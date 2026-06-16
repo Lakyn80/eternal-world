@@ -5,6 +5,7 @@ from sqlalchemy import text
 from app.cache.redis_client import get_redis_client
 from app.core.config import settings
 from app.db.session import engine
+from app.modules.auth.router import router as auth_router
 
 
 app = FastAPI(title=settings.app_name)
@@ -16,6 +17,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+app.include_router(auth_router)
 
 
 @app.get("/")
