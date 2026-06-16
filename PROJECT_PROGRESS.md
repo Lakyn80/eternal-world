@@ -11,7 +11,7 @@ Eternal World is a production-oriented AI memory social platform under active ba
 - Docker Compose for local orchestration
 - GitHub Actions CI for backend and frontend validation
 
-The backend currently includes infrastructure foundations, authentication, Memory Profiles CRUD, and a chat backend MVP with a prepared multi-agent architecture tree. The frontend remains minimal and was not expanded as part of the backend slices completed so far.
+The backend currently includes infrastructure foundations, authentication, Memory Profiles CRUD, a chat backend MVP with a prepared multi-agent architecture tree, and a media storage foundation with local server storage abstraction. The frontend remains minimal and was not expanded as part of the backend slices completed so far.
 
 ## 2. Production Architecture Decisions
 
@@ -56,6 +56,7 @@ Current Docker wiring:
 
 - Backend connects to PostgreSQL through `DATABASE_URL=postgresql+psycopg://eternal_user:eternal_password@db:5432/eternal_world`
 - Backend connects to Redis through `REDIS_URL=redis://redis:6379/0`
+- Backend media storage is configured through `MEDIA_STORAGE_PROVIDER=local`, `MEDIA_ROOT=/app/media`, and `MEDIA_PUBLIC_BASE_URL=/media`
 - Frontend is configured to call the backend through `NEXT_PUBLIC_API_URL=http://localhost:8033`
 - Backend source is mounted into `/app`
 - Frontend source is mounted into `/app`
@@ -99,6 +100,7 @@ Current backend structure is modular:
 - `backend/app/cache`
 - `backend/app/modules/auth`
 - `backend/app/modules/chat`
+- `backend/app/modules/media`
 - `backend/app/modules/users`
 - `backend/app/modules/memory_profiles`
 - `backend/app/modules/ai_agents`
@@ -118,6 +120,7 @@ Current ORM models:
 - `MemoryProfile`
 - `ChatMessage`
 - `Memory`
+- `MediaAsset`
 
 Current migration history:
 
@@ -125,15 +128,21 @@ Current migration history:
 - `20260616_0002` add `users.full_name`
 - `20260616_0003` update `memory_profiles` for CRUD support
 - `20260616_0004` drop legacy memory-profile columns that were replaced by the CRUD-oriented schema
+- `20260617_0005` create `media_assets` table
 
 Current Alembic head:
 
-- `20260616_0004`
+- `20260617_0005`
 
 Chat backend note:
 
 - The chat MVP reuses the existing `ChatMessage` model for stored user and assistant messages
 - No additional Alembic migration was required for the chat slice
+
+Media storage note:
+
+- The media storage foundation adds a dedicated `MediaAsset` metadata model
+- Raw file contents are stored on disk, while PostgreSQL stores metadata and storage identifiers only
 
 ## 8. Security Foundation Summary
 
@@ -327,22 +336,94 @@ Observability test coverage currently includes:
 - unexpected exception handling returns safe JSON and includes the request id
 - sensitive logging fields are sanitized before output
 
-## 13. Current Verification Status
+## 13. Media Storage Foundation Summary
 
-Current local verification completed on `2026-06-16`:
+The media storage foundation is implemented and available through:
 
-- Backend tests passing: `38 passed`
-- Docker working: confirmed with `docker compose ps`
-- Alembic migrations working: confirmed with `docker compose exec backend alembic current` -> `20260616_0004 (head)`
+- `POST /api/media/upload`
+- `GET /api/media`
+- `GET /api/media/{media_id}`
+- `DELETE /api/media/{media_id}`
+
+Current media module structure:
+
+- `backend/app/modules/media/router.py`
+- `backend/app/modules/media/schemas.py`
+- `backend/app/modules/media/service.py`
+- `backend/app/modules/media/repository.py`
+- `backend/app/modules/media/storage/base.py`
+- `backend/app/modules/media/storage/local.py`
+- `backend/app/modules/media/storage/yandex_s3.py`
+
+Current storage behavior:
+
+- all media endpoints require JWT authentication
+- local file storage is implemented now through a storage-provider abstraction
+- future Yandex Object Storage integration is reserved behind a placeholder provider
+- uploaded files are written under the configured media root
+- file paths are generated internally through storage keys, not trusted filenames
+- PostgreSQL stores metadata only:
+  - owner id
+  - optional profile id
+  - media type
+  - storage provider
+  - storage key
+  - sanitized original filename
+  - MIME type
+  - file size
+- public URLs are returned as relative media paths and do not expose absolute server paths
+- profile-linked uploads verify that the referenced Memory Profile belongs to the current user
+- cross-user media access returns `404`, not `403`
+
+Current media validation and safety behavior:
+
+- allowed MIME types:
+  - `image/jpeg`
+  - `image/png`
+  - `image/webp`
+  - `audio/mpeg`
+  - `audio/wav`
+  - `video/mp4`
+- maximum file size is controlled by settings and defaults to `20 MB`
+- original filenames are sanitized before metadata persistence
+- path traversal in uploaded filenames cannot escape the configured media root
+- local storage keys are generated internally and do not depend on the uploaded filename
+- absolute filesystem paths are not returned in API metadata responses
+
+Media test coverage currently includes:
+
+- authenticated user can upload allowed file
+- unauthenticated upload is rejected
+- unsupported MIME type is rejected
+- too large file is rejected
+- path traversal filename is sanitized and remains inside the media root
+- user can list only own media
+- user can get own media metadata
+- user cannot get another user’s media
+- user can delete own media metadata and local file
+- user cannot delete another user’s media
+- upload with another user’s profile id returns `404`
+- local storage provider generates safe storage keys
+- storage provider metadata responses do not expose absolute filesystem paths
+- no raw file bytes are stored in the database model
+
+## 14. Current Verification Status
+
+Current local verification completed on `2026-06-17`:
+
+- Backend tests passing locally: `51 passed`
+- Backend tests passing in Docker: `51 passed`
+- Docker working: confirmed with `docker compose up -d --build backend`
+- Alembic migrations working: confirmed with `docker compose exec backend alembic upgrade head` and `docker compose exec backend alembic current` -> `20260617_0005 (head)`
 - Runtime health OK: `{"status":"ok","database":"ok","redis":"ok"}`
-- Health endpoint OK: `{"status":"ok"}`
-- Live `X-Request-ID` response header OK
-- Live chat smoke test OK against `http://localhost:8033`
+- Observability foundation verified previously with live `X-Request-ID` response header
+- Media storage foundation verified with local pytest coverage and Docker backend startup after rebuild
 
-## 14. Commit Tracking
+## 15. Commit Tracking
 
 Current `git log --oneline` history:
 
+- `44268be` Add backend observability foundation
 - `065ea8f` Add chat backend and agent architecture skeleton
 - `0ce4a0e` Add project progress tracking
 - `893b0f0` Add memory profiles backend CRUD
@@ -357,7 +438,7 @@ Current `git log --oneline` history:
 
 Current working tree note:
 
-- The observability foundation slice is implemented in the working tree and is not yet represented by a committed hash.
+- The media storage foundation slice is implemented in the working tree and is not yet represented by a committed hash.
 
 Future commit entry format:
 
@@ -370,7 +451,7 @@ Future commit entry format:
 - Docker verified:
 ```
 
-## 15. Mandatory Future Rule
+## 16. Mandatory Future Rule
 
 This file is mandatory project tracking documentation and must be maintained continuously.
 

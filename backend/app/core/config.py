@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from pydantic import SecretStr
+from pydantic import Field, SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -28,6 +28,10 @@ class Settings(BaseSettings):
     jwt_access_token_expire_minutes: int = 30
     jwt_issuer: str = "eternal-world"
     jwt_audience: str = "eternal-world-api"
+    media_storage_provider: str = "local"
+    media_root: Path = BACKEND_DIR / "media"
+    media_public_base_url: str = "/media"
+    media_max_file_size_bytes: int = Field(default=20 * 1024 * 1024, gt=0)
 
     model_config = SettingsConfigDict(
         env_file=ENV_FILE_CANDIDATES,
@@ -50,6 +54,27 @@ class Settings(BaseSettings):
             return [str(item).strip() for item in parsed_value if str(item).strip()]
 
         return [item.strip() for item in normalized_value.split(",") if item.strip()]
+
+    @field_validator("media_storage_provider")
+    @classmethod
+    def normalize_media_storage_provider(cls, value: str) -> str:
+        normalized_value = value.strip().lower()
+        if not normalized_value:
+            raise ValueError("MEDIA_STORAGE_PROVIDER must not be empty")
+
+        return normalized_value
+
+    @field_validator("media_public_base_url")
+    @classmethod
+    def normalize_media_public_base_url(cls, value: str) -> str:
+        normalized_value = value.strip()
+        if not normalized_value:
+            return "/media"
+
+        if not normalized_value.startswith("/"):
+            normalized_value = f"/{normalized_value}"
+
+        return normalized_value.rstrip("/") or "/media"
 
 
 settings = Settings()

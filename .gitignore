@@ -3,6 +3,7 @@ __pycache__/
 .venv/
 .env
 .pytest_cache/
+backend/media/
 node_modules/
 .next/
 dist/

@@ -1,1 +1,1 @@
-"""Media module placeholders and future routers/services."""
+"""Media storage foundation with local storage and future cloud abstraction."""

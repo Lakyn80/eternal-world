@@ -42,6 +42,10 @@ class User(TimestampMixin, Base):
         back_populates="user",
         cascade="all, delete-orphan",
     )
+    media_assets: Mapped[list[MediaAsset]] = relationship(
+        back_populates="owner",
+        cascade="all, delete-orphan",
+    )
 
 
 class MemoryProfile(TimestampMixin, Base):
@@ -69,6 +73,7 @@ class MemoryProfile(TimestampMixin, Base):
     user: Mapped[User] = relationship(back_populates="memory_profiles")
     chat_messages: Mapped[list[ChatMessage]] = relationship(back_populates="memory_profile")
     memories: Mapped[list[Memory]] = relationship(back_populates="memory_profile")
+    media_assets: Mapped[list[MediaAsset]] = relationship(back_populates="memory_profile")
 
 
 class ChatMessage(TimestampMixin, Base):
@@ -145,3 +150,35 @@ class Memory(TimestampMixin, Base):
 
     user: Mapped[User] = relationship(back_populates="memories")
     memory_profile: Mapped[MemoryProfile | None] = relationship(back_populates="memories")
+
+
+class MediaAsset(TimestampMixin, Base):
+    __tablename__ = "media_assets"
+    __table_args__ = (
+        CheckConstraint(
+            "media_type IN ('image', 'audio', 'video')",
+            name="media_assets_media_type",
+        ),
+        CheckConstraint("size_bytes >= 0", name="media_assets_size_bytes_non_negative"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    owner_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"),
+        index=True,
+        nullable=False,
+    )
+    profile_id: Mapped[int | None] = mapped_column(
+        ForeignKey("memory_profiles.id", ondelete="SET NULL"),
+        index=True,
+        nullable=True,
+    )
+    media_type: Mapped[str] = mapped_column(String(16), nullable=False)
+    storage_provider: Mapped[str] = mapped_column(String(32), nullable=False)
+    storage_key: Mapped[str] = mapped_column(String(255), unique=True, index=True, nullable=False)
+    original_filename: Mapped[str] = mapped_column(String(255), nullable=False)
+    mime_type: Mapped[str] = mapped_column(String(255), nullable=False)
+    size_bytes: Mapped[int] = mapped_column(Integer, nullable=False)
+
+    owner: Mapped[User] = relationship(back_populates="media_assets")
+    memory_profile: Mapped[MemoryProfile | None] = relationship(back_populates="media_assets")

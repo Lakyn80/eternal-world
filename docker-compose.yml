@@ -33,6 +33,10 @@ services:
       APP_NAME: Eternal World API
       ENVIRONMENT: local
       BACKEND_CORS_ORIGINS: http://localhost:8017
+      MEDIA_STORAGE_PROVIDER: local
+      MEDIA_ROOT: /app/media
+      MEDIA_PUBLIC_BASE_URL: /media
+      MEDIA_MAX_FILE_SIZE_BYTES: 20971520
     ports:
       - "8033:8000"
     depends_on:
