@@ -2,8 +2,7 @@ from __future__ import annotations
 
 from functools import lru_cache
 
-from app.modules.ai_agents.brain.provider import MockBrainAgentProvider
-from app.modules.ai_agents.brain.service import BrainAgentService
+from app.modules.ai_agents.brain.service import BrainAgentService, get_brain_service
 from app.modules.ai_agents.director.service import DirectorAgentService
 from app.modules.ai_agents.face.service import FaceAgentService
 from app.modules.ai_agents.schemas import (
@@ -23,9 +22,7 @@ class AgentOrchestrator:
         face_service: FaceAgentService | None = None,
         director_service: DirectorAgentService | None = None,
     ) -> None:
-        self.brain_service = brain_service or BrainAgentService(
-            provider=MockBrainAgentProvider()
-        )
+        self.brain_service = brain_service or get_brain_service()
         self.voice_service = voice_service or VoiceAgentService()
         self.face_service = face_service or FaceAgentService()
         self.director_service = director_service or DirectorAgentService()

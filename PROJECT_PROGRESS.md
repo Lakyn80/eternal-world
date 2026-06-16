@@ -11,7 +11,7 @@ Eternal World is a production-oriented AI memory social platform under active ba
 - Docker Compose for local orchestration
 - GitHub Actions CI for backend and frontend validation
 
-The backend currently includes infrastructure foundations, authentication, Memory Profiles CRUD, a chat backend MVP with a prepared multi-agent architecture tree, a media storage foundation with local server storage abstraction, and local media serving plus Memory Profile photo binding for dev/MVP use. The frontend remains minimal and was not expanded as part of the backend slices completed so far.
+The backend currently includes infrastructure foundations, authentication, Memory Profiles CRUD, a chat backend MVP with a prepared multi-agent architecture tree, a media storage foundation with local server storage abstraction, local media serving plus Memory Profile photo binding for dev/MVP use, and a configurable Brain Agent provider foundation with deterministic mock defaults. The frontend remains minimal and was not expanded as part of the backend slices completed so far.
 
 ## 2. Production Architecture Decisions
 
@@ -56,6 +56,7 @@ Current Docker wiring:
 
 - Backend connects to PostgreSQL through `DATABASE_URL=postgresql+psycopg://eternal_user:eternal_password@db:5432/eternal_world`
 - Backend connects to Redis through `REDIS_URL=redis://redis:6379/0`
+- Backend Brain Agent defaults to `AI_BRAIN_PROVIDER=mock` in Docker/local dev
 - Backend media storage is configured through `MEDIA_STORAGE_PROVIDER=local`, `MEDIA_ROOT=/app/media`, and `MEDIA_PUBLIC_BASE_URL=/media`
 - Frontend is configured to call the backend through `NEXT_PUBLIC_API_URL=http://localhost:8033`
 - Backend source is mounted into `/app`
@@ -281,6 +282,7 @@ Prepared agent architecture tree now present in the backend:
 - `backend/app/modules/ai_agents/orchestrator.py`
 - `backend/app/modules/ai_agents/schemas.py`
 - `backend/app/modules/ai_agents/brain/`
+- `backend/app/modules/ai_agents/brain/providers/`
 - `backend/app/modules/ai_agents/voice/`
 - `backend/app/modules/ai_agents/face/`
 - `backend/app/modules/ai_agents/director/`
@@ -289,7 +291,9 @@ Agent implementation status:
 
 - Brain Agent: implemented as a text-only skeleton for this slice
 - Brain prompt builder: implemented using current user message, Memory Profile fields, and recent chat history
-- Brain provider: implemented as a deterministic local mock provider for runtime and CI
+- Brain provider factory: implemented with config-based provider selection
+- Brain mock provider: implemented as the deterministic default for runtime, tests, Docker, and CI
+- Brain OpenAI-compatible provider: implemented as a non-default skeleton for future OpenAI/DeepSeek-style usage through environment configuration
 - Voice Agent: placeholder only, not called
 - Face / Lip-Sync Agent: placeholder only, not called
 - Director Agent: placeholder only, not called
@@ -456,20 +460,65 @@ Test coverage for this slice includes:
 - unauthenticated profile-photo binding rejected
 - usable `photo_media_id` and `photo_url` fields returned in profile responses
 
-## 15. Current Verification Status
+## 15. Real Brain Agent Provider Foundation Summary
+
+The Brain Agent provider foundation now includes:
+
+- provider selection through `AI_BRAIN_PROVIDER`
+- deterministic `mock` provider as the default
+- `openai_compatible` provider skeleton for future real-provider usage
+- safe AI configuration fields:
+  - `AI_BRAIN_PROVIDER`
+  - `AI_BRAIN_MODEL`
+  - `AI_BRAIN_API_KEY`
+  - `AI_BRAIN_BASE_URL`
+  - `AI_BRAIN_TIMEOUT_SECONDS`
+
+Current provider behavior:
+
+- default provider remains `mock`
+- tests, CI, and local Docker continue to use the deterministic mock path unless configuration is explicitly changed
+- `openai_compatible` is available only when explicitly selected
+- `openai_compatible` validates required configuration before use
+- unknown provider names fail with a clear configuration error
+- AI API keys are stored through secret-aware settings and are not logged in plaintext
+- no database migration was required for this slice
+
+Current Brain Agent provider structure:
+
+- `backend/app/modules/ai_agents/brain/service.py`
+- `backend/app/modules/ai_agents/brain/provider.py`
+- `backend/app/modules/ai_agents/brain/prompt_builder.py`
+- `backend/app/modules/ai_agents/brain/providers/__init__.py`
+- `backend/app/modules/ai_agents/brain/providers/mock.py`
+- `backend/app/modules/ai_agents/brain/providers/openai_compatible.py`
+
+Brain-provider test coverage currently includes:
+
+- default Brain provider is mock
+- mock provider is deterministic
+- provider factory selects mock
+- provider factory rejects unknown provider
+- openai-compatible provider requires API key when selected
+- openai-compatible provider does not run in normal tests unless explicitly mocked
+- chat endpoint still works with mock provider
+- sensitive AI config values are not exposed in logs or API responses
+
+## 16. Current Verification Status
 
 Current local verification completed on `2026-06-17`:
 
-- Backend tests passing locally: `61 passed`
-- Backend tests passing in Docker: `61 passed`
+- Backend tests passing locally: `67 passed`
+- Backend tests passing in Docker: `67 passed`
 - Docker working: confirmed with `docker compose up -d --build backend`
 - Alembic migrations working: confirmed with `docker compose exec backend alembic upgrade head` and `docker compose exec backend alembic current` -> `20260617_0006 (head)`
 - Runtime health OK: `{"status":"ok","database":"ok","redis":"ok"}`
 - Observability foundation verified previously with live `X-Request-ID` response header
 - Media storage foundation verified with local pytest coverage and Docker backend startup after rebuild
 - Local media serving and profile-photo binding verified with local pytest coverage and Docker backend verification
+- Brain Agent provider foundation verified with local pytest coverage and Docker backend verification
 
-## 16. Commit Tracking
+## 17. Commit Tracking
 
 Current `git log --oneline` history:
 
@@ -488,7 +537,7 @@ Current `git log --oneline` history:
 
 Current working tree note:
 
-- The local media serving and Memory Profile photo binding slice is implemented in the working tree and is not yet represented by a committed hash.
+- The local media serving and Memory Profile photo binding slice, together with the Brain Agent provider foundation slice, is implemented in the working tree and is not yet represented by a committed hash.
 
 Future commit entry format:
 
@@ -501,7 +550,7 @@ Future commit entry format:
 - Docker verified:
 ```
 
-## 17. Mandatory Future Rule
+## 18. Mandatory Future Rule
 
 This file is mandatory project tracking documentation and must be maintained continuously.
 

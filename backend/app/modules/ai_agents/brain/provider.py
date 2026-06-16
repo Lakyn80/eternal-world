@@ -2,7 +2,12 @@ from __future__ import annotations
 
 from typing import Protocol
 
+from app.core.config import Settings, settings
 from app.modules.ai_agents.schemas import BrainAgentRequest, BrainAgentResponse
+from app.modules.ai_agents.brain.providers import (
+    MockBrainAgentProvider,
+    OpenAICompatibleBrainAgentProvider,
+)
 
 
 class BrainAgentProvider(Protocol):
@@ -10,20 +15,29 @@ class BrainAgentProvider(Protocol):
         ...
 
 
-class MockBrainAgentProvider:
-    provider_name = "mock-brain-provider"
+class BrainProviderConfigurationError(ValueError):
+    pass
 
-    def generate_response(self, request: BrainAgentRequest) -> BrainAgentResponse:
-        history_count = len(request.recent_history)
-        response_text = (
-            f"{request.profile.name} mock reply: I heard '{request.user_message}'. "
-            f"Recent messages considered: {history_count}."
-        )
-        return BrainAgentResponse(
-            text=response_text,
-            provider_name=self.provider_name,
-            metadata={
-                "agent": "brain",
-                "history_count": history_count,
-            },
-        )
+
+class BrainProviderResponseError(RuntimeError):
+    pass
+
+
+def build_brain_provider(
+    *,
+    provider_name: str | None = None,
+    provider_settings: Settings | None = None,
+) -> BrainAgentProvider:
+    resolved_settings = provider_settings or settings
+    normalized_provider_name = (provider_name or resolved_settings.ai_brain_provider).strip().lower()
+
+    if normalized_provider_name == "mock":
+        return MockBrainAgentProvider()
+
+    if normalized_provider_name == "openai_compatible":
+        return OpenAICompatibleBrainAgentProvider.from_settings(resolved_settings)
+
+    raise BrainProviderConfigurationError(
+        "Unsupported AI_BRAIN_PROVIDER: "
+        f"{normalized_provider_name}. Allowed values: mock, openai_compatible"
+    )

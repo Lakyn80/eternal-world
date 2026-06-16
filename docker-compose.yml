@@ -33,6 +33,8 @@ services:
       APP_NAME: Eternal World API
       ENVIRONMENT: local
       BACKEND_CORS_ORIGINS: http://localhost:8017
+      AI_BRAIN_PROVIDER: mock
+      AI_BRAIN_TIMEOUT_SECONDS: 30
       MEDIA_STORAGE_PROVIDER: local
       MEDIA_ROOT: /app/media
       MEDIA_PUBLIC_BASE_URL: /media

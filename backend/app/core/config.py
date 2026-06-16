@@ -28,6 +28,11 @@ class Settings(BaseSettings):
     jwt_access_token_expire_minutes: int = 30
     jwt_issuer: str = "eternal-world"
     jwt_audience: str = "eternal-world-api"
+    ai_brain_provider: str = "mock"
+    ai_brain_model: str = ""
+    ai_brain_api_key: SecretStr | None = None
+    ai_brain_base_url: str = "https://api.openai.com/v1"
+    ai_brain_timeout_seconds: float = Field(default=30, gt=0)
     media_storage_provider: str = "local"
     media_root: Path = BACKEND_DIR / "media"
     media_public_base_url: str = "/media"
@@ -54,6 +59,29 @@ class Settings(BaseSettings):
             return [str(item).strip() for item in parsed_value if str(item).strip()]
 
         return [item.strip() for item in normalized_value.split(",") if item.strip()]
+
+    @field_validator("ai_brain_provider")
+    @classmethod
+    def normalize_ai_brain_provider(cls, value: str) -> str:
+        normalized_value = value.strip().lower()
+        if not normalized_value:
+            raise ValueError("AI_BRAIN_PROVIDER must not be empty")
+
+        return normalized_value
+
+    @field_validator("ai_brain_model")
+    @classmethod
+    def normalize_ai_brain_model(cls, value: str) -> str:
+        return value.strip()
+
+    @field_validator("ai_brain_base_url")
+    @classmethod
+    def normalize_ai_brain_base_url(cls, value: str) -> str:
+        normalized_value = value.strip()
+        if not normalized_value:
+            return "https://api.openai.com/v1"
+
+        return normalized_value.rstrip("/")
 
     @field_validator("media_storage_provider")
     @classmethod

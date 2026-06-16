@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from app.modules.ai_agents.brain.provider import BrainAgentProvider, build_brain_provider
 from app.modules.ai_agents.brain.prompt_builder import build_brain_prompt
 from app.modules.ai_agents.schemas import (
     BrainAgentRequest,
@@ -9,7 +10,7 @@ from app.modules.ai_agents.schemas import (
 
 
 class BrainAgentService:
-    def __init__(self, provider) -> None:
+    def __init__(self, provider: BrainAgentProvider) -> None:
         self.provider = provider
 
     def generate_chat_response(
@@ -24,3 +25,7 @@ class BrainAgentService:
             prompt=prompt,
         )
         return self.provider.generate_response(provider_request)
+
+
+def get_brain_service() -> BrainAgentService:
+    return BrainAgentService(provider=build_brain_provider())
