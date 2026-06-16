@@ -9,11 +9,9 @@ from app.db.session import engine
 
 app = FastAPI(title=settings.app_name)
 
-origins = [origin.strip() for origin in settings.backend_cors_origins.split(",")]
-
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,
+    allow_origins=settings.cors_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
