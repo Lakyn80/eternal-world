@@ -71,6 +71,36 @@ def test_authenticated_user_can_upload_allowed_file(client, media_settings):
     assert len(stored_files) == 1
 
 
+def test_local_media_route_serves_uploaded_local_file_safely(client):
+    token = _register_and_login(client, "media-serve@example.com")
+    upload_response = client.post(
+        "/api/media/upload",
+        headers=_auth_headers(token),
+        files={"file": ("portrait.png", b"image-bytes", "image/png")},
+    )
+    public_url = upload_response.json()["public_url"]
+
+    response = client.get(public_url)
+
+    assert response.status_code == 200
+    assert response.content == b"image-bytes"
+    assert response.headers["content-type"] == "image/png"
+
+
+def test_local_media_route_rejects_path_traversal(client):
+    response = client.get("/media/%2e%2e/%2e%2e/secret.png")
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == "Media file not found"
+
+
+def test_local_media_route_returns_404_for_missing_file(client):
+    response = client.get("/media/image/2026/06/17/missing-file.png")
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == "Media file not found"
+
+
 def test_unauthenticated_upload_is_rejected(client):
     response = client.post(
         "/api/media/upload",
@@ -229,6 +259,163 @@ def test_upload_with_another_users_profile_id_returns_404(client):
 
     assert response.status_code == 404
     assert response.json()["detail"] == "Memory profile not found"
+
+
+def test_authenticated_user_can_assign_own_uploaded_image_to_own_memory_profile(client, media_settings):
+    token = _register_and_login(client, "profile-photo-bind@example.com")
+    profile_id = _create_profile(client, token, "Photo Profile")
+    upload_response = client.post(
+        "/api/media/upload",
+        headers=_auth_headers(token),
+        files={"file": ("profile.png", b"profile-bytes", "image/png")},
+    )
+    media_body = upload_response.json()
+
+    response = client.post(
+        f"/api/memory-profiles/{profile_id}/photo",
+        headers=_auth_headers(token),
+        json={"media_id": media_body["id"]},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["photo_media_id"] == media_body["id"]
+    assert body["photo_url"] == media_body["public_url"]
+    assert str(media_settings.resolve()) not in body["photo_url"]
+
+
+def test_authenticated_user_can_unset_profile_photo(client):
+    token = _register_and_login(client, "profile-photo-unset@example.com")
+    profile_id = _create_profile(client, token, "Unset Photo Profile")
+    upload_response = client.post(
+        "/api/media/upload",
+        headers=_auth_headers(token),
+        files={"file": ("profile.webp", b"profile-webp", "image/webp")},
+    )
+    media_id = upload_response.json()["id"]
+    client.post(
+        f"/api/memory-profiles/{profile_id}/photo",
+        headers=_auth_headers(token),
+        json={"media_id": media_id},
+    )
+
+    response = client.delete(
+        f"/api/memory-profiles/{profile_id}/photo",
+        headers=_auth_headers(token),
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["photo_media_id"] is None
+    assert body["photo_url"] is None
+
+
+def test_user_cannot_assign_another_users_media_as_profile_photo(client):
+    owner_token = _register_and_login(client, "profile-photo-owner@example.com")
+    other_token = _register_and_login(client, "profile-photo-other@example.com")
+    profile_id = _create_profile(client, other_token, "Other User Profile")
+    upload_response = client.post(
+        "/api/media/upload",
+        headers=_auth_headers(owner_token),
+        files={"file": ("owner-photo.png", b"owner-photo", "image/png")},
+    )
+    media_id = upload_response.json()["id"]
+
+    response = client.post(
+        f"/api/memory-profiles/{profile_id}/photo",
+        headers=_auth_headers(other_token),
+        json={"media_id": media_id},
+    )
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == "Media not found"
+
+
+def test_user_cannot_assign_photo_to_another_users_profile(client):
+    owner_token = _register_and_login(client, "profile-photo-owner-profile@example.com")
+    other_token = _register_and_login(client, "profile-photo-owner-media@example.com")
+    profile_id = _create_profile(client, owner_token, "Owner Profile")
+    upload_response = client.post(
+        "/api/media/upload",
+        headers=_auth_headers(other_token),
+        files={"file": ("other-photo.png", b"other-photo", "image/png")},
+    )
+    media_id = upload_response.json()["id"]
+
+    response = client.post(
+        f"/api/memory-profiles/{profile_id}/photo",
+        headers=_auth_headers(other_token),
+        json={"media_id": media_id},
+    )
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == "Memory profile not found"
+
+
+def test_non_image_media_cannot_be_assigned_as_profile_photo(client):
+    token = _register_and_login(client, "profile-photo-audio@example.com")
+    profile_id = _create_profile(client, token, "Audio Photo Profile")
+    upload_response = client.post(
+        "/api/media/upload",
+        headers=_auth_headers(token),
+        files={"file": ("voice.wav", b"voice-bytes", "audio/wav")},
+    )
+    media_id = upload_response.json()["id"]
+
+    response = client.post(
+        f"/api/memory-profiles/{profile_id}/photo",
+        headers=_auth_headers(token),
+        json={"media_id": media_id},
+    )
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "Profile photo must be an image"
+
+
+def test_unauthenticated_profile_photo_binding_is_rejected(client):
+    token = _register_and_login(client, "profile-photo-auth-owner@example.com")
+    profile_id = _create_profile(client, token, "Auth Profile")
+    upload_response = client.post(
+        "/api/media/upload",
+        headers=_auth_headers(token),
+        files={"file": ("photo.png", b"auth-photo", "image/png")},
+    )
+    media_id = upload_response.json()["id"]
+
+    response = client.post(
+        f"/api/memory-profiles/{profile_id}/photo",
+        json={"media_id": media_id},
+    )
+
+    assert response.status_code == 401
+    assert response.json()["detail"] == "Could not validate credentials"
+
+
+def test_profile_response_includes_usable_photo_reference(client, media_settings):
+    token = _register_and_login(client, "profile-photo-response@example.com")
+    profile_id = _create_profile(client, token, "Photo Response Profile")
+    upload_response = client.post(
+        "/api/media/upload",
+        headers=_auth_headers(token),
+        files={"file": ("photo-response.png", b"response-photo", "image/png")},
+    )
+    media_body = upload_response.json()
+    client.post(
+        f"/api/memory-profiles/{profile_id}/photo",
+        headers=_auth_headers(token),
+        json={"media_id": media_body["id"]},
+    )
+
+    response = client.get(
+        f"/api/memory-profiles/{profile_id}",
+        headers=_auth_headers(token),
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["photo_media_id"] == media_body["id"]
+    assert body["photo_url"] == media_body["public_url"]
+    assert str(media_settings.resolve()) not in body["photo_url"]
 
 
 def test_local_storage_provider_generates_safe_storage_keys(media_settings):

@@ -9,7 +9,16 @@ def test_database_models_are_registered():
     assert Memory.__tablename__ == "memories"
     assert MediaAsset.__tablename__ == "media_assets"
     assert "full_name" in User.__table__.columns.keys()
-    assert {"name", "birth_date", "death_date", "biography", "personality", "catchphrases", "is_public"}.issubset(
+    assert {
+        "main_photo_media_id",
+        "name",
+        "birth_date",
+        "death_date",
+        "biography",
+        "personality",
+        "catchphrases",
+        "is_public",
+    }.issubset(
         MemoryProfile.__table__.columns.keys()
     )
     assert {

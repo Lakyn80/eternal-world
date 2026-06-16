@@ -57,6 +57,16 @@ class MemoryProfile(TimestampMixin, Base):
         index=True,
         nullable=False,
     )
+    main_photo_media_id: Mapped[int | None] = mapped_column(
+        ForeignKey(
+            "media_assets.id",
+            ondelete="SET NULL",
+            use_alter=True,
+            name="fk_memory_profiles_main_photo_media_id_media_assets",
+        ),
+        index=True,
+        nullable=True,
+    )
     name: Mapped[str] = mapped_column(String(120), nullable=False)
     birth_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     death_date: Mapped[date | None] = mapped_column(Date, nullable=True)
@@ -73,7 +83,14 @@ class MemoryProfile(TimestampMixin, Base):
     user: Mapped[User] = relationship(back_populates="memory_profiles")
     chat_messages: Mapped[list[ChatMessage]] = relationship(back_populates="memory_profile")
     memories: Mapped[list[Memory]] = relationship(back_populates="memory_profile")
-    media_assets: Mapped[list[MediaAsset]] = relationship(back_populates="memory_profile")
+    media_assets: Mapped[list[MediaAsset]] = relationship(
+        back_populates="memory_profile",
+        foreign_keys="MediaAsset.profile_id",
+    )
+    main_photo_media: Mapped[MediaAsset | None] = relationship(
+        foreign_keys=[main_photo_media_id],
+        post_update=True,
+    )
 
 
 class ChatMessage(TimestampMixin, Base):
@@ -181,4 +198,7 @@ class MediaAsset(TimestampMixin, Base):
     size_bytes: Mapped[int] = mapped_column(Integer, nullable=False)
 
     owner: Mapped[User] = relationship(back_populates="media_assets")
-    memory_profile: Mapped[MemoryProfile | None] = relationship(back_populates="media_assets")
+    memory_profile: Mapped[MemoryProfile | None] = relationship(
+        back_populates="media_assets",
+        foreign_keys=[profile_id],
+    )

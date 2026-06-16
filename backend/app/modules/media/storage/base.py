@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from pathlib import Path
 
 
 class StorageProvider(ABC):
@@ -23,3 +24,6 @@ class StorageProvider(ABC):
     @abstractmethod
     def build_public_url(self, *, storage_key: str) -> str:
         raise NotImplementedError
+
+    def get_local_file_path(self, *, storage_key: str) -> Path:
+        raise NotImplementedError("This storage provider does not expose local files")

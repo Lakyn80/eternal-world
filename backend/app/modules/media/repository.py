@@ -54,5 +54,14 @@ def get_media_asset_for_owner(
     return db.scalar(statement)
 
 
+def get_media_asset_by_storage_key(
+    db: Session,
+    *,
+    storage_key: str,
+) -> MediaAsset | None:
+    statement = select(MediaAsset).where(MediaAsset.storage_key == storage_key)
+    return db.scalar(statement)
+
+
 def delete_media_asset(db: Session, media_asset: MediaAsset) -> None:
     db.delete(media_asset)

@@ -10,6 +10,7 @@ from app.core.middleware import install_middleware
 from app.db.session import engine
 from app.modules.auth.router import router as auth_router
 from app.modules.chat.router import router as chat_router
+from app.modules.media.router import public_router as media_public_router
 from app.modules.media.router import router as media_router
 from app.modules.memory_profiles.router import router as memory_profiles_router
 
@@ -29,6 +30,7 @@ app.add_middleware(
 app.include_router(auth_router)
 app.include_router(chat_router)
 app.include_router(media_router)
+app.include_router(media_public_router)
 app.include_router(memory_profiles_router)
 
 

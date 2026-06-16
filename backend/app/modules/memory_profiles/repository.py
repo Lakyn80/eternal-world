@@ -1,9 +1,14 @@
 from __future__ import annotations
 
 from sqlalchemy import select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 from app.db.models import MemoryProfile
+
+
+MEMORY_PROFILE_LOAD_OPTIONS = (
+    selectinload(MemoryProfile.main_photo_media),
+)
 
 
 def create_memory_profile(
@@ -35,6 +40,7 @@ def create_memory_profile(
 def list_memory_profiles_for_user(db: Session, user_id: int) -> list[MemoryProfile]:
     statement = (
         select(MemoryProfile)
+        .options(*MEMORY_PROFILE_LOAD_OPTIONS)
         .where(MemoryProfile.user_id == user_id)
         .order_by(MemoryProfile.id.asc())
     )
@@ -47,8 +53,12 @@ def get_memory_profile_for_user(
     user_id: int,
     profile_id: int,
 ) -> MemoryProfile | None:
-    statement = select(MemoryProfile).where(
-        MemoryProfile.id == profile_id,
-        MemoryProfile.user_id == user_id,
+    statement = (
+        select(MemoryProfile)
+        .options(*MEMORY_PROFILE_LOAD_OPTIONS)
+        .where(
+            MemoryProfile.id == profile_id,
+            MemoryProfile.user_id == user_id,
+        )
     )
     return db.scalar(statement)

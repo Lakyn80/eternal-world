@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from pathlib import Path
 
 from sqlalchemy.orm import Session
 
@@ -16,6 +17,13 @@ from app.modules.memory_profiles import repository as memory_profiles_repository
 class AllowedMimeType:
     media_type: str
     extension: str
+
+
+@dataclass(frozen=True)
+class LocalMediaFile:
+    file_path: Path
+    mime_type: str
+    original_filename: str
 
 
 ALLOWED_MIME_TYPES: dict[str, AllowedMimeType] = {
@@ -41,6 +49,10 @@ class UnsupportedMediaTypeError(Exception):
 
 
 class MediaTooLargeError(Exception):
+    pass
+
+
+class MediaFileNotFoundError(Exception):
     pass
 
 
@@ -175,6 +187,31 @@ def get_media_asset(
         media_id=media_id,
     )
     return _build_media_response(media_asset)
+
+
+def get_local_media_file(
+    db: Session,
+    *,
+    storage_key: str,
+) -> LocalMediaFile:
+    media_asset = repository.get_media_asset_by_storage_key(
+        db,
+        storage_key=storage_key,
+    )
+    if media_asset is None:
+        raise MediaFileNotFoundError("Media file not found")
+
+    storage_provider = get_storage_provider(media_asset.storage_provider)
+    try:
+        file_path = storage_provider.get_local_file_path(storage_key=media_asset.storage_key)
+    except (FileNotFoundError, NotImplementedError, ValueError) as exc:
+        raise MediaFileNotFoundError("Media file not found") from exc
+
+    return LocalMediaFile(
+        file_path=file_path,
+        mime_type=media_asset.mime_type,
+        original_filename=media_asset.original_filename,
+    )
 
 
 def delete_media_asset(

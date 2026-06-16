@@ -42,6 +42,13 @@ class LocalStorageProvider(StorageProvider):
     def build_public_url(self, *, storage_key: str) -> str:
         return f"{self.public_base_url.rstrip('/')}/{storage_key}"
 
+    def get_local_file_path(self, *, storage_key: str) -> Path:
+        destination = self._resolve_storage_path(storage_key)
+        if not destination.is_file():
+            raise FileNotFoundError("Media file not found")
+
+        return destination
+
     def _generate_storage_key(self, *, media_type: str, extension: str) -> str:
         timestamp = datetime.now(UTC)
         normalized_extension = extension if extension.startswith(".") else f".{extension}"

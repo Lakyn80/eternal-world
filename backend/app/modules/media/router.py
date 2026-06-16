@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Path, Response, UploadFile, status
+from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
@@ -13,17 +14,20 @@ from app.modules.auth.schemas import ErrorResponse
 from app.modules.media.schemas import MediaAssetRead, MediaUploadRequest
 from app.modules.media.service import (
     MediaAssetNotFoundError,
+    MediaFileNotFoundError,
     MediaProfileNotFoundError,
     MediaTooLargeError,
     UnsupportedMediaTypeError,
     create_media_asset,
     delete_media_asset,
     get_media_asset,
+    get_local_media_file,
     list_media_assets,
 )
 
 
 router = APIRouter(prefix="/api/media", tags=["media"])
+public_router = APIRouter(prefix="/media", tags=["media-serving"])
 MediaIdPath = Annotated[int, Path(gt=0)]
 
 
@@ -137,3 +141,29 @@ def delete_media_endpoint(
         ) from exc
 
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@public_router.get(
+    "/{storage_key:path}",
+    responses={status.HTTP_404_NOT_FOUND: {"model": ErrorResponse}},
+)
+def serve_local_media_endpoint(
+    storage_key: str,
+    db: Session = Depends(get_db),
+) -> FileResponse:
+    try:
+        media_file = get_local_media_file(
+            db,
+            storage_key=storage_key,
+        )
+    except MediaFileNotFoundError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(exc),
+        ) from exc
+
+    return FileResponse(
+        path=media_file.file_path,
+        media_type=media_file.mime_type,
+        filename=media_file.original_filename,
+    )

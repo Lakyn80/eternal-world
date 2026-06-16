@@ -11,7 +11,7 @@ Eternal World is a production-oriented AI memory social platform under active ba
 - Docker Compose for local orchestration
 - GitHub Actions CI for backend and frontend validation
 
-The backend currently includes infrastructure foundations, authentication, Memory Profiles CRUD, a chat backend MVP with a prepared multi-agent architecture tree, and a media storage foundation with local server storage abstraction. The frontend remains minimal and was not expanded as part of the backend slices completed so far.
+The backend currently includes infrastructure foundations, authentication, Memory Profiles CRUD, a chat backend MVP with a prepared multi-agent architecture tree, a media storage foundation with local server storage abstraction, and local media serving plus Memory Profile photo binding for dev/MVP use. The frontend remains minimal and was not expanded as part of the backend slices completed so far.
 
 ## 2. Production Architecture Decisions
 
@@ -129,10 +129,11 @@ Current migration history:
 - `20260616_0003` update `memory_profiles` for CRUD support
 - `20260616_0004` drop legacy memory-profile columns that were replaced by the CRUD-oriented schema
 - `20260617_0005` create `media_assets` table
+- `20260617_0006` add `memory_profiles.main_photo_media_id`
 
 Current Alembic head:
 
-- `20260617_0005`
+- `20260617_0006`
 
 Chat backend note:
 
@@ -206,6 +207,8 @@ The Memory Profiles backend CRUD slice is implemented and available through:
 
 Current Memory Profile fields:
 
+- `photo_media_id` optional
+- `photo_url` optional response field
 - `name` required
 - `birth_date` optional
 - `death_date` optional
@@ -221,9 +224,12 @@ Current CRUD behavior:
 - get only a profile owned by the current user
 - update only a profile owned by the current user
 - delete only a profile owned by the current user
+- assign an owned uploaded image as the main profile photo
+- remove/unset the current main profile photo
 - cross-user access returns `404`, not `403`
 - profile path parameter is constrained to positive integer IDs
 - optional text fields are normalized safely
+- profile responses can include `photo_media_id` and a usable relative `photo_url`
 
 Memory Profiles test coverage currently includes:
 
@@ -235,6 +241,10 @@ Memory Profiles test coverage currently includes:
 - unauthenticated request rejected
 - user cannot access another user’s profile
 - SQL-like text input handled safely without breaking the API
+- authenticated user can assign own uploaded image to own Memory Profile
+- authenticated user can unset profile photo
+- non-image media cannot be assigned as profile photo
+- cross-user profile-photo binding attempts return `404`
 
 ## 11. Chat Backend MVP and Agent Architecture Summary
 
@@ -344,6 +354,7 @@ The media storage foundation is implemented and available through:
 - `GET /api/media`
 - `GET /api/media/{media_id}`
 - `DELETE /api/media/{media_id}`
+- `GET /media/{storage_key:path}` for local/dev serving
 
 Current media module structure:
 
@@ -359,6 +370,7 @@ Current storage behavior:
 
 - all media endpoints require JWT authentication
 - local file storage is implemented now through a storage-provider abstraction
+- local media files can be served safely through `/media/{storage_key:path}` in dev/MVP mode
 - future Yandex Object Storage integration is reserved behind a placeholder provider
 - uploaded files are written under the configured media root
 - file paths are generated internally through storage keys, not trusted filenames
@@ -374,6 +386,7 @@ Current storage behavior:
 - public URLs are returned as relative media paths and do not expose absolute server paths
 - profile-linked uploads verify that the referenced Memory Profile belongs to the current user
 - cross-user media access returns `404`, not `403`
+- local media serving returns `404` for missing files and rejects path traversal through validated storage-key resolution
 
 Current media validation and safety behavior:
 
@@ -397,6 +410,9 @@ Media test coverage currently includes:
 - unsupported MIME type is rejected
 - too large file is rejected
 - path traversal filename is sanitized and remains inside the media root
+- local media route serves an uploaded local file safely
+- local media route rejects path traversal
+- local media route returns `404` for missing files
 - user can list only own media
 - user can get own media metadata
 - user cannot get another user’s media
@@ -407,19 +423,53 @@ Media test coverage currently includes:
 - storage provider metadata responses do not expose absolute filesystem paths
 - no raw file bytes are stored in the database model
 
-## 14. Current Verification Status
+## 14. Local Media Serving and MemoryProfile Photo Binding Summary
+
+The local media serving and profile-photo slice is implemented through:
+
+- `GET /media/{storage_key:path}`
+- `POST /api/memory-profiles/{profile_id}/photo`
+- `DELETE /api/memory-profiles/{profile_id}/photo`
+
+Current behavior:
+
+- local media serving uses the configured `MEDIA_ROOT` and resolves only validated storage keys
+- only files inside `MEDIA_ROOT` are served
+- missing files return `404`
+- path traversal attempts are rejected safely and return `404`
+- Memory Profile photo binding stores a durable media reference through `main_photo_media_id`
+- uploaded image media can be assigned only when both the profile and the media asset belong to the current user
+- only image media (`jpeg`, `png`, `webp`) can be bound as profile photos
+- profile photo removal unsets the media reference without touching the stored media metadata
+- profile responses expose only relative media URLs and never absolute filesystem paths
+
+Test coverage for this slice includes:
+
+- safe local media serving for uploaded files
+- local media route missing-file handling
+- local media route path-traversal rejection
+- successful profile-photo assignment
+- successful profile-photo removal
+- cross-user media assignment blocked with `404`
+- cross-user profile assignment blocked with `404`
+- non-image profile-photo binding rejected safely
+- unauthenticated profile-photo binding rejected
+- usable `photo_media_id` and `photo_url` fields returned in profile responses
+
+## 15. Current Verification Status
 
 Current local verification completed on `2026-06-17`:
 
-- Backend tests passing locally: `51 passed`
-- Backend tests passing in Docker: `51 passed`
+- Backend tests passing locally: `61 passed`
+- Backend tests passing in Docker: `61 passed`
 - Docker working: confirmed with `docker compose up -d --build backend`
-- Alembic migrations working: confirmed with `docker compose exec backend alembic upgrade head` and `docker compose exec backend alembic current` -> `20260617_0005 (head)`
+- Alembic migrations working: confirmed with `docker compose exec backend alembic upgrade head` and `docker compose exec backend alembic current` -> `20260617_0006 (head)`
 - Runtime health OK: `{"status":"ok","database":"ok","redis":"ok"}`
 - Observability foundation verified previously with live `X-Request-ID` response header
 - Media storage foundation verified with local pytest coverage and Docker backend startup after rebuild
+- Local media serving and profile-photo binding verified with local pytest coverage and Docker backend verification
 
-## 15. Commit Tracking
+## 16. Commit Tracking
 
 Current `git log --oneline` history:
 
@@ -438,7 +488,7 @@ Current `git log --oneline` history:
 
 Current working tree note:
 
-- The media storage foundation slice is implemented in the working tree and is not yet represented by a committed hash.
+- The local media serving and Memory Profile photo binding slice is implemented in the working tree and is not yet represented by a committed hash.
 
 Future commit entry format:
 
@@ -451,7 +501,7 @@ Future commit entry format:
 - Docker verified:
 ```
 
-## 16. Mandatory Future Rule
+## 17. Mandatory Future Rule
 
 This file is mandatory project tracking documentation and must be maintained continuously.
 

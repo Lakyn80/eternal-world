@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import date, datetime
+from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
@@ -83,11 +84,17 @@ class MemoryProfileUpdate(BaseModel):
         return self
 
 
+class MemoryProfilePhotoAssign(BaseModel):
+    media_id: int = Field(gt=0)
+
+
 class MemoryProfileRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: int
     user_id: int
+    photo_media_id: int | None
+    photo_url: str | None
     name: str
     birth_date: date | None
     death_date: date | None
@@ -97,3 +104,41 @@ class MemoryProfileRead(BaseModel):
     is_public: bool
     created_at: datetime
     updated_at: datetime
+
+    @field_validator("photo_url")
+    @classmethod
+    def reject_absolute_filesystem_paths(cls, value: str | None) -> str | None:
+        if value is not None and (value.startswith("/app/") or value.startswith("C:\\")):
+            raise ValueError("Absolute filesystem paths are not allowed")
+
+        return value
+
+
+def build_memory_profile_read(memory_profile: Any) -> MemoryProfileRead:
+    photo_url = None
+    if getattr(memory_profile, "main_photo_media", None) is not None:
+        from app.modules.media.storage import get_storage_provider
+
+        storage_provider = get_storage_provider(memory_profile.main_photo_media.storage_provider)
+        try:
+            photo_url = storage_provider.build_public_url(
+                storage_key=memory_profile.main_photo_media.storage_key,
+            )
+        except NotImplementedError:
+            photo_url = None
+
+    return MemoryProfileRead(
+        id=memory_profile.id,
+        user_id=memory_profile.user_id,
+        photo_media_id=memory_profile.main_photo_media_id,
+        photo_url=photo_url,
+        name=memory_profile.name,
+        birth_date=memory_profile.birth_date,
+        death_date=memory_profile.death_date,
+        biography=memory_profile.biography,
+        personality=memory_profile.personality,
+        catchphrases=memory_profile.catchphrases,
+        is_public=memory_profile.is_public,
+        created_at=memory_profile.created_at,
+        updated_at=memory_profile.updated_at,
+    )
