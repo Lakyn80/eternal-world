@@ -288,20 +288,63 @@ Chat and agent test coverage currently includes:
 - mock Brain Agent provider is deterministic
 - agent orchestrator calls Brain Agent only for this slice
 
-## 12. Current Verification Status
+## 12. Observability Foundation Summary
+
+The observability foundation currently includes:
+
+- structured JSON logging in `backend/app/core/logging.py`
+- request context middleware in `backend/app/core/middleware.py`
+- safe global error handling in `backend/app/core/errors.py`
+- request correlation through `X-Request-ID`
+
+Current observability behavior:
+
+- every backend request receives a `request_id`
+- a safe client-provided `X-Request-ID` is reused
+- an unsafe or oversized `X-Request-ID` is replaced with a generated UUID
+- every response includes `X-Request-ID`
+- request lifecycle logs emit structured JSON for request start and completion
+- log fields include timestamp, level, event, request id, method, path, status code, and duration when available
+- unexpected backend exceptions return a safe generic JSON response with the request id
+- logging helpers sanitize sensitive keys before writing structured fields
+
+Current log-safety safeguards:
+
+- `password` is redacted
+- `access_token` is redacted
+- `authorization` is redacted
+- `secret` is redacted
+- `api_key` is redacted
+- raw request bodies are not logged
+
+Observability test coverage currently includes:
+
+- request without `X-Request-ID` returns a generated request id
+- request with safe `X-Request-ID` returns the same request id
+- unsafe request id input is replaced safely
+- `/health` still works with the middleware installed
+- `/health/runtime` still works with the middleware installed
+- unexpected exception handling returns safe JSON and includes the request id
+- sensitive logging fields are sanitized before output
+
+## 13. Current Verification Status
 
 Current local verification completed on `2026-06-16`:
 
-- Backend tests passing: `32 passed`
+- Backend tests passing: `38 passed`
 - Docker working: confirmed with `docker compose ps`
-- Alembic migrations working: confirmed with `docker compose exec backend alembic current`
+- Alembic migrations working: confirmed with `docker compose exec backend alembic current` -> `20260616_0004 (head)`
 - Runtime health OK: `{"status":"ok","database":"ok","redis":"ok"}`
+- Health endpoint OK: `{"status":"ok"}`
+- Live `X-Request-ID` response header OK
 - Live chat smoke test OK against `http://localhost:8033`
 
-## 13. Commit Tracking
+## 14. Commit Tracking
 
 Current `git log --oneline` history:
 
+- `065ea8f` Add chat backend and agent architecture skeleton
+- `0ce4a0e` Add project progress tracking
 - `893b0f0` Add memory profiles backend CRUD
 - `7983c1a` Add backend authentication MVP
 - `ebb6805` Pin bcrypt for passlib compatibility
@@ -314,7 +357,7 @@ Current `git log --oneline` history:
 
 Current working tree note:
 
-- The chat backend MVP and the prepared multi-agent architecture tree are implemented in the working tree and are not yet represented by a committed hash.
+- The observability foundation slice is implemented in the working tree and is not yet represented by a committed hash.
 
 Future commit entry format:
 
@@ -327,7 +370,7 @@ Future commit entry format:
 - Docker verified:
 ```
 
-## 14. Mandatory Future Rule
+## 15. Mandatory Future Rule
 
 This file is mandatory project tracking documentation and must be maintained continuously.
 

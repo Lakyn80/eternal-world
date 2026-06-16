@@ -4,13 +4,19 @@ from sqlalchemy import text
 
 from app.cache.redis_client import get_redis_client
 from app.core.config import settings
+from app.core.errors import install_error_handlers
+from app.core.logging import configure_logging
+from app.core.middleware import install_middleware
 from app.db.session import engine
 from app.modules.auth.router import router as auth_router
 from app.modules.chat.router import router as chat_router
 from app.modules.memory_profiles.router import router as memory_profiles_router
 
 
+configure_logging()
 app = FastAPI(title=settings.app_name)
+install_error_handlers(app)
+install_middleware(app)
 
 app.add_middleware(
     CORSMiddleware,
