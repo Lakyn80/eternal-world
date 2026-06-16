@@ -6,6 +6,7 @@ from app.cache.redis_client import get_redis_client
 from app.core.config import settings
 from app.db.session import engine
 from app.modules.auth.router import router as auth_router
+from app.modules.chat.router import router as chat_router
 from app.modules.memory_profiles.router import router as memory_profiles_router
 
 
@@ -19,6 +20,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 app.include_router(auth_router)
+app.include_router(chat_router)
 app.include_router(memory_profiles_router)
 
 

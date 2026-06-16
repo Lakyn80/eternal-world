@@ -11,7 +11,7 @@ Eternal World is a production-oriented AI memory social platform under active ba
 - Docker Compose for local orchestration
 - GitHub Actions CI for backend and frontend validation
 
-The backend currently includes infrastructure foundations, authentication, and Memory Profiles CRUD. The frontend remains minimal and was not expanded as part of the backend slices completed so far.
+The backend currently includes infrastructure foundations, authentication, Memory Profiles CRUD, and a chat backend MVP with a prepared multi-agent architecture tree. The frontend remains minimal and was not expanded as part of the backend slices completed so far.
 
 ## 2. Production Architecture Decisions
 
@@ -98,8 +98,10 @@ Current backend structure is modular:
 - `backend/app/db`
 - `backend/app/cache`
 - `backend/app/modules/auth`
+- `backend/app/modules/chat`
 - `backend/app/modules/users`
 - `backend/app/modules/memory_profiles`
+- `backend/app/modules/ai_agents`
 - placeholder module packages also exist for future slices
 
 ## 7. Database Foundation Summary
@@ -127,6 +129,11 @@ Current migration history:
 Current Alembic head:
 
 - `20260616_0004`
+
+Chat backend note:
+
+- The chat MVP reuses the existing `ChatMessage` model for stored user and assistant messages
+- No additional Alembic migration was required for the chat slice
 
 ## 8. Security Foundation Summary
 
@@ -220,16 +227,78 @@ Memory Profiles test coverage currently includes:
 - user cannot access another user’s profile
 - SQL-like text input handled safely without breaking the API
 
-## 11. Current Verification Status
+## 11. Chat Backend MVP and Agent Architecture Summary
+
+The chat backend MVP is implemented and available through:
+
+- `POST /api/chat/{profile_id}/messages`
+- `GET /api/chat/{profile_id}/messages`
+
+Current chat behavior:
+
+- all chat endpoints require JWT authentication
+- chat access is limited to Memory Profiles owned by the current user
+- cross-user profile access returns `404`, not `403`
+- user messages and assistant replies are stored in the existing `ChatMessage` model
+- the send endpoint returns:
+  - message id
+  - profile id
+  - user message
+  - AI response text
+  - `audio_url` nullable
+  - `video_url` nullable
+  - `created_at`
+
+Current chat flow:
+
+- chat router
+- chat service
+- agent orchestrator
+- brain agent service
+- mock brain provider
+
+Prepared agent architecture tree now present in the backend:
+
+- `backend/app/modules/ai_agents/orchestrator.py`
+- `backend/app/modules/ai_agents/schemas.py`
+- `backend/app/modules/ai_agents/brain/`
+- `backend/app/modules/ai_agents/voice/`
+- `backend/app/modules/ai_agents/face/`
+- `backend/app/modules/ai_agents/director/`
+
+Agent implementation status:
+
+- Brain Agent: implemented as a text-only skeleton for this slice
+- Brain prompt builder: implemented using current user message, Memory Profile fields, and recent chat history
+- Brain provider: implemented as a deterministic local mock provider for runtime and CI
+- Voice Agent: placeholder only, not called
+- Face / Lip-Sync Agent: placeholder only, not called
+- Director Agent: placeholder only, not called
+
+Chat and agent test coverage currently includes:
+
+- authenticated user can send chat message to own profile
+- chat message stores user message and AI response text
+- authenticated user can list own chat history
+- unauthenticated send is rejected
+- unauthenticated history request is rejected
+- user cannot send message to another user’s profile
+- user cannot read another user’s chat history
+- SQL-injection-like message text is treated safely as normal text
+- mock Brain Agent provider is deterministic
+- agent orchestrator calls Brain Agent only for this slice
+
+## 12. Current Verification Status
 
 Current local verification completed on `2026-06-16`:
 
-- Backend tests passing: `22 passed`
+- Backend tests passing: `32 passed`
 - Docker working: confirmed with `docker compose ps`
 - Alembic migrations working: confirmed with `docker compose exec backend alembic current`
 - Runtime health OK: `{"status":"ok","database":"ok","redis":"ok"}`
+- Live chat smoke test OK against `http://localhost:8033`
 
-## 12. Commit Tracking
+## 13. Commit Tracking
 
 Current `git log --oneline` history:
 
@@ -243,6 +312,10 @@ Current `git log --oneline` history:
 - `1166f00` Add backend and frontend MVP base
 - `1e3da05` Initial production project structure
 
+Current working tree note:
+
+- The chat backend MVP and the prepared multi-agent architecture tree are implemented in the working tree and are not yet represented by a committed hash.
+
 Future commit entry format:
 
 ```md
@@ -254,7 +327,7 @@ Future commit entry format:
 - Docker verified:
 ```
 
-## 13. Mandatory Future Rule
+## 14. Mandatory Future Rule
 
 This file is mandatory project tracking documentation and must be maintained continuously.
 
