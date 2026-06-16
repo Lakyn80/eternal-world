@@ -1,8 +1,9 @@
 from __future__ import annotations
 
+from datetime import date
 from typing import Any
 
-from sqlalchemy import Boolean, CheckConstraint, ForeignKey, Integer, JSON, String, Text, text
+from sqlalchemy import Boolean, CheckConstraint, Date, ForeignKey, Integer, JSON, String, Text, text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base, TimestampMixin
@@ -29,9 +30,8 @@ class User(TimestampMixin, Base):
         server_default=text("false"),
     )
 
-    memory_profile: Mapped[MemoryProfile | None] = relationship(
+    memory_profiles: Mapped[list[MemoryProfile]] = relationship(
         back_populates="user",
-        uselist=False,
         cascade="all, delete-orphan",
     )
     chat_messages: Mapped[list[ChatMessage]] = relationship(
@@ -50,16 +50,23 @@ class MemoryProfile(TimestampMixin, Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     user_id: Mapped[int] = mapped_column(
         ForeignKey("users.id", ondelete="CASCADE"),
-        unique=True,
         index=True,
         nullable=False,
     )
-    display_name: Mapped[str] = mapped_column(String(120), nullable=False)
-    persona_summary: Mapped[str | None] = mapped_column(Text, nullable=True)
-    long_term_summary: Mapped[str | None] = mapped_column(Text, nullable=True)
-    preferences: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
+    name: Mapped[str] = mapped_column(String(120), nullable=False)
+    birth_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    death_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    biography: Mapped[str | None] = mapped_column(Text, nullable=True)
+    personality: Mapped[str | None] = mapped_column(Text, nullable=True)
+    catchphrases: Mapped[str | None] = mapped_column(Text, nullable=True)
+    is_public: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=False,
+        server_default=text("false"),
+    )
 
-    user: Mapped[User] = relationship(back_populates="memory_profile")
+    user: Mapped[User] = relationship(back_populates="memory_profiles")
     chat_messages: Mapped[list[ChatMessage]] = relationship(back_populates="memory_profile")
     memories: Mapped[list[Memory]] = relationship(back_populates="memory_profile")
 
