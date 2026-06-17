@@ -522,6 +522,9 @@ Current local verification completed on `2026-06-17`:
 
 Current `git log --oneline` history:
 
+- `6eb90d2` Add Brain Agent provider foundation
+- `c079d85` Add local media serving and profile photo binding
+- `3115d71` Add media storage foundation
 - `44268be` Add backend observability foundation
 - `065ea8f` Add chat backend and agent architecture skeleton
 - `0ce4a0e` Add project progress tracking
@@ -537,7 +540,7 @@ Current `git log --oneline` history:
 
 Current working tree note:
 
-- The local media serving and Memory Profile photo binding slice, together with the Brain Agent provider foundation slice, is implemented in the working tree and is not yet represented by a committed hash.
+- The working tree currently contains only an uncommitted `PROJECT_PROGRESS.md` synchronization update.
 
 Future commit entry format:
 
