@@ -11,7 +11,7 @@ Eternal World is a production-oriented AI memory social platform under active ba
 - Docker Compose for local orchestration
 - GitHub Actions CI for backend and frontend validation
 
-The backend currently includes infrastructure foundations, authentication, Memory Profiles CRUD, a chat backend MVP with a prepared multi-agent architecture tree, a media storage foundation with local server storage abstraction, local media serving plus Memory Profile photo binding for dev/MVP use, and a configurable Brain Agent provider foundation with deterministic mock defaults. The frontend remains minimal and was not expanded as part of the backend slices completed so far.
+The backend currently includes infrastructure foundations, authentication, Memory Profiles CRUD, a chat backend MVP with a prepared multi-agent architecture tree, a media storage foundation with local server storage abstraction, local media serving plus Memory Profile photo binding for dev/MVP use, a configurable Brain Agent provider foundation with deterministic mock defaults, and a static billing / tariff foundation. The frontend remains minimal and was not expanded as part of the backend slices completed so far.
 
 ## 2. Production Architecture Decisions
 
@@ -100,6 +100,7 @@ Current backend structure is modular:
 - `backend/app/db`
 - `backend/app/cache`
 - `backend/app/modules/auth`
+- `backend/app/modules/billing`
 - `backend/app/modules/chat`
 - `backend/app/modules/media`
 - `backend/app/modules/users`
@@ -504,12 +505,77 @@ Brain-provider test coverage currently includes:
 - chat endpoint still works with mock provider
 - sensitive AI config values are not exposed in logs or API responses
 
-## 16. Current Verification Status
+## 16. Billing Foundation Summary
+
+The billing / tariff foundation is implemented and available through:
+
+- `GET /api/billing/plans`
+- `GET /api/billing/me`
+- `GET /api/billing/limits`
+
+Current billing module structure:
+
+- `backend/app/modules/billing/__init__.py`
+- `backend/app/modules/billing/router.py`
+- `backend/app/modules/billing/schemas.py`
+- `backend/app/modules/billing/service.py`
+- `backend/app/modules/billing/plans.py`
+- `backend/app/modules/billing/limits.py`
+
+Current billing behavior:
+
+- plan codes are stable and lowercase:
+  - `free`
+  - `basic`
+  - `premium`
+  - `family`
+- `GET /api/billing/plans` is public and returns the tariff catalog in stable order
+- authenticated users default to the `free` plan
+- `GET /api/billing/me` returns the effective plan for the current user
+- `GET /api/billing/limits` returns the effective limits plus placeholder usage values
+- tariffs are static for this slice and separated from auth, chat, media, and memory-profile logic
+- prices are stored as integer rubles
+- unlimited numeric limits are represented as `null`
+- no payment provider, invoice flow, or subscription purchase flow is implemented yet
+- no database migration is required for this slice
+
+Current supported billing limits:
+
+- `max_profiles`
+- `max_memories`
+- `max_audio_minutes`
+- `max_videos_per_month`
+- `max_video_seconds`
+- `allow_watermark_removal`
+- `allow_unlimited_chat`
+- `allow_priority_support`
+- `allow_family_members`
+- `allow_shared_memories`
+- `allow_family_tree`
+- `max_family_members`
+- `max_video_quality`
+
+Billing test coverage currently includes:
+
+- list plans returns all four plans
+- plan codes are stable and ordered as `free`, `basic`, `premium`, `family`
+- unauthenticated user can list public plans
+- authenticated user defaults to `free`
+- `/api/billing/me` rejects unauthenticated users
+- `/api/billing/limits` rejects unauthenticated users
+- `free` plan has correct limits
+- `basic` plan has correct limits
+- `premium` plan has unlimited values where expected
+- `family` plan includes family-specific flags
+- billing endpoints do not call external HTTP helpers
+- `PROJECT_PROGRESS.md` is updated for this slice
+
+## 17. Current Verification Status
 
 Current local verification completed on `2026-06-17`:
 
-- Backend tests passing locally: `67 passed`
-- Backend tests passing in Docker: `67 passed`
+- Backend tests passing locally: `80 passed`
+- Backend tests passing in Docker: `79 passed, 1 skipped`
 - Docker working: confirmed with `docker compose up -d --build backend`
 - Alembic migrations working: confirmed with `docker compose exec backend alembic upgrade head` and `docker compose exec backend alembic current` -> `20260617_0006 (head)`
 - Runtime health OK: `{"status":"ok","database":"ok","redis":"ok"}`
@@ -517,8 +583,9 @@ Current local verification completed on `2026-06-17`:
 - Media storage foundation verified with local pytest coverage and Docker backend startup after rebuild
 - Local media serving and profile-photo binding verified with local pytest coverage and Docker backend verification
 - Brain Agent provider foundation verified with local pytest coverage and Docker backend verification
+- Billing / tariff foundation verified with local pytest coverage and Docker backend verification
 
-## 17. Commit Tracking
+## 18. Commit Tracking
 
 Current `git log --oneline` history:
 
@@ -540,7 +607,7 @@ Current `git log --oneline` history:
 
 Current working tree note:
 
-- The working tree currently contains only an uncommitted `PROJECT_PROGRESS.md` synchronization update.
+- The billing / tariff foundation slice is implemented in the working tree and is not yet represented by a committed hash.
 
 Future commit entry format:
 
@@ -553,7 +620,7 @@ Future commit entry format:
 - Docker verified:
 ```
 
-## 18. Mandatory Future Rule
+## 19. Mandatory Future Rule
 
 This file is mandatory project tracking documentation and must be maintained continuously.
 
