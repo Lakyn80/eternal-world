@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from app.modules.billing.plans import PlanDefinition
-from app.modules.billing.schemas import BillingPlanLimits, BillingUsageSnapshot
+from app.modules.billing.schemas import BillingPlanLimits
 
 
 def build_plan_limits(plan_definition: PlanDefinition) -> BillingPlanLimits:
@@ -20,14 +20,4 @@ def build_plan_limits(plan_definition: PlanDefinition) -> BillingPlanLimits:
         allow_family_tree=plan_limits.allow_family_tree,
         max_family_members=plan_limits.max_family_members,
         max_video_quality=plan_limits.max_video_quality,
-    )
-
-
-def build_usage_placeholders() -> BillingUsageSnapshot:
-    return BillingUsageSnapshot(
-        current_profiles=0,
-        current_memories=0,
-        current_audio_minutes=0,
-        current_videos_month=0,
-        current_family_members=0,
     )

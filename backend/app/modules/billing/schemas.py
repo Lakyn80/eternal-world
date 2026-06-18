@@ -49,3 +49,9 @@ class BillingLimitsRead(BaseModel):
     plan_code: str
     limits: BillingPlanLimits
     current_usage: BillingUsageSnapshot
+
+
+class BillingLimitExceededResponse(BaseModel):
+    detail: str
+    error: str
+    code: str

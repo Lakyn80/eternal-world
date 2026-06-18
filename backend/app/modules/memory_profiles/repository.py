@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
 
 from app.db.models import MemoryProfile
@@ -45,6 +45,11 @@ def list_memory_profiles_for_user(db: Session, user_id: int) -> list[MemoryProfi
         .order_by(MemoryProfile.id.asc())
     )
     return list(db.scalars(statement))
+
+
+def count_memory_profiles_for_user(db: Session, user_id: int) -> int:
+    statement = select(func.count(MemoryProfile.id)).where(MemoryProfile.user_id == user_id)
+    return int(db.scalar(statement) or 0)
 
 
 def get_memory_profile_for_user(

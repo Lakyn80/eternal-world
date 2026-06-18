@@ -222,6 +222,7 @@ Current Memory Profile fields:
 Current CRUD behavior:
 
 - create profile for authenticated user
+- Memory Profile creation now enforces the current plan entitlement before insert
 - list only profiles owned by the current user
 - get only a profile owned by the current user
 - update only a profile owned by the current user
@@ -232,10 +233,16 @@ Current CRUD behavior:
 - profile path parameter is constrained to positive integer IDs
 - optional text fields are normalized safely
 - profile responses can include `photo_media_id` and a usable relative `photo_url`
+- the default `free` plan currently allows up to 1 Memory Profile per user
+- profile limit exceeded responses return safe `403` JSON with machine-readable codes
 
 Memory Profiles test coverage currently includes:
 
 - create memory profile with authenticated user
+- free user can create the first Memory Profile
+- free user cannot create the second Memory Profile
+- profile limit checks count only the current user's profiles
+- another user's profiles do not affect the current user's limit
 - list only own profiles
 - get own profile
 - update own profile
@@ -521,6 +528,9 @@ Current billing module structure:
 - `backend/app/modules/billing/service.py`
 - `backend/app/modules/billing/plans.py`
 - `backend/app/modules/billing/limits.py`
+- `backend/app/modules/billing/entitlements.py`
+- `backend/app/modules/billing/usage.py`
+- `backend/app/modules/billing/exceptions.py`
 
 Current billing behavior:
 
@@ -533,6 +543,14 @@ Current billing behavior:
 - authenticated users default to the `free` plan
 - `GET /api/billing/me` returns the effective plan for the current user
 - `GET /api/billing/limits` returns the effective limits plus placeholder usage values
+- reusable entitlement checks now live inside the billing module
+- Memory Profile creation calls billing entitlement logic before persistence
+- `free` users can have up to 1 Memory Profile
+- `basic` users can have up to 3 Memory Profiles
+- `premium` users have unlimited Memory Profiles
+- `family` users have unlimited Memory Profiles
+- limit violations return safe `403` responses with `error=limit_exceeded` and `code=profile_limit_exceeded`
+- future usage checks can reuse the same billing entitlement helpers for memories, audio minutes, videos, and family-member limits
 - tariffs are static for this slice and separated from auth, chat, media, and memory-profile logic
 - prices are stored as integer rubles
 - unlimited numeric limits are represented as `null`
@@ -567,16 +585,20 @@ Billing test coverage currently includes:
 - `basic` plan has correct limits
 - `premium` plan has unlimited values where expected
 - `family` plan includes family-specific flags
+- the reusable billing limit checker allows unlimited plans
+- `basic` Memory Profile limit logic allows 3 profiles and rejects the 4th
+- `premium` Memory Profile limit logic supports unlimited profiles
+- `family` Memory Profile limit logic supports unlimited profiles
 - billing endpoints do not call external HTTP helpers
 - `PROJECT_PROGRESS.md` is updated for this slice
 
 ## 17. Current Verification Status
 
-Current local verification completed on `2026-06-17`:
+Current local verification completed on `2026-06-18`:
 
-- Backend tests passing locally: `80 passed`
-- Backend tests passing in Docker: `79 passed, 1 skipped`
-- Docker working: confirmed with `docker compose up -d --build backend`
+- Backend tests passing locally: `87 passed`
+- Backend tests passing in Docker: `86 passed, 1 skipped`
+- Docker working: confirmed with `docker compose up -d --build`
 - Alembic migrations working: confirmed with `docker compose exec backend alembic upgrade head` and `docker compose exec backend alembic current` -> `20260617_0006 (head)`
 - Runtime health OK: `{"status":"ok","database":"ok","redis":"ok"}`
 - Observability foundation verified previously with live `X-Request-ID` response header
@@ -584,6 +606,7 @@ Current local verification completed on `2026-06-17`:
 - Local media serving and profile-photo binding verified with local pytest coverage and Docker backend verification
 - Brain Agent provider foundation verified with local pytest coverage and Docker backend verification
 - Billing / tariff foundation verified with local pytest coverage and Docker backend verification
+- Usage Limits / Entitlements foundation verified with local pytest coverage and Docker backend verification
 
 ## 18. Commit Tracking
 
@@ -607,7 +630,7 @@ Current `git log --oneline` history:
 
 Current working tree note:
 
-- The billing / tariff foundation slice is implemented in the working tree and is not yet represented by a committed hash.
+- The Usage Limits / Entitlements foundation slice is implemented in the working tree and is not yet represented by a committed hash.
 
 Future commit entry format:
 

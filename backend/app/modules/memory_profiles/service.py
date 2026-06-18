@@ -5,6 +5,7 @@ from datetime import date
 from sqlalchemy.orm import Session
 
 from app.db.models import MemoryProfile, User
+from app.modules.billing.service import enforce_memory_profile_creation_limit
 from app.modules.media import repository as media_repository
 from app.modules.memory_profiles import repository
 from app.modules.memory_profiles.schemas import (
@@ -49,6 +50,11 @@ def create_memory_profile(
     current_user: User,
     payload: MemoryProfileCreate,
 ) -> MemoryProfile:
+    current_profiles = repository.count_memory_profiles_for_user(db, current_user.id)
+    enforce_memory_profile_creation_limit(
+        current_user=current_user,
+        current_profiles=current_profiles,
+    )
     memory_profile = repository.create_memory_profile(
         db,
         user_id=current_user.id,

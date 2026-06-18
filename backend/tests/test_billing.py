@@ -2,6 +2,10 @@ import httpx
 import pytest
 from pathlib import Path
 
+from app.modules.billing.entitlements import check_usage_limit
+from app.modules.billing.exceptions import BillingLimitExceededError
+from app.modules.billing.service import enforce_memory_profile_limit_for_plan
+
 
 def _register_and_login(client, email: str) -> str:
     password = "StrongPass123"
@@ -168,6 +172,50 @@ def test_billing_limits_returns_free_plan_limits_and_usage_placeholders(client):
     }
 
 
+def test_billing_limit_checker_returns_allowed_for_unlimited_plans():
+    result = check_usage_limit(
+        current_usage=999,
+        limit=None,
+        error="limit_exceeded",
+        code="profile_limit_exceeded",
+        detail="Memory profile limit exceeded for current plan",
+    )
+
+    assert result.is_allowed is True
+    assert result.limit is None
+
+
+def test_basic_plan_profile_limit_logic_supports_3_profiles():
+    for current_profiles in (0, 1, 2):
+        enforce_memory_profile_limit_for_plan(
+            plan_code="basic",
+            current_profiles=current_profiles,
+        )
+
+    with pytest.raises(BillingLimitExceededError) as exc_info:
+        enforce_memory_profile_limit_for_plan(
+            plan_code="basic",
+            current_profiles=3,
+        )
+
+    assert exc_info.value.code == "profile_limit_exceeded"
+    assert exc_info.value.error == "limit_exceeded"
+
+
+def test_premium_plan_profile_limit_logic_supports_unlimited_profiles():
+    enforce_memory_profile_limit_for_plan(
+        plan_code="premium",
+        current_profiles=10_000,
+    )
+
+
+def test_family_plan_profile_limit_logic_supports_unlimited_profiles():
+    enforce_memory_profile_limit_for_plan(
+        plan_code="family",
+        current_profiles=10_000,
+    )
+
+
 def test_no_payment_provider_is_called_and_no_external_api_calls_are_made(client, monkeypatch):
     def fail_http_call(*args, **kwargs):
         raise AssertionError("No external HTTP call should be made for billing foundation")
@@ -197,4 +245,8 @@ def test_project_progress_is_updated_for_billing_foundation():
 
     content = project_progress_path.read_text(encoding="utf-8")
 
-    assert "Billing / Tariff Foundation" in content or "Billing Foundation Summary" in content
+    assert (
+        "Billing / Tariff Foundation" in content
+        or "Billing Foundation Summary" in content
+        or "Usage Limits / Entitlements Foundation" in content
+    )

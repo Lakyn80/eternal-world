@@ -39,6 +39,74 @@ def test_create_memory_profile_for_authenticated_user(client):
     assert body["is_public"] is True
 
 
+def test_free_user_cannot_create_second_memory_profile(client):
+    token = _register_and_login(client, "free-limit@example.com")
+
+    first_response = client.post(
+        "/api/memory-profiles",
+        headers=_auth_headers(token),
+        json={"name": "First Profile"},
+    )
+    second_response = client.post(
+        "/api/memory-profiles",
+        headers=_auth_headers(token),
+        json={"name": "Second Profile"},
+    )
+
+    assert first_response.status_code == 201
+    assert second_response.status_code == 403
+    assert second_response.json() == {
+        "detail": "Memory profile limit exceeded for current plan",
+        "error": "limit_exceeded",
+        "code": "profile_limit_exceeded",
+    }
+
+
+def test_another_users_profiles_do_not_affect_current_users_limit(client):
+    other_user_token = _register_and_login(client, "other-limit@example.com")
+    current_user_token = _register_and_login(client, "current-limit@example.com")
+
+    other_user_response = client.post(
+        "/api/memory-profiles",
+        headers=_auth_headers(other_user_token),
+        json={"name": "Other User Profile"},
+    )
+    current_user_response = client.post(
+        "/api/memory-profiles",
+        headers=_auth_headers(current_user_token),
+        json={"name": "Current User Profile"},
+    )
+
+    assert other_user_response.status_code == 201
+    assert current_user_response.status_code == 201
+
+
+def test_profile_limit_counts_only_current_users_profiles(client):
+    first_user_token = _register_and_login(client, "first-limit-count@example.com")
+    second_user_token = _register_and_login(client, "second-limit-count@example.com")
+
+    first_user_first_response = client.post(
+        "/api/memory-profiles",
+        headers=_auth_headers(first_user_token),
+        json={"name": "First User Profile"},
+    )
+    second_user_first_response = client.post(
+        "/api/memory-profiles",
+        headers=_auth_headers(second_user_token),
+        json={"name": "Second User Profile"},
+    )
+    second_user_second_response = client.post(
+        "/api/memory-profiles",
+        headers=_auth_headers(second_user_token),
+        json={"name": "Second User Extra Profile"},
+    )
+
+    assert first_user_first_response.status_code == 201
+    assert second_user_first_response.status_code == 201
+    assert second_user_second_response.status_code == 403
+    assert second_user_second_response.json()["code"] == "profile_limit_exceeded"
+
+
 def test_list_memory_profiles_returns_only_current_user_profiles(client):
     first_user_token = _register_and_login(client, "first-profiles@example.com")
     second_user_token = _register_and_login(client, "second-profiles@example.com")

@@ -9,6 +9,7 @@ from app.db.models import User
 from app.db.session import get_db
 from app.modules.auth.dependencies import get_current_user
 from app.modules.auth.schemas import ErrorResponse
+from app.modules.billing.schemas import BillingLimitExceededResponse
 from app.modules.memory_profiles.schemas import (
     MemoryProfileCreate,
     MemoryProfilePhotoAssign,
@@ -38,7 +39,10 @@ ProfileIdPath = Annotated[int, Path(gt=0)]
     "",
     response_model=MemoryProfileRead,
     status_code=status.HTTP_201_CREATED,
-    responses={status.HTTP_401_UNAUTHORIZED: {"model": ErrorResponse}},
+    responses={
+        status.HTTP_401_UNAUTHORIZED: {"model": ErrorResponse},
+        status.HTTP_403_FORBIDDEN: {"model": BillingLimitExceededResponse},
+    },
 )
 def create_memory_profile_endpoint(
     payload: MemoryProfileCreate,
