@@ -4,7 +4,7 @@ from pathlib import Path
 
 from app.modules.billing.entitlements import check_usage_limit
 from app.modules.billing.exceptions import BillingLimitExceededError
-from app.modules.billing.service import enforce_memory_profile_limit_for_plan
+from app.modules.billing.service import enforce_memory_limit_for_plan, enforce_memory_profile_limit_for_plan
 
 
 def _register_and_login(client, email: str) -> str:
@@ -213,6 +213,44 @@ def test_family_plan_profile_limit_logic_supports_unlimited_profiles():
     enforce_memory_profile_limit_for_plan(
         plan_code="family",
         current_profiles=10_000,
+    )
+
+
+def test_free_plan_memory_limit_logic_supports_10_memories():
+    for current_memories in range(10):
+        enforce_memory_limit_for_plan(
+            plan_code="free",
+            current_memories=current_memories,
+        )
+
+    with pytest.raises(BillingLimitExceededError) as exc_info:
+        enforce_memory_limit_for_plan(
+            plan_code="free",
+            current_memories=10,
+        )
+
+    assert exc_info.value.code == "memory_limit_exceeded"
+    assert exc_info.value.error == "limit_exceeded"
+
+
+def test_basic_plan_memory_limit_logic_supports_unlimited_memories():
+    enforce_memory_limit_for_plan(
+        plan_code="basic",
+        current_memories=10_000,
+    )
+
+
+def test_premium_plan_memory_limit_logic_supports_unlimited_memories():
+    enforce_memory_limit_for_plan(
+        plan_code="premium",
+        current_memories=10_000,
+    )
+
+
+def test_family_plan_memory_limit_logic_supports_unlimited_memories():
+    enforce_memory_limit_for_plan(
+        plan_code="family",
+        current_memories=10_000,
     )
 
 

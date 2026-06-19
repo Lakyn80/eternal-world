@@ -31,6 +31,16 @@ def test_database_models_are_registered():
         "mime_type",
         "size_bytes",
     }.issubset(MediaAsset.__table__.columns.keys())
+    assert {
+        "user_id",
+        "memory_profile_id",
+        "title",
+        "memory_type",
+        "content",
+        "occurred_at",
+        "occurred_year",
+        "media_id",
+    }.issubset(Memory.__table__.columns.keys())
 
     assert {"users", "memory_profiles", "chat_messages", "memories", "media_assets"}.issubset(
         Base.metadata.tables.keys()

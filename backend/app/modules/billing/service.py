@@ -90,3 +90,29 @@ def enforce_memory_profile_creation_limit(
         plan_code=get_effective_plan_code_for_user(current_user),
         current_profiles=current_profiles,
     )
+
+
+def enforce_memory_limit_for_plan(
+    *,
+    plan_code: str,
+    current_memories: int,
+) -> None:
+    plan_definition = get_plan_definition_or_raise(plan_code)
+    enforce_usage_limit(
+        current_usage=current_memories,
+        limit=plan_definition.limits.max_memories,
+        error="limit_exceeded",
+        code="memory_limit_exceeded",
+        detail="Memory limit exceeded for current plan",
+    )
+
+
+def enforce_memory_creation_limit(
+    *,
+    current_user: User,
+    current_memories: int,
+) -> None:
+    enforce_memory_limit_for_plan(
+        plan_code=get_effective_plan_code_for_user(current_user),
+        current_memories=current_memories,
+    )

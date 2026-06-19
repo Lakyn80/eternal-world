@@ -102,6 +102,7 @@ Current backend structure is modular:
 - `backend/app/modules/auth`
 - `backend/app/modules/billing`
 - `backend/app/modules/chat`
+- `backend/app/modules/memories`
 - `backend/app/modules/media`
 - `backend/app/modules/users`
 - `backend/app/modules/memory_profiles`
@@ -132,10 +133,11 @@ Current migration history:
 - `20260616_0004` drop legacy memory-profile columns that were replaced by the CRUD-oriented schema
 - `20260617_0005` create `media_assets` table
 - `20260617_0006` add `memory_profiles.main_photo_media_id`
+- `20260619_0007` add timeline memory fields and `memories.media_id`
 
 Current Alembic head:
 
-- `20260617_0006`
+- `20260619_0007`
 
 Chat backend note:
 
@@ -255,7 +257,73 @@ Memory Profiles test coverage currently includes:
 - non-image media cannot be assigned as profile photo
 - cross-user profile-photo binding attempts return `404`
 
-## 11. Chat Backend MVP and Agent Architecture Summary
+## 11. Memory Entries / Timeline Foundation Summary
+
+The Memory Entries / Timeline foundation is implemented and available through:
+
+- `POST /api/memory-profiles/{profile_id}/memories`
+- `GET /api/memory-profiles/{profile_id}/memories`
+- `GET /api/memories/{memory_id}`
+- `PATCH /api/memories/{memory_id}`
+- `DELETE /api/memories/{memory_id}`
+
+Current memory fields supported by the API:
+
+- `id`
+- `profile_id`
+- `owner_user_id`
+- `title`
+- `content`
+- `memory_type`
+- `occurred_at`
+- `occurred_year`
+- `media_id`
+- `created_at`
+- `updated_at`
+
+Current memory behavior:
+
+- all memory endpoints require JWT authentication
+- memories can only be created under Memory Profiles owned by the current user
+- memory reads, updates, and deletes are ownership-scoped and return `404` for cross-user access
+- titles are trimmed, required, and must not be empty
+- content is optional and trimmed safely
+- supported `memory_type` values are `text`, `photo`, `audio`, and `video`
+- timeline ordering is newest first by `occurred_at desc`, then `occurred_year desc`, then `created_at desc`
+- optional media linkage is ownership-checked and MIME-type-validated
+- text memories do not require media
+- memory creation now enforces the current billing entitlement for `max_memories`
+- the default `free` plan currently allows up to 10 memories per user
+- limit exceeded responses return safe `403` JSON with `error=limit_exceeded` and `code=memory_limit_exceeded`
+
+Current memory/media compatibility rules:
+
+- `photo` memories allow `image/jpeg`, `image/png`, `image/webp`
+- `audio` memories allow `audio/mpeg`, `audio/wav`
+- `video` memories allow `video/mp4`
+- media that belongs to another user returns `404`
+- incompatible media returns safe `400`
+
+Memory timeline test coverage currently includes:
+
+- authenticated user can create a text memory under own profile
+- unauthenticated user cannot create memory
+- user cannot create memory under another user’s profile
+- user can list only own profile memories
+- user can read own memory
+- user cannot read another user’s memory
+- user can update own memory
+- user cannot update another user’s memory
+- user can delete own memory
+- user cannot delete another user’s memory
+- memory list is timeline ordered
+- free user cannot create more than 10 memories
+- memory limit counts only current user’s memories
+- media ownership is enforced when linking `media_id`
+- media type compatibility is enforced
+- memory CRUD does not call external HTTP helpers
+
+## 12. Chat Backend MVP and Agent Architecture Summary
 
 The chat backend MVP is implemented and available through:
 
@@ -319,7 +387,7 @@ Chat and agent test coverage currently includes:
 - mock Brain Agent provider is deterministic
 - agent orchestrator calls Brain Agent only for this slice
 
-## 12. Observability Foundation Summary
+## 13. Observability Foundation Summary
 
 The observability foundation currently includes:
 
@@ -358,7 +426,7 @@ Observability test coverage currently includes:
 - unexpected exception handling returns safe JSON and includes the request id
 - sensitive logging fields are sanitized before output
 
-## 13. Media Storage Foundation Summary
+## 14. Media Storage Foundation Summary
 
 The media storage foundation is implemented and available through:
 
@@ -435,7 +503,7 @@ Media test coverage currently includes:
 - storage provider metadata responses do not expose absolute filesystem paths
 - no raw file bytes are stored in the database model
 
-## 14. Local Media Serving and MemoryProfile Photo Binding Summary
+## 15. Local Media Serving and MemoryProfile Photo Binding Summary
 
 The local media serving and profile-photo slice is implemented through:
 
@@ -468,7 +536,7 @@ Test coverage for this slice includes:
 - unauthenticated profile-photo binding rejected
 - usable `photo_media_id` and `photo_url` fields returned in profile responses
 
-## 15. Real Brain Agent Provider Foundation Summary
+## 16. Real Brain Agent Provider Foundation Summary
 
 The Brain Agent provider foundation now includes:
 
@@ -512,7 +580,7 @@ Brain-provider test coverage currently includes:
 - chat endpoint still works with mock provider
 - sensitive AI config values are not exposed in logs or API responses
 
-## 16. Billing Foundation Summary
+## 17. Billing Foundation Summary
 
 The billing / tariff foundation is implemented and available through:
 
@@ -545,17 +613,21 @@ Current billing behavior:
 - `GET /api/billing/limits` returns the effective limits plus placeholder usage values
 - reusable entitlement checks now live inside the billing module
 - Memory Profile creation calls billing entitlement logic before persistence
+- Memory creation calls billing entitlement logic before persistence
 - `free` users can have up to 1 Memory Profile
 - `basic` users can have up to 3 Memory Profiles
 - `premium` users have unlimited Memory Profiles
 - `family` users have unlimited Memory Profiles
 - limit violations return safe `403` responses with `error=limit_exceeded` and `code=profile_limit_exceeded`
+- `free` users can have up to 10 memories
+- `basic`, `premium`, and `family` users have unlimited memories
+- memory limit violations return safe `403` responses with `error=limit_exceeded` and `code=memory_limit_exceeded`
 - future usage checks can reuse the same billing entitlement helpers for memories, audio minutes, videos, and family-member limits
 - tariffs are static for this slice and separated from auth, chat, media, and memory-profile logic
 - prices are stored as integer rubles
 - unlimited numeric limits are represented as `null`
 - no payment provider, invoice flow, or subscription purchase flow is implemented yet
-- no database migration is required for this slice
+- a database migration was required for the timeline memory fields slice
 
 Current supported billing limits:
 
@@ -589,17 +661,19 @@ Billing test coverage currently includes:
 - `basic` Memory Profile limit logic allows 3 profiles and rejects the 4th
 - `premium` Memory Profile limit logic supports unlimited profiles
 - `family` Memory Profile limit logic supports unlimited profiles
+- `free` memory limit logic allows 10 memories and rejects the 11th
+- `basic`, `premium`, and `family` memory limit logic supports unlimited memories
 - billing endpoints do not call external HTTP helpers
 - `PROJECT_PROGRESS.md` is updated for this slice
 
-## 17. Current Verification Status
+## 18. Current Verification Status
 
-Current local verification completed on `2026-06-18`:
+Current local verification completed on `2026-06-19`:
 
-- Backend tests passing locally: `87 passed`
-- Backend tests passing in Docker: `86 passed, 1 skipped`
+- Backend tests passing locally: `107 passed`
+- Backend tests passing in Docker: `106 passed, 1 skipped`
 - Docker working: confirmed with `docker compose up -d --build`
-- Alembic migrations working: confirmed with `docker compose exec backend alembic upgrade head` and `docker compose exec backend alembic current` -> `20260617_0006 (head)`
+- Alembic migrations working: confirmed with `docker compose exec backend alembic upgrade head` and `docker compose exec backend alembic current` -> `20260619_0007 (head)`
 - Runtime health OK: `{"status":"ok","database":"ok","redis":"ok"}`
 - Observability foundation verified previously with live `X-Request-ID` response header
 - Media storage foundation verified with local pytest coverage and Docker backend startup after rebuild
@@ -607,8 +681,9 @@ Current local verification completed on `2026-06-18`:
 - Brain Agent provider foundation verified with local pytest coverage and Docker backend verification
 - Billing / tariff foundation verified with local pytest coverage and Docker backend verification
 - Usage Limits / Entitlements foundation verified with local pytest coverage and Docker backend verification
+- Memory Entries / Timeline foundation verified with local pytest coverage and Docker backend verification
 
-## 18. Commit Tracking
+## 19. Commit Tracking
 
 Current `git log --oneline` history:
 
@@ -630,7 +705,7 @@ Current `git log --oneline` history:
 
 Current working tree note:
 
-- The Usage Limits / Entitlements foundation slice is implemented in the working tree and is not yet represented by a committed hash.
+- The Memory Entries / Timeline foundation slice is implemented in the working tree and is not yet represented by a committed hash.
 
 Future commit entry format:
 
@@ -643,7 +718,7 @@ Future commit entry format:
 - Docker verified:
 ```
 
-## 19. Mandatory Future Rule
+## 20. Mandatory Future Rule
 
 This file is mandatory project tracking documentation and must be maintained continuously.
 

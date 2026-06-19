@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, datetime
 from typing import Any
 
-from sqlalchemy import Boolean, CheckConstraint, Date, ForeignKey, Integer, JSON, String, Text, text
+from sqlalchemy import Boolean, CheckConstraint, Date, DateTime, ForeignKey, Integer, JSON, String, Text, text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base, TimestampMixin
@@ -126,7 +126,7 @@ class Memory(TimestampMixin, Base):
     __tablename__ = "memories"
     __table_args__ = (
         CheckConstraint(
-            "memory_type IN ('episodic', 'semantic', 'profile', 'system')",
+            "memory_type IN ('text', 'photo', 'audio', 'video')",
             name="memories_memory_type",
         ),
         CheckConstraint("importance BETWEEN 1 AND 5", name="memories_importance"),
@@ -143,13 +143,21 @@ class Memory(TimestampMixin, Base):
         index=True,
         nullable=True,
     )
+    media_id: Mapped[int | None] = mapped_column(
+        ForeignKey("media_assets.id", ondelete="SET NULL"),
+        index=True,
+        nullable=True,
+    )
+    title: Mapped[str] = mapped_column(String(200), nullable=False)
     memory_type: Mapped[str] = mapped_column(
         String(32),
         nullable=False,
-        default="episodic",
-        server_default=text("'episodic'"),
+        default="text",
+        server_default=text("'text'"),
     )
-    content: Mapped[str] = mapped_column(Text, nullable=False)
+    content: Mapped[str | None] = mapped_column(Text, nullable=True)
+    occurred_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    occurred_year: Mapped[int | None] = mapped_column(Integer, nullable=True)
     summary: Mapped[str | None] = mapped_column(Text, nullable=True)
     importance: Mapped[int] = mapped_column(
         Integer,
@@ -167,6 +175,10 @@ class Memory(TimestampMixin, Base):
 
     user: Mapped[User] = relationship(back_populates="memories")
     memory_profile: Mapped[MemoryProfile | None] = relationship(back_populates="memories")
+    media_asset: Mapped[MediaAsset | None] = relationship(
+        back_populates="memories",
+        foreign_keys=[media_id],
+    )
 
 
 class MediaAsset(TimestampMixin, Base):
@@ -201,4 +213,8 @@ class MediaAsset(TimestampMixin, Base):
     memory_profile: Mapped[MemoryProfile | None] = relationship(
         back_populates="media_assets",
         foreign_keys=[profile_id],
+    )
+    memories: Mapped[list[Memory]] = relationship(
+        back_populates="media_asset",
+        foreign_keys="Memory.media_id",
     )
