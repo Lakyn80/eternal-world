@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from sqlalchemy.orm import Session
 
+from app.modules.ai_agents.brain.context import build_grounded_context
 from app.db.models import ChatMessage, User
 from app.modules.ai_agents import get_agent_orchestrator
 from app.modules.ai_agents.schemas import (
@@ -11,6 +12,7 @@ from app.modules.ai_agents.schemas import (
 )
 from app.modules.chat import repository
 from app.modules.chat.schemas import ChatMessageCreate, ChatMessageRead, ChatSendResponse
+from app.modules.memories import repository as memories_repository
 from app.modules.memory_profiles import repository as memory_profiles_repository
 
 
@@ -87,6 +89,16 @@ def send_chat_message(
         profile_id=profile_id,
         limit=RECENT_HISTORY_LIMIT,
     )
+    profile_memories = memories_repository.list_memories_for_profile(
+        db,
+        user_id=current_user.id,
+        profile_id=profile_id,
+    )
+    grounded_context = build_grounded_context(
+        profile=profile,
+        memories=profile_memories,
+        user_message=payload.message,
+    )
 
     user_message = repository.create_chat_message(
         db,
@@ -106,6 +118,7 @@ def send_chat_message(
             recent_history=[
                 _build_history_entry(message) for message in recent_history
             ],
+            grounded_context=grounded_context,
         )
     )
 

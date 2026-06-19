@@ -22,6 +22,7 @@ class BrainAgentService:
             profile=request.profile,
             user_message=request.user_message,
             recent_history=request.recent_history,
+            grounded_context=request.grounded_context,
             prompt=prompt,
         )
         return self.provider.generate_response(provider_request)

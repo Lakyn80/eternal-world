@@ -5,6 +5,8 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
+from app.modules.ai_agents.brain.context import BrainGroundedContext
+
 
 class ChatHistoryEntry(BaseModel):
     role: str
@@ -27,6 +29,7 @@ class BrainAgentRequest(BaseModel):
     profile: MemoryProfileContext
     user_message: str
     recent_history: list[ChatHistoryEntry] = Field(default_factory=list)
+    grounded_context: BrainGroundedContext | None = None
     prompt: str
 
 
@@ -40,6 +43,7 @@ class OrchestratorChatRequest(BaseModel):
     profile: MemoryProfileContext
     user_message: str
     recent_history: list[ChatHistoryEntry] = Field(default_factory=list)
+    grounded_context: BrainGroundedContext | None = None
 
 
 class OrchestratorChatResponse(BaseModel):

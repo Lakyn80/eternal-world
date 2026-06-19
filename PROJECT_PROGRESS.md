@@ -580,7 +580,56 @@ Brain-provider test coverage currently includes:
 - chat endpoint still works with mock provider
 - sensitive AI config values are not exposed in logs or API responses
 
-## 17. Billing Foundation Summary
+## 17. Grounded Memory Context / RAG-lite Foundation Summary
+
+The grounded memory context / RAG-lite foundation is implemented inside the Brain Agent flow and currently works through:
+
+- `backend/app/modules/ai_agents/brain/context.py`
+- `backend/app/modules/ai_agents/brain/prompt_builder.py`
+- `backend/app/modules/chat/service.py`
+
+Current grounded-context behavior:
+
+- chat requests still validate the owned Memory Profile first
+- profile context is loaded from the selected Memory Profile only
+- memory evidence is loaded only from memories owned by the current user and attached to the selected profile
+- evidence selection is deterministic and does not use embeddings, vector search, or external AI calls
+- memory ranking uses simple keyword overlap against memory `title` and `content`
+- when keyword matches exist, matched memories are preferred
+- when keyword matches do not exist, latest timeline memories are used as fallback context
+- timeline tie-breaking remains `occurred_at desc`, `occurred_year desc`, `created_at desc`, `id desc`
+- evidence items are capped at 10
+- prompt text now separates avatar identity/style, verified memory evidence, and grounding instructions
+- factual answers are restricted to stored evidence and profile facts already present in context
+- the prompt explicitly tells the model not to invent unknown facts and to say when information is not available in stored memories/context
+- personality and catchphrases can influence tone, but not create facts
+- prompt sanitization removes absolute local filesystem paths before they can reach the provider prompt
+- no media binary data, storage keys, or local file paths are included in grounded prompt context
+- no new database fields or Alembic migration were required for this slice
+
+Current grounded-context structures include:
+
+- `BrainProfileContext`
+- `BrainMemoryEvidence`
+- `BrainGroundedContext`
+
+Grounded-context test coverage currently includes:
+
+- chat response generation still works with no memories
+- generated Brain prompt includes profile context
+- generated Brain prompt includes selected memory evidence when memories exist
+- factual grounding instructions are present in the prompt
+- the prompt tells the model not to invent unknown facts
+- the prompt tells the model to say when information is missing from stored memories/context
+- only the selected profile’s memories are included
+- another user’s memories are not included
+- memory evidence count is capped at 10
+- memory evidence is deterministic and timeline ordered for fallback
+- keyword-matching memory is preferred over unrelated latest memory
+- prompt does not include absolute local file paths
+- grounded memory context makes no external HTTP calls
+
+## 18. Billing Foundation Summary
 
 The billing / tariff foundation is implemented and available through:
 
@@ -666,12 +715,12 @@ Billing test coverage currently includes:
 - billing endpoints do not call external HTTP helpers
 - `PROJECT_PROGRESS.md` is updated for this slice
 
-## 18. Current Verification Status
+## 19. Current Verification Status
 
 Current local verification completed on `2026-06-19`:
 
-- Backend tests passing locally: `107 passed`
-- Backend tests passing in Docker: `106 passed, 1 skipped`
+- Backend tests passing locally: `118 passed`
+- Backend tests passing in Docker: `117 passed, 1 skipped`
 - Docker working: confirmed with `docker compose up -d --build`
 - Alembic migrations working: confirmed with `docker compose exec backend alembic upgrade head` and `docker compose exec backend alembic current` -> `20260619_0007 (head)`
 - Runtime health OK: `{"status":"ok","database":"ok","redis":"ok"}`
@@ -679,11 +728,12 @@ Current local verification completed on `2026-06-19`:
 - Media storage foundation verified with local pytest coverage and Docker backend startup after rebuild
 - Local media serving and profile-photo binding verified with local pytest coverage and Docker backend verification
 - Brain Agent provider foundation verified with local pytest coverage and Docker backend verification
+- Grounded Memory Context / RAG-lite foundation verified with local pytest coverage and Docker backend verification
 - Billing / tariff foundation verified with local pytest coverage and Docker backend verification
 - Usage Limits / Entitlements foundation verified with local pytest coverage and Docker backend verification
 - Memory Entries / Timeline foundation verified with local pytest coverage and Docker backend verification
 
-## 19. Commit Tracking
+## 20. Commit Tracking
 
 Current `git log --oneline` history:
 
@@ -705,7 +755,7 @@ Current `git log --oneline` history:
 
 Current working tree note:
 
-- The Memory Entries / Timeline foundation slice is implemented in the working tree and is not yet represented by a committed hash.
+- The Grounded Memory Context / RAG-lite foundation slice is implemented in the working tree and is not yet represented by a committed hash.
 
 Future commit entry format:
 
@@ -718,7 +768,7 @@ Future commit entry format:
 - Docker verified:
 ```
 
-## 20. Mandatory Future Rule
+## 21. Mandatory Future Rule
 
 This file is mandatory project tracking documentation and must be maintained continuously.
 
