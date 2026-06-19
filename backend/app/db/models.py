@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import date, datetime
 from typing import Any
 
-from sqlalchemy import Boolean, CheckConstraint, Date, DateTime, ForeignKey, Integer, JSON, String, Text, text
+from sqlalchemy import Boolean, CheckConstraint, Date, DateTime, ForeignKey, Index, Integer, JSON, String, Text, text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base, TimestampMixin
@@ -40,6 +40,10 @@ class User(TimestampMixin, Base):
     )
     memories: Mapped[list[Memory]] = relationship(
         back_populates="user",
+        cascade="all, delete-orphan",
+    )
+    rag_sources: Mapped[list[RagSource]] = relationship(
+        back_populates="owner",
         cascade="all, delete-orphan",
     )
     media_assets: Mapped[list[MediaAsset]] = relationship(
@@ -83,6 +87,7 @@ class MemoryProfile(TimestampMixin, Base):
     user: Mapped[User] = relationship(back_populates="memory_profiles")
     chat_messages: Mapped[list[ChatMessage]] = relationship(back_populates="memory_profile")
     memories: Mapped[list[Memory]] = relationship(back_populates="memory_profile")
+    rag_sources: Mapped[list[RagSource]] = relationship(back_populates="memory_profile")
     media_assets: Mapped[list[MediaAsset]] = relationship(
         back_populates="memory_profile",
         foreign_keys="MediaAsset.profile_id",
@@ -179,6 +184,61 @@ class Memory(TimestampMixin, Base):
         back_populates="memories",
         foreign_keys=[media_id],
     )
+
+
+class RagSource(TimestampMixin, Base):
+    __tablename__ = "rag_sources"
+    __table_args__ = (
+        CheckConstraint(
+            (
+                "source_type IN ("
+                "'manual_text', 'biography', 'timeline_memory', 'document_text', "
+                "'chat_export', 'audio_transcript', 'video_transcript', "
+                "'letter', 'diary', 'other')"
+            ),
+            name="rag_sources_source_type",
+        ),
+        CheckConstraint(
+            (
+                "status IN ("
+                "'pending', 'ready_for_cleaning', 'cleaned', 'ready_for_chunking', "
+                "'chunked', 'ready_for_embedding', 'embedded', 'failed')"
+            ),
+            name="rag_sources_status",
+        ),
+        Index("ix_rag_sources_created_at", "created_at"),
+        Index("ix_rag_sources_owner_user_id_profile_id", "owner_user_id", "profile_id"),
+        Index("ix_rag_sources_profile_id_status", "profile_id", "status"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    owner_user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"),
+        index=True,
+        nullable=False,
+    )
+    profile_id: Mapped[int] = mapped_column(
+        ForeignKey("memory_profiles.id", ondelete="CASCADE"),
+        index=True,
+        nullable=False,
+    )
+    source_type: Mapped[str] = mapped_column(String(32), index=True, nullable=False)
+    title: Mapped[str] = mapped_column(String(200), nullable=False)
+    raw_text: Mapped[str] = mapped_column(Text, nullable=False)
+    normalized_text: Mapped[str | None] = mapped_column(Text, nullable=True)
+    language: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    status: Mapped[str] = mapped_column(
+        String(32),
+        index=True,
+        nullable=False,
+        default="ready_for_cleaning",
+        server_default=text("'ready_for_cleaning'"),
+    )
+    processing_error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    source_metadata: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
+
+    owner: Mapped[User] = relationship(back_populates="rag_sources")
+    memory_profile: Mapped[MemoryProfile] = relationship(back_populates="rag_sources")
 
 
 class MediaAsset(TimestampMixin, Base):

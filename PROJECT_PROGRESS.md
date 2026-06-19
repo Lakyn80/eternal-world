@@ -104,6 +104,7 @@ Current backend structure is modular:
 - `backend/app/modules/chat`
 - `backend/app/modules/memories`
 - `backend/app/modules/media`
+- `backend/app/modules/rag_sources`
 - `backend/app/modules/users`
 - `backend/app/modules/memory_profiles`
 - `backend/app/modules/ai_agents`
@@ -124,6 +125,7 @@ Current ORM models:
 - `ChatMessage`
 - `Memory`
 - `MediaAsset`
+- `RagSource`
 
 Current migration history:
 
@@ -134,10 +136,11 @@ Current migration history:
 - `20260617_0005` create `media_assets` table
 - `20260617_0006` add `memory_profiles.main_photo_media_id`
 - `20260619_0007` add timeline memory fields and `memories.media_id`
+- `20260620_0008` create `rag_sources` table for profile-scoped RAG source ingestion
 
 Current Alembic head:
 
-- `20260619_0007`
+- `20260620_0008`
 
 Chat backend note:
 
@@ -629,7 +632,77 @@ Grounded-context test coverage currently includes:
 - prompt does not include absolute local file paths
 - grounded memory context makes no external HTTP calls
 
-## 18. Billing Foundation Summary
+## 18. RAG Source Ingestion Foundation Summary
+
+The RAG source ingestion foundation is implemented and available through:
+
+- `POST /api/memory-profiles/{profile_id}/rag-sources`
+- `GET /api/memory-profiles/{profile_id}/rag-sources`
+- `GET /api/rag-sources/{source_id}`
+- `PATCH /api/rag-sources/{source_id}`
+- `DELETE /api/rag-sources/{source_id}`
+
+Current RAG source fields supported by the API:
+
+- `id`
+- `owner_user_id`
+- `profile_id`
+- `source_type`
+- `title`
+- `raw_text`
+- `normalized_text`
+- `language`
+- `status`
+- `processing_error`
+- `source_metadata`
+- `created_at`
+- `updated_at`
+
+Current RAG source behavior:
+
+- all RAG source endpoints require JWT authentication
+- sources can only be created under Memory Profiles owned by the current user
+- source reads, updates, deletes, and lists are ownership-scoped and return `404` for cross-user access
+- `title` is trimmed, required, and must not be empty
+- `raw_text` is trimmed, required, and must not be empty
+- `source_type` is validated against the allowed ingestion categories
+- `language` is optional and normalized for values like `ru`, `cs`, `en`, or `unknown`
+- `source_metadata` is an optional JSON object for future ingestion pipeline hints
+- new sources default to `ready_for_cleaning`
+- `normalized_text` is currently stored as the minimally normalized raw text only
+- updating `raw_text` resets `status` to `ready_for_cleaning` and clears `processing_error`
+- source lists are ordered newest first by `created_at desc`, then `id desc`
+- ingestion metadata is isolated from timeline memories and does not duplicate the `Memory` model
+- no new billing enforcement was added in this slice
+
+Current ingestion-preparation behavior:
+
+- the system now has a durable per-profile source corpus table
+- source rows persist raw input and pipeline state for future cleaning/chunking/embedding
+- indexes exist for `owner_user_id`, `profile_id`, `status`, `source_type`, `created_at`
+- compound indexes exist for `owner_user_id + profile_id` and `profile_id + status`
+- no chunking, embeddings, Qdrant indexing, or hybrid retrieval is implemented yet
+
+RAG source test coverage currently includes:
+
+- authenticated user can create RAG source under own profile
+- unauthenticated user cannot create RAG source
+- user cannot create RAG source under another user’s profile
+- user can list only own profile sources
+- user can read own source
+- user cannot read another user’s source
+- user can update own source
+- updating `raw_text` resets status to `ready_for_cleaning`
+- user cannot update another user’s source
+- user can delete own source
+- user cannot delete another user’s source
+- title is trimmed and cannot be empty
+- raw_text is trimmed and cannot be empty
+- invalid `source_type` is rejected
+- list is ordered newest first
+- RAG source CRUD does not call external HTTP helpers
+
+## 19. Billing Foundation Summary
 
 The billing / tariff foundation is implemented and available through:
 
@@ -715,25 +788,26 @@ Billing test coverage currently includes:
 - billing endpoints do not call external HTTP helpers
 - `PROJECT_PROGRESS.md` is updated for this slice
 
-## 19. Current Verification Status
+## 20. Current Verification Status
 
-Current local verification completed on `2026-06-19`:
+Current local verification completed on `2026-06-20`:
 
-- Backend tests passing locally: `118 passed`
-- Backend tests passing in Docker: `117 passed, 1 skipped`
+- Backend tests passing locally: `134 passed`
+- Backend tests passing in Docker: `133 passed, 1 skipped`
 - Docker working: confirmed with `docker compose up -d --build`
-- Alembic migrations working: confirmed with `docker compose exec backend alembic upgrade head` and `docker compose exec backend alembic current` -> `20260619_0007 (head)`
+- Alembic migrations working: confirmed with `docker compose exec backend alembic upgrade head` and `docker compose exec backend alembic current` -> `20260620_0008 (head)`
 - Runtime health OK: `{"status":"ok","database":"ok","redis":"ok"}`
 - Observability foundation verified previously with live `X-Request-ID` response header
 - Media storage foundation verified with local pytest coverage and Docker backend startup after rebuild
 - Local media serving and profile-photo binding verified with local pytest coverage and Docker backend verification
 - Brain Agent provider foundation verified with local pytest coverage and Docker backend verification
 - Grounded Memory Context / RAG-lite foundation verified with local pytest coverage and Docker backend verification
+- RAG Source Ingestion foundation verified with local pytest coverage and Docker backend verification
 - Billing / tariff foundation verified with local pytest coverage and Docker backend verification
 - Usage Limits / Entitlements foundation verified with local pytest coverage and Docker backend verification
 - Memory Entries / Timeline foundation verified with local pytest coverage and Docker backend verification
 
-## 20. Commit Tracking
+## 21. Commit Tracking
 
 Current `git log --oneline` history:
 
@@ -755,7 +829,7 @@ Current `git log --oneline` history:
 
 Current working tree note:
 
-- The Grounded Memory Context / RAG-lite foundation slice is implemented in the working tree and is not yet represented by a committed hash.
+- The RAG Source Ingestion foundation slice is implemented in the working tree and is not yet represented by a committed hash.
 
 Future commit entry format:
 
@@ -768,7 +842,7 @@ Future commit entry format:
 - Docker verified:
 ```
 
-## 21. Mandatory Future Rule
+## 22. Mandatory Future Rule
 
 This file is mandatory project tracking documentation and must be maintained continuously.
 
