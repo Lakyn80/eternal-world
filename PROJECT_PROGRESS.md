@@ -102,6 +102,7 @@ Current backend structure is modular:
 - `backend/app/modules/auth`
 - `backend/app/modules/billing`
 - `backend/app/modules/chat`
+- `backend/app/modules/embedding_models`
 - `backend/app/modules/memories`
 - `backend/app/modules/media`
 - `backend/app/modules/rag_chunks`
@@ -795,7 +796,87 @@ Current retrieval-readiness note:
 - chunks are now persisted per owner/profile/source with stable ordering, hashes, validation metadata, and token estimates
 - this prepares the system for future embeddings, Qdrant indexing, hybrid retrieval, reranking, and RAG evaluation without adding those features yet
 
-## 20. Billing Foundation Summary
+## 20. Embedding Model Registry Foundation Summary
+
+The embedding model registry foundation is implemented and available through:
+
+- `GET /api/embedding-models`
+- `GET /api/embedding-models/default`
+- `GET /api/embedding-models/{model_code}`
+
+Current `embedding_models` module structure:
+
+- `backend/app/modules/embedding_models/__init__.py`
+- `backend/app/modules/embedding_models/router.py`
+- `backend/app/modules/embedding_models/schemas.py`
+- `backend/app/modules/embedding_models/service.py`
+- `backend/app/modules/embedding_models/registry.py`
+- `backend/app/modules/embedding_models/exceptions.py`
+
+Current registry behavior:
+
+- the embedding model catalog is static and code-defined for this slice
+- no database table is used because no per-profile model choice is stored yet
+- the default model is the stable local profile `multilingual_e5_small`
+- disabled models are hidden from the public list response unless `include_disabled=true`
+- multilingual candidate selection includes models that explicitly support the requested language or the `multilingual` capability
+- unknown model codes return a safe `404`
+- the disabled external profile `jina_embeddings_v3` is registered but not returned by default
+- the deterministic `mock_embedding` profile is available for tests and future local pipeline mocks
+
+Current registered model profiles:
+
+- `multilingual_e5_small`
+- `bge_m3`
+- `jina_embeddings_v3`
+- `mock_embedding`
+
+Current registry metadata exposed by the API:
+
+- `code`
+- `display_name`
+- `provider_type`
+- `dimension`
+- `languages`
+- `max_input_tokens`
+- `normalized_vectors`
+- `supports_batching`
+- `enabled`
+- `is_default`
+- `recommended_for`
+- `notes`
+
+Current slice constraints:
+
+- no real embedding generation is implemented yet
+- no model packages are installed or downloaded in this slice
+- no external embedding providers are called
+- no Qdrant indexing or retrieval changes are implemented yet
+- no Alembic migration is required for this static registry foundation
+
+Embedding model registry test coverage currently includes:
+
+- list endpoint returns enabled models by default
+- disabled external model is hidden unless `include_disabled=true`
+- default endpoint returns the configured default model
+- get by code returns a known model
+- unknown model code returns `404`
+- model codes are stable
+- exactly one default model exists
+- default model is enabled
+- candidate selection for `ru` includes multilingual-capable models
+- candidate selection for `cs` includes multilingual-capable models
+- candidate selection for unknown language still returns multilingual/default candidates
+- mock embedding model is available for tests
+- embedding model registry endpoints do not call external HTTP helpers
+- `PROJECT_PROGRESS.md` is updated for this slice
+
+Current future-readiness note:
+
+- this registry now provides stable internal model metadata for later embedding execution, Qdrant indexing, hybrid retrieval, retrieval-quality comparisons, and automatic best-model selection
+- provider type, vector dimension, normalization behavior, and batching capability are now centralized before any real embedding pipeline is introduced
+
+## 21. Billing Foundation Summary
 
 The billing / tariff foundation is implemented and available through:
 
@@ -881,12 +962,12 @@ Billing test coverage currently includes:
 - billing endpoints do not call external HTTP helpers
 - `PROJECT_PROGRESS.md` is updated for this slice
 
-## 21. Current Verification Status
+## 22. Current Verification Status
 
 Current local verification completed on `2026-06-20`:
 
-- Backend tests passing locally: `154 passed`
-- Backend tests passing in Docker: `153 passed, 1 skipped`
+- Backend tests passing locally: `170 passed`
+- Backend tests passing in Docker: `168 passed, 2 skipped`
 - Docker working: confirmed with `docker compose up -d --build`
 - Alembic migrations working: confirmed with `docker compose exec backend alembic upgrade head` and `docker compose exec backend alembic current` -> `20260620_0009 (head)`
 - Runtime health OK: `{"status":"ok","database":"ok","redis":"ok"}`
@@ -900,8 +981,9 @@ Current local verification completed on `2026-06-20`:
 - Usage Limits / Entitlements foundation verified with local pytest coverage and Docker backend verification
 - Memory Entries / Timeline foundation verified with local pytest coverage and Docker backend verification
 - Sentence-aware Chunking + Chunk Validation foundation verified with local pytest coverage and Docker backend verification
+- Embedding Model Registry foundation verified with local pytest coverage and Docker backend verification
 
-## 22. Commit Tracking
+## 23. Commit Tracking
 
 Current `git log --oneline` history:
 
@@ -923,7 +1005,8 @@ Current `git log --oneline` history:
 
 Current working tree note:
 
-- The RAG Source Ingestion foundation slice is implemented in the working tree and is not yet represented by a committed hash.
+- The Sentence-aware Chunking + Chunk Validation foundation is committed as `e178fb3 Add sentence-aware RAG chunking foundation`.
+- The Embedding Model Registry foundation is the current uncommitted slice in the working tree.
 
 Future commit entry format:
 
@@ -936,7 +1019,7 @@ Future commit entry format:
 - Docker verified:
 ```
 
-## 23. Mandatory Future Rule
+## 24. Mandatory Future Rule
 
 This file is mandatory project tracking documentation and must be maintained continuously.
 

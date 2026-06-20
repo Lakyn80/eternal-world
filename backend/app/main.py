@@ -8,6 +8,7 @@ from app.core.errors import install_error_handlers
 from app.core.logging import configure_logging
 from app.core.middleware import install_middleware
 from app.db.session import engine
+from app.modules.embedding_models.router import router as embedding_models_router
 from app.modules.auth.router import router as auth_router
 from app.modules.billing.router import router as billing_router
 from app.modules.chat.router import router as chat_router
@@ -31,6 +32,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+app.include_router(embedding_models_router)
 app.include_router(auth_router)
 app.include_router(billing_router)
 app.include_router(chat_router)
