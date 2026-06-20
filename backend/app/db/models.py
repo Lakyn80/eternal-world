@@ -46,6 +46,10 @@ class User(TimestampMixin, Base):
         back_populates="owner",
         cascade="all, delete-orphan",
     )
+    rag_chunks: Mapped[list[RagChunk]] = relationship(
+        back_populates="owner",
+        cascade="all, delete-orphan",
+    )
     media_assets: Mapped[list[MediaAsset]] = relationship(
         back_populates="owner",
         cascade="all, delete-orphan",
@@ -88,6 +92,7 @@ class MemoryProfile(TimestampMixin, Base):
     chat_messages: Mapped[list[ChatMessage]] = relationship(back_populates="memory_profile")
     memories: Mapped[list[Memory]] = relationship(back_populates="memory_profile")
     rag_sources: Mapped[list[RagSource]] = relationship(back_populates="memory_profile")
+    rag_chunks: Mapped[list[RagChunk]] = relationship(back_populates="memory_profile")
     media_assets: Mapped[list[MediaAsset]] = relationship(
         back_populates="memory_profile",
         foreign_keys="MediaAsset.profile_id",
@@ -239,6 +244,60 @@ class RagSource(TimestampMixin, Base):
 
     owner: Mapped[User] = relationship(back_populates="rag_sources")
     memory_profile: Mapped[MemoryProfile] = relationship(back_populates="rag_sources")
+    rag_chunks: Mapped[list[RagChunk]] = relationship(
+        back_populates="source",
+        cascade="all, delete-orphan",
+    )
+
+
+class RagChunk(TimestampMixin, Base):
+    __tablename__ = "rag_chunks"
+    __table_args__ = (
+        CheckConstraint(
+            "validation_status IN ('valid', 'warning', 'invalid')",
+            name="rag_chunks_validation_status",
+        ),
+        Index("ix_rag_chunks_owner_user_id_profile_id", "owner_user_id", "profile_id"),
+        Index("ix_rag_chunks_profile_id_source_id", "profile_id", "source_id"),
+        Index("ix_rag_chunks_source_id_chunk_index", "source_id", "chunk_index"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    owner_user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"),
+        index=True,
+        nullable=False,
+    )
+    profile_id: Mapped[int] = mapped_column(
+        ForeignKey("memory_profiles.id", ondelete="CASCADE"),
+        index=True,
+        nullable=False,
+    )
+    source_id: Mapped[int] = mapped_column(
+        ForeignKey("rag_sources.id", ondelete="CASCADE"),
+        index=True,
+        nullable=False,
+    )
+    chunk_index: Mapped[int] = mapped_column(Integer, nullable=False)
+    chunk_text: Mapped[str] = mapped_column(Text, nullable=False)
+    text_hash: Mapped[str] = mapped_column(String(64), index=True, nullable=False)
+    token_estimate: Mapped[int] = mapped_column(Integer, nullable=False)
+    char_count: Mapped[int] = mapped_column(Integer, nullable=False)
+    sentence_count: Mapped[int] = mapped_column(Integer, nullable=False)
+    language: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    chunk_metadata: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
+    validation_status: Mapped[str] = mapped_column(
+        String(16),
+        index=True,
+        nullable=False,
+        default="valid",
+        server_default=text("'valid'"),
+    )
+    validation_errors: Mapped[list[str] | None] = mapped_column(JSON, nullable=True)
+
+    owner: Mapped[User] = relationship(back_populates="rag_chunks")
+    memory_profile: Mapped[MemoryProfile] = relationship(back_populates="rag_chunks")
+    source: Mapped[RagSource] = relationship(back_populates="rag_chunks")
 
 
 class MediaAsset(TimestampMixin, Base):

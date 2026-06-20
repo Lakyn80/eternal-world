@@ -104,6 +104,7 @@ Current backend structure is modular:
 - `backend/app/modules/chat`
 - `backend/app/modules/memories`
 - `backend/app/modules/media`
+- `backend/app/modules/rag_chunks`
 - `backend/app/modules/rag_sources`
 - `backend/app/modules/users`
 - `backend/app/modules/memory_profiles`
@@ -126,6 +127,7 @@ Current ORM models:
 - `Memory`
 - `MediaAsset`
 - `RagSource`
+- `RagChunk`
 
 Current migration history:
 
@@ -137,10 +139,11 @@ Current migration history:
 - `20260617_0006` add `memory_profiles.main_photo_media_id`
 - `20260619_0007` add timeline memory fields and `memories.media_id`
 - `20260620_0008` create `rag_sources` table for profile-scoped RAG source ingestion
+- `20260620_0009` create `rag_chunks` table for sentence-aware chunk persistence and validation audit
 
 Current Alembic head:
 
-- `20260620_0008`
+- `20260620_0009`
 
 Chat backend note:
 
@@ -702,7 +705,97 @@ RAG source test coverage currently includes:
 - list is ordered newest first
 - RAG source CRUD does not call external HTTP helpers
 
-## 19. Billing Foundation Summary
+## 19. Sentence-aware Chunking + Chunk Validation Foundation Summary
+
+The sentence-aware chunking and chunk-validation foundation is implemented and available through:
+
+- `POST /api/rag-sources/{source_id}/chunk`
+- `GET /api/rag-sources/{source_id}/chunks`
+- `GET /api/rag-chunks/{chunk_id}`
+
+Current `rag_chunks` module structure:
+
+- `backend/app/modules/rag_chunks/__init__.py`
+- `backend/app/modules/rag_chunks/router.py`
+- `backend/app/modules/rag_chunks/schemas.py`
+- `backend/app/modules/rag_chunks/service.py`
+- `backend/app/modules/rag_chunks/repository.py`
+- `backend/app/modules/rag_chunks/chunker.py`
+- `backend/app/modules/rag_chunks/validation.py`
+
+Current chunking behavior:
+
+- all chunking endpoints require JWT authentication
+- chunking is ownership-scoped through the current user and the owned `RagSource`
+- cross-user chunk/list/read access returns `404`, not `403`
+- chunking uses `normalized_text` when present, otherwise `raw_text`
+- safe normalization currently standardizes line endings, trims repeated whitespace, and preserves paragraph boundaries
+- sentence-aware chunking prefers paragraph and sentence boundaries before any hard split fallback
+- chunk grouping targets roughly `1100` characters, allows up to `1800`, and uses `1` sentence of overlap when safe
+- extremely long single sentences fall back to deterministic hard splitting instead of crashing
+- successful chunking replaces previous chunks for the same source in one DB transaction
+- successful chunking updates `RagSource.normalized_text`, sets `status=chunked`, and clears `processing_error`
+- chunking failures roll back partial chunk writes, set `status=failed`, and store only the safe short error `Chunking failed`
+
+Current `RagChunk` fields persisted:
+
+- `id`
+- `owner_user_id`
+- `profile_id`
+- `source_id`
+- `chunk_index`
+- `chunk_text`
+- `text_hash`
+- `token_estimate`
+- `char_count`
+- `sentence_count`
+- `language`
+- `chunk_metadata`
+- `validation_status`
+- `validation_errors`
+- `created_at`
+- `updated_at`
+
+Current chunk validation behavior:
+
+- empty chunks are rejected at validation time
+- duplicate chunk hashes within one source are flagged as invalid
+- chunk text is trimmed before persistence
+- overlong chunks are flagged unless they came from the hard-split fallback
+- suspicious lowercase continuation starts are flagged when avoidable
+- suspicious mid-sentence endings are flagged when avoidable
+- suspicious broken-word endings are flagged heuristically
+- missing owner/profile/source identifiers are flagged as invalid
+- a source-level summary returns chunk counts plus any coverage warnings
+
+Chunking and validation test coverage currently includes:
+
+- authenticated user can chunk own source
+- unauthenticated user cannot chunk source
+- user cannot chunk another user’s source
+- chunking creates ordered chunks with `chunk_index` starting at `0`
+- chunking replaces previous chunks for the same source
+- list chunks returns only owned source chunks
+- user cannot list chunks for another user’s source
+- user can read own chunk
+- user cannot read another user’s chunk
+- chunker preserves sentence boundaries on normal text
+- chunker preserves Russian, Czech, and English punctuation endings
+- chunker does not create empty chunks
+- duplicate chunks are detected by validation
+- validation flags suspicious mid-sentence starts and ends
+- very long sentence fallback does not crash
+- source status becomes `chunked` after success
+- source processing error is cleared after success
+- failure path sets source status to `failed` with a safe error
+- chunking endpoints do not call external HTTP helpers
+
+Current retrieval-readiness note:
+
+- chunks are now persisted per owner/profile/source with stable ordering, hashes, validation metadata, and token estimates
+- this prepares the system for future embeddings, Qdrant indexing, hybrid retrieval, reranking, and RAG evaluation without adding those features yet
+
+## 20. Billing Foundation Summary
 
 The billing / tariff foundation is implemented and available through:
 
@@ -788,14 +881,14 @@ Billing test coverage currently includes:
 - billing endpoints do not call external HTTP helpers
 - `PROJECT_PROGRESS.md` is updated for this slice
 
-## 20. Current Verification Status
+## 21. Current Verification Status
 
 Current local verification completed on `2026-06-20`:
 
-- Backend tests passing locally: `134 passed`
-- Backend tests passing in Docker: `133 passed, 1 skipped`
+- Backend tests passing locally: `154 passed`
+- Backend tests passing in Docker: `153 passed, 1 skipped`
 - Docker working: confirmed with `docker compose up -d --build`
-- Alembic migrations working: confirmed with `docker compose exec backend alembic upgrade head` and `docker compose exec backend alembic current` -> `20260620_0008 (head)`
+- Alembic migrations working: confirmed with `docker compose exec backend alembic upgrade head` and `docker compose exec backend alembic current` -> `20260620_0009 (head)`
 - Runtime health OK: `{"status":"ok","database":"ok","redis":"ok"}`
 - Observability foundation verified previously with live `X-Request-ID` response header
 - Media storage foundation verified with local pytest coverage and Docker backend startup after rebuild
@@ -806,8 +899,9 @@ Current local verification completed on `2026-06-20`:
 - Billing / tariff foundation verified with local pytest coverage and Docker backend verification
 - Usage Limits / Entitlements foundation verified with local pytest coverage and Docker backend verification
 - Memory Entries / Timeline foundation verified with local pytest coverage and Docker backend verification
+- Sentence-aware Chunking + Chunk Validation foundation verified with local pytest coverage and Docker backend verification
 
-## 21. Commit Tracking
+## 22. Commit Tracking
 
 Current `git log --oneline` history:
 
@@ -842,7 +936,7 @@ Future commit entry format:
 - Docker verified:
 ```
 
-## 22. Mandatory Future Rule
+## 23. Mandatory Future Rule
 
 This file is mandatory project tracking documentation and must be maintained continuously.
 
