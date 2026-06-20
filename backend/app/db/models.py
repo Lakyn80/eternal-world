@@ -50,6 +50,10 @@ class User(TimestampMixin, Base):
         back_populates="owner",
         cascade="all, delete-orphan",
     )
+    rag_embeddings: Mapped[list[RagEmbedding]] = relationship(
+        back_populates="owner",
+        cascade="all, delete-orphan",
+    )
     media_assets: Mapped[list[MediaAsset]] = relationship(
         back_populates="owner",
         cascade="all, delete-orphan",
@@ -93,6 +97,7 @@ class MemoryProfile(TimestampMixin, Base):
     memories: Mapped[list[Memory]] = relationship(back_populates="memory_profile")
     rag_sources: Mapped[list[RagSource]] = relationship(back_populates="memory_profile")
     rag_chunks: Mapped[list[RagChunk]] = relationship(back_populates="memory_profile")
+    rag_embeddings: Mapped[list[RagEmbedding]] = relationship(back_populates="memory_profile")
     media_assets: Mapped[list[MediaAsset]] = relationship(
         back_populates="memory_profile",
         foreign_keys="MediaAsset.profile_id",
@@ -248,6 +253,10 @@ class RagSource(TimestampMixin, Base):
         back_populates="source",
         cascade="all, delete-orphan",
     )
+    rag_embeddings: Mapped[list[RagEmbedding]] = relationship(
+        back_populates="source",
+        cascade="all, delete-orphan",
+    )
 
 
 class RagChunk(TimestampMixin, Base):
@@ -298,6 +307,63 @@ class RagChunk(TimestampMixin, Base):
     owner: Mapped[User] = relationship(back_populates="rag_chunks")
     memory_profile: Mapped[MemoryProfile] = relationship(back_populates="rag_chunks")
     source: Mapped[RagSource] = relationship(back_populates="rag_chunks")
+    rag_embeddings: Mapped[list[RagEmbedding]] = relationship(
+        back_populates="chunk",
+        cascade="all, delete-orphan",
+    )
+
+
+class RagEmbedding(TimestampMixin, Base):
+    __tablename__ = "rag_embeddings"
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('embedded', 'failed')",
+            name="rag_embeddings_status",
+        ),
+        Index("ix_rag_embeddings_owner_user_id_profile_id", "owner_user_id", "profile_id"),
+        Index("ix_rag_embeddings_profile_id_model_code", "profile_id", "model_code"),
+        Index("ix_rag_embeddings_chunk_id_model_code", "chunk_id", "model_code", unique=True),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    owner_user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"),
+        index=True,
+        nullable=False,
+    )
+    profile_id: Mapped[int] = mapped_column(
+        ForeignKey("memory_profiles.id", ondelete="CASCADE"),
+        index=True,
+        nullable=False,
+    )
+    source_id: Mapped[int] = mapped_column(
+        ForeignKey("rag_sources.id", ondelete="CASCADE"),
+        index=True,
+        nullable=False,
+    )
+    chunk_id: Mapped[int] = mapped_column(
+        ForeignKey("rag_chunks.id", ondelete="CASCADE"),
+        index=True,
+        nullable=False,
+    )
+    model_code: Mapped[str] = mapped_column(String(64), index=True, nullable=False)
+    vector: Mapped[list[float] | None] = mapped_column(JSON, nullable=True)
+    vector_dimension: Mapped[int] = mapped_column(Integer, nullable=False)
+    text_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    status: Mapped[str] = mapped_column(
+        String(16),
+        index=True,
+        nullable=False,
+        default="embedded",
+        server_default=text("'embedded'"),
+    )
+    error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    embedding_metadata: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
+
+    owner: Mapped[User] = relationship(back_populates="rag_embeddings")
+    memory_profile: Mapped[MemoryProfile] = relationship(back_populates="rag_embeddings")
+    source: Mapped[RagSource] = relationship(back_populates="rag_embeddings")
+    chunk: Mapped[RagChunk] = relationship(back_populates="rag_embeddings")
 
 
 class MediaAsset(TimestampMixin, Base):

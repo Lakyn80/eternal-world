@@ -1,5 +1,5 @@
 from app.db.base import Base
-from app.db.models import ChatMessage, MediaAsset, Memory, MemoryProfile, RagChunk, RagSource, User
+from app.db.models import ChatMessage, MediaAsset, Memory, MemoryProfile, RagChunk, RagEmbedding, RagSource, User
 
 
 def test_database_models_are_registered():
@@ -10,6 +10,7 @@ def test_database_models_are_registered():
     assert MediaAsset.__tablename__ == "media_assets"
     assert RagSource.__tablename__ == "rag_sources"
     assert RagChunk.__tablename__ == "rag_chunks"
+    assert RagEmbedding.__tablename__ == "rag_embeddings"
     assert "full_name" in User.__table__.columns.keys()
     assert {
         "main_photo_media_id",
@@ -70,7 +71,20 @@ def test_database_models_are_registered():
         "validation_status",
         "validation_errors",
     }.issubset(RagChunk.__table__.columns.keys())
+    assert {
+        "owner_user_id",
+        "profile_id",
+        "source_id",
+        "chunk_id",
+        "model_code",
+        "vector",
+        "vector_dimension",
+        "text_hash",
+        "status",
+        "error_message",
+        "embedding_metadata",
+    }.issubset(RagEmbedding.__table__.columns.keys())
 
-    assert {"users", "memory_profiles", "chat_messages", "memories", "media_assets", "rag_sources", "rag_chunks"}.issubset(
+    assert {"users", "memory_profiles", "chat_messages", "memories", "media_assets", "rag_sources", "rag_chunks", "rag_embeddings"}.issubset(
         Base.metadata.tables.keys()
     )

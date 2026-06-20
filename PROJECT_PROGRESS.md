@@ -102,6 +102,7 @@ Current backend structure is modular:
 - `backend/app/modules/auth`
 - `backend/app/modules/billing`
 - `backend/app/modules/chat`
+- `backend/app/modules/embeddings`
 - `backend/app/modules/embedding_models`
 - `backend/app/modules/memories`
 - `backend/app/modules/media`
@@ -129,6 +130,7 @@ Current ORM models:
 - `MediaAsset`
 - `RagSource`
 - `RagChunk`
+- `RagEmbedding`
 
 Current migration history:
 
@@ -141,10 +143,11 @@ Current migration history:
 - `20260619_0007` add timeline memory fields and `memories.media_id`
 - `20260620_0008` create `rag_sources` table for profile-scoped RAG source ingestion
 - `20260620_0009` create `rag_chunks` table for sentence-aware chunk persistence and validation audit
+- `20260620_0010` create `rag_embeddings` table for chunk-level embedding storage and metadata
 
 Current Alembic head:
 
-- `20260620_0009`
+- `20260620_0010`
 
 Chat backend note:
 
@@ -876,7 +879,92 @@ Current future-readiness note:
 - this registry now provides stable internal model metadata for later embedding execution, Qdrant indexing, hybrid retrieval, retrieval-quality comparisons, and automatic best-model selection
 - provider type, vector dimension, normalization behavior, and batching capability are now centralized before any real embedding pipeline is introduced
 
-## 21. Billing Foundation Summary
+## 21. Embedding Generation Foundation Summary
+
+The embedding generation foundation is implemented and available through:
+
+- `POST /api/rag-chunks/{chunk_id}/embed`
+- `POST /api/rag-sources/{source_id}/embed-chunks`
+- `GET /api/rag-chunks/{chunk_id}/embeddings`
+- `GET /api/rag-embeddings/{embedding_id}`
+
+Current `embeddings` module structure:
+
+- `backend/app/modules/embeddings/__init__.py`
+- `backend/app/modules/embeddings/router.py`
+- `backend/app/modules/embeddings/schemas.py`
+- `backend/app/modules/embeddings/service.py`
+- `backend/app/modules/embeddings/repository.py`
+- `backend/app/modules/embeddings/exceptions.py`
+- `backend/app/modules/embeddings/providers/__init__.py`
+- `backend/app/modules/embeddings/providers/base.py`
+- `backend/app/modules/embeddings/providers/mock.py`
+
+Current embedding-generation behavior:
+
+- embedding generation is ownership-scoped through the current user and the owned `RagChunk` or `RagSource`
+- cross-user embed/list/read access returns `404`, not `403`
+- the default embedding model comes from the committed embedding model registry foundation
+- embedding generation currently uses a deterministic mock provider only
+- no external API calls, model downloads, or heavy embedding packages are used in this slice
+- successful embedding upserts one row per `chunk_id + model_code`
+- vectors are stored in PostgreSQL JSON for this foundation slice only
+- source-level embedding skips chunks with `validation_status=invalid`
+- chunk validation and source chunking status are not changed by embedding generation
+
+Current `RagEmbedding` fields persisted:
+
+- `id`
+- `owner_user_id`
+- `profile_id`
+- `source_id`
+- `chunk_id`
+- `model_code`
+- `vector`
+- `vector_dimension`
+- `text_hash`
+- `status`
+- `error_message`
+- `embedding_metadata`
+- `created_at`
+- `updated_at`
+
+Current provider behavior:
+
+- `providers/base.py` defines the provider interface for single-text and batch embedding
+- `providers/mock.py` implements deterministic vector generation using registry dimensions
+- the mock provider supports `mock_embedding` and the enabled local registry models without any network calls
+- vector dimensions are validated against the embedding model registry before persistence
+
+Embedding generation test coverage currently includes:
+
+- authenticated user can embed own chunk with default model
+- unauthenticated user cannot embed chunk
+- user cannot embed another user’s chunk
+- unknown model code is rejected safely
+- disabled external model is rejected safely
+- embedding vector dimension matches model registry dimension
+- mock provider is deterministic
+- repeated embed for the same chunk and model upserts instead of duplicating
+- source-level embed embeds all valid chunks
+- source-level embed skips invalid chunks
+- user cannot embed chunks for another user’s source
+- user can list embeddings for own chunk
+- user cannot list embeddings for another user’s chunk
+- user can read own embedding metadata
+- user cannot read another user’s embedding
+- optional `include_vector=true` behavior is covered
+- no external HTTP calls are made
+- no model downloads are required for the mock provider
+- provider failure can be persisted safely as `status=failed`
+- `PROJECT_PROGRESS.md` is updated for this slice
+
+Current future-readiness note:
+
+- the system now has durable per-chunk embedding records keyed by chunk and model profile
+- this prepares later Qdrant indexing, hybrid retrieval, retrieval comparisons, and automatic embedding-model evaluation without implementing those flows yet
+
+## 22. Billing Foundation Summary
 
 The billing / tariff foundation is implemented and available through:
 
@@ -962,14 +1050,14 @@ Billing test coverage currently includes:
 - billing endpoints do not call external HTTP helpers
 - `PROJECT_PROGRESS.md` is updated for this slice
 
-## 22. Current Verification Status
+## 23. Current Verification Status
 
 Current local verification completed on `2026-06-20`:
 
-- Backend tests passing locally: `170 passed`
-- Backend tests passing in Docker: `168 passed, 2 skipped`
+- Backend tests passing locally: `190 passed`
+- Backend tests passing in Docker: `188 passed, 2 skipped`
 - Docker working: confirmed with `docker compose up -d --build`
-- Alembic migrations working: confirmed with `docker compose exec backend alembic upgrade head` and `docker compose exec backend alembic current` -> `20260620_0009 (head)`
+- Alembic migrations working: confirmed with `docker compose exec backend alembic upgrade head` and `docker compose exec backend alembic current` -> `20260620_0010 (head)`
 - Runtime health OK: `{"status":"ok","database":"ok","redis":"ok"}`
 - Observability foundation verified previously with live `X-Request-ID` response header
 - Media storage foundation verified with local pytest coverage and Docker backend startup after rebuild
@@ -982,11 +1070,14 @@ Current local verification completed on `2026-06-20`:
 - Memory Entries / Timeline foundation verified with local pytest coverage and Docker backend verification
 - Sentence-aware Chunking + Chunk Validation foundation verified with local pytest coverage and Docker backend verification
 - Embedding Model Registry foundation verified with local pytest coverage and Docker backend verification
+- Embedding Generation foundation verified with local pytest coverage and Docker backend verification
 
-## 23. Commit Tracking
+## 24. Commit Tracking
 
 Current `git log --oneline` history:
 
+- `0138188` Add embedding model registry foundation
+- `e178fb3` Add sentence-aware RAG chunking foundation
 - `6eb90d2` Add Brain Agent provider foundation
 - `c079d85` Add local media serving and profile photo binding
 - `3115d71` Add media storage foundation
@@ -1006,7 +1097,8 @@ Current `git log --oneline` history:
 Current working tree note:
 
 - The Sentence-aware Chunking + Chunk Validation foundation is committed as `e178fb3 Add sentence-aware RAG chunking foundation`.
-- The Embedding Model Registry foundation is the current uncommitted slice in the working tree.
+- The Embedding Model Registry foundation is committed as `0138188 Add embedding model registry foundation`.
+- The Embedding Generation foundation is the current uncommitted slice in the working tree.
 
 Future commit entry format:
 
@@ -1019,7 +1111,7 @@ Future commit entry format:
 - Docker verified:
 ```
 
-## 24. Mandatory Future Rule
+## 25. Mandatory Future Rule
 
 This file is mandatory project tracking documentation and must be maintained continuously.
 
