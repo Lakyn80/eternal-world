@@ -37,6 +37,10 @@ class Settings(BaseSettings):
     media_root: Path = BACKEND_DIR / "media"
     media_public_base_url: str = "/media"
     media_max_file_size_bytes: int = Field(default=20 * 1024 * 1024, gt=0)
+    qdrant_url: str = "http://qdrant:6333"
+    qdrant_collection_name: str = "eternal_world_rag_chunks"
+    qdrant_timeout_seconds: float = Field(default=10, gt=0)
+    qdrant_indexing_enabled: bool = True
 
     model_config = SettingsConfigDict(
         env_file=ENV_FILE_CANDIDATES,
@@ -103,6 +107,24 @@ class Settings(BaseSettings):
             normalized_value = f"/{normalized_value}"
 
         return normalized_value.rstrip("/") or "/media"
+
+    @field_validator("qdrant_url")
+    @classmethod
+    def normalize_qdrant_url(cls, value: str) -> str:
+        normalized_value = value.strip()
+        if not normalized_value:
+            return "http://qdrant:6333"
+
+        return normalized_value.rstrip("/")
+
+    @field_validator("qdrant_collection_name")
+    @classmethod
+    def normalize_qdrant_collection_name(cls, value: str) -> str:
+        normalized_value = value.strip().lower()
+        if not normalized_value:
+            raise ValueError("QDRANT_COLLECTION_NAME must not be empty")
+
+        return normalized_value
 
 
 settings = Settings()

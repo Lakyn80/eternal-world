@@ -54,6 +54,10 @@ class User(TimestampMixin, Base):
         back_populates="owner",
         cascade="all, delete-orphan",
     )
+    rag_vector_indexes: Mapped[list[RagVectorIndex]] = relationship(
+        back_populates="owner",
+        cascade="all, delete-orphan",
+    )
     media_assets: Mapped[list[MediaAsset]] = relationship(
         back_populates="owner",
         cascade="all, delete-orphan",
@@ -98,6 +102,10 @@ class MemoryProfile(TimestampMixin, Base):
     rag_sources: Mapped[list[RagSource]] = relationship(back_populates="memory_profile")
     rag_chunks: Mapped[list[RagChunk]] = relationship(back_populates="memory_profile")
     rag_embeddings: Mapped[list[RagEmbedding]] = relationship(back_populates="memory_profile")
+    rag_vector_indexes: Mapped[list[RagVectorIndex]] = relationship(
+        back_populates="memory_profile",
+        cascade="all, delete-orphan",
+    )
     media_assets: Mapped[list[MediaAsset]] = relationship(
         back_populates="memory_profile",
         foreign_keys="MediaAsset.profile_id",
@@ -257,6 +265,10 @@ class RagSource(TimestampMixin, Base):
         back_populates="source",
         cascade="all, delete-orphan",
     )
+    rag_vector_indexes: Mapped[list[RagVectorIndex]] = relationship(
+        back_populates="source",
+        cascade="all, delete-orphan",
+    )
 
 
 class RagChunk(TimestampMixin, Base):
@@ -308,6 +320,10 @@ class RagChunk(TimestampMixin, Base):
     memory_profile: Mapped[MemoryProfile] = relationship(back_populates="rag_chunks")
     source: Mapped[RagSource] = relationship(back_populates="rag_chunks")
     rag_embeddings: Mapped[list[RagEmbedding]] = relationship(
+        back_populates="chunk",
+        cascade="all, delete-orphan",
+    )
+    rag_vector_indexes: Mapped[list[RagVectorIndex]] = relationship(
         back_populates="chunk",
         cascade="all, delete-orphan",
     )
@@ -364,6 +380,73 @@ class RagEmbedding(TimestampMixin, Base):
     memory_profile: Mapped[MemoryProfile] = relationship(back_populates="rag_embeddings")
     source: Mapped[RagSource] = relationship(back_populates="rag_embeddings")
     chunk: Mapped[RagChunk] = relationship(back_populates="rag_embeddings")
+    rag_vector_indexes: Mapped[list[RagVectorIndex]] = relationship(
+        back_populates="embedding",
+        cascade="all, delete-orphan",
+    )
+
+
+class RagVectorIndex(TimestampMixin, Base):
+    __tablename__ = "rag_vector_indexes"
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('indexed', 'failed')",
+            name="rag_vector_indexes_status",
+        ),
+        Index("ix_rag_vector_indexes_owner_user_id_profile_id", "owner_user_id", "profile_id"),
+        Index("ix_rag_vector_indexes_profile_id_model_code", "profile_id", "model_code"),
+        Index(
+            "ix_rag_vector_indexes_embedding_id_qdrant_collection",
+            "embedding_id",
+            "qdrant_collection",
+            unique=True,
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    owner_user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"),
+        index=True,
+        nullable=False,
+    )
+    profile_id: Mapped[int] = mapped_column(
+        ForeignKey("memory_profiles.id", ondelete="CASCADE"),
+        index=True,
+        nullable=False,
+    )
+    source_id: Mapped[int] = mapped_column(
+        ForeignKey("rag_sources.id", ondelete="CASCADE"),
+        index=True,
+        nullable=False,
+    )
+    chunk_id: Mapped[int] = mapped_column(
+        ForeignKey("rag_chunks.id", ondelete="CASCADE"),
+        index=True,
+        nullable=False,
+    )
+    embedding_id: Mapped[int] = mapped_column(
+        ForeignKey("rag_embeddings.id", ondelete="CASCADE"),
+        index=True,
+        nullable=False,
+    )
+    model_code: Mapped[str] = mapped_column(String(64), index=True, nullable=False)
+    qdrant_collection: Mapped[str] = mapped_column(String(200), index=True, nullable=False)
+    qdrant_point_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    status: Mapped[str] = mapped_column(
+        String(16),
+        index=True,
+        nullable=False,
+        default="indexed",
+        server_default=text("'indexed'"),
+    )
+    error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    indexed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    owner: Mapped[User] = relationship(back_populates="rag_vector_indexes")
+    memory_profile: Mapped[MemoryProfile] = relationship(back_populates="rag_vector_indexes")
+    source: Mapped[RagSource] = relationship(back_populates="rag_vector_indexes")
+    chunk: Mapped[RagChunk] = relationship(back_populates="rag_vector_indexes")
+    embedding: Mapped[RagEmbedding] = relationship(back_populates="rag_vector_indexes")
 
 
 class MediaAsset(TimestampMixin, Base):

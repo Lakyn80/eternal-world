@@ -35,13 +35,16 @@ The backend currently includes infrastructure foundations, authentication, Memor
 - PostgreSQL internal: `db:5432`
 - Redis external: `6384`
 - Redis internal: `redis:6379`
+- Qdrant external: `6335`
+- Qdrant internal: `qdrant:6333`
 
 ## 4. Docker Setup Summary
 
-The root `docker-compose.yml` defines four services:
+The root `docker-compose.yml` defines five services:
 
 - `db`: `postgres:16-alpine`
 - `redis`: `redis:7-alpine`
+- `qdrant`: `qdrant/qdrant:v1.13.6`
 - `backend`: FastAPI application container built from `backend/Dockerfile`
 - `frontend`: Next.js application container built from `frontend/Dockerfile`
 
@@ -49,6 +52,7 @@ Current container names:
 
 - `eternal_world_db`
 - `eternal_world_redis`
+- `eternal_world_qdrant`
 - `eternal_world_backend`
 - `eternal_world_frontend`
 
@@ -56,8 +60,10 @@ Current Docker wiring:
 
 - Backend connects to PostgreSQL through `DATABASE_URL=postgresql+psycopg://eternal_user:eternal_password@db:5432/eternal_world`
 - Backend connects to Redis through `REDIS_URL=redis://redis:6379/0`
+- Backend connects to Qdrant through `QDRANT_URL=http://qdrant:6333`
 - Backend Brain Agent defaults to `AI_BRAIN_PROVIDER=mock` in Docker/local dev
 - Backend media storage is configured through `MEDIA_STORAGE_PROVIDER=local`, `MEDIA_ROOT=/app/media`, and `MEDIA_PUBLIC_BASE_URL=/media`
+- Backend Qdrant indexing defaults to `QDRANT_COLLECTION_NAME=eternal_world_rag_chunks`, `QDRANT_TIMEOUT_SECONDS=10`, and `QDRANT_INDEXING_ENABLED=true`
 - Frontend is configured to call the backend through `NEXT_PUBLIC_API_URL=http://localhost:8033`
 - Backend source is mounted into `/app`
 - Frontend source is mounted into `/app`
@@ -106,6 +112,7 @@ Current backend structure is modular:
 - `backend/app/modules/embedding_models`
 - `backend/app/modules/memories`
 - `backend/app/modules/media`
+- `backend/app/modules/qdrant_indexing`
 - `backend/app/modules/rag_chunks`
 - `backend/app/modules/rag_sources`
 - `backend/app/modules/users`
@@ -131,6 +138,7 @@ Current ORM models:
 - `RagSource`
 - `RagChunk`
 - `RagEmbedding`
+- `RagVectorIndex`
 
 Current migration history:
 
@@ -144,10 +152,11 @@ Current migration history:
 - `20260620_0008` create `rag_sources` table for profile-scoped RAG source ingestion
 - `20260620_0009` create `rag_chunks` table for sentence-aware chunk persistence and validation audit
 - `20260620_0010` create `rag_embeddings` table for chunk-level embedding storage and metadata
+- `20260620_0011` create `rag_vector_indexes` table for Qdrant indexing state and deterministic point tracking
 
 Current Alembic head:
 
-- `20260620_0010`
+- `20260620_0011`
 
 Chat backend note:
 
@@ -964,7 +973,90 @@ Current future-readiness note:
 - the system now has durable per-chunk embedding records keyed by chunk and model profile
 - this prepares later Qdrant indexing, hybrid retrieval, retrieval comparisons, and automatic embedding-model evaluation without implementing those flows yet
 
-## 22. Billing Foundation Summary
+## 22. Qdrant Indexing Foundation Summary
+
+The Qdrant Indexing Foundation is implemented and available through:
+
+- `POST /api/rag-embeddings/{embedding_id}/index`
+- `POST /api/rag-sources/{source_id}/index-embeddings`
+- `GET /api/rag-embeddings/{embedding_id}/index`
+
+Current `qdrant_indexing` module structure:
+
+- `backend/app/modules/qdrant_indexing/__init__.py`
+- `backend/app/modules/qdrant_indexing/router.py`
+- `backend/app/modules/qdrant_indexing/schemas.py`
+- `backend/app/modules/qdrant_indexing/service.py`
+- `backend/app/modules/qdrant_indexing/repository.py`
+- `backend/app/modules/qdrant_indexing/client.py`
+- `backend/app/modules/qdrant_indexing/exceptions.py`
+
+Current Qdrant indexing behavior:
+
+- indexing is ownership-scoped through the current user and the owned `RagEmbedding` or `RagSource`
+- cross-user index/list/read access returns `404`, not `403`
+- this slice only indexes already persisted `RagEmbedding` rows from PostgreSQL
+- no embedding generation, hybrid retrieval, Brain Agent Qdrant retrieval, or external AI API calls are introduced here
+- source-level indexing scans stored embeddings for one owned source and skips rows that are not in `status=embedded` or do not have a vector
+- collection creation is checked lazily before upsert and is non-destructive
+- collection names are derived per embedding model as `{QDRANT_COLLECTION_NAME}__{model_code}` so vector dimensions stay isolated by model
+- repeated indexing reuses the same deterministic Qdrant point id and updates the same point through upsert semantics
+- repeated indexing reuses the same PostgreSQL `RagVectorIndex` row for `embedding_id + qdrant_collection`
+- collection dimension mismatches return a safe configuration error instead of recreating or deleting the collection
+
+Current `RagVectorIndex` fields persisted:
+
+- `id`
+- `owner_user_id`
+- `profile_id`
+- `source_id`
+- `chunk_id`
+- `embedding_id`
+- `model_code`
+- `qdrant_collection`
+- `qdrant_point_id`
+- `status`
+- `error_message`
+- `indexed_at`
+- `created_at`
+- `updated_at`
+
+Current Qdrant payload behavior:
+
+- each point payload stores `owner_user_id`, `profile_id`, `source_id`, `chunk_id`, `embedding_id`, `model_code`, `text_hash`, `language`, `validation_status`, `source_type`, `chunk_index`, and `indexed_at`
+- raw chunk text, raw source text, absolute local file paths, storage keys, media binary content, and secrets are intentionally excluded
+
+Current determinism and isolation behavior:
+
+- point ids are derived as UUIDv5 from `qdrant_collection + embedding_id`
+- ownership is enforced through joined lookups across `RagEmbedding`, `RagChunk`, `RagSource`, and `MemoryProfile`
+- Qdrant payload metadata now carries enough owner/profile/source/chunk context for future filtered retrieval and evaluation without exposing sensitive local paths
+
+Qdrant indexing test coverage currently includes:
+
+- authenticated user can index own embedding
+- unauthenticated user cannot index embedding
+- user cannot index another user’s embedding
+- deterministic point id generation is stable
+- repeated indexing upserts the same index row instead of duplicating
+- source-level indexing indexes all embedded records for one owned source
+- source-level indexing skips failed embeddings
+- user cannot index another user’s source embeddings
+- user can read own index metadata
+- user cannot read another user’s index metadata
+- Qdrant payload includes required ownership and chunk metadata
+- Qdrant payload excludes absolute file paths
+- collection creation is requested when missing
+- collection dimension mismatch returns a safe error
+- indexing existing embeddings does not trigger embedding generation
+- `PROJECT_PROGRESS.md` is updated for this slice
+
+Current future-readiness note:
+
+- the system now has a dedicated indexing layer between PostgreSQL embedding persistence and future vector retrieval
+- this prepares later hybrid retrieval, search evaluation, and grounded Brain Agent retrieval without implementing any retrieval pipeline yet
+
+## 23. Billing Foundation Summary
 
 The billing / tariff foundation is implemented and available through:
 
@@ -1050,14 +1142,14 @@ Billing test coverage currently includes:
 - billing endpoints do not call external HTTP helpers
 - `PROJECT_PROGRESS.md` is updated for this slice
 
-## 23. Current Verification Status
+## 24. Current Verification Status
 
 Current local verification completed on `2026-06-20`:
 
-- Backend tests passing locally: `190 passed`
-- Backend tests passing in Docker: `188 passed, 2 skipped`
+- Backend tests passing locally: `205 passed`
+- Backend tests passing in Docker: `203 passed, 2 skipped`
 - Docker working: confirmed with `docker compose up -d --build`
-- Alembic migrations working: confirmed with `docker compose exec backend alembic upgrade head` and `docker compose exec backend alembic current` -> `20260620_0010 (head)`
+- Alembic migrations working: confirmed with `docker compose exec backend alembic upgrade head` and `docker compose exec backend alembic current` -> `20260620_0011 (head)`
 - Runtime health OK: `{"status":"ok","database":"ok","redis":"ok"}`
 - Observability foundation verified previously with live `X-Request-ID` response header
 - Media storage foundation verified with local pytest coverage and Docker backend startup after rebuild
@@ -1071,8 +1163,9 @@ Current local verification completed on `2026-06-20`:
 - Sentence-aware Chunking + Chunk Validation foundation verified with local pytest coverage and Docker backend verification
 - Embedding Model Registry foundation verified with local pytest coverage and Docker backend verification
 - Embedding Generation foundation verified with local pytest coverage and Docker backend verification
+- Qdrant Indexing foundation verified with local pytest coverage, Docker backend verification, Alembic head `20260620_0011`, and `/health/runtime`
 
-## 24. Commit Tracking
+## 25. Commit Tracking
 
 Current `git log --oneline` history:
 
@@ -1098,7 +1191,8 @@ Current working tree note:
 
 - The Sentence-aware Chunking + Chunk Validation foundation is committed as `e178fb3 Add sentence-aware RAG chunking foundation`.
 - The Embedding Model Registry foundation is committed as `0138188 Add embedding model registry foundation`.
-- The Embedding Generation foundation is the current uncommitted slice in the working tree.
+- The Embedding Generation foundation is already implemented and represented in the current repository state.
+- The Qdrant Indexing foundation is the current uncommitted slice in the working tree.
 
 Future commit entry format:
 
@@ -1111,7 +1205,7 @@ Future commit entry format:
 - Docker verified:
 ```
 
-## 25. Mandatory Future Rule
+## 26. Mandatory Future Rule
 
 This file is mandatory project tracking documentation and must be maintained continuously.
 

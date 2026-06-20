@@ -1,0 +1,116 @@
+from __future__ import annotations
+
+from typing import Any
+
+import httpx
+
+from app.core.config import settings
+from app.modules.qdrant_indexing.exceptions import QdrantClientError, QdrantCollectionConfigurationError
+
+
+DISTANCE_METRIC = "Cosine"
+
+
+def _extract_vector_size(collection_payload: dict[str, Any]) -> int | None:
+    result = collection_payload.get("result")
+    if not isinstance(result, dict):
+        return None
+
+    config = result.get("config")
+    if not isinstance(config, dict):
+        return None
+
+    params = config.get("params")
+    if not isinstance(params, dict):
+        return None
+
+    vectors = params.get("vectors")
+    if isinstance(vectors, dict):
+        if "size" in vectors:
+            size = vectors.get("size")
+            return int(size) if isinstance(size, (int, float)) else None
+
+        for key in ("default", ""):
+            candidate = vectors.get(key)
+            if isinstance(candidate, dict) and "size" in candidate:
+                size = candidate.get("size")
+                return int(size) if isinstance(size, (int, float)) else None
+
+    return None
+
+
+class QdrantRestClient:
+    def __init__(self, *, base_url: str, timeout_seconds: float) -> None:
+        self._base_url = base_url.rstrip("/")
+        self._timeout_seconds = timeout_seconds
+
+    def _request(self, method: str, path: str, **kwargs) -> httpx.Response:
+        try:
+            with httpx.Client(base_url=self._base_url, timeout=self._timeout_seconds) as client:
+                response = client.request(method, path, **kwargs)
+                return response
+        except httpx.HTTPError as exc:
+            raise QdrantClientError("Qdrant request failed") from exc
+
+    def ensure_collection(self, *, collection_name: str, vector_size: int) -> None:
+        response = self._request("GET", f"/collections/{collection_name}")
+
+        if response.status_code == 404:
+            self._create_collection(collection_name=collection_name, vector_size=vector_size)
+            return
+
+        if response.is_error:
+            raise QdrantClientError("Qdrant collection check failed")
+
+        existing_vector_size = _extract_vector_size(response.json())
+        if existing_vector_size is None:
+            raise QdrantCollectionConfigurationError("Qdrant collection metadata is invalid")
+
+        if existing_vector_size != vector_size:
+            raise QdrantCollectionConfigurationError("Qdrant collection is incompatible with embedding dimension")
+
+    def _create_collection(self, *, collection_name: str, vector_size: int) -> None:
+        response = self._request(
+            "PUT",
+            f"/collections/{collection_name}",
+            json={
+                "vectors": {
+                    "size": vector_size,
+                    "distance": DISTANCE_METRIC,
+                }
+            },
+        )
+        if response.is_error:
+            raise QdrantClientError("Qdrant collection creation failed")
+
+    def upsert_point(
+        self,
+        *,
+        collection_name: str,
+        point_id: str,
+        vector: list[float],
+        payload: dict[str, object],
+    ) -> None:
+        response = self._request(
+            "PUT",
+            f"/collections/{collection_name}/points",
+            params={"wait": "true"},
+            json={
+                "points": [
+                    {
+                        "id": point_id,
+                        "vector": vector,
+                        "payload": payload,
+                    }
+                ]
+            },
+        )
+        if response.is_error:
+            raise QdrantClientError("Qdrant point upsert failed")
+
+
+def build_qdrant_client() -> QdrantRestClient:
+    return QdrantRestClient(
+        base_url=settings.qdrant_url,
+        timeout_seconds=settings.qdrant_timeout_seconds,
+    )

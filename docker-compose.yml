@@ -21,6 +21,15 @@ services:
     volumes:
       - eternal_world_redis_data:/data
 
+  qdrant:
+    image: qdrant/qdrant:v1.13.6
+    container_name: eternal_world_qdrant
+    restart: unless-stopped
+    ports:
+      - "6335:6333"
+    volumes:
+      - eternal_world_qdrant_data:/qdrant/storage
+
   backend:
     build:
       context: ./backend
@@ -39,11 +48,16 @@ services:
       MEDIA_ROOT: /app/media
       MEDIA_PUBLIC_BASE_URL: /media
       MEDIA_MAX_FILE_SIZE_BYTES: 20971520
+      QDRANT_URL: http://qdrant:6333
+      QDRANT_COLLECTION_NAME: eternal_world_rag_chunks
+      QDRANT_TIMEOUT_SECONDS: 10
+      QDRANT_INDEXING_ENABLED: "true"
     ports:
       - "8033:8000"
     depends_on:
       - db
       - redis
+      - qdrant
     volumes:
       - ./backend:/app
 
@@ -66,3 +80,4 @@ services:
 volumes:
   eternal_world_postgres_data:
   eternal_world_redis_data:
+  eternal_world_qdrant_data:
