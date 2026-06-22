@@ -1391,8 +1391,8 @@ Billing test coverage currently includes:
 
 Current local verification completed on `2026-06-22`:
 
-- Backend tests passing locally: `254 passed`
-- Backend tests passing in Docker: `252 passed, 2 skipped`
+- Backend tests passing locally: `260 passed`
+- Backend tests passing in Docker: `258 passed, 2 skipped`
 - Docker working: confirmed with `docker compose up -d --build`
 - Docker worker stack verified: `backend`, `frontend`, `db`, `redis`, `qdrant`, `celery_worker`
 - Alembic migrations working: confirmed with `docker compose exec backend alembic upgrade head` and `docker compose exec backend alembic current` -> `20260622_0012 (head)`
@@ -1415,6 +1415,7 @@ Current local verification completed on `2026-06-22`:
 - Brain Agent Qdrant RAG Integration verified with local pytest coverage, Docker backend verification, existing Alembic head `20260622_0012`, and `/health/runtime`
 - RAG Evaluation Harness verified with local pytest coverage, Docker backend verification, existing Alembic head `20260622_0012`, and `/health/runtime`
 - Celery RAG Pipeline Orchestration verified with local pytest coverage, Docker backend verification, existing Alembic head `20260622_0012`, and `/health/runtime`
+- End-to-End Demo Seed/Smoke Flow verified with local pytest coverage, Docker backend verification, existing Alembic head `20260622_0012`, `/health/runtime`, and Docker smoke script PASS
 
 ## 28. Task 22 RAG Evaluation Harness
 
@@ -1530,10 +1531,88 @@ Verification commands and results:
 - `docker compose exec backend python -m pytest` -> `252 passed, 2 skipped`
 - `Invoke-RestMethod http://localhost:8033/health/runtime` -> `{"status":"ok","database":"ok","redis":"ok"}`
 
-## 30. Commit Tracking
+## 30. Task 24 End-to-End Demo Seed/Smoke Flow
+
+Changed area:
+
+- backend-only demo smoke flow proving the seeded RAG pipeline works end to end
+
+What was added:
+
+- new module `backend/app/modules/demo_smoke/`
+- new script `backend/scripts/run_e2e_demo_smoke.py`
+- deterministic safe demo user/profile/source seed flow using fictional data only
+- script support for `--email`, `--profile-name`, `--json`, `--timeout-seconds`, and `--poll-interval-seconds`
+- smoke runner that creates or reuses demo records, triggers the existing Celery RAG pipeline, polls the tracked `BackgroundJob`, verifies chunks, embeddings, Qdrant indexing records, retrieval evidence, chat/Brain Agent output, and the RAG evaluation harness
+- tests covering safe fictional data, seed idempotency, required stage checks, PASS/FAIL behavior, no external AI calls, and no stored query embeddings
+
+How to run the smoke script:
+
+- Local backend working directory: `python scripts/run_e2e_demo_smoke.py`
+- Docker backend container: `docker compose exec backend python scripts/run_e2e_demo_smoke.py`
+- JSON output: `docker compose exec backend python scripts/run_e2e_demo_smoke.py --json`
+
+What the script verifies:
+
+- demo user/profile
+- demo RAG source
+- tracked Celery RAG pipeline job
+- `BackgroundJob` success and progress `4/4`
+- chunks exist
+- embedded records exist
+- Qdrant indexing records exist
+- retrieval returns seeded evidence containing `sunflower`
+- chat flow reaches the existing Brain Agent with grounded metadata
+- answer contains the expected seeded marker
+- RAG evaluation harness passes the grounded answer case
+
+Docker smoke result:
+
+```text
+E2E DEMO SMOKE RESULT: PASS
+
+[PASS] user/profile
+[PASS] profile
+[PASS] source
+[PASS] job
+[PASS] job_status
+[PASS] chunks
+[PASS] embeddings
+[PASS] qdrant_indexing
+[PASS] retrieval
+[PASS] retrieval_marker
+[PASS] chat/brain_answer
+[PASS] chat_grounding
+[PASS] evaluation
+```
+
+Intentionally not implemented:
+
+- no frontend UI
+- no billing, subscription, tariff, or payment changes
+- no Brain Agent behavior changes
+- no RAG retrieval behavior changes
+- no Qdrant indexing semantic changes
+- no Celery worker architecture changes
+- no new AI providers or embedding providers
+- no real external AI/API calls
+- no database wipe, Qdrant wipe, or deletion of unrelated data
+
+Verification commands and results:
+
+- `python -m pytest` -> `260 passed`
+- `docker compose up -d --build` -> success
+- `docker compose exec backend alembic upgrade head` -> success
+- `docker compose exec backend alembic current` -> `20260622_0012 (head)`
+- `docker compose exec backend python -m pytest` -> `258 passed, 2 skipped`
+- `docker compose exec backend python scripts/run_e2e_demo_smoke.py` -> `E2E DEMO SMOKE RESULT: PASS`
+- `Invoke-RestMethod http://localhost:8033/health/runtime` -> `{"status":"ok","database":"ok","redis":"ok"}`
+
+## 31. Commit Tracking
 
 Current `git log --oneline` history:
 
+- `07bb407` Add Celery RAG pipeline orchestration
 - `4712333` Add RAG evaluation harness
 - `6235880` Connect Brain Agent to Qdrant RAG retrieval
 - `936dc82` Add Celery job tracking foundation
@@ -1569,7 +1648,8 @@ Current working tree note:
 - The Celery Job Tracking foundation is committed as `936dc82 Add Celery job tracking foundation`.
 - The Brain Agent Qdrant RAG Integration foundation is committed as `6235880 Connect Brain Agent to Qdrant RAG retrieval`.
 - The RAG Evaluation Harness is committed as `4712333 Add RAG evaluation harness`.
-- The Celery RAG Pipeline Orchestration is the current uncommitted slice in the working tree.
+- The Celery RAG Pipeline Orchestration is committed as `07bb407 Add Celery RAG pipeline orchestration`.
+- The End-to-End Demo Seed/Smoke Flow is the current uncommitted slice in the working tree.
 
 Future commit entry format:
 
@@ -1582,7 +1662,7 @@ Future commit entry format:
 - Docker verified:
 ```
 
-## 31. Mandatory Future Rule
+## 32. Mandatory Future Rule
 
 This file is mandatory project tracking documentation and must be maintained continuously.
 
