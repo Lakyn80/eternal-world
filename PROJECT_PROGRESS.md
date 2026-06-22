@@ -112,6 +112,7 @@ Current backend structure is modular:
 - `backend/app/modules/embedding_models`
 - `backend/app/modules/memories`
 - `backend/app/modules/media`
+- `backend/app/modules/rag_retrieval`
 - `backend/app/modules/qdrant_indexing`
 - `backend/app/modules/rag_chunks`
 - `backend/app/modules/rag_sources`
@@ -1056,7 +1057,85 @@ Current future-readiness note:
 - the system now has a dedicated indexing layer between PostgreSQL embedding persistence and future vector retrieval
 - this prepares later hybrid retrieval, search evaluation, and grounded Brain Agent retrieval without implementing any retrieval pipeline yet
 
-## 23. Billing Foundation Summary
+## 23. Hybrid Retrieval Foundation Summary
+
+The Hybrid Retrieval Foundation is implemented and available through:
+
+- `POST /api/memory-profiles/{profile_id}/rag/retrieve`
+
+Current `rag_retrieval` module structure:
+
+- `backend/app/modules/rag_retrieval/__init__.py`
+- `backend/app/modules/rag_retrieval/exceptions.py`
+- `backend/app/modules/rag_retrieval/ranking.py`
+- `backend/app/modules/rag_retrieval/repository.py`
+- `backend/app/modules/rag_retrieval/router.py`
+- `backend/app/modules/rag_retrieval/schemas.py`
+- `backend/app/modules/rag_retrieval/service.py`
+
+Current retrieval behavior:
+
+- retrieval requires JWT authentication
+- retrieval is scoped to one owned `MemoryProfile`
+- cross-user and cross-profile access returns `404`, not `403`
+- query embeddings are generated in memory only and are never persisted to PostgreSQL
+- retrieval reuses the existing embedding model registry and the current local embedding provider mechanism
+- Qdrant collection names follow the existing model-specific pattern `{QDRANT_COLLECTION_NAME}__{model_code}`
+- Qdrant search always filters by `owner_user_id` and `profile_id`
+- optional `language` and `source_type` filters are forwarded to Qdrant and then rechecked against PostgreSQL-backed evidence rows
+- Qdrant is treated as the vector index only, while PostgreSQL remains the source of truth for returned chunk text and metadata
+- missing Qdrant collections or empty search results return a safe empty `results` list
+- no Brain Agent call, no final AI answer generation, and no reranking LLM is added in this slice
+
+Current response evidence fields:
+
+- `chunk_id`
+- `source_id`
+- `embedding_id`
+- `score`
+- `text`
+- `chunk_index`
+- `language`
+- `source_type`
+- `validation_status`
+- `text_hash`
+- `qdrant_collection`
+- `payload_metadata`
+
+Current ranking behavior:
+
+- ranking preserves the Qdrant similarity score
+- result sorting is deterministic by score desc with stable tie-breakers
+- optional `score_threshold` filtering is supported
+- no keyword engine and no advanced reranking is implemented yet
+
+What is intentionally not implemented:
+
+- no Brain Agent integration with Qdrant
+- no hybrid keyword search engine
+- no final answer synthesis
+- no query embedding persistence
+- no new chunk embeddings or reindexing during retrieval
+
+Hybrid retrieval test coverage currently includes:
+
+- retrieval endpoint requires authentication
+- retrieval is scoped to `owner_user_id` and `profile_id`
+- cross-user profile access returns `404`
+- query embedding is generated but not persisted as `RagEmbedding`
+- Qdrant search receives owner and profile filters
+- empty Qdrant results return an empty list
+- existing indexed chunks can be returned as evidence
+- retrieval does not call Brain Agent
+- retrieval does not create new stored chunk embeddings
+- `PROJECT_PROGRESS.md` is updated for this slice
+
+Current future-readiness note:
+
+- the backend now has a dedicated profile-scoped evidence retrieval layer over Qdrant indexing
+- this prepares later grounded answer generation, retrieval evaluation, and richer hybrid retrieval without coupling search to the Brain Agent yet
+
+## 24. Billing Foundation Summary
 
 The billing / tariff foundation is implemented and available through:
 
@@ -1142,12 +1221,12 @@ Billing test coverage currently includes:
 - billing endpoints do not call external HTTP helpers
 - `PROJECT_PROGRESS.md` is updated for this slice
 
-## 24. Current Verification Status
+## 25. Current Verification Status
 
-Current local verification completed on `2026-06-20`:
+Current local verification completed on `2026-06-22`:
 
-- Backend tests passing locally: `205 passed`
-- Backend tests passing in Docker: `203 passed, 2 skipped`
+- Backend tests passing locally: `215 passed`
+- Backend tests passing in Docker: `213 passed, 2 skipped`
 - Docker working: confirmed with `docker compose up -d --build`
 - Alembic migrations working: confirmed with `docker compose exec backend alembic upgrade head` and `docker compose exec backend alembic current` -> `20260620_0011 (head)`
 - Runtime health OK: `{"status":"ok","database":"ok","redis":"ok"}`
@@ -1164,13 +1243,17 @@ Current local verification completed on `2026-06-20`:
 - Embedding Model Registry foundation verified with local pytest coverage and Docker backend verification
 - Embedding Generation foundation verified with local pytest coverage and Docker backend verification
 - Qdrant Indexing foundation verified with local pytest coverage, Docker backend verification, Alembic head `20260620_0011`, and `/health/runtime`
+- Hybrid Retrieval foundation verified with local pytest coverage, Docker backend verification, existing Alembic head `20260620_0011`, and `/health/runtime`
 
-## 25. Commit Tracking
+## 26. Commit Tracking
 
 Current `git log --oneline` history:
 
+- `a44be88` Add Qdrant indexing foundation
+- `130ad5d` Add embedding generation foundation
 - `0138188` Add embedding model registry foundation
 - `e178fb3` Add sentence-aware RAG chunking foundation
+- `1860342` Add RAG source ingestion foundation
 - `6eb90d2` Add Brain Agent provider foundation
 - `c079d85` Add local media serving and profile photo binding
 - `3115d71` Add media storage foundation
@@ -1191,8 +1274,9 @@ Current working tree note:
 
 - The Sentence-aware Chunking + Chunk Validation foundation is committed as `e178fb3 Add sentence-aware RAG chunking foundation`.
 - The Embedding Model Registry foundation is committed as `0138188 Add embedding model registry foundation`.
-- The Embedding Generation foundation is already implemented and represented in the current repository state.
-- The Qdrant Indexing foundation is the current uncommitted slice in the working tree.
+- The Embedding Generation foundation is committed as `130ad5d Add embedding generation foundation`.
+- The Qdrant Indexing foundation is committed as `a44be88 Add Qdrant indexing foundation`.
+- The Hybrid Retrieval foundation is the current uncommitted slice in the working tree.
 
 Future commit entry format:
 
@@ -1205,7 +1289,7 @@ Future commit entry format:
 - Docker verified:
 ```
 
-## 26. Mandatory Future Rule
+## 27. Mandatory Future Rule
 
 This file is mandatory project tracking documentation and must be maintained continuously.
 

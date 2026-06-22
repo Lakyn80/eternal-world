@@ -17,6 +17,7 @@ from app.modules.memories.router import router as memories_router
 from app.modules.media.router import public_router as media_public_router
 from app.modules.media.router import router as media_router
 from app.modules.memory_profiles.router import router as memory_profiles_router
+from app.modules.rag_retrieval.router import router as rag_retrieval_router
 from app.modules.rag_chunks.router import router as rag_chunks_router
 from app.modules.rag_sources.router import router as rag_sources_router
 from app.modules.qdrant_indexing.router import router as qdrant_indexing_router
@@ -43,6 +44,7 @@ app.include_router(memories_router)
 app.include_router(media_router)
 app.include_router(media_public_router)
 app.include_router(memory_profiles_router)
+app.include_router(rag_retrieval_router)
 app.include_router(qdrant_indexing_router)
 app.include_router(rag_chunks_router)
 app.include_router(rag_sources_router)

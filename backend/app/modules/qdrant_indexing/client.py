@@ -108,6 +108,49 @@ class QdrantRestClient:
         if response.is_error:
             raise QdrantClientError("Qdrant point upsert failed")
 
+    def search_points(
+        self,
+        *,
+        collection_name: str,
+        vector: list[float],
+        limit: int,
+        search_filter: dict[str, object] | None = None,
+        score_threshold: float | None = None,
+    ) -> list[dict[str, object]]:
+        request_body: dict[str, object] = {
+            "vector": vector,
+            "limit": limit,
+            "with_payload": True,
+        }
+        if search_filter is not None:
+            request_body["filter"] = search_filter
+        if score_threshold is not None:
+            request_body["score_threshold"] = score_threshold
+
+        response = self._request(
+            "POST",
+            f"/collections/{collection_name}/points/search",
+            json=request_body,
+        )
+
+        if response.status_code == 404:
+            return []
+
+        if response.is_error:
+            raise QdrantClientError("Qdrant point search failed")
+
+        response_payload = response.json()
+        result = response_payload.get("result")
+        if not isinstance(result, list):
+            return []
+
+        normalized_results: list[dict[str, object]] = []
+        for item in result:
+            if isinstance(item, dict):
+                normalized_results.append(item)
+
+        return normalized_results
+
 
 def build_qdrant_client() -> QdrantRestClient:
     return QdrantRestClient(
