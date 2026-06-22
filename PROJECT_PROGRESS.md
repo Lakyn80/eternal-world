@@ -1391,8 +1391,8 @@ Billing test coverage currently includes:
 
 Current local verification completed on `2026-06-22`:
 
-- Backend tests passing locally: `235 passed`
-- Backend tests passing in Docker: `233 passed, 2 skipped`
+- Backend tests passing locally: `243 passed`
+- Backend tests passing in Docker: `241 passed, 2 skipped`
 - Docker working: confirmed with `docker compose up -d --build`
 - Docker worker stack verified: `backend`, `frontend`, `db`, `redis`, `qdrant`, `celery_worker`
 - Alembic migrations working: confirmed with `docker compose exec backend alembic upgrade head` and `docker compose exec backend alembic current` -> `20260622_0012 (head)`
@@ -1413,11 +1413,49 @@ Current local verification completed on `2026-06-22`:
 - Hybrid Retrieval foundation verified with local pytest coverage, Docker backend verification, existing Alembic head `20260620_0011`, and `/health/runtime`
 - Celery Job Tracking foundation verified with local pytest coverage, Docker backend verification, Alembic head `20260622_0012`, and `/health/runtime`
 - Brain Agent Qdrant RAG Integration verified with local pytest coverage, Docker backend verification, existing Alembic head `20260622_0012`, and `/health/runtime`
+- RAG Evaluation Harness verified with local pytest coverage, Docker backend verification, existing Alembic head `20260622_0012`, and `/health/runtime`
 
-## 28. Commit Tracking
+## 28. Task 22 RAG Evaluation Harness
+
+Changed area:
+
+- backend-only evaluation foundation for the grounded Brain Agent + Qdrant RAG flow
+
+What was added:
+
+- new module `backend/app/modules/rag_evaluation/`
+- deterministic evaluation case schema for profile facts, memory evidence, retrieved RAG evidence, expected behavior, expected markers, forbidden claims, and minimum evidence requirements
+- pure evaluation logic that classifies answers as `grounded_answer`, `lack_of_evidence`, or `partial_answer_with_uncertainty`
+- structured pass/fail results with reasons, evidence counts, missing markers, forbidden-claim detection, answer preview, provider name, and response metadata
+- service methods for `build_chat_request`, `run_eval_case`, and `run_eval_suite`
+- foundation eval cases for grounded context present vs. lack-of-evidence behavior
+- backend tests covering grounded pass/fail, forbidden-claim detection, lack-of-evidence pass/fail, no external AI HTTP client use in tests, no stored query embeddings, and suite summary aggregation
+
+Intentionally not implemented:
+
+- no frontend UI or dashboard
+- no new billing, subscription, tariff, or payment logic
+- no Qdrant indexing behavior changes
+- no embedding persistence changes
+- no stored query embeddings for evaluation requests
+- no Celery worker architecture changes
+- no API router for the eval harness in this slice
+- no LLM-as-judge or external observability tooling
+
+Verification commands and results:
+
+- `python -m pytest` -> `243 passed`
+- `docker compose up -d --build` -> success
+- `docker compose exec backend alembic upgrade head` -> success
+- `docker compose exec backend alembic current` -> `20260622_0012 (head)`
+- `docker compose exec backend python -m pytest` -> `241 passed, 2 skipped`
+- `Invoke-RestMethod http://localhost:8033/health/runtime` -> `{"status":"ok","database":"ok","redis":"ok"}`
+
+## 29. Commit Tracking
 
 Current `git log --oneline` history:
 
+- `6235880` Connect Brain Agent to Qdrant RAG retrieval
 - `936dc82` Add Celery job tracking foundation
 - `b46e39c` Add hybrid retrieval foundation
 - `a44be88` Add Qdrant indexing foundation
@@ -1449,7 +1487,8 @@ Current working tree note:
 - The Qdrant Indexing foundation is committed as `a44be88 Add Qdrant indexing foundation`.
 - The Hybrid Retrieval foundation is committed as `b46e39c Add hybrid retrieval foundation`.
 - The Celery Job Tracking foundation is committed as `936dc82 Add Celery job tracking foundation`.
-- The Brain Agent Qdrant RAG Integration is the current uncommitted slice in the working tree.
+- The Brain Agent Qdrant RAG Integration foundation is committed as `6235880 Connect Brain Agent to Qdrant RAG retrieval`.
+- The RAG Evaluation Harness is the current uncommitted slice in the working tree.
 
 Future commit entry format:
 
@@ -1462,7 +1501,7 @@ Future commit entry format:
 - Docker verified:
 ```
 
-## 29. Mandatory Future Rule
+## 30. Mandatory Future Rule
 
 This file is mandatory project tracking documentation and must be maintained continuously.
 
