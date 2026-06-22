@@ -33,9 +33,23 @@ class BrainMemoryEvidence(BaseModel):
     selection_reason: str
 
 
+class BrainRagEvidence(BaseModel):
+    source_type: str = "rag_chunk"
+    chunk_id: int
+    source_id: int
+    embedding_id: int
+    score: float
+    language: str | None = None
+    source_document_type: str
+    validation_status: str
+    text_hash: str
+    content_preview: str
+
+
 class BrainGroundedContext(BaseModel):
     profile_context: BrainProfileContext
     evidence_items: list[BrainMemoryEvidence] = Field(default_factory=list)
+    retrieved_evidence_items: list[BrainRagEvidence] = Field(default_factory=list)
 
 
 def _sanitize_prompt_text(value: str | None) -> str | None:
@@ -140,6 +154,7 @@ def build_grounded_context(
     profile,
     memories: list,
     user_message: str,
+    retrieved_evidence_items: list[BrainRagEvidence] | None = None,
 ) -> BrainGroundedContext:
     return BrainGroundedContext(
         profile_context=build_brain_profile_context(profile),
@@ -147,4 +162,25 @@ def build_grounded_context(
             memories=memories,
             user_message=user_message,
         ),
+        retrieved_evidence_items=retrieved_evidence_items or [],
     )
+
+
+def build_rag_evidence_items(results: list) -> list[BrainRagEvidence]:
+    rag_evidence_items: list[BrainRagEvidence] = []
+    for result in results:
+        rag_evidence_items.append(
+            BrainRagEvidence(
+                chunk_id=result.chunk_id,
+                source_id=result.source_id,
+                embedding_id=result.embedding_id,
+                score=float(result.score),
+                language=result.language,
+                source_document_type=result.source_type,
+                validation_status=result.validation_status,
+                text_hash=result.text_hash,
+                content_preview=_build_content_preview(result.text) or "",
+            )
+        )
+
+    return rag_evidence_items

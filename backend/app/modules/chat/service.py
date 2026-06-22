@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from sqlalchemy.orm import Session
 
-from app.modules.ai_agents.brain.context import build_grounded_context
+from app.modules.ai_agents.brain.context import build_grounded_context, build_rag_evidence_items
 from app.db.models import ChatMessage, User
 from app.modules.ai_agents import get_agent_orchestrator
 from app.modules.ai_agents.schemas import (
@@ -14,6 +14,14 @@ from app.modules.chat import repository
 from app.modules.chat.schemas import ChatMessageCreate, ChatMessageRead, ChatSendResponse
 from app.modules.memories import repository as memories_repository
 from app.modules.memory_profiles import repository as memory_profiles_repository
+from app.modules.qdrant_indexing.exceptions import QdrantClientError, QdrantCollectionConfigurationError
+from app.modules.rag_retrieval.exceptions import (
+    RagRetrievalDisabledError,
+    RagRetrievalModelUnavailableError,
+    RagRetrievalProfileNotFoundError,
+)
+from app.modules.rag_retrieval.schemas import RagRetrievalRequest
+from app.modules.rag_retrieval.service import retrieve_profile_rag
 
 
 RECENT_HISTORY_LIMIT = 10
@@ -71,6 +79,35 @@ def _build_message_read(message: ChatMessage) -> ChatMessageRead:
     )
 
 
+def _retrieve_rag_evidence_safely(
+    db: Session,
+    *,
+    current_user: User,
+    profile_id: int,
+    user_message: str,
+):
+    try:
+        retrieval_response = retrieve_profile_rag(
+            db,
+            current_user=current_user,
+            profile_id=profile_id,
+            payload=RagRetrievalRequest(
+                query=user_message,
+            ),
+        )
+    except (
+        RagRetrievalDisabledError,
+        RagRetrievalModelUnavailableError,
+        RagRetrievalProfileNotFoundError,
+        QdrantClientError,
+        QdrantCollectionConfigurationError,
+        Exception,
+    ):
+        return []
+
+    return build_rag_evidence_items(retrieval_response.results)
+
+
 def send_chat_message(
     db: Session,
     *,
@@ -94,10 +131,17 @@ def send_chat_message(
         user_id=current_user.id,
         profile_id=profile_id,
     )
+    retrieved_evidence_items = _retrieve_rag_evidence_safely(
+        db,
+        current_user=current_user,
+        profile_id=profile_id,
+        user_message=payload.message,
+    )
     grounded_context = build_grounded_context(
         profile=profile,
         memories=profile_memories,
         user_message=payload.message,
+        retrieved_evidence_items=retrieved_evidence_items,
     )
 
     user_message = repository.create_chat_message(

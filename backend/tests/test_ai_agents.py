@@ -1,7 +1,10 @@
 import pytest
 
 from app.core.config import Settings, settings
+from app.db.models import RagEmbedding
+from app.db.session import get_db
 from app.core.logging import REDACTED_VALUE, sanitize_log_data
+from app.main import app
 from app.modules.ai_agents.brain.context import MAX_MEMORY_EVIDENCE_ITEMS
 from app.modules.ai_agents.brain.provider import (
     BrainProviderConfigurationError,
@@ -15,6 +18,7 @@ from app.modules.ai_agents.schemas import (
     MemoryProfileContext,
     OrchestratorChatRequest,
 )
+from app.modules.rag_retrieval.schemas import RagRetrievalResponseRead, RagRetrievalResultRead
 
 
 @pytest.fixture(autouse=True)
@@ -98,6 +102,13 @@ def _capture_prompt(monkeypatch):
 
     monkeypatch.setattr(MockBrainAgentProvider, "generate_response", capture_generate_response)
     return captured
+
+
+def _get_test_db_session():
+    override = app.dependency_overrides[get_db]
+    session_generator = override()
+    db = next(session_generator)
+    return db, session_generator
 
 
 def test_default_brain_provider_is_mock():
@@ -579,6 +590,205 @@ def test_grounded_memory_context_makes_no_external_api_calls(client, monkeypatch
         f"/api/chat/{profile_id}/messages",
         headers={"Authorization": f"Bearer {token}"},
         json={"message": "Hello grounded world"},
+    )
+
+    assert response.status_code == 200
+
+
+def test_chat_flow_calls_retrieval_for_correct_owner_and_profile(client, monkeypatch):
+    captured_call: dict[str, object] = {}
+    token = _register_and_login(client, "ai-rag-call@example.com")
+    profile_id = _create_profile(client, token, name="RAG Call Profile")
+
+    def capture_retrieval_call(db, *, current_user, profile_id, payload):
+        captured_call["owner_user_id"] = current_user.id
+        captured_call["profile_id"] = profile_id
+        captured_call["query"] = payload.query
+        return RagRetrievalResponseRead(
+            profile_id=profile_id,
+            query=payload.query,
+            model_code="multilingual_e5_small",
+            results=[],
+        )
+
+    monkeypatch.setattr("app.modules.chat.service.retrieve_profile_rag", capture_retrieval_call)
+
+    response = client.post(
+        f"/api/chat/{profile_id}/messages",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"message": "What do you know about Prague?"},
+    )
+
+    assert response.status_code == 200
+    assert captured_call == {
+        "owner_user_id": 1,
+        "profile_id": profile_id,
+        "query": "What do you know about Prague?",
+    }
+
+
+def test_retrieved_chunks_are_included_in_brain_grounded_context(client, monkeypatch):
+    captured = _capture_prompt(monkeypatch)
+    token = _register_and_login(client, "ai-rag-prompt@example.com")
+    profile_id = _create_profile(client, token, name="RAG Prompt Profile")
+
+    def fake_retrieval_response(db, *, current_user, profile_id, payload):
+        return RagRetrievalResponseRead(
+            profile_id=profile_id,
+            query=payload.query,
+            model_code="multilingual_e5_small",
+            results=[
+                RagRetrievalResultRead(
+                    chunk_id=77,
+                    source_id=33,
+                    embedding_id=15,
+                    score=0.9123,
+                    text="Verified archive note about a Prague spring visit.",
+                    chunk_index=0,
+                    language="en",
+                    source_type="manual_text",
+                    validation_status="valid",
+                    text_hash="hash-123",
+                    qdrant_collection="eternal_world_rag_chunks__multilingual_e5_small",
+                    payload_metadata={
+                        "owner_user_id": current_user.id,
+                        "profile_id": profile_id,
+                    },
+                )
+            ],
+        )
+
+    monkeypatch.setattr("app.modules.chat.service.retrieve_profile_rag", fake_retrieval_response)
+
+    response = client.post(
+        f"/api/chat/{profile_id}/messages",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"message": "Tell me about Prague"},
+    )
+
+    assert response.status_code == 200
+    prompt = captured["prompt"]
+    assert "[rag:77]" in prompt
+    assert "Verified archive note about a Prague spring visit." in prompt
+    assert "embedding_id=15" in prompt
+    assert "validation=valid" in prompt
+
+
+def test_cross_user_profile_data_is_not_retrieved(client, monkeypatch):
+    called = False
+    owner_token = _register_and_login(client, "ai-rag-owner@example.com")
+    other_token = _register_and_login(client, "ai-rag-other@example.com")
+    profile_id = _create_profile(client, owner_token, name="Owner RAG Profile")
+
+    def fail_if_called(*args, **kwargs):
+        nonlocal called
+        called = True
+        raise AssertionError("Retrieval should not run for cross-user profile access")
+
+    monkeypatch.setattr("app.modules.chat.service.retrieve_profile_rag", fail_if_called)
+
+    response = client.post(
+        f"/api/chat/{profile_id}/messages",
+        headers={"Authorization": f"Bearer {other_token}"},
+        json={"message": "Unauthorized access"},
+    )
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == "Memory profile not found"
+    assert called is False
+
+
+def test_no_retrieval_results_return_safe_lack_of_evidence_answer(client, monkeypatch):
+    token = _register_and_login(client, "ai-rag-no-evidence@example.com")
+    profile_id = _create_profile(client, token, name="No Evidence RAG Profile")
+
+    def no_results(db, *, current_user, profile_id, payload):
+        return RagRetrievalResponseRead(
+            profile_id=profile_id,
+            query=payload.query,
+            model_code="multilingual_e5_small",
+            results=[],
+        )
+
+    monkeypatch.setattr("app.modules.chat.service.retrieve_profile_rag", no_results)
+
+    response = client.post(
+        f"/api/chat/{profile_id}/messages",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"message": "What happened in Prague?"},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["ai_response_text"] == (
+        "No Evidence RAG Profile mock reply: "
+        "That information is not available in the stored memories/context."
+    )
+
+
+def test_chat_flow_does_not_create_query_rag_embeddings(client, monkeypatch):
+    token = _register_and_login(client, "ai-rag-no-persist@example.com")
+    profile_id = _create_profile(client, token, name="No Persist RAG Profile")
+
+    def no_results(db, *, current_user, profile_id, payload):
+        return RagRetrievalResponseRead(
+            profile_id=profile_id,
+            query=payload.query,
+            model_code="multilingual_e5_small",
+            results=[],
+        )
+
+    monkeypatch.setattr("app.modules.chat.service.retrieve_profile_rag", no_results)
+
+    db, session_generator = _get_test_db_session()
+    try:
+        before_count = db.query(RagEmbedding).count()
+    finally:
+        try:
+            next(session_generator)
+        except StopIteration:
+            pass
+
+    response = client.post(
+        f"/api/chat/{profile_id}/messages",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"message": "What happened in Prague?"},
+    )
+
+    db, session_generator = _get_test_db_session()
+    try:
+        after_count = db.query(RagEmbedding).count()
+    finally:
+        try:
+            next(session_generator)
+        except StopIteration:
+            pass
+
+    assert response.status_code == 200
+    assert before_count == after_count
+
+
+def test_brain_agent_chat_flow_uses_rag_retrieval_service_not_qdrant_directly(client, monkeypatch):
+    token = _register_and_login(client, "ai-rag-service-only@example.com")
+    profile_id = _create_profile(client, token, name="Service Only Profile")
+
+    def fake_retrieval_response(db, *, current_user, profile_id, payload):
+        return RagRetrievalResponseRead(
+            profile_id=profile_id,
+            query=payload.query,
+            model_code="multilingual_e5_small",
+            results=[],
+        )
+
+    def fail_if_qdrant_called(*args, **kwargs):
+        raise AssertionError("Chat flow should use rag_retrieval service abstraction, not call Qdrant directly")
+
+    monkeypatch.setattr("app.modules.chat.service.retrieve_profile_rag", fake_retrieval_response)
+    monkeypatch.setattr("app.modules.rag_retrieval.service.build_qdrant_client", fail_if_qdrant_called)
+
+    response = client.post(
+        f"/api/chat/{profile_id}/messages",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"message": "Tell me about Prague"},
     )
 
     assert response.status_code == 200

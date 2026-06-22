@@ -1243,7 +1243,65 @@ Current future-readiness note:
 
 - the backend now has a reusable worker/job state layer that future long-running RAG, media, and generation pipelines can adopt without changing user-facing auth or profile ownership rules
 
-## 25. Billing Foundation Summary
+## 25. Brain Agent Qdrant RAG Integration Summary
+
+The Brain Agent Qdrant RAG integration is implemented inside the existing chat/Brain flow.
+
+Current integration behavior:
+
+- profile chat still validates ownership before any Brain or retrieval work runs
+- chat now calls the existing `rag_retrieval` service for the current user, selected profile, and current user message
+- retrieval remains fully ownership-scoped through `owner_user_id` and `profile_id`
+- retrieved evidence chunks are converted into grounded Brain context items instead of duplicating Qdrant logic inside the Brain Agent
+- PostgreSQL remains the source of truth for returned RAG evidence text, while Qdrant remains the vector index
+- query embeddings are still generated only in memory and are never persisted as `RagEmbedding` rows
+
+Current Brain grounding behavior:
+
+- the Brain prompt now includes retrieved evidence chunks alongside the earlier memory/timeline evidence
+- retrieved evidence is formatted with:
+  - `chunk_id`
+  - `source_id`
+  - `embedding_id`
+  - `score`
+  - `language`
+  - `validation_status`
+  - `text_hash`
+  - preview text
+- if retrieval is disabled, unavailable, misconfigured, or returns no results, chat continues safely without crashing
+
+Current anti-hallucination behavior:
+
+- personality and tone are still allowed to influence style only
+- factual grounding is explicitly limited to profile facts, stored memories, and retrieved evidence
+- when no relevant grounded evidence exists, the mock Brain provider now returns a safe lack-of-evidence response for factual queries
+- no cross-user or cross-profile retrieval data is exposed through chat
+
+What is intentionally not implemented:
+
+- no new public RAG/Brain API endpoints
+- no change to Qdrant indexing behavior
+- no persisted query embeddings
+- no automatic job-tracking orchestration for chat retrieval
+- no final citation UX in the frontend
+
+Brain/RAG integration test coverage currently includes:
+
+- chat flow calls retrieval for the correct owner/profile/query
+- retrieved chunks are injected into Brain grounded context
+- cross-user profile access does not trigger retrieval
+- no-result retrieval path returns a safe lack-of-evidence response
+- chat does not create new `RagEmbedding` rows for user queries
+- Brain chat flow uses the `rag_retrieval` service abstraction instead of direct Qdrant calls
+- existing Brain Agent/provider/chat tests remain green
+- existing `rag_retrieval` tests remain green
+- existing `job_tracking` tests remain green
+
+Current future-readiness note:
+
+- the Brain Agent can now consume profile-scoped Qdrant retrieval evidence as grounded context, which prepares later richer grounded answer generation without changing indexing or embedding persistence architecture
+
+## 26. Billing Foundation Summary
 
 The billing / tariff foundation is implemented and available through:
 
@@ -1329,12 +1387,12 @@ Billing test coverage currently includes:
 - billing endpoints do not call external HTTP helpers
 - `PROJECT_PROGRESS.md` is updated for this slice
 
-## 26. Current Verification Status
+## 27. Current Verification Status
 
 Current local verification completed on `2026-06-22`:
 
-- Backend tests passing locally: `229 passed`
-- Backend tests passing in Docker: `227 passed, 2 skipped`
+- Backend tests passing locally: `235 passed`
+- Backend tests passing in Docker: `233 passed, 2 skipped`
 - Docker working: confirmed with `docker compose up -d --build`
 - Docker worker stack verified: `backend`, `frontend`, `db`, `redis`, `qdrant`, `celery_worker`
 - Alembic migrations working: confirmed with `docker compose exec backend alembic upgrade head` and `docker compose exec backend alembic current` -> `20260622_0012 (head)`
@@ -1354,11 +1412,13 @@ Current local verification completed on `2026-06-22`:
 - Qdrant Indexing foundation verified with local pytest coverage, Docker backend verification, Alembic head `20260620_0011`, and `/health/runtime`
 - Hybrid Retrieval foundation verified with local pytest coverage, Docker backend verification, existing Alembic head `20260620_0011`, and `/health/runtime`
 - Celery Job Tracking foundation verified with local pytest coverage, Docker backend verification, Alembic head `20260622_0012`, and `/health/runtime`
+- Brain Agent Qdrant RAG Integration verified with local pytest coverage, Docker backend verification, existing Alembic head `20260622_0012`, and `/health/runtime`
 
-## 27. Commit Tracking
+## 28. Commit Tracking
 
 Current `git log --oneline` history:
 
+- `936dc82` Add Celery job tracking foundation
 - `b46e39c` Add hybrid retrieval foundation
 - `a44be88` Add Qdrant indexing foundation
 - `130ad5d` Add embedding generation foundation
@@ -1388,7 +1448,8 @@ Current working tree note:
 - The Embedding Generation foundation is committed as `130ad5d Add embedding generation foundation`.
 - The Qdrant Indexing foundation is committed as `a44be88 Add Qdrant indexing foundation`.
 - The Hybrid Retrieval foundation is committed as `b46e39c Add hybrid retrieval foundation`.
-- The Celery Job Tracking foundation is the current uncommitted slice in the working tree.
+- The Celery Job Tracking foundation is committed as `936dc82 Add Celery job tracking foundation`.
+- The Brain Agent Qdrant RAG Integration is the current uncommitted slice in the working tree.
 
 Future commit entry format:
 
@@ -1401,7 +1462,7 @@ Future commit entry format:
 - Docker verified:
 ```
 
-## 28. Mandatory Future Rule
+## 29. Mandatory Future Rule
 
 This file is mandatory project tracking documentation and must be maintained continuously.
 

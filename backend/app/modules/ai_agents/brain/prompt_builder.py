@@ -18,8 +18,11 @@ def build_brain_prompt(request: OrchestratorChatRequest) -> str:
     ]
 
     evidence_lines = ["B. Verified memory evidence"]
-    if grounded_context is not None and grounded_context.evidence_items:
-        for evidence_item in grounded_context.evidence_items:
+    memory_evidence_items = grounded_context.evidence_items if grounded_context is not None else []
+    rag_evidence_items = grounded_context.retrieved_evidence_items if grounded_context is not None else []
+
+    if memory_evidence_items or rag_evidence_items:
+        for evidence_item in memory_evidence_items:
             evidence_date = (
                 evidence_item.occurred_at.isoformat()
                 if evidence_item.occurred_at is not None
@@ -35,8 +38,19 @@ def build_brain_prompt(request: OrchestratorChatRequest) -> str:
                     f"  Selection reason: {evidence_item.selection_reason}",
                 ]
             )
+        for evidence_item in rag_evidence_items:
+            evidence_lines.extend(
+                [
+                    (
+                        f"- [rag:{evidence_item.chunk_id}] score={evidence_item.score:.4f} | "
+                        f"source_id={evidence_item.source_id} | type={evidence_item.source_document_type}"
+                    ),
+                    f"  Preview: {evidence_item.content_preview or 'none'}",
+                    f"  Metadata: embedding_id={evidence_item.embedding_id}, language={evidence_item.language or 'unknown'}, validation={evidence_item.validation_status}, text_hash={evidence_item.text_hash}",
+                ]
+            )
     else:
-        evidence_lines.append("- No verified memory evidence is currently available in stored memories.")
+        evidence_lines.append("- No verified memory evidence is currently available in stored memories/context.")
 
     grounding_lines = [
         "C. Grounding instructions",
