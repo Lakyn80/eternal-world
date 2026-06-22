@@ -52,12 +52,49 @@ services:
       QDRANT_COLLECTION_NAME: eternal_world_rag_chunks
       QDRANT_TIMEOUT_SECONDS: 10
       QDRANT_INDEXING_ENABLED: "true"
+      CELERY_BROKER_URL: redis://redis:6379/1
+      CELERY_RESULT_BACKEND: redis://redis:6379/1
+      CELERY_TASK_ALWAYS_EAGER: "false"
+      CELERY_TASK_EAGER_PROPAGATES: "false"
     ports:
       - "8033:8000"
     depends_on:
       - db
       - redis
       - qdrant
+    volumes:
+      - ./backend:/app
+
+  celery_worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: eternal_world_celery_worker
+    restart: unless-stopped
+    command: celery -A app.worker.celery_app.celery_app worker --loglevel=info
+    environment:
+      DATABASE_URL: postgresql+psycopg://eternal_user:eternal_password@db:5432/eternal_world
+      REDIS_URL: redis://redis:6379/0
+      APP_NAME: Eternal World API
+      ENVIRONMENT: local
+      BACKEND_CORS_ORIGINS: http://localhost:8017
+      AI_BRAIN_PROVIDER: mock
+      AI_BRAIN_TIMEOUT_SECONDS: 30
+      MEDIA_STORAGE_PROVIDER: local
+      MEDIA_ROOT: /app/media
+      MEDIA_PUBLIC_BASE_URL: /media
+      MEDIA_MAX_FILE_SIZE_BYTES: 20971520
+      QDRANT_URL: http://qdrant:6333
+      QDRANT_COLLECTION_NAME: eternal_world_rag_chunks
+      QDRANT_TIMEOUT_SECONDS: 10
+      QDRANT_INDEXING_ENABLED: "true"
+      CELERY_BROKER_URL: redis://redis:6379/1
+      CELERY_RESULT_BACKEND: redis://redis:6379/1
+      CELERY_TASK_ALWAYS_EAGER: "false"
+      CELERY_TASK_EAGER_PROPAGATES: "false"
+    depends_on:
+      - db
+      - redis
     volumes:
       - ./backend:/app
 

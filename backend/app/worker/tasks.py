@@ -1,0 +1,71 @@
+from __future__ import annotations
+
+from celery.utils.log import get_task_logger
+
+from app.db.session import SessionLocal
+from app.modules.job_tracking.service import mark_failed, mark_running, mark_succeeded, update_progress
+from app.worker.celery_app import celery_app
+
+
+logger = get_task_logger(__name__)
+
+
+def get_session_factory():
+    return SessionLocal
+
+
+@celery_app.task(bind=True, name="app.worker.tasks.run_job_smoke_test")
+def run_job_smoke_test(self, job_id: int) -> dict[str, object]:
+    session_factory = get_session_factory()
+    db = session_factory()
+    try:
+        mark_running(
+            db,
+            job_id=job_id,
+            celery_task_id=self.request.id,
+        )
+        update_progress(
+            db,
+            job_id=job_id,
+            progress_current=1,
+            progress_total=3,
+        )
+        update_progress(
+            db,
+            job_id=job_id,
+            progress_current=2,
+            progress_total=3,
+        )
+        update_progress(
+            db,
+            job_id=job_id,
+            progress_current=3,
+            progress_total=3,
+        )
+        mark_succeeded(
+            db,
+            job_id=job_id,
+            result_payload={
+                "smoke_test": True,
+                "message": "Celery smoke test completed successfully.",
+            },
+        )
+        return {
+            "job_id": job_id,
+            "status": "succeeded",
+        }
+    except Exception as exc:
+        logger.exception("celery_smoke_test_failed", extra={"job_id": job_id})
+        mark_failed(
+            db,
+            job_id=job_id,
+            error_message="Celery smoke test failed",
+            error_payload={
+                "code": "celery_smoke_test_failed",
+                "message": "Celery smoke test failed",
+                "details": {"job_id": job_id, "exception_type": exc.__class__.__name__},
+            },
+        )
+        raise
+    finally:
+        db.close()

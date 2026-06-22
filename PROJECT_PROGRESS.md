@@ -40,12 +40,13 @@ The backend currently includes infrastructure foundations, authentication, Memor
 
 ## 4. Docker Setup Summary
 
-The root `docker-compose.yml` defines five services:
+The root `docker-compose.yml` defines six services:
 
 - `db`: `postgres:16-alpine`
 - `redis`: `redis:7-alpine`
 - `qdrant`: `qdrant/qdrant:v1.13.6`
 - `backend`: FastAPI application container built from `backend/Dockerfile`
+- `celery_worker`: Celery worker container built from `backend/Dockerfile`
 - `frontend`: Next.js application container built from `frontend/Dockerfile`
 
 Current container names:
@@ -54,6 +55,7 @@ Current container names:
 - `eternal_world_redis`
 - `eternal_world_qdrant`
 - `eternal_world_backend`
+- `eternal_world_celery_worker`
 - `eternal_world_frontend`
 
 Current Docker wiring:
@@ -61,9 +63,11 @@ Current Docker wiring:
 - Backend connects to PostgreSQL through `DATABASE_URL=postgresql+psycopg://eternal_user:eternal_password@db:5432/eternal_world`
 - Backend connects to Redis through `REDIS_URL=redis://redis:6379/0`
 - Backend connects to Qdrant through `QDRANT_URL=http://qdrant:6333`
+- Backend and Celery worker share `CELERY_BROKER_URL=redis://redis:6379/1`
 - Backend Brain Agent defaults to `AI_BRAIN_PROVIDER=mock` in Docker/local dev
 - Backend media storage is configured through `MEDIA_STORAGE_PROVIDER=local`, `MEDIA_ROOT=/app/media`, and `MEDIA_PUBLIC_BASE_URL=/media`
 - Backend Qdrant indexing defaults to `QDRANT_COLLECTION_NAME=eternal_world_rag_chunks`, `QDRANT_TIMEOUT_SECONDS=10`, and `QDRANT_INDEXING_ENABLED=true`
+- Celery worker runs `celery -A app.worker.celery_app.celery_app worker --loglevel=info`
 - Frontend is configured to call the backend through `NEXT_PUBLIC_API_URL=http://localhost:8033`
 - Backend source is mounted into `/app`
 - Frontend source is mounted into `/app`
@@ -112,6 +116,7 @@ Current backend structure is modular:
 - `backend/app/modules/embedding_models`
 - `backend/app/modules/memories`
 - `backend/app/modules/media`
+- `backend/app/modules/job_tracking`
 - `backend/app/modules/rag_retrieval`
 - `backend/app/modules/qdrant_indexing`
 - `backend/app/modules/rag_chunks`
@@ -119,6 +124,7 @@ Current backend structure is modular:
 - `backend/app/modules/users`
 - `backend/app/modules/memory_profiles`
 - `backend/app/modules/ai_agents`
+- `backend/app/worker`
 - placeholder module packages also exist for future slices
 
 ## 7. Database Foundation Summary
@@ -140,6 +146,7 @@ Current ORM models:
 - `RagChunk`
 - `RagEmbedding`
 - `RagVectorIndex`
+- `BackgroundJob`
 
 Current migration history:
 
@@ -154,10 +161,11 @@ Current migration history:
 - `20260620_0009` create `rag_chunks` table for sentence-aware chunk persistence and validation audit
 - `20260620_0010` create `rag_embeddings` table for chunk-level embedding storage and metadata
 - `20260620_0011` create `rag_vector_indexes` table for Qdrant indexing state and deterministic point tracking
+- `20260622_0012` create `background_jobs` table for Celery-backed job tracking and historical milestone audit rows
 
 Current Alembic head:
 
-- `20260620_0011`
+- `20260622_0012`
 
 Chat backend note:
 
@@ -1135,7 +1143,107 @@ Current future-readiness note:
 - the backend now has a dedicated profile-scoped evidence retrieval layer over Qdrant indexing
 - this prepares later grounded answer generation, retrieval evaluation, and richer hybrid retrieval without coupling search to the Brain Agent yet
 
-## 24. Billing Foundation Summary
+## 24. Celery Job Tracking Foundation Summary
+
+The Celery Job Tracking Foundation is implemented and available through:
+
+- `GET /api/jobs`
+- `GET /api/jobs/{job_id}`
+- `POST /api/jobs/smoke-test`
+
+Current `job_tracking` module structure:
+
+- `backend/app/modules/job_tracking/__init__.py`
+- `backend/app/modules/job_tracking/enums.py`
+- `backend/app/modules/job_tracking/exceptions.py`
+- `backend/app/modules/job_tracking/repository.py`
+- `backend/app/modules/job_tracking/router.py`
+- `backend/app/modules/job_tracking/schemas.py`
+- `backend/app/modules/job_tracking/service.py`
+
+Current worker structure:
+
+- `backend/app/worker/__init__.py`
+- `backend/app/worker/celery_app.py`
+- `backend/app/worker/tasks.py`
+
+Current job-tracking behavior:
+
+- PostgreSQL is the authoritative background-job tracking store
+- Celery task ids are stored only as technical worker references
+- every job is owned by `owner_user_id`
+- `profile_id` is optional and ownership-validated when provided
+- users can list and read only their own jobs
+- cross-user job access returns `404`, not `403`
+- reusable service methods now cover queued creation, running state, progress updates, success completion, and failure completion
+- the optional smoke-test endpoint creates a harmless job and can dispatch a reusable Celery smoke task
+- the smoke task updates one `BackgroundJob` through `queued -> running -> succeeded`
+- no existing Brain Agent, retrieval, embedding, or Qdrant behavior is moved to Celery in this slice
+
+Current `BackgroundJob` fields persisted:
+
+- `id`
+- `owner_user_id`
+- `profile_id`
+- `job_type`
+- `status`
+- `progress_current`
+- `progress_total`
+- `celery_task_id`
+- `input_payload`
+- `result_payload`
+- `error_payload`
+- `error_message`
+- `started_at`
+- `finished_at`
+- `created_at`
+- `updated_at`
+
+Current job-type/status foundation:
+
+- job types currently include `smoke_test`, `system_milestone`, `rag_source_ingestion`, `rag_chunking`, `embedding_generation`, `qdrant_indexing`, `rag_retrieval`, `brain_agent_generation`, `media_processing`, `voice_generation`, and `video_generation`
+- job statuses currently include `queued`, `running`, `succeeded`, `failed`, and `cancelled`
+
+Historical milestone backfill behavior:
+
+- `backend/scripts/backfill_job_tracking_milestones.py` provides an explicit manual backfill entrypoint
+- backfill is not automatic and does not run on startup
+- backfill requires an explicit `--owner-user-id`
+- backfilled records are marked as `job_type=system_milestone` and `status=succeeded`
+- known milestones currently include Task 18 `a44be88` and Task 19 `b46e39c`
+- backfilled rows include source/note fields that explicitly state runtime progress was not recorded at execution time
+- the backfill service is idempotent and skips milestones already present for the owner
+
+What is intentionally not implemented:
+
+- no automatic Celery integration for all existing modules yet
+- no public job cancellation flow
+- no retry-heavy orchestration for AI or media pipelines
+- no fabricated historical runtime timestamps or progress logs
+
+Job tracking test coverage currently includes:
+
+- `BackgroundJob` metadata registration
+- Alembic head coverage for the new migration
+- auth required for job endpoints
+- users can list only their own jobs
+- users can read their own jobs
+- cross-user job access returns `404`
+- `create_job` creates queued rows
+- `mark_running` sets running and `started_at`
+- `update_progress` updates progress fields
+- `mark_succeeded` sets succeeded and `finished_at`
+- `mark_failed` sets failed and error fields
+- Celery smoke task can update a job in test/eager mode without external services
+- historical milestone backfill is idempotent
+- backfilled milestone jobs are marked as `system_milestone` and `succeeded`
+- `PROJECT_PROGRESS.md` is updated for this slice
+
+Current future-readiness note:
+
+- the backend now has a reusable worker/job state layer that future long-running RAG, media, and generation pipelines can adopt without changing user-facing auth or profile ownership rules
+
+## 25. Billing Foundation Summary
 
 The billing / tariff foundation is implemented and available through:
 
@@ -1221,14 +1329,15 @@ Billing test coverage currently includes:
 - billing endpoints do not call external HTTP helpers
 - `PROJECT_PROGRESS.md` is updated for this slice
 
-## 25. Current Verification Status
+## 26. Current Verification Status
 
 Current local verification completed on `2026-06-22`:
 
-- Backend tests passing locally: `215 passed`
-- Backend tests passing in Docker: `213 passed, 2 skipped`
+- Backend tests passing locally: `229 passed`
+- Backend tests passing in Docker: `227 passed, 2 skipped`
 - Docker working: confirmed with `docker compose up -d --build`
-- Alembic migrations working: confirmed with `docker compose exec backend alembic upgrade head` and `docker compose exec backend alembic current` -> `20260620_0011 (head)`
+- Docker worker stack verified: `backend`, `frontend`, `db`, `redis`, `qdrant`, `celery_worker`
+- Alembic migrations working: confirmed with `docker compose exec backend alembic upgrade head` and `docker compose exec backend alembic current` -> `20260622_0012 (head)`
 - Runtime health OK: `{"status":"ok","database":"ok","redis":"ok"}`
 - Observability foundation verified previously with live `X-Request-ID` response header
 - Media storage foundation verified with local pytest coverage and Docker backend startup after rebuild
@@ -1244,11 +1353,13 @@ Current local verification completed on `2026-06-22`:
 - Embedding Generation foundation verified with local pytest coverage and Docker backend verification
 - Qdrant Indexing foundation verified with local pytest coverage, Docker backend verification, Alembic head `20260620_0011`, and `/health/runtime`
 - Hybrid Retrieval foundation verified with local pytest coverage, Docker backend verification, existing Alembic head `20260620_0011`, and `/health/runtime`
+- Celery Job Tracking foundation verified with local pytest coverage, Docker backend verification, Alembic head `20260622_0012`, and `/health/runtime`
 
-## 26. Commit Tracking
+## 27. Commit Tracking
 
 Current `git log --oneline` history:
 
+- `b46e39c` Add hybrid retrieval foundation
 - `a44be88` Add Qdrant indexing foundation
 - `130ad5d` Add embedding generation foundation
 - `0138188` Add embedding model registry foundation
@@ -1276,7 +1387,8 @@ Current working tree note:
 - The Embedding Model Registry foundation is committed as `0138188 Add embedding model registry foundation`.
 - The Embedding Generation foundation is committed as `130ad5d Add embedding generation foundation`.
 - The Qdrant Indexing foundation is committed as `a44be88 Add Qdrant indexing foundation`.
-- The Hybrid Retrieval foundation is the current uncommitted slice in the working tree.
+- The Hybrid Retrieval foundation is committed as `b46e39c Add hybrid retrieval foundation`.
+- The Celery Job Tracking foundation is the current uncommitted slice in the working tree.
 
 Future commit entry format:
 
@@ -1289,7 +1401,7 @@ Future commit entry format:
 - Docker verified:
 ```
 
-## 27. Mandatory Future Rule
+## 28. Mandatory Future Rule
 
 This file is mandatory project tracking documentation and must be maintained continuously.
 

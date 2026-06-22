@@ -58,6 +58,10 @@ class User(TimestampMixin, Base):
         back_populates="owner",
         cascade="all, delete-orphan",
     )
+    background_jobs: Mapped[list[BackgroundJob]] = relationship(
+        back_populates="owner",
+        cascade="all, delete-orphan",
+    )
     media_assets: Mapped[list[MediaAsset]] = relationship(
         back_populates="owner",
         cascade="all, delete-orphan",
@@ -103,6 +107,10 @@ class MemoryProfile(TimestampMixin, Base):
     rag_chunks: Mapped[list[RagChunk]] = relationship(back_populates="memory_profile")
     rag_embeddings: Mapped[list[RagEmbedding]] = relationship(back_populates="memory_profile")
     rag_vector_indexes: Mapped[list[RagVectorIndex]] = relationship(
+        back_populates="memory_profile",
+        cascade="all, delete-orphan",
+    )
+    background_jobs: Mapped[list[BackgroundJob]] = relationship(
         back_populates="memory_profile",
         cascade="all, delete-orphan",
     )
@@ -447,6 +455,72 @@ class RagVectorIndex(TimestampMixin, Base):
     source: Mapped[RagSource] = relationship(back_populates="rag_vector_indexes")
     chunk: Mapped[RagChunk] = relationship(back_populates="rag_vector_indexes")
     embedding: Mapped[RagEmbedding] = relationship(back_populates="rag_vector_indexes")
+
+
+class BackgroundJob(TimestampMixin, Base):
+    __tablename__ = "background_jobs"
+    __table_args__ = (
+        CheckConstraint(
+            (
+                "job_type IN ("
+                "'smoke_test', 'system_milestone', 'rag_source_ingestion', 'rag_chunking', "
+                "'embedding_generation', 'qdrant_indexing', 'rag_retrieval', "
+                "'brain_agent_generation', 'media_processing', 'voice_generation', "
+                "'video_generation'"
+                ")"
+            ),
+            name="background_jobs_job_type",
+        ),
+        CheckConstraint(
+            "status IN ('queued', 'running', 'succeeded', 'failed', 'cancelled')",
+            name="background_jobs_status",
+        ),
+        Index("ix_background_jobs_created_at", "created_at"),
+        Index("ix_background_jobs_owner_user_id_profile_id", "owner_user_id", "profile_id"),
+        Index("ix_background_jobs_owner_user_id_status", "owner_user_id", "status"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    owner_user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"),
+        index=True,
+        nullable=False,
+    )
+    profile_id: Mapped[int | None] = mapped_column(
+        ForeignKey("memory_profiles.id", ondelete="SET NULL"),
+        index=True,
+        nullable=True,
+    )
+    job_type: Mapped[str] = mapped_column(String(64), index=True, nullable=False)
+    status: Mapped[str] = mapped_column(
+        String(16),
+        index=True,
+        nullable=False,
+        default="queued",
+        server_default=text("'queued'"),
+    )
+    progress_current: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        default=0,
+        server_default=text("0"),
+    )
+    progress_total: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        default=0,
+        server_default=text("0"),
+    )
+    celery_task_id: Mapped[str | None] = mapped_column(String(255), index=True, nullable=True)
+    input_payload: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
+    result_payload: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
+    error_payload: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
+    error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    owner: Mapped[User] = relationship(back_populates="background_jobs")
+    memory_profile: Mapped[MemoryProfile | None] = relationship(back_populates="background_jobs")
 
 
 class MediaAsset(TimestampMixin, Base):

@@ -1,5 +1,5 @@
 from app.db.base import Base
-from app.db.models import ChatMessage, MediaAsset, Memory, MemoryProfile, RagChunk, RagEmbedding, RagSource, RagVectorIndex, User
+from app.db.models import BackgroundJob, ChatMessage, MediaAsset, Memory, MemoryProfile, RagChunk, RagEmbedding, RagSource, RagVectorIndex, User
 
 
 def test_database_models_are_registered():
@@ -12,6 +12,7 @@ def test_database_models_are_registered():
     assert RagChunk.__tablename__ == "rag_chunks"
     assert RagEmbedding.__tablename__ == "rag_embeddings"
     assert RagVectorIndex.__tablename__ == "rag_vector_indexes"
+    assert BackgroundJob.__tablename__ == "background_jobs"
     assert "full_name" in User.__table__.columns.keys()
     assert {
         "main_photo_media_id",
@@ -98,7 +99,22 @@ def test_database_models_are_registered():
         "error_message",
         "indexed_at",
     }.issubset(RagVectorIndex.__table__.columns.keys())
+    assert {
+        "owner_user_id",
+        "profile_id",
+        "job_type",
+        "status",
+        "progress_current",
+        "progress_total",
+        "celery_task_id",
+        "input_payload",
+        "result_payload",
+        "error_payload",
+        "error_message",
+        "started_at",
+        "finished_at",
+    }.issubset(BackgroundJob.__table__.columns.keys())
 
-    assert {"users", "memory_profiles", "chat_messages", "memories", "media_assets", "rag_sources", "rag_chunks", "rag_embeddings", "rag_vector_indexes"}.issubset(
+    assert {"users", "memory_profiles", "chat_messages", "memories", "media_assets", "rag_sources", "rag_chunks", "rag_embeddings", "rag_vector_indexes", "background_jobs"}.issubset(
         Base.metadata.tables.keys()
     )

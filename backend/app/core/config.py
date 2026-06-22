@@ -41,6 +41,10 @@ class Settings(BaseSettings):
     qdrant_collection_name: str = "eternal_world_rag_chunks"
     qdrant_timeout_seconds: float = Field(default=10, gt=0)
     qdrant_indexing_enabled: bool = True
+    celery_broker_url: str = "redis://redis:6379/1"
+    celery_result_backend: str | None = "redis://redis:6379/1"
+    celery_task_always_eager: bool = False
+    celery_task_eager_propagates: bool = True
 
     model_config = SettingsConfigDict(
         env_file=ENV_FILE_CANDIDATES,
@@ -125,6 +129,24 @@ class Settings(BaseSettings):
             raise ValueError("QDRANT_COLLECTION_NAME must not be empty")
 
         return normalized_value
+
+    @field_validator("celery_broker_url")
+    @classmethod
+    def normalize_celery_broker_url(cls, value: str) -> str:
+        normalized_value = value.strip()
+        if not normalized_value:
+            return "redis://redis:6379/1"
+
+        return normalized_value.rstrip("/")
+
+    @field_validator("celery_result_backend")
+    @classmethod
+    def normalize_celery_result_backend(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+
+        normalized_value = value.strip()
+        return normalized_value.rstrip("/") or None
 
 
 settings = Settings()

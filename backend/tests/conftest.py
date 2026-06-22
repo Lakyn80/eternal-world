@@ -33,10 +33,13 @@ def client():
             db.close()
 
     app.dependency_overrides[get_db] = override_get_db
+    app.state.testing_session_local = testing_session_local
 
     with TestClient(app) as test_client:
         yield test_client
 
     app.dependency_overrides.clear()
+    if hasattr(app.state, "testing_session_local"):
+        delattr(app.state, "testing_session_local")
     Base.metadata.drop_all(bind=engine)
     engine.dispose()
