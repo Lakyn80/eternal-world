@@ -4,6 +4,7 @@ from celery.utils.log import get_task_logger
 
 from app.db.session import SessionLocal
 from app.modules.job_tracking.service import mark_failed, mark_running, mark_succeeded, update_progress
+from app.modules.rag_pipeline.service import process_rag_source_job
 from app.worker.celery_app import celery_app
 
 
@@ -66,6 +67,23 @@ def run_job_smoke_test(self, job_id: int) -> dict[str, object]:
                 "details": {"job_id": job_id, "exception_type": exc.__class__.__name__},
             },
         )
+        raise
+    finally:
+        db.close()
+
+
+@celery_app.task(bind=True, name="app.worker.tasks.run_rag_source_processing_job")
+def run_rag_source_processing_job(self, job_id: int) -> dict[str, object]:
+    session_factory = get_session_factory()
+    db = session_factory()
+    try:
+        return process_rag_source_job(
+            db,
+            job_id=job_id,
+            celery_task_id=self.request.id,
+        )
+    except Exception:
+        logger.exception("rag_source_processing_failed", extra={"job_id": job_id})
         raise
     finally:
         db.close()

@@ -22,6 +22,7 @@ from app.modules.rag_retrieval.router import router as rag_retrieval_router
 from app.modules.rag_chunks.router import router as rag_chunks_router
 from app.modules.rag_sources.router import router as rag_sources_router
 from app.modules.qdrant_indexing.router import router as qdrant_indexing_router
+from app.modules.rag_pipeline.router import router as rag_pipeline_router
 
 
 configure_logging()
@@ -48,6 +49,7 @@ app.include_router(media_public_router)
 app.include_router(memory_profiles_router)
 app.include_router(rag_retrieval_router)
 app.include_router(qdrant_indexing_router)
+app.include_router(rag_pipeline_router)
 app.include_router(rag_chunks_router)
 app.include_router(rag_sources_router)
 

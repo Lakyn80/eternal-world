@@ -1391,8 +1391,8 @@ Billing test coverage currently includes:
 
 Current local verification completed on `2026-06-22`:
 
-- Backend tests passing locally: `243 passed`
-- Backend tests passing in Docker: `241 passed, 2 skipped`
+- Backend tests passing locally: `254 passed`
+- Backend tests passing in Docker: `252 passed, 2 skipped`
 - Docker working: confirmed with `docker compose up -d --build`
 - Docker worker stack verified: `backend`, `frontend`, `db`, `redis`, `qdrant`, `celery_worker`
 - Alembic migrations working: confirmed with `docker compose exec backend alembic upgrade head` and `docker compose exec backend alembic current` -> `20260622_0012 (head)`
@@ -1414,6 +1414,7 @@ Current local verification completed on `2026-06-22`:
 - Celery Job Tracking foundation verified with local pytest coverage, Docker backend verification, Alembic head `20260622_0012`, and `/health/runtime`
 - Brain Agent Qdrant RAG Integration verified with local pytest coverage, Docker backend verification, existing Alembic head `20260622_0012`, and `/health/runtime`
 - RAG Evaluation Harness verified with local pytest coverage, Docker backend verification, existing Alembic head `20260622_0012`, and `/health/runtime`
+- Celery RAG Pipeline Orchestration verified with local pytest coverage, Docker backend verification, existing Alembic head `20260622_0012`, and `/health/runtime`
 
 ## 28. Task 22 RAG Evaluation Harness
 
@@ -1451,10 +1452,89 @@ Verification commands and results:
 - `docker compose exec backend python -m pytest` -> `241 passed, 2 skipped`
 - `Invoke-RestMethod http://localhost:8033/health/runtime` -> `{"status":"ok","database":"ok","redis":"ok"}`
 
-## 29. Commit Tracking
+## 29. Task 23 Celery RAG Pipeline Orchestration
+
+Changed area:
+
+- backend-only tracked orchestration for processing one owned RAG source through chunking, embedding generation, and Qdrant indexing
+
+What was added:
+
+- new module `backend/app/modules/rag_pipeline/`
+- authenticated `POST /api/rag-sources/{source_id}/process` endpoint
+- new Celery task `app.worker.tasks.run_rag_source_processing_job`
+- pipeline service that creates a `BackgroundJob`, enqueues Celery, stores the Celery task id, and delegates worker execution to existing RAG services
+- minimal `job_tracking.create_job` extension to allow initial progress fields without changing existing callers
+- tests for authentication, own-source access, cross-user 404s, queued job creation, Celery task id storage, progress updates, success payloads, failure payloads, service usage, no Brain Agent calls, no retrieval behavior calls, no query embedding creation, existing chunk reuse on rerun, eager Celery compatibility, and job visibility through existing job endpoints
+
+How the tracked pipeline works:
+
+- API validates ownership of the requested `RagSource`
+- API creates a `BackgroundJob` with `job_type = rag_source_ingestion`, `status = queued`, `progress_current = 0`, and `progress_total = 4`
+- API enqueues `run_rag_source_processing_job` and stores `celery_task_id` on the `BackgroundJob`
+- worker marks the job `running`
+- worker validates source ownership and updates progress to `1/4`
+- worker reuses existing chunks on rerun, otherwise calls existing `chunk_rag_source`, then updates progress to `2/4`
+- worker calls existing `embed_source_chunks` and updates progress to `3/4`
+- worker calls existing `index_source_embeddings` and updates progress to `4/4`
+- worker marks the job `succeeded` with result counts, or `failed` with a structured error payload
+- existing `/api/jobs` and `/api/jobs/{job_id}` remain the tracking read surface
+
+Result payload structure:
+
+- `source_id`
+- `profile_id`
+- `chunks_total`
+- `chunks_valid`
+- `chunks_warning`
+- `chunks_invalid`
+- `embeddings_total`
+- `embeddings_created`
+- `embeddings_skipped`
+- `embeddings_failed`
+- `indexed_total`
+- `embeddings_indexed`
+- `indexing_skipped`
+- `indexing_failed`
+- `model_code`
+- `qdrant_collection`
+- `completed_at`
+
+Error payload structure:
+
+- `code`
+- `message`
+- `step`
+- `details.job_id`
+- `details.source_id`
+- `details.exception_type`
+
+Intentionally not implemented:
+
+- no frontend UI
+- no billing, subscription, tariff, or payment changes
+- no Brain Agent behavior changes
+- no RAG retrieval behavior changes
+- no Qdrant indexing semantic changes
+- no new embedding providers
+- no external AI/API calls
+- no Celery broker or worker architecture changes
+- no deletion of existing chunks, embeddings, vector indexes, or Qdrant points by the orchestration layer
+
+Verification commands and results:
+
+- `python -m pytest` -> `254 passed`
+- `docker compose up -d --build` -> success
+- `docker compose exec backend alembic upgrade head` -> success
+- `docker compose exec backend alembic current` -> `20260622_0012 (head)`
+- `docker compose exec backend python -m pytest` -> `252 passed, 2 skipped`
+- `Invoke-RestMethod http://localhost:8033/health/runtime` -> `{"status":"ok","database":"ok","redis":"ok"}`
+
+## 30. Commit Tracking
 
 Current `git log --oneline` history:
 
+- `4712333` Add RAG evaluation harness
 - `6235880` Connect Brain Agent to Qdrant RAG retrieval
 - `936dc82` Add Celery job tracking foundation
 - `b46e39c` Add hybrid retrieval foundation
@@ -1488,7 +1568,8 @@ Current working tree note:
 - The Hybrid Retrieval foundation is committed as `b46e39c Add hybrid retrieval foundation`.
 - The Celery Job Tracking foundation is committed as `936dc82 Add Celery job tracking foundation`.
 - The Brain Agent Qdrant RAG Integration foundation is committed as `6235880 Connect Brain Agent to Qdrant RAG retrieval`.
-- The RAG Evaluation Harness is the current uncommitted slice in the working tree.
+- The RAG Evaluation Harness is committed as `4712333 Add RAG evaluation harness`.
+- The Celery RAG Pipeline Orchestration is the current uncommitted slice in the working tree.
 
 Future commit entry format:
 
@@ -1501,7 +1582,7 @@ Future commit entry format:
 - Docker verified:
 ```
 
-## 30. Mandatory Future Rule
+## 31. Mandatory Future Rule
 
 This file is mandatory project tracking documentation and must be maintained continuously.
 

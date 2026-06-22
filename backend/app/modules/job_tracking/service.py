@@ -59,6 +59,8 @@ def create_job(
     job_type: BackgroundJobType | str,
     profile_id: int | None = None,
     input_payload: dict[str, object] | None = None,
+    progress_current: int = 0,
+    progress_total: int = 0,
 ) -> BackgroundJob:
     _validate_owned_profile(
         db,
@@ -71,8 +73,8 @@ def create_job(
         profile_id=profile_id,
         job_type=str(job_type.value if isinstance(job_type, BackgroundJobType) else job_type),
         status=BackgroundJobStatus.QUEUED.value,
-        progress_current=0,
-        progress_total=0,
+        progress_current=progress_current,
+        progress_total=progress_total,
         celery_task_id=None,
         input_payload=input_payload or {},
         result_payload=None,
