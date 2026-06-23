@@ -33,6 +33,8 @@ class Settings(BaseSettings):
     ai_brain_api_key: SecretStr | None = None
     ai_brain_base_url: str = "https://api.openai.com/v1"
     ai_brain_timeout_seconds: float = Field(default=30, gt=0)
+    ai_brain_temperature: float = Field(default=0.2, ge=0, le=2)
+    ai_brain_max_tokens: int | None = Field(default=None, gt=0)
     media_storage_provider: str = "local"
     media_root: Path = BACKEND_DIR / "media"
     media_public_base_url: str = "/media"

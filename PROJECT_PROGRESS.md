@@ -1608,7 +1608,64 @@ Verification commands and results:
 - `docker compose exec backend python scripts/run_e2e_demo_smoke.py` -> `E2E DEMO SMOKE RESULT: PASS`
 - `Invoke-RestMethod http://localhost:8033/health/runtime` -> `{"status":"ok","database":"ok","redis":"ok"}`
 
-## 31. Commit Tracking
+## 31. Task 25 Real Brain Provider Integration
+
+Changed area:
+
+- backend-only Brain Agent provider integration on top of the existing OpenAI-compatible provider foundation
+
+What was added:
+
+- production-ready `OpenAICompatibleBrainAgentProvider` request builder with normalized `/chat/completions` URL handling
+- safe configuration support for `AI_BRAIN_TEMPERATURE` and `AI_BRAIN_MAX_TOKENS`
+- strict request construction using the existing grounded Brain prompt without duplicating prompt-building or retrieval logic
+- deterministic lack-of-evidence short-circuiting shared across Brain providers so factual questions with no evidence never call the real provider
+- safe provider request/response error handling for timeout, network, HTTP status, invalid JSON, and invalid response shape cases
+- response metadata enrichment with provider type, model, grounding status, latency, and token usage when returned
+- dedicated provider tests covering config loading, payload construction, timeout/network/API failures, invalid responses, metadata safety, and no-evidence behavior
+
+How to configure the OpenAI-compatible provider:
+
+- `AI_BRAIN_PROVIDER=openai_compatible`
+- `AI_BRAIN_MODEL=<provider model name>`
+- `AI_BRAIN_API_KEY=<secret token>`
+- `AI_BRAIN_BASE_URL=<provider base URL such as https://api.openai.com/v1>`
+- `AI_BRAIN_TIMEOUT_SECONDS=<positive float>`
+- optional `AI_BRAIN_TEMPERATURE=<0..2>`
+- optional `AI_BRAIN_MAX_TOKENS=<positive integer>`
+
+Exact provider behavior:
+
+- default/test behavior remains `AI_BRAIN_PROVIDER=mock`
+- when `AI_BRAIN_PROVIDER=openai_compatible`, the Brain Agent sends the existing grounded prompt as a single chat-completions user message
+- the provider posts to `{AI_BRAIN_BASE_URL}/chat/completions` unless the configured base URL already ends with `/chat/completions`
+- the request includes `model`, `messages`, `temperature`, and optional `max_tokens`
+- the API key is only sent in the `Authorization` header and is not returned in metadata, errors, or API responses
+- responses are parsed strictly from `choices[0].message.content`, with support for plain string content and text-part arrays
+
+Intentionally not implemented:
+
+- no frontend changes
+- no billing, subscription, tariff, or payment changes
+- no Qdrant indexing semantic changes
+- no RAG retrieval semantic changes
+- no Celery worker architecture changes
+- no embedding generation or embedding persistence changes
+- no new stored query embeddings
+- no new RAG pipeline behavior
+- no direct real external AI API calls in tests
+
+Verification commands and results:
+
+- `python -m pytest` -> `272 passed`
+- `docker compose up -d --build` -> success
+- `docker compose exec backend alembic upgrade head` -> success
+- `docker compose exec backend alembic current` -> `20260622_0012 (head)`
+- `docker compose exec backend python -m pytest` -> `270 passed, 2 skipped`
+- `docker compose exec backend python scripts/run_e2e_demo_smoke.py` -> `E2E DEMO SMOKE RESULT: PASS`
+- `Invoke-RestMethod http://localhost:8033/health/runtime` -> `{"status":"ok","database":"ok","redis":"ok"}`
+
+## 32. Commit Tracking
 
 Current `git log --oneline` history:
 

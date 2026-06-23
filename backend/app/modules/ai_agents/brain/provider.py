@@ -23,6 +23,10 @@ class BrainProviderResponseError(RuntimeError):
     pass
 
 
+class BrainProviderRequestError(RuntimeError):
+    pass
+
+
 def build_brain_provider(
     *,
     provider_name: str | None = None,

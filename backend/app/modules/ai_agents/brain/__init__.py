@@ -1,6 +1,7 @@
 from app.modules.ai_agents.brain.provider import (
     BrainAgentProvider,
     BrainProviderConfigurationError,
+    BrainProviderRequestError,
     BrainProviderResponseError,
     MockBrainAgentProvider,
     OpenAICompatibleBrainAgentProvider,
@@ -12,6 +13,7 @@ __all__ = [
     "BrainAgentProvider",
     "BrainAgentService",
     "BrainProviderConfigurationError",
+    "BrainProviderRequestError",
     "BrainProviderResponseError",
     "MockBrainAgentProvider",
     "OpenAICompatibleBrainAgentProvider",
