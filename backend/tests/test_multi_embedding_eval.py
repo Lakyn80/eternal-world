@@ -4,6 +4,7 @@ from types import SimpleNamespace
 
 import pytest
 
+from app.core.config import settings
 from app.db.models import BackgroundJob, RagChunk, RagEmbedding
 from app.db.session import get_db
 from app.main import app
@@ -96,6 +97,27 @@ def _close_test_db_session(session_generator):
         next(session_generator)
     except StopIteration:
         pass
+
+
+def _install_fake_sentence_transformers(monkeypatch):
+    class FakeSentenceTransformer:
+        def __init__(self, model_name: str, *, device: str = "cpu", cache_folder: str | None = None):
+            self.model_name = model_name
+            self.device = device
+            self.cache_folder = cache_folder
+
+        def encode(self, texts, **kwargs):
+            materialized_texts = list(texts)
+            return [
+                [round((index + 1) / 1000, 6) for index in range(384)]
+                for _ in materialized_texts
+            ]
+
+    monkeypatch.setattr(settings, "embedding_provider", "sentence_transformers")
+    monkeypatch.setattr(
+        "app.modules.embeddings.providers.sentence_transformers.import_module",
+        lambda module_name: SimpleNamespace(SentenceTransformer=FakeSentenceTransformer),
+    )
 
 
 def _build_dataset() -> RagQualityEvalDataset:
@@ -819,3 +841,57 @@ def test_multi_embedding_eval_does_not_call_real_external_apis(client, monkeypat
         process_multi_embedding_eval_job(db, job_id=background_job.id)
     finally:
         _close_test_db_session(session_generator)
+
+
+def test_multi_embedding_eval_can_include_multilingual_e5_small_candidate(client, monkeypatch):
+    _install_fake_sentence_transformers(monkeypatch)
+    token = _register_and_login(client, "multi-eval-e5@example.com")
+    profile_id = _create_profile(client, token, "Multi Eval E5 Profile")
+    source_id = _create_rag_source(client, token, profile_id).json()["id"]
+    payload = MultiEmbeddingEvalRequest(
+        dataset=_build_dataset(),
+        candidates=[
+            {
+                "config_id": "candidate-e5",
+                "model_code": "multilingual_e5_small",
+                "collection_name": "eternal_world_rag_chunks__multilingual_e5_small_eval",
+                "top_k": 3,
+                "retrieval_mode": "hybrid",
+            }
+        ],
+    )
+
+    monkeypatch.setattr(
+        "app.modules.multi_embedding_eval.service.index_source_embeddings",
+        lambda db, *, current_user, source_id, model_code=None, collection_name=None: RagSourceIndexingSummaryRead(
+            source_id=source_id,
+            model_code=model_code,
+            total_embeddings=1,
+            indexed_count=1,
+            skipped_count=0,
+            failed_count=0,
+        ),
+    )
+    monkeypatch.setattr(
+        "app.modules.multi_embedding_eval.service.retrieve_profile_rag_for_collection",
+        lambda db, *, current_user, profile_id, payload, collection_name=None: _build_retrieval_response(
+            model_code=str(payload.model_code),
+            collection_name=str(collection_name),
+        ),
+    )
+
+    db, session_generator = _get_test_db_session()
+    try:
+        background_job = _create_multi_eval_job(
+            db=db,
+            owner_user_id=1,
+            profile_id=profile_id,
+            source_id=source_id,
+            payload=payload,
+        )
+        result = process_multi_embedding_eval_job(db, job_id=background_job.id)
+    finally:
+        _close_test_db_session(session_generator)
+
+    assert result["status"] == "succeeded"
+    assert result["result_payload"]["best_config"]["best_model_code"] == "multilingual_e5_small"

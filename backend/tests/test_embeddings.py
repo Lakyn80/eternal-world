@@ -1,7 +1,9 @@
 import httpx
 import socket
 from pathlib import Path
+from types import SimpleNamespace
 
+from app.core.config import settings
 from app.db.models import RagChunk, RagEmbedding
 from app.db.session import get_db
 from app.main import app
@@ -81,6 +83,27 @@ def _get_test_db_session():
     return db, session_generator
 
 
+def _install_fake_sentence_transformers(monkeypatch):
+    class FakeSentenceTransformer:
+        def __init__(self, model_name: str, *, device: str = "cpu", cache_folder: str | None = None):
+            self.model_name = model_name
+            self.device = device
+            self.cache_folder = cache_folder
+
+        def encode(self, texts, **kwargs):
+            materialized_texts = list(texts)
+            return [
+                [round((index + 1) / 1000, 6) for index in range(384)]
+                for _ in materialized_texts
+            ]
+
+    monkeypatch.setattr(settings, "embedding_provider", "sentence_transformers")
+    monkeypatch.setattr(
+        "app.modules.embeddings.providers.sentence_transformers.import_module",
+        lambda module_name: SimpleNamespace(SentenceTransformer=FakeSentenceTransformer),
+    )
+
+
 def test_authenticated_user_can_embed_own_chunk_with_default_model(client):
     token = _register_and_login(client, "embed-own@example.com")
     profile_id = _create_profile(client, token, "Embedding Profile")
@@ -100,6 +123,30 @@ def test_authenticated_user_can_embed_own_chunk_with_default_model(client):
     assert body["vector_dimension"] == 384
     assert body["status"] == "embedded"
     assert body["vector"] is None
+
+
+def test_chunk_embedding_can_use_sentence_transformers_multilingual_e5_small_without_downloads(client, monkeypatch):
+    _install_fake_sentence_transformers(monkeypatch)
+    token = _register_and_login(client, "embed-real-local@example.com")
+    profile_id = _create_profile(client, token, "Embedding Real Local Profile")
+    source_id = _create_rag_source(client, token, profile_id).json()["id"]
+    assert _chunk_source(client, token, source_id).status_code == 200
+    chunk_id = _list_chunks(client, token, source_id).json()[0]["id"]
+
+    response = client.post(
+        f"/api/rag-chunks/{chunk_id}/embed",
+        headers=_auth_headers(token),
+    )
+    embedding_id = response.json()["id"]
+    metadata_response = client.get(
+        f"/api/rag-embeddings/{embedding_id}?include_vector=true",
+        headers=_auth_headers(token),
+    )
+
+    assert response.status_code == 200
+    assert metadata_response.status_code == 200
+    assert metadata_response.json()["vector_dimension"] == 384
+    assert metadata_response.json()["embedding_metadata"]["provider_name"] == "sentence_transformers"
 
 
 def test_unauthenticated_user_cannot_embed_chunk(client):

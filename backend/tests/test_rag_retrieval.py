@@ -1,5 +1,7 @@
 from pathlib import Path
+from types import SimpleNamespace
 
+from app.core.config import settings
 from app.db.models import MemoryProfile, RagEmbedding
 from app.db.session import get_db
 from app.main import app
@@ -224,6 +226,27 @@ def _install_fake_qdrant_client(monkeypatch) -> FakeQdrantRetrievalClient:
     return fake_qdrant_client
 
 
+def _install_fake_sentence_transformers(monkeypatch):
+    class FakeSentenceTransformer:
+        def __init__(self, model_name: str, *, device: str = "cpu", cache_folder: str | None = None):
+            self.model_name = model_name
+            self.device = device
+            self.cache_folder = cache_folder
+
+        def encode(self, texts, **kwargs):
+            materialized_texts = list(texts)
+            return [
+                [round((index + 1) / 1000, 6) for index in range(384)]
+                for _ in materialized_texts
+            ]
+
+    monkeypatch.setattr(settings, "embedding_provider", "sentence_transformers")
+    monkeypatch.setattr(
+        "app.modules.embeddings.providers.sentence_transformers.import_module",
+        lambda module_name: SimpleNamespace(SentenceTransformer=FakeSentenceTransformer),
+    )
+
+
 def _create_indexed_embedding(
     client,
     token: str,
@@ -367,6 +390,46 @@ def test_query_embedding_is_generated_but_not_persisted_as_rag_embedding(client,
 
     assert response.status_code == 200
     assert embed_call_count == 1
+    assert before_count == after_count
+
+
+def test_query_embedding_can_use_sentence_transformers_without_persisting_query_embeddings(client, monkeypatch):
+    _install_fake_qdrant_client(monkeypatch)
+    _install_fake_sentence_transformers(monkeypatch)
+    token = _register_and_login(client, "retrieval-real-local-query@example.com")
+    profile_id, _, _, _ = _create_indexed_embedding(
+        client,
+        token,
+        "Retrieval Real Local Query Profile",
+        source_text="prague sentence for sentence-transformers retrieval. " * 18,
+    )
+
+    db, session_generator = _get_test_db_session()
+    try:
+        before_count = db.query(RagEmbedding).count()
+    finally:
+        try:
+            next(session_generator)
+        except StopIteration:
+            pass
+
+    response = client.post(
+        f"/api/memory-profiles/{profile_id}/rag/retrieve",
+        headers=_auth_headers(token),
+        json={"query": "prague retrieval query"},
+    )
+
+    db, session_generator = _get_test_db_session()
+    try:
+        after_count = db.query(RagEmbedding).count()
+    finally:
+        try:
+            next(session_generator)
+        except StopIteration:
+            pass
+
+    assert response.status_code == 200
+    assert response.json()["model_code"] == "multilingual_e5_small"
     assert before_count == after_count
 
 

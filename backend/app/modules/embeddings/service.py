@@ -13,8 +13,8 @@ from app.modules.embeddings.exceptions import (
     RagEmbeddingNotFoundError,
     RagEmbeddingSourceNotFoundError,
 )
+from app.modules.embeddings.providers import build_embedding_provider
 from app.modules.embeddings.providers.base import EmbeddingVector
-from app.modules.embeddings.providers.mock import MockEmbeddingProvider
 from app.modules.embeddings.schemas import RagSourceEmbeddingSummaryRead
 from app.modules.rag_chunks import repository as rag_chunks_repository
 from app.modules.rag_chunks.service import RagChunkNotFoundError, get_rag_chunk
@@ -71,8 +71,8 @@ def _resolve_model(model_code: str | None):
     return model
 
 
-def _build_provider():
-    return MockEmbeddingProvider()
+def _build_provider(*, model_code: str):
+    return build_embedding_provider(model_code=model_code)
 
 
 def _build_embedding_metadata(
@@ -150,10 +150,10 @@ def embed_rag_chunk(
         chunk_id=chunk_id,
     )
     model = _resolve_model(model_code)
-    provider = _build_provider()
+    provider = _build_provider(model_code=model.code)
 
     try:
-        embedding_vector = provider.embed_text(chunk.chunk_text, model.code)
+        embedding_vector = provider.embed_passage(chunk.chunk_text, model.code)
         if embedding_vector.dimension != model.dimension or len(embedding_vector.values) != model.dimension:
             raise RagEmbeddingGenerationError(SAFE_EMBEDDING_FAILURE_MESSAGE)
 

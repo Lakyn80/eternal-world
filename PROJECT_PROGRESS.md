@@ -1893,7 +1893,96 @@ Verification commands and results:
   - `Invoke-RestMethod http://localhost:8033/health/runtime` -> `{"status":"ok","database":"ok","redis":"ok"}`
   - `docker compose exec backend python scripts/run_e2e_demo_smoke.py` -> `E2E DEMO SMOKE RESULT: PASS`
 
-## 35. Commit Tracking
+## 35. Task 29 Real Local Embedding Provider - multilingual_e5_small
+
+Changed area:
+
+- backend-only real local embedding execution for `multilingual_e5_small` using lazy `SentenceTransformers` integration while preserving the existing mock-default behavior
+
+What was added:
+
+- new provider module `backend/app/modules/embeddings/providers/sentence_transformers.py`
+- provider resolver logic in `backend/app/modules/embeddings/providers/__init__.py`
+- optional settings:
+  - `EMBEDDING_PROVIDER`
+  - `SENTENCE_TRANSFORMERS_DEVICE`
+  - `SENTENCE_TRANSFORMERS_CACHE_DIR`
+- `sentence-transformers==3.3.1` added to backend requirements
+- chunk embedding now calls provider `embed_passage(...)`
+- retrieval query embedding now calls provider `embed_query(...)`
+- `BaseEmbeddingProvider` gained default `embed_query(...)` and `embed_passage(...)` helpers so existing mock behavior stays compatible
+- fake-model tests covering provider resolution, lazy loading, E5 query/passage formatting, safe provider failures, no-network behavior, and targeted integration coverage for chunk embedding, retrieval query embedding, Qdrant indexing, and `multi_embedding_eval`
+
+Why only one real provider was added in this slice:
+
+- this slice enables the first production-relevant local provider without widening the dependency, config, and CI surface to multiple heavy embedding backends at once
+- `multilingual_e5_small` is already the existing default model profile in the registry and is the narrowest useful path for validating real local execution through the current embedding, retrieval, indexing, and evaluation pipeline
+- `bge_m3`, Jina, and OpenAI-compatible embeddings were intentionally left out so the project can harden one local provider path first
+
+How mock remains default for tests/dev:
+
+- `EMBEDDING_PROVIDER` defaults to `mock`
+- when `EMBEDDING_PROVIDER=mock`, even `multilingual_e5_small` continues to use the deterministic mock provider
+- `mock_embedding` always resolves to `MockEmbeddingProvider`
+- all existing tests and the demo smoke flow continue to run without downloading any real model
+- the real provider path is exercised in tests only through fake `SentenceTransformer` loader/inference stubs
+
+How to configure and use `multilingual_e5_small`:
+
+- set `EMBEDDING_PROVIDER=sentence_transformers`
+- optionally set `SENTENCE_TRANSFORMERS_DEVICE=cpu` or another supported local device string
+- optionally set `SENTENCE_TRANSFORMERS_CACHE_DIR` if model cache location should be controlled explicitly
+- then existing embedding generation and retrieval flows can use `model_code=multilingual_e5_small` and will resolve to local `SentenceTransformers` execution
+- no public API rename was required; the existing chunk embedding, source embedding, retrieval, Qdrant indexing, and `multi_embedding_eval` paths keep the same route surface
+
+How `multilingual_e5_small` is executed:
+
+- the provider is resolved through the existing model-code path, not a new public API
+- when enabled, `multilingual_e5_small` maps to Hugging Face model `intfloat/multilingual-e5-small`
+- model loading is lazy and cached per provider instance
+- import and model construction happen only when the provider is actually used
+- chunk/source embeddings are treated as passages
+- retrieval query embeddings are treated as queries
+- vector length is validated against the registry dimension `384`
+
+How query versus passage/chunk text is handled:
+
+- query text is normalized and prefixed as `query: ...`
+- chunk/passage text is normalized and prefixed as `passage: ...`
+- this keeps the E5 usage pattern explicit while preserving the existing storage and retrieval contracts
+
+Intentionally not implemented:
+
+- no frontend changes
+- no billing, subscription, tariff, or payment changes
+- no Brain Agent behavior changes
+- no production chat behavior changes
+- no active retrieval config behavior changes
+- no `rag_quality` selector/scoring changes
+- no `multi_embedding_eval` orchestration redesign
+- no BGE-M3 real provider
+- no Jina real provider
+- no OpenAI-compatible embedding provider
+- no GPU requirement
+- no external API calls
+- no query embedding persistence
+- no Qdrant wipe or point deletion
+
+Verification commands and results:
+
+- focused verification:
+  - `python -m pytest tests/test_embeddings_sentence_transformers.py tests/test_embeddings.py tests/test_rag_retrieval.py tests/test_qdrant_indexing.py tests/test_multi_embedding_eval.py` -> `69 passed`
+  - `python -m pytest tests/test_embedding_models.py tests/test_active_retrieval_config.py tests/test_rag_quality.py` -> `36 passed`
+- required full verification:
+  - `python -m pytest` -> `318 passed`
+  - `docker compose up -d --build` -> success
+  - `docker compose exec backend alembic upgrade head` -> success
+  - `docker compose exec backend alembic current` -> `20260624_0013 (head)`
+  - `docker compose exec backend python -m pytest` -> `316 passed, 2 skipped`
+  - `Invoke-RestMethod http://localhost:8033/health/runtime` -> `{"status":"ok","database":"ok","redis":"ok"}`
+  - `docker compose exec backend python scripts/run_e2e_demo_smoke.py` -> `E2E DEMO SMOKE RESULT: PASS`
+
+## 36. Commit Tracking
 
 Current `git log --oneline` history:
 
@@ -1934,7 +2023,7 @@ Current working tree note:
 - The Brain Agent Qdrant RAG Integration foundation is committed as `6235880 Connect Brain Agent to Qdrant RAG retrieval`.
 - The RAG Evaluation Harness is committed as `4712333 Add RAG evaluation harness`.
 - The Celery RAG Pipeline Orchestration is committed as `07bb407 Add Celery RAG pipeline orchestration`.
-- The Active Retrieval Config Selection foundation is the current uncommitted slice in the working tree.
+- The Real Local Embedding Provider - multilingual_e5_small foundation is the current uncommitted slice in the working tree.
 
 Future commit entry format:
 
@@ -1947,7 +2036,7 @@ Future commit entry format:
 - Docker verified:
 ```
 
-## 36. Mandatory Future Rule
+## 37. Mandatory Future Rule
 
 This file is mandatory project tracking documentation and must be maintained continuously.
 

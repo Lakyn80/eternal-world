@@ -1,6 +1,8 @@
 from pathlib import Path
+from types import SimpleNamespace
 from uuid import NAMESPACE_URL, uuid5
 
+from app.core.config import settings
 from app.db.models import RagEmbedding, RagVectorIndex
 from app.db.session import get_db
 from app.main import app
@@ -126,6 +128,27 @@ def _install_fake_qdrant_client(monkeypatch) -> FakeQdrantClient:
         lambda: fake_qdrant_client,
     )
     return fake_qdrant_client
+
+
+def _install_fake_sentence_transformers(monkeypatch):
+    class FakeSentenceTransformer:
+        def __init__(self, model_name: str, *, device: str = "cpu", cache_folder: str | None = None):
+            self.model_name = model_name
+            self.device = device
+            self.cache_folder = cache_folder
+
+        def encode(self, texts, **kwargs):
+            materialized_texts = list(texts)
+            return [
+                [round((index + 1) / 1000, 6) for index in range(384)]
+                for _ in materialized_texts
+            ]
+
+    monkeypatch.setattr(settings, "embedding_provider", "sentence_transformers")
+    monkeypatch.setattr(
+        "app.modules.embeddings.providers.sentence_transformers.import_module",
+        lambda module_name: SimpleNamespace(SentenceTransformer=FakeSentenceTransformer),
+    )
 
 
 def _create_embedded_chunk_and_embedding(client, token: str, profile_name: str, email_label: str) -> tuple[int, int, int]:
@@ -416,6 +439,26 @@ def test_collection_creation_is_requested_when_missing(client, monkeypatch):
         token,
         "Qdrant Create Collection Profile",
         "create-collection",
+    )
+
+    response = client.post(
+        f"/api/rag-embeddings/{embedding_id}/index",
+        headers=_auth_headers(token),
+    )
+
+    assert response.status_code == 200
+    assert fake_qdrant_client.collections["eternal_world_rag_chunks__multilingual_e5_small"] == 384
+
+
+def test_qdrant_indexing_accepts_sentence_transformers_multilingual_e5_small_embeddings(client, monkeypatch):
+    fake_qdrant_client = _install_fake_qdrant_client(monkeypatch)
+    _install_fake_sentence_transformers(monkeypatch)
+    token = _register_and_login(client, "qdrant-real-local@example.com")
+    _, _, embedding_id = _create_embedded_chunk_and_embedding(
+        client,
+        token,
+        "Qdrant Real Local Profile",
+        "real-local",
     )
 
     response = client.post(

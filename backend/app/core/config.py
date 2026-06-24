@@ -35,6 +35,9 @@ class Settings(BaseSettings):
     ai_brain_timeout_seconds: float = Field(default=30, gt=0)
     ai_brain_temperature: float = Field(default=0.2, ge=0, le=2)
     ai_brain_max_tokens: int | None = Field(default=None, gt=0)
+    embedding_provider: str = "mock"
+    sentence_transformers_device: str = "cpu"
+    sentence_transformers_cache_dir: Path | None = None
     media_storage_provider: str = "local"
     media_root: Path = BACKEND_DIR / "media"
     media_public_base_url: str = "/media"
@@ -78,6 +81,21 @@ class Settings(BaseSettings):
             raise ValueError("AI_BRAIN_PROVIDER must not be empty")
 
         return normalized_value
+
+    @field_validator("embedding_provider")
+    @classmethod
+    def normalize_embedding_provider(cls, value: str) -> str:
+        normalized_value = value.strip().lower()
+        if not normalized_value:
+            raise ValueError("EMBEDDING_PROVIDER must not be empty")
+
+        return normalized_value
+
+    @field_validator("sentence_transformers_device")
+    @classmethod
+    def normalize_sentence_transformers_device(cls, value: str) -> str:
+        normalized_value = value.strip().lower()
+        return normalized_value or "cpu"
 
     @field_validator("ai_brain_model")
     @classmethod

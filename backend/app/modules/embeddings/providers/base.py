@@ -20,3 +20,9 @@ class BaseEmbeddingProvider(ABC):
     @abstractmethod
     def embed_batch(self, texts: list[str], model_code: str) -> list[EmbeddingVector]:
         raise NotImplementedError
+
+    def embed_query(self, text: str, model_code: str) -> EmbeddingVector:
+        return self.embed_text(text, model_code)
+
+    def embed_passage(self, text: str, model_code: str) -> EmbeddingVector:
+        return self.embed_text(text, model_code)
