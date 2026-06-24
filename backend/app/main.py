@@ -10,6 +10,7 @@ from app.core.middleware import install_middleware
 from app.db.session import engine
 from app.modules.embeddings.router import router as embeddings_router
 from app.modules.embedding_models.router import router as embedding_models_router
+from app.modules.active_retrieval_config.router import router as active_retrieval_config_router
 from app.modules.auth.router import router as auth_router
 from app.modules.billing.router import router as billing_router
 from app.modules.chat.router import router as chat_router
@@ -40,6 +41,7 @@ app.add_middleware(
 )
 app.include_router(embeddings_router)
 app.include_router(embedding_models_router)
+app.include_router(active_retrieval_config_router)
 app.include_router(auth_router)
 app.include_router(billing_router)
 app.include_router(chat_router)

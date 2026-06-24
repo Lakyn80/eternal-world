@@ -15,7 +15,7 @@ def test_alembic_configuration_loads_revision_history():
     revision_ids = {revision.revision for revision in revisions}
 
     assert revisions
-    assert script_directory.get_current_head() == "20260622_0012"
+    assert script_directory.get_current_head() == "20260624_0013"
     assert {
         "20260616_0001",
         "20260616_0002",
@@ -29,6 +29,7 @@ def test_alembic_configuration_loads_revision_history():
         "20260620_0010",
         "20260620_0011",
         "20260622_0012",
+        "20260624_0013",
     }.issubset(revision_ids)
 
 
@@ -67,14 +68,14 @@ def test_latest_alembic_revision_module_imports():
 def test_current_alembic_revision_module_imports():
     backend_dir = Path(__file__).resolve().parents[1]
     revision_path = (
-        backend_dir / "alembic" / "versions" / "20260622_0012_create_background_jobs.py"
+        backend_dir / "alembic" / "versions" / "20260624_0013_create_active_retrieval_configs.py"
     )
 
-    spec = spec_from_file_location("alembic_revision_20260622_0012", revision_path)
+    spec = spec_from_file_location("alembic_revision_20260624_0013", revision_path)
     assert spec is not None
     assert spec.loader is not None
 
     module = module_from_spec(spec)
     spec.loader.exec_module(module)
 
-    assert module.revision == "20260622_0012"
+    assert module.revision == "20260624_0013"

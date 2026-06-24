@@ -1804,7 +1804,96 @@ Verification commands and results:
 - `docker compose exec backend python scripts/run_e2e_demo_smoke.py` -> `E2E DEMO SMOKE RESULT: PASS`
 - `Invoke-RestMethod http://localhost:8033/health/runtime` -> `{"status":"ok","database":"ok","redis":"ok"}`
 
-## 34. Commit Tracking
+## 34. Task 28 Active Retrieval Config Selection
+
+Changed area:
+
+- backend-only active retrieval configuration persistence and runtime selection on top of the existing `multi_embedding_eval` and `rag_quality` foundations
+
+What was added:
+
+- new module `backend/app/modules/active_retrieval_config/`
+- authenticated endpoints:
+  - `GET /api/memory-profiles/{profile_id}/active-retrieval-config`
+  - `POST /api/memory-profiles/{profile_id}/active-retrieval-config`
+  - `POST /api/rag-sources/{source_id}/multi-embedding-eval/{job_id}/activate-best`
+- new `ActiveRetrievalConfig` SQLAlchemy model and Alembic migration `20260624_0013`
+- ownership-scoped service/repository layer for reading and updating one active retrieval config per owned profile
+- explicit activation path that reads a successful `multi_embedding_eval` job result, finds the winning candidate in the original request payload, and persists the selected runtime retrieval config with audit metadata
+- minimal runtime retrieval integration so `rag_retrieval.retrieve_profile_rag` can use an active config when present while preserving the existing fallback path when none exists
+- small JWT decode leeway to tolerate minor container clock skew observed during full Docker verification without changing auth semantics for normal callers
+
+How active config is stored:
+
+- one `active_retrieval_configs` row per profile
+- `profile_id` is unique in this backend-only foundation, so updates overwrite the existing active row instead of keeping historical inactive rows
+- stored fields include:
+  - owner/profile ownership keys
+  - `model_code`
+  - `collection_name`
+  - `top_k`
+  - optional `score_threshold`
+  - `retrieval_mode`
+  - optional `source_eval_job_id`
+  - optional `source_eval_dataset_id`
+  - optional `selected_metrics`
+  - optional `all_config_scores`
+  - optional `selection_reason`
+  - optional `warnings`
+  - `is_active`
+  - `selected_at`
+  - `created_at`
+  - `updated_at`
+
+How runtime retrieval uses the selected config:
+
+- `Brain Agent` chat flow was not changed to call a new subsystem directly
+- chat still calls the existing `retrieve_profile_rag(...)` service abstraction
+- `retrieve_profile_rag(...)` now looks up an active config for the owned profile before building the retrieval request
+- when an active config exists and the caller did not explicitly override the model:
+  - retrieval uses the active `model_code`
+  - retrieval uses the active `collection_name`
+- when the caller did not explicitly override limit or threshold:
+  - retrieval uses active `top_k`
+  - retrieval uses active `score_threshold`
+- if no active config exists, the previous default retrieval behavior remains unchanged
+- if a caller explicitly supplies `model_code`, retrieval keeps normal default collection-name resolution for that explicit model instead of forcing the active collection from a different model
+
+How this relates to `multi_embedding_eval` and `rag_quality`:
+
+- `multi_embedding_eval` still executes candidate embeddings/retrievals and delegates scoring to `rag_quality`
+- `rag_quality` still remains the place that evaluates and ranks candidates
+- `active_retrieval_config` does not rescore or reevaluate candidates
+- explicit activation reads the successful `multi_embedding_eval` job result payload, uses `best_config`, `selected_metrics`, `all_config_scores`, and `warnings`, and stores the winning candidate as the runtime config for the profile
+- failed `multi_embedding_eval` jobs are rejected for activation and do not change runtime retrieval behavior
+
+Intentionally not implemented:
+
+- no frontend changes
+- no billing, subscription, tariff, or payment changes
+- no Brain Agent answer-generation behavior changes beyond using the existing retrieval abstraction
+- no automatic activation on every successful evaluation job
+- no historical inactive config table rows yet
+- no production chat multi-model evaluation per request
+- no new embedding providers
+- no Qdrant indexing semantic changes
+- no real external AI/API calls in tests
+
+Verification commands and results:
+
+- focused verification:
+  - `python -m pytest tests/test_models.py tests/test_alembic.py tests/test_active_retrieval_config.py` -> `13 passed`
+  - `python -m pytest tests/test_rag_retrieval.py tests/test_multi_embedding_eval.py tests/test_ai_agents.py` -> `48 passed`
+- required full verification:
+  - `python -m pytest` -> `306 passed`
+  - `docker compose up -d --build` -> success
+  - `docker compose exec backend alembic upgrade head` -> success
+  - `docker compose exec backend alembic current` -> `20260624_0013 (head)`
+  - `docker compose exec backend python -m pytest` -> `304 passed, 2 skipped`
+  - `Invoke-RestMethod http://localhost:8033/health/runtime` -> `{"status":"ok","database":"ok","redis":"ok"}`
+  - `docker compose exec backend python scripts/run_e2e_demo_smoke.py` -> `E2E DEMO SMOKE RESULT: PASS`
+
+## 35. Commit Tracking
 
 Current `git log --oneline` history:
 
@@ -1845,7 +1934,7 @@ Current working tree note:
 - The Brain Agent Qdrant RAG Integration foundation is committed as `6235880 Connect Brain Agent to Qdrant RAG retrieval`.
 - The RAG Evaluation Harness is committed as `4712333 Add RAG evaluation harness`.
 - The Celery RAG Pipeline Orchestration is committed as `07bb407 Add Celery RAG pipeline orchestration`.
-- The Multi-Embedding Provider Execution foundation is the current uncommitted slice in the working tree.
+- The Active Retrieval Config Selection foundation is the current uncommitted slice in the working tree.
 
 Future commit entry format:
 
@@ -1858,7 +1947,7 @@ Future commit entry format:
 - Docker verified:
 ```
 
-## 35. Mandatory Future Rule
+## 36. Mandatory Future Rule
 
 This file is mandatory project tracking documentation and must be maintained continuously.
 

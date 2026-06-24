@@ -67,6 +67,7 @@ def decode_access_token(token: str) -> dict[str, Any]:
         algorithms=[settings.jwt_algorithm],
         audience=settings.jwt_audience,
         issuer=settings.jwt_issuer,
+        leeway=5,
     )
 
 

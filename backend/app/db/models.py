@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import date, datetime
 from typing import Any
 
-from sqlalchemy import Boolean, CheckConstraint, Date, DateTime, ForeignKey, Index, Integer, JSON, String, Text, text
+from sqlalchemy import Boolean, CheckConstraint, Date, DateTime, Float, ForeignKey, Index, Integer, JSON, String, Text, func, text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base, TimestampMixin
@@ -62,6 +62,10 @@ class User(TimestampMixin, Base):
         back_populates="owner",
         cascade="all, delete-orphan",
     )
+    active_retrieval_configs: Mapped[list[ActiveRetrievalConfig]] = relationship(
+        back_populates="owner",
+        cascade="all, delete-orphan",
+    )
     media_assets: Mapped[list[MediaAsset]] = relationship(
         back_populates="owner",
         cascade="all, delete-orphan",
@@ -113,6 +117,12 @@ class MemoryProfile(TimestampMixin, Base):
     background_jobs: Mapped[list[BackgroundJob]] = relationship(
         back_populates="memory_profile",
         cascade="all, delete-orphan",
+    )
+    active_retrieval_config: Mapped[ActiveRetrievalConfig | None] = relationship(
+        back_populates="memory_profile",
+        cascade="all, delete-orphan",
+        single_parent=True,
+        uselist=False,
     )
     media_assets: Mapped[list[MediaAsset]] = relationship(
         back_populates="memory_profile",
@@ -521,6 +531,83 @@ class BackgroundJob(TimestampMixin, Base):
 
     owner: Mapped[User] = relationship(back_populates="background_jobs")
     memory_profile: Mapped[MemoryProfile | None] = relationship(back_populates="background_jobs")
+    active_retrieval_configs: Mapped[list[ActiveRetrievalConfig]] = relationship(
+        back_populates="source_eval_job",
+    )
+
+
+class ActiveRetrievalConfig(TimestampMixin, Base):
+    __tablename__ = "active_retrieval_configs"
+    __table_args__ = (
+        CheckConstraint(
+            "top_k BETWEEN 1 AND 100",
+            name="active_retrieval_configs_top_k",
+        ),
+        Index("ix_active_retrieval_configs_created_at", "created_at"),
+        Index(
+            "ix_active_retrieval_configs_owner_user_id_profile_id",
+            "owner_user_id",
+            "profile_id",
+        ),
+        Index(
+            "ix_active_retrieval_configs_profile_id_is_active",
+            "profile_id",
+            "is_active",
+        ),
+        Index(
+            "ix_active_retrieval_configs_source_eval_job_id",
+            "source_eval_job_id",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    owner_user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"),
+        index=True,
+        nullable=False,
+    )
+    profile_id: Mapped[int] = mapped_column(
+        ForeignKey("memory_profiles.id", ondelete="CASCADE"),
+        index=True,
+        nullable=False,
+        unique=True,
+    )
+    model_code: Mapped[str] = mapped_column(String(120), nullable=False)
+    collection_name: Mapped[str] = mapped_column(String(200), nullable=False)
+    top_k: Mapped[int] = mapped_column(Integer, nullable=False)
+    score_threshold: Mapped[float | None] = mapped_column(Float, nullable=True)
+    retrieval_mode: Mapped[str] = mapped_column(
+        String(64),
+        nullable=False,
+        default="hybrid",
+        server_default=text("'hybrid'"),
+    )
+    source_eval_job_id: Mapped[int | None] = mapped_column(
+        ForeignKey("background_jobs.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    source_eval_dataset_id: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    selected_metrics: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
+    all_config_scores: Mapped[list[dict[str, Any]] | None] = mapped_column(JSON, nullable=True)
+    selection_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    warnings: Mapped[list[dict[str, Any]] | None] = mapped_column(JSON, nullable=True)
+    is_active: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=True,
+        server_default=text("true"),
+    )
+    selected_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
+
+    owner: Mapped[User] = relationship(back_populates="active_retrieval_configs")
+    memory_profile: Mapped[MemoryProfile] = relationship(back_populates="active_retrieval_config")
+    source_eval_job: Mapped[BackgroundJob | None] = relationship(
+        back_populates="active_retrieval_configs"
+    )
 
 
 class MediaAsset(TimestampMixin, Base):
