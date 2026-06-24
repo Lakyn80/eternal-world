@@ -63,7 +63,14 @@ def _get_owned_source_or_raise(
         raise RagVectorIndexSourceNotFoundError("RAG source not found") from exc
 
 
-def _build_collection_name(model_code: str) -> str:
+def build_qdrant_collection_name(
+    model_code: str,
+    *,
+    collection_name: str | None = None,
+) -> str:
+    if collection_name is not None:
+        return collection_name
+
     return f"{settings.qdrant_collection_name}__{model_code}"
 
 
@@ -137,6 +144,7 @@ def _index_embedding_record(
     db: Session,
     *,
     rag_embedding: RagEmbedding,
+    collection_name: str | None = None,
 ) -> RagVectorIndex:
     _ensure_indexing_enabled()
 
@@ -146,7 +154,10 @@ def _index_embedding_record(
     if len(rag_embedding.vector) != rag_embedding.vector_dimension:
         raise QdrantCollectionConfigurationError("Embedding vector dimension is invalid")
 
-    qdrant_collection = _build_collection_name(rag_embedding.model_code)
+    qdrant_collection = build_qdrant_collection_name(
+        rag_embedding.model_code,
+        collection_name=collection_name,
+    )
     qdrant_point_id = _build_point_id(
         collection_name=qdrant_collection,
         embedding_id=rag_embedding.id,
@@ -201,6 +212,7 @@ def index_rag_embedding(
     *,
     current_user: User,
     embedding_id: int,
+    collection_name: str | None = None,
 ) -> RagVectorIndex:
     rag_embedding = _get_owned_embedding_or_raise(
         db,
@@ -210,6 +222,7 @@ def index_rag_embedding(
     return _index_embedding_record(
         db,
         rag_embedding=rag_embedding,
+        collection_name=collection_name,
     )
 
 
@@ -219,6 +232,7 @@ def index_source_embeddings(
     current_user: User,
     source_id: int,
     model_code: str | None = None,
+    collection_name: str | None = None,
 ) -> RagSourceIndexingSummaryRead:
     _ensure_indexing_enabled()
     source = _get_owned_source_or_raise(
@@ -246,6 +260,7 @@ def index_source_embeddings(
             _index_embedding_record(
                 db,
                 rag_embedding=rag_embedding,
+                collection_name=collection_name,
             )
             indexed_count += 1
         except (

@@ -1734,7 +1734,77 @@ Verification commands and results:
 - `docker compose exec backend python scripts/run_e2e_demo_smoke.py` -> `E2E DEMO SMOKE RESULT: PASS`
 - `Invoke-RestMethod http://localhost:8033/health/runtime` -> `{"status":"ok","database":"ok","redis":"ok"}`
 
-## 33. Commit Tracking
+## 33. Task 27 Multi-Embedding Provider Execution
+
+Changed area:
+
+- backend-only multi-candidate embedding/retrieval execution foundation integrated with the existing `rag_quality` evaluator
+
+What was added:
+
+- new module `backend/app/modules/multi_embedding_eval/`
+- authenticated endpoint `POST /api/rag-sources/{source_id}/multi-embedding-eval`
+- Celery task `app.worker.tasks.run_multi_embedding_eval_job`
+- orchestration service that:
+  - validates owned `RagSource`
+  - reuses existing chunks or chunks once when needed
+  - runs each candidate through existing embedding generation
+  - indexes each candidate into its own Qdrant collection
+  - runs retrieval for each eval case query
+  - converts retrieval results into generic `rag_quality` case inputs
+  - delegates scoring and best-config selection to `rag_quality`
+  - returns structured partial-success or failed job payloads
+- candidate execution warnings/results schemas for safe per-candidate failure reporting
+- minimal internal collection-override support in existing Qdrant indexing and retrieval services so evaluation can benchmark separate collections without changing production chat/runtime behavior
+- dedicated tests covering auth, ownership, background job creation, Celery task id storage, per-candidate model/collection usage, chunk reuse, reuse of embedding/indexing services, `rag_quality` integration, partial success, total failure, no Brain Agent calls, no stored query embeddings, and no external API calls
+
+How it uses `rag_quality`:
+
+- `multi_embedding_eval` does not score candidates itself
+- each candidate is converted into an existing `RagQualityRetrievalConfigCandidate`
+- each retrieval response is converted through `RagQualityService.adapt_rag_retrieval_response`
+- final comparison and best-config selection run through `RagQualityService.run_quality_evaluation`
+- selector logic remains centralized in `rag_quality`
+
+Why each embedding model/config has its own Qdrant collection:
+
+- different embedding models can produce vectors in incompatible vector spaces and dimensions
+- keeping one collection per candidate avoids mixing heterogeneous vector spaces
+- separate collections preserve deterministic comparison between candidates
+- the implementation is non-destructive: no collection wipe, no point deletion, and no cross-model mixing
+
+Exact module structure:
+
+- `backend/app/modules/multi_embedding_eval/__init__.py`
+- `backend/app/modules/multi_embedding_eval/exceptions.py`
+- `backend/app/modules/multi_embedding_eval/router.py`
+- `backend/app/modules/multi_embedding_eval/schemas.py`
+- `backend/app/modules/multi_embedding_eval/service.py`
+
+Intentionally not implemented:
+
+- no frontend changes
+- no billing, subscription, tariff, or payment changes
+- no Brain Agent behavior changes
+- no production chat behavior changes
+- no automatic production switch to the winning config
+- no new embedding providers
+- no pip package extraction
+- no destructive Qdrant deletion/wipe behavior
+- no new public retrieval selection semantics
+- no real external AI/API calls in tests
+
+Verification commands and results:
+
+- `python -m pytest` -> `297 passed`
+- `docker compose up -d --build` -> success
+- `docker compose exec backend alembic upgrade head` -> success
+- `docker compose exec backend alembic current` -> `20260622_0012 (head)`
+- `docker compose exec backend python -m pytest` -> `295 passed, 2 skipped`
+- `docker compose exec backend python scripts/run_e2e_demo_smoke.py` -> `E2E DEMO SMOKE RESULT: PASS`
+- `Invoke-RestMethod http://localhost:8033/health/runtime` -> `{"status":"ok","database":"ok","redis":"ok"}`
+
+## 34. Commit Tracking
 
 Current `git log --oneline` history:
 
@@ -1775,7 +1845,7 @@ Current working tree note:
 - The Brain Agent Qdrant RAG Integration foundation is committed as `6235880 Connect Brain Agent to Qdrant RAG retrieval`.
 - The RAG Evaluation Harness is committed as `4712333 Add RAG evaluation harness`.
 - The Celery RAG Pipeline Orchestration is committed as `07bb407 Add Celery RAG pipeline orchestration`.
-- The Universal RAG Quality Evaluation Foundation is the current uncommitted slice in the working tree.
+- The Multi-Embedding Provider Execution foundation is the current uncommitted slice in the working tree.
 
 Future commit entry format:
 
@@ -1788,7 +1858,7 @@ Future commit entry format:
 - Docker verified:
 ```
 
-## 34. Mandatory Future Rule
+## 35. Mandatory Future Rule
 
 This file is mandatory project tracking documentation and must be maintained continuously.
 

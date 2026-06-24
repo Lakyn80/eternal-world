@@ -45,7 +45,14 @@ def _build_provider():
     return MockEmbeddingProvider()
 
 
-def _build_collection_name(model_code: str) -> str:
+def build_retrieval_collection_name(
+    model_code: str,
+    *,
+    collection_name: str | None = None,
+) -> str:
+    if collection_name is not None:
+        return collection_name
+
     return f"{settings.qdrant_collection_name}__{model_code}"
 
 
@@ -107,6 +114,23 @@ def retrieve_profile_rag(
     profile_id: int,
     payload: RagRetrievalRequest,
 ) -> RagRetrievalResponseRead:
+    return retrieve_profile_rag_for_collection(
+        db,
+        current_user=current_user,
+        profile_id=profile_id,
+        payload=payload,
+        collection_name=None,
+    )
+
+
+def retrieve_profile_rag_for_collection(
+    db: Session,
+    *,
+    current_user: User,
+    profile_id: int,
+    payload: RagRetrievalRequest,
+    collection_name: str | None = None,
+) -> RagRetrievalResponseRead:
     _ensure_retrieval_enabled()
     _get_owned_profile_or_raise(
         db,
@@ -120,7 +144,10 @@ def retrieve_profile_rag(
     if query_embedding.dimension != model.dimension or len(query_embedding.values) != model.dimension:
         raise QdrantCollectionConfigurationError("Query embedding dimension is invalid")
 
-    qdrant_collection = _build_collection_name(model.code)
+    qdrant_collection = build_retrieval_collection_name(
+        model.code,
+        collection_name=collection_name,
+    )
     qdrant_client = build_qdrant_client()
     raw_results = qdrant_client.search_points(
         collection_name=qdrant_collection,

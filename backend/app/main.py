@@ -17,6 +17,7 @@ from app.modules.memories.router import router as memories_router
 from app.modules.media.router import public_router as media_public_router
 from app.modules.media.router import router as media_router
 from app.modules.job_tracking.router import router as job_tracking_router
+from app.modules.multi_embedding_eval.router import router as multi_embedding_eval_router
 from app.modules.memory_profiles.router import router as memory_profiles_router
 from app.modules.rag_retrieval.router import router as rag_retrieval_router
 from app.modules.rag_chunks.router import router as rag_chunks_router
@@ -43,6 +44,7 @@ app.include_router(auth_router)
 app.include_router(billing_router)
 app.include_router(chat_router)
 app.include_router(job_tracking_router)
+app.include_router(multi_embedding_eval_router)
 app.include_router(memories_router)
 app.include_router(media_router)
 app.include_router(media_public_router)
