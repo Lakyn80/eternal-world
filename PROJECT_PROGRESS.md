@@ -1665,7 +1665,76 @@ Verification commands and results:
 - `docker compose exec backend python scripts/run_e2e_demo_smoke.py` -> `E2E DEMO SMOKE RESULT: PASS`
 - `Invoke-RestMethod http://localhost:8033/health/runtime` -> `{"status":"ok","database":"ok","redis":"ok"}`
 
-## 32. Commit Tracking
+## 32. Task 26 Universal RAG Quality Evaluation Foundation
+
+Changed area:
+
+- backend-only universal retrieval quality evaluation foundation for reusable cross-project RAG comparison
+
+What was added:
+
+- new module `backend/app/modules/rag_quality/`
+- pure reusable schemas for datasets, eval cases, retrieval config candidates, generic retrieval results, case evaluations, config evaluations, dataset evaluations, and selection output
+- deterministic retrieval-quality evaluator for case-level matching of expected markers, expected source IDs, expected chunk IDs, forbidden markers, and lack-of-evidence cases
+- deterministic metrics for `hit_rate`, `recall_at_k`, `mrr`, `forbidden_marker_rate`, `average_latency_ms`, `cost_estimate_total`, `evidence_marker_coverage`, `missing_expected_marker_count`, and `false_positive_count`
+- transparent best-config selector with structured ranking factors, reasons, warnings, and a safety override when a near-equal config has materially lower forbidden-marker risk
+- small reusable foundation cases/dataset plus a lightweight adapter from current `rag_retrieval` response objects into generic `rag_quality` inputs
+- dedicated tests covering schemas, metrics, selector behavior, generic-input support, no external API calls, and no stored query embeddings
+
+How this differs from the existing `rag_evaluation` module:
+
+- `rag_evaluation` checks Brain Agent answer groundedness and lack-of-evidence behavior after answer generation
+- `rag_quality` evaluates retrieval/config quality before answer generation using deterministic retrieval evidence metrics only
+- `rag_evaluation` is Brain-Agent-oriented and answer-oriented
+- `rag_quality` is retrieval-model/config-oriented and dataset/candidate-oriented
+- `rag_quality` does not replace `rag_evaluation`; it complements it
+
+How this supports future multi-embedding comparison:
+
+- datasets and eval cases are independent from Eternal World database entities
+- retrieval config candidates model multiple embedding/retrieval combinations without creating providers or Qdrant collections yet
+- dataset-level evaluation can compare multiple candidate configs side by side
+- selector output is structured so future tasks can plug in real per-model execution and choose the best config by deterministic metrics
+- the current adapter allows future reuse with existing `rag_retrieval` outputs while keeping the core evaluator generic
+
+Exact module structure:
+
+- `backend/app/modules/rag_quality/__init__.py`
+- `backend/app/modules/rag_quality/cases.py`
+- `backend/app/modules/rag_quality/datasets.py`
+- `backend/app/modules/rag_quality/evaluator.py`
+- `backend/app/modules/rag_quality/metrics.py`
+- `backend/app/modules/rag_quality/schemas.py`
+- `backend/app/modules/rag_quality/selectors.py`
+- `backend/app/modules/rag_quality/service.py`
+
+Intentionally not implemented:
+
+- no frontend changes
+- no billing, subscription, tariff, or payment changes
+- no Brain Agent behavior changes
+- no Qdrant indexing semantic changes
+- no RAG retrieval semantic changes
+- no Celery worker architecture changes
+- no new embedding providers
+- no multi-model execution
+- no new Qdrant collections
+- no production runtime retrieval auto-selection
+- no public API endpoints for `rag_quality`
+- no LLM judge or non-deterministic scoring
+- no real external AI/API calls in tests
+
+Verification commands and results:
+
+- `python -m pytest` -> `284 passed`
+- `docker compose up -d --build` -> success
+- `docker compose exec backend alembic upgrade head` -> success
+- `docker compose exec backend alembic current` -> `20260622_0012 (head)`
+- `docker compose exec backend python -m pytest` -> `282 passed, 2 skipped`
+- `docker compose exec backend python scripts/run_e2e_demo_smoke.py` -> `E2E DEMO SMOKE RESULT: PASS`
+- `Invoke-RestMethod http://localhost:8033/health/runtime` -> `{"status":"ok","database":"ok","redis":"ok"}`
+
+## 33. Commit Tracking
 
 Current `git log --oneline` history:
 
@@ -1706,7 +1775,7 @@ Current working tree note:
 - The Brain Agent Qdrant RAG Integration foundation is committed as `6235880 Connect Brain Agent to Qdrant RAG retrieval`.
 - The RAG Evaluation Harness is committed as `4712333 Add RAG evaluation harness`.
 - The Celery RAG Pipeline Orchestration is committed as `07bb407 Add Celery RAG pipeline orchestration`.
-- The End-to-End Demo Seed/Smoke Flow is the current uncommitted slice in the working tree.
+- The Universal RAG Quality Evaluation Foundation is the current uncommitted slice in the working tree.
 
 Future commit entry format:
 
@@ -1719,7 +1788,7 @@ Future commit entry format:
 - Docker verified:
 ```
 
-## 32. Mandatory Future Rule
+## 34. Mandatory Future Rule
 
 This file is mandatory project tracking documentation and must be maintained continuously.
 
