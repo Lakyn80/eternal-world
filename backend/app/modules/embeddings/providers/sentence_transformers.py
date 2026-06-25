@@ -12,6 +12,7 @@ from app.modules.embeddings.providers.base import BaseEmbeddingProvider, Embeddi
 SENTENCE_TRANSFORMERS_PROVIDER_NAME = "sentence_transformers"
 E5_SMALL_MODEL_NAME = "intfloat/multilingual-e5-small"
 BGE_M3_MODEL_NAME = "BAAI/bge-m3"
+PARAPHRASE_MULTILINGUAL_MPNET_BASE_V2_MODEL_NAME = "sentence-transformers/paraphrase-multilingual-mpnet-base-v2"
 QUERY_PREFIX = "query: "
 PASSAGE_PREFIX = "passage: "
 SAFE_PROVIDER_FAILURE_MESSAGE = "SentenceTransformers embedding generation failed"
@@ -74,7 +75,7 @@ class SentenceTransformersEmbeddingProvider(BaseEmbeddingProvider):
             if input_type == "query":
                 return f"{QUERY_PREFIX}{normalized_text}"
             return f"{PASSAGE_PREFIX}{normalized_text}"
-        if normalized_model_code == "bge_m3":
+        if normalized_model_code in {"bge_m3", "paraphrase_multilingual_mpnet_base_v2"}:
             return normalized_text
 
         raise SentenceTransformersProviderError(
@@ -125,6 +126,8 @@ class SentenceTransformersEmbeddingProvider(BaseEmbeddingProvider):
             return E5_SMALL_MODEL_NAME
         if model_code == "bge_m3":
             return BGE_M3_MODEL_NAME
+        if model_code == "paraphrase_multilingual_mpnet_base_v2":
+            return PARAPHRASE_MULTILINGUAL_MPNET_BASE_V2_MODEL_NAME
 
         raise SentenceTransformersProviderError("SentenceTransformers model is not configured")
 
@@ -207,7 +210,7 @@ class SentenceTransformersEmbeddingProvider(BaseEmbeddingProvider):
         normalized_model_code = model_code.strip().lower()
         if normalized_model_code == "multilingual_e5_small":
             return QUERY_PREFIX.strip() if input_type == "query" else PASSAGE_PREFIX.strip()
-        if normalized_model_code == "bge_m3":
+        if normalized_model_code in {"bge_m3", "paraphrase_multilingual_mpnet_base_v2"}:
             return None
 
         raise SentenceTransformersProviderError(

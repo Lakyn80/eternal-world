@@ -108,7 +108,12 @@ def _install_fake_sentence_transformers(monkeypatch):
 
         def encode(self, texts, **kwargs):
             materialized_texts = list(texts)
-            dimension = 384 if self.model_name == "intfloat/multilingual-e5-small" else 1024
+            if self.model_name == "intfloat/multilingual-e5-small":
+                dimension = 384
+            elif self.model_name == "sentence-transformers/paraphrase-multilingual-mpnet-base-v2":
+                dimension = 768
+            else:
+                dimension = 1024
             return [
                 [round((index + 1) / 1000, 6) for index in range(dimension)]
                 for _ in materialized_texts
@@ -969,3 +974,76 @@ def test_multi_embedding_eval_can_include_bge_m3_candidate_using_fake_sentence_t
     assert chunk_count > 0
     assert len(bge_embeddings) == chunk_count
     assert all(embedding.vector_dimension == 1024 for embedding in bge_embeddings)
+
+
+def test_multi_embedding_eval_can_include_mpnet_candidate_using_fake_sentence_transformers(client, monkeypatch):
+    _install_fake_sentence_transformers(monkeypatch)
+    token = _register_and_login(client, "multi-eval-mpnet@example.com")
+    profile_id = _create_profile(client, token, "Multi Eval MPNet Profile")
+    source_id = _create_rag_source(
+        client,
+        token,
+        profile_id,
+        raw_text="Prague archive memory sentence. Another Prague sentence for evaluation chunking.",
+    ).json()["id"]
+    payload = MultiEmbeddingEvalRequest(
+        dataset=_build_dataset(),
+        candidates=[
+            {
+                "config_id": "candidate-mpnet",
+                "model_code": "paraphrase_multilingual_mpnet_base_v2",
+                "collection_name": "eternal_world_rag_chunks__paraphrase_multilingual_mpnet_base_v2_eval",
+                "top_k": 3,
+                "retrieval_mode": "hybrid",
+            }
+        ],
+    )
+
+    monkeypatch.setattr(
+        "app.modules.multi_embedding_eval.service.index_source_embeddings",
+        lambda db, *, current_user, source_id, model_code=None, collection_name=None: RagSourceIndexingSummaryRead(
+            source_id=source_id,
+            model_code=model_code,
+            total_embeddings=db.query(RagEmbedding).filter(
+                RagEmbedding.source_id == source_id,
+                RagEmbedding.model_code == model_code,
+            ).count(),
+            indexed_count=db.query(RagEmbedding).filter(
+                RagEmbedding.source_id == source_id,
+                RagEmbedding.model_code == model_code,
+            ).count(),
+            skipped_count=0,
+            failed_count=0,
+        ),
+    )
+    monkeypatch.setattr(
+        "app.modules.multi_embedding_eval.service.retrieve_profile_rag_for_collection",
+        lambda db, *, current_user, profile_id, payload, collection_name=None: _build_retrieval_response(
+            model_code=str(payload.model_code),
+            collection_name=str(collection_name),
+        ),
+    )
+
+    db, session_generator = _get_test_db_session()
+    try:
+        background_job = _create_multi_eval_job(
+            db=db,
+            owner_user_id=1,
+            profile_id=profile_id,
+            source_id=source_id,
+            payload=payload,
+        )
+        result = process_multi_embedding_eval_job(db, job_id=background_job.id)
+        chunk_count = db.query(RagChunk).filter(RagChunk.source_id == source_id).count()
+        mpnet_embeddings = db.query(RagEmbedding).filter(
+            RagEmbedding.source_id == source_id,
+            RagEmbedding.model_code == "paraphrase_multilingual_mpnet_base_v2",
+        ).all()
+    finally:
+        _close_test_db_session(session_generator)
+
+    assert result["status"] == "succeeded"
+    assert result["result_payload"]["best_config"]["best_model_code"] == "paraphrase_multilingual_mpnet_base_v2"
+    assert chunk_count > 0
+    assert len(mpnet_embeddings) == chunk_count
+    assert all(embedding.vector_dimension == 768 for embedding in mpnet_embeddings)

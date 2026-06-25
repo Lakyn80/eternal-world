@@ -18,7 +18,11 @@ def build_embedding_provider(*, model_code: str) -> BaseEmbeddingProvider:
         return MockEmbeddingProvider()
 
     if (
-        normalized_model_code in {"multilingual_e5_small", "bge_m3"}
+        normalized_model_code in {
+            "multilingual_e5_small",
+            "bge_m3",
+            "paraphrase_multilingual_mpnet_base_v2",
+        }
         and settings.embedding_provider == SENTENCE_TRANSFORMERS_PROVIDER_NAME
     ):
         return SentenceTransformersEmbeddingProvider(

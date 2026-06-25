@@ -20,6 +20,7 @@ def test_list_endpoint_returns_enabled_models_by_default(client):
     assert [model["code"] for model in response.json()] == [
         "multilingual_e5_small",
         "bge_m3",
+        "paraphrase_multilingual_mpnet_base_v2",
         "mock_embedding",
     ]
 
@@ -53,6 +54,16 @@ def test_get_by_code_returns_known_model(client):
     assert body["dimension"] == 1024
 
 
+def test_get_by_code_returns_new_mpnet_model(client):
+    response = client.get("/api/embedding-models/paraphrase_multilingual_mpnet_base_v2")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["code"] == "paraphrase_multilingual_mpnet_base_v2"
+    assert body["provider_type"] == "local"
+    assert body["dimension"] == 768
+
+
 def test_unknown_model_code_returns_404(client):
     response = client.get("/api/embedding-models/not_real")
 
@@ -64,6 +75,7 @@ def test_model_codes_are_stable():
     assert [model.code for model in list_embedding_models(include_disabled=True)] == [
         "multilingual_e5_small",
         "bge_m3",
+        "paraphrase_multilingual_mpnet_base_v2",
         "jina_embeddings_v3",
         "mock_embedding",
     ]
@@ -88,6 +100,7 @@ def test_candidate_selection_for_ru_includes_multilingual_capable_models():
     assert [model.code for model in candidates] == [
         "multilingual_e5_small",
         "bge_m3",
+        "paraphrase_multilingual_mpnet_base_v2",
     ]
 
 
@@ -97,6 +110,7 @@ def test_candidate_selection_for_cs_includes_multilingual_capable_models():
     assert [model.code for model in candidates] == [
         "multilingual_e5_small",
         "bge_m3",
+        "paraphrase_multilingual_mpnet_base_v2",
     ]
 
 
@@ -106,6 +120,7 @@ def test_candidate_selection_for_unknown_language_returns_multilingual_default_c
     assert [model.code for model in candidates] == [
         "multilingual_e5_small",
         "bge_m3",
+        "paraphrase_multilingual_mpnet_base_v2",
     ]
 
 
@@ -125,6 +140,7 @@ def test_enabled_models_helper_hides_disabled_external_models():
     assert [model.code for model in get_enabled_embedding_models()] == [
         "multilingual_e5_small",
         "bge_m3",
+        "paraphrase_multilingual_mpnet_base_v2",
         "mock_embedding",
     ]
 

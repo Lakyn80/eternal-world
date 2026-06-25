@@ -2488,6 +2488,50 @@ Runtime smoke outcome:
 - the test remained fake-safe throughout
 - no real-local model evaluation was run
 
+## Úkol 35 Add Next Embedding Provider Adapter
+
+Changed area:
+
+- backend-only embedding registry and SentenceTransformers adapter expansion for a third dense multilingual local baseline
+
+What was added:
+
+- added provider key `paraphrase_multilingual_mpnet_base_v2`
+- mapped it to the SentenceTransformers model name:
+  - `sentence-transformers/paraphrase-multilingual-mpnet-base-v2`
+- kept the provider on the dense-only local SentenceTransformers path
+- registered the new model as an enabled multilingual local embedding candidate alongside:
+  - `multilingual_e5_small`
+  - `bge_m3`
+- extended fake-safe tests to verify:
+  - registry/config accepts the new provider key
+  - provider resolution uses the expected SentenceTransformers model name
+  - fake SentenceTransformers execution returns the expected registry dimension `768`
+  - the model can be included in multi-embedding evaluation configuration without real model loading
+  - existing providers still resolve and work
+  - mock/fake default behavior remains unchanged
+
+What was intentionally not run:
+
+- no real-local model evaluation
+- no real SentenceTransformers model downloads
+- no BGE-M3 real inference
+- no MPNet real inference
+- no DeepSeek/OpenAI/external embedding API calls
+
+Next planned task:
+
+- three-model retrieval evaluation smoke using:
+  - `multilingual_e5_small`
+  - `bge_m3`
+  - `paraphrase_multilingual_mpnet_base_v2`
+
+Verification commands and results:
+
+- `python -m pytest tests/test_embedding_models.py tests/test_embeddings.py tests/test_embeddings_sentence_transformers.py tests/test_multi_embedding_eval.py tests/test_rag_quality.py -q` -> `83 passed`
+- `python -m pytest -q` -> `345 passed`
+- `python -m pytest --collect-only -q` -> `345 tests collected`
+
 ## 39. Commit Tracking
 
 Current `git log --oneline` history:
