@@ -2447,6 +2447,47 @@ Verification commands and results:
   - `archived_json_result: /app/artifacts/real_question_eval/runs/20260625_135748Z_fake/real_question_eval_result.json`
   - preserved `latest_real/` was not targeted by the fake-safe run
 
+## Úkol 34 Production Retrieval Runtime Smoke
+
+Changed area:
+
+- backend-only runtime smoke coverage for normal production retrieval using the active retrieval config path
+
+What was added:
+
+- new focused test `backend/tests/test_production_retrieval_runtime_smoke.py`
+- fake-safe production retrieval smoke proving that a normal retrieval request:
+  - reads and uses `active_retrieval_config` when present
+  - performs one normal retrieval flow through `rag_retrieval`
+  - does not execute evaluation flow entrypoints
+  - does not write `real_question_eval` artifacts
+- the smoke uses:
+  - deterministic local test data
+  - fake in-memory Qdrant behavior
+  - the normal retrieval endpoint `/api/memory-profiles/{profile_id}/rag/retrieve`
+- the smoke adds explicit test guards for:
+  - preserved `real_question_eval` artifact tree remaining byte-for-byte unchanged
+  - no eval artifact directory creation or file writes under `backend/artifacts/real_question_eval/`
+  - no execution of loaded eval entrypoints from:
+    - `real_question_eval`
+    - `multi_embedding_eval`
+    - `rag_quality`
+- no production chat behavior, embedding providers, or real-local eval execution were modified
+
+Verification commands and results:
+
+- `python -m pytest tests/test_real_question_eval.py tests/test_production_retrieval_runtime_smoke.py -q` -> `10 passed`
+- `python -m pytest -q` -> `338 passed`
+- `python -m pytest --collect-only -q` -> `338 tests collected`
+
+Runtime smoke outcome:
+
+- production retrieval used the selected active config collection at query time
+- production retrieval stayed on the normal retrieval path and did not execute eval
+- production retrieval did not write `latest_real/`, `latest_fake/`, or `runs/` eval artifacts
+- the test remained fake-safe throughout
+- no real-local model evaluation was run
+
 ## 39. Commit Tracking
 
 Current `git log --oneline` history:
