@@ -21,6 +21,7 @@ def test_list_endpoint_returns_enabled_models_by_default(client):
         "multilingual_e5_small",
         "bge_m3",
         "paraphrase_multilingual_mpnet_base_v2",
+        "multilingual_e5_base",
         "mock_embedding",
     ]
 
@@ -64,6 +65,16 @@ def test_get_by_code_returns_new_mpnet_model(client):
     assert body["dimension"] == 768
 
 
+def test_get_by_code_returns_new_e5_base_model(client):
+    response = client.get("/api/embedding-models/multilingual_e5_base")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["code"] == "multilingual_e5_base"
+    assert body["provider_type"] == "local"
+    assert body["dimension"] == 768
+
+
 def test_unknown_model_code_returns_404(client):
     response = client.get("/api/embedding-models/not_real")
 
@@ -76,6 +87,7 @@ def test_model_codes_are_stable():
         "multilingual_e5_small",
         "bge_m3",
         "paraphrase_multilingual_mpnet_base_v2",
+        "multilingual_e5_base",
         "jina_embeddings_v3",
         "mock_embedding",
     ]
@@ -101,6 +113,7 @@ def test_candidate_selection_for_ru_includes_multilingual_capable_models():
         "multilingual_e5_small",
         "bge_m3",
         "paraphrase_multilingual_mpnet_base_v2",
+        "multilingual_e5_base",
     ]
 
 
@@ -111,6 +124,7 @@ def test_candidate_selection_for_cs_includes_multilingual_capable_models():
         "multilingual_e5_small",
         "bge_m3",
         "paraphrase_multilingual_mpnet_base_v2",
+        "multilingual_e5_base",
     ]
 
 
@@ -121,6 +135,7 @@ def test_candidate_selection_for_unknown_language_returns_multilingual_default_c
         "multilingual_e5_small",
         "bge_m3",
         "paraphrase_multilingual_mpnet_base_v2",
+        "multilingual_e5_base",
     ]
 
 
@@ -141,6 +156,7 @@ def test_enabled_models_helper_hides_disabled_external_models():
         "multilingual_e5_small",
         "bge_m3",
         "paraphrase_multilingual_mpnet_base_v2",
+        "multilingual_e5_base",
         "mock_embedding",
     ]
 

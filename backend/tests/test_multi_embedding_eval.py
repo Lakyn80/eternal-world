@@ -110,7 +110,10 @@ def _install_fake_sentence_transformers(monkeypatch):
             materialized_texts = list(texts)
             if self.model_name == "intfloat/multilingual-e5-small":
                 dimension = 384
-            elif self.model_name == "sentence-transformers/paraphrase-multilingual-mpnet-base-v2":
+            elif self.model_name in {
+                "intfloat/multilingual-e5-base",
+                "sentence-transformers/paraphrase-multilingual-mpnet-base-v2",
+            }:
                 dimension = 768
             else:
                 dimension = 1024
@@ -1047,3 +1050,76 @@ def test_multi_embedding_eval_can_include_mpnet_candidate_using_fake_sentence_tr
     assert chunk_count > 0
     assert len(mpnet_embeddings) == chunk_count
     assert all(embedding.vector_dimension == 768 for embedding in mpnet_embeddings)
+
+
+def test_multi_embedding_eval_can_include_multilingual_e5_base_candidate_using_fake_sentence_transformers(client, monkeypatch):
+    _install_fake_sentence_transformers(monkeypatch)
+    token = _register_and_login(client, "multi-eval-e5-base@example.com")
+    profile_id = _create_profile(client, token, "Multi Eval E5 Base Profile")
+    source_id = _create_rag_source(
+        client,
+        token,
+        profile_id,
+        raw_text="Kosice archive memory sentence. Another Kosice sentence for evaluation chunking.",
+    ).json()["id"]
+    payload = MultiEmbeddingEvalRequest(
+        dataset=_build_dataset(),
+        candidates=[
+            {
+                "config_id": "candidate-e5-base",
+                "model_code": "multilingual_e5_base",
+                "collection_name": "eternal_world_rag_chunks__multilingual_e5_base_eval",
+                "top_k": 3,
+                "retrieval_mode": "hybrid",
+            }
+        ],
+    )
+
+    monkeypatch.setattr(
+        "app.modules.multi_embedding_eval.service.index_source_embeddings",
+        lambda db, *, current_user, source_id, model_code=None, collection_name=None: RagSourceIndexingSummaryRead(
+            source_id=source_id,
+            model_code=model_code,
+            total_embeddings=db.query(RagEmbedding).filter(
+                RagEmbedding.source_id == source_id,
+                RagEmbedding.model_code == model_code,
+            ).count(),
+            indexed_count=db.query(RagEmbedding).filter(
+                RagEmbedding.source_id == source_id,
+                RagEmbedding.model_code == model_code,
+            ).count(),
+            skipped_count=0,
+            failed_count=0,
+        ),
+    )
+    monkeypatch.setattr(
+        "app.modules.multi_embedding_eval.service.retrieve_profile_rag_for_collection",
+        lambda db, *, current_user, profile_id, payload, collection_name=None: _build_retrieval_response(
+            model_code=str(payload.model_code),
+            collection_name=str(collection_name),
+        ),
+    )
+
+    db, session_generator = _get_test_db_session()
+    try:
+        background_job = _create_multi_eval_job(
+            db=db,
+            owner_user_id=1,
+            profile_id=profile_id,
+            source_id=source_id,
+            payload=payload,
+        )
+        result = process_multi_embedding_eval_job(db, job_id=background_job.id)
+        chunk_count = db.query(RagChunk).filter(RagChunk.source_id == source_id).count()
+        e5_base_embeddings = db.query(RagEmbedding).filter(
+            RagEmbedding.source_id == source_id,
+            RagEmbedding.model_code == "multilingual_e5_base",
+        ).all()
+    finally:
+        _close_test_db_session(session_generator)
+
+    assert result["status"] == "succeeded"
+    assert result["result_payload"]["best_config"]["best_model_code"] == "multilingual_e5_base"
+    assert chunk_count > 0
+    assert len(e5_base_embeddings) == chunk_count
+    assert all(embedding.vector_dimension == 768 for embedding in e5_base_embeddings)

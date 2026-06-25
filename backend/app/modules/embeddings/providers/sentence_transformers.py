@@ -11,6 +11,7 @@ from app.modules.embeddings.providers.base import BaseEmbeddingProvider, Embeddi
 
 SENTENCE_TRANSFORMERS_PROVIDER_NAME = "sentence_transformers"
 E5_SMALL_MODEL_NAME = "intfloat/multilingual-e5-small"
+E5_BASE_MODEL_NAME = "intfloat/multilingual-e5-base"
 BGE_M3_MODEL_NAME = "BAAI/bge-m3"
 PARAPHRASE_MULTILINGUAL_MPNET_BASE_V2_MODEL_NAME = "sentence-transformers/paraphrase-multilingual-mpnet-base-v2"
 QUERY_PREFIX = "query: "
@@ -71,7 +72,7 @@ class SentenceTransformersEmbeddingProvider(BaseEmbeddingProvider):
     ) -> str:
         normalized_text = self._normalize_text(text)
         normalized_model_code = model_code.strip().lower()
-        if normalized_model_code == "multilingual_e5_small":
+        if normalized_model_code in {"multilingual_e5_small", "multilingual_e5_base"}:
             if input_type == "query":
                 return f"{QUERY_PREFIX}{normalized_text}"
             return f"{PASSAGE_PREFIX}{normalized_text}"
@@ -124,6 +125,8 @@ class SentenceTransformersEmbeddingProvider(BaseEmbeddingProvider):
     def _resolve_model_name(self, model_code: str) -> str:
         if model_code == "multilingual_e5_small":
             return E5_SMALL_MODEL_NAME
+        if model_code == "multilingual_e5_base":
+            return E5_BASE_MODEL_NAME
         if model_code == "bge_m3":
             return BGE_M3_MODEL_NAME
         if model_code == "paraphrase_multilingual_mpnet_base_v2":
@@ -208,7 +211,7 @@ class SentenceTransformersEmbeddingProvider(BaseEmbeddingProvider):
         input_type: str,
     ) -> str | None:
         normalized_model_code = model_code.strip().lower()
-        if normalized_model_code == "multilingual_e5_small":
+        if normalized_model_code in {"multilingual_e5_small", "multilingual_e5_base"}:
             return QUERY_PREFIX.strip() if input_type == "query" else PASSAGE_PREFIX.strip()
         if normalized_model_code in {"bge_m3", "paraphrase_multilingual_mpnet_base_v2"}:
             return None
