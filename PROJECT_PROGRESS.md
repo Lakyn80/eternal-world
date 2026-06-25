@@ -2070,7 +2070,104 @@ Verification commands and results:
   - `Invoke-RestMethod http://localhost:8033/health/runtime` -> `{"status":"ok","database":"ok","redis":"ok"}`
   - `docker compose exec backend python scripts/run_e2e_demo_smoke.py` -> `E2E DEMO SMOKE RESULT: PASS`
 
-## 37. Commit Tracking
+## 37. Task 31 Real Multi-Embedding Evaluation Smoke Test
+
+Changed area:
+
+- backend-only smoke/evaluation orchestration for the already implemented real local embedding candidates `multilingual_e5_small` and `bge_m3`
+
+What was added:
+
+- new module `backend/app/modules/real_multi_embedding_eval_smoke/`
+- new script `backend/scripts/run_real_multi_embedding_eval_smoke.py`
+- new test `backend/tests/test_real_multi_embedding_eval_smoke.py`
+- synchronous smoke runner that reuses existing module boundaries instead of duplicating evaluation logic:
+  - creates or reuses a safe fictional smoke user
+  - creates or reuses a dedicated profile and RAG source
+  - runs `multi_embedding_eval` for exactly two candidates:
+    - `multilingual_e5_small`
+    - `bge_m3`
+  - indexes each candidate into its own Qdrant collection
+  - passes retrieval results into the existing `rag_quality` flow
+  - activates the winning config through the existing `active_retrieval_config` service
+  - verifies runtime retrieval resolves the activated config without changing production chat behavior
+- default fake `SentenceTransformer` model objects for the smoke script/test path so CI and normal verification do not download real Hugging Face models
+- optional explicit real-local-model execution path for manual runs when desired
+
+What the smoke flow verifies:
+
+- the source can be created or reused safely
+- chunking is available for the evaluation source
+- both embedding candidates can generate chunk embeddings through the existing `SentenceTransformers` provider path
+- both candidates can be indexed into separate Qdrant collections
+- both candidates can be evaluated through `multi_embedding_eval`
+- `rag_quality` receives both candidate result sets and selects a winner
+- the winning candidate can be activated into `active_retrieval_config`
+- runtime retrieval resolves the activated config and uses the winning collection/model
+
+How `multilingual_e5_small` and `bge_m3` are compared:
+
+- the smoke request builds exactly two candidates in one `MultiEmbeddingEvalRequest`
+- both candidates use the same smoke dataset and query
+- both candidates run through the existing embedding, indexing, retrieval, and `rag_quality` selection path
+- the default fake-model mode intentionally makes the two candidates produce different retrieval quality so the winning config is deterministic in the smoke fixture
+
+How Qdrant collections are kept separate:
+
+- the smoke runner assigns explicit per-candidate collection names:
+  - `eternal_world_rag_chunks__multilingual_e5_small__real_multi_eval_smoke`
+  - `eternal_world_rag_chunks__bge_m3__real_multi_eval_smoke`
+- indexing remains non-destructive
+- existing collections are not wiped
+- existing points are not deleted
+
+How the selected config is activated:
+
+- after synchronous `process_multi_embedding_eval_job(...)` completes successfully, the smoke runner calls `activate_best_multi_embedding_eval_result(...)`
+- the existing activation service reads the winning candidate from the evaluation job payload and upserts one active config row for the profile
+- the runner then reads the stored active config back through `get_active_retrieval_config(...)`
+
+How tests avoid real model downloads/network:
+
+- the smoke runner defaults to `use_real_local_models=False`
+- in that default mode it forces the existing `SentenceTransformers` provider path but monkeypatches model loading to a deterministic in-memory fake class
+- tests use a fake Qdrant client and explicit HTTP failure guards
+- no real external API calls are used in the smoke tests
+
+How to run the new smoke flow:
+
+- default fake/mock-safe path:
+  - `docker compose exec backend python scripts/run_real_multi_embedding_eval_smoke.py`
+- optional explicit real local model path:
+  - `docker compose exec backend sh -lc "REAL_MULTI_EMBEDDING_SMOKE_USE_REAL_LOCAL_MODELS=1 EMBEDDING_PROVIDER=sentence_transformers python scripts/run_real_multi_embedding_eval_smoke.py --use-real-local-models"`
+
+Intentionally not implemented:
+
+- no new embedding provider
+- no Jina provider
+- no OpenAI-compatible embedding provider
+- no sparse retrieval
+- no ColBERT / multi-vector retrieval
+- no frontend changes
+- no billing, subscription, tariff, or payment changes
+- no pip package extraction
+
+Verification commands and results:
+
+- focused verification:
+  - `python -m pytest tests/test_real_multi_embedding_eval_smoke.py tests/test_multi_embedding_eval.py tests/test_active_retrieval_config.py tests/test_rag_retrieval.py tests/test_qdrant_indexing.py` -> `54 passed`
+  - `python -m pytest tests/test_embeddings_sentence_transformers.py tests/test_embeddings.py tests/test_rag_quality.py` -> `45 passed`
+- required full verification:
+  - `python -m pytest` -> `328 passed`
+  - `docker compose up -d --build` -> success
+  - `docker compose exec backend alembic upgrade head` -> success
+  - `docker compose exec backend alembic current` -> `20260624_0013 (head)`
+  - `docker compose exec backend python -m pytest` -> `326 passed, 2 skipped`
+  - `Invoke-RestMethod http://localhost:8033/health/runtime` -> `{"status":"ok","database":"ok","redis":"ok"}`
+  - `docker compose exec backend python scripts/run_e2e_demo_smoke.py` -> `E2E DEMO SMOKE RESULT: PASS`
+  - `docker compose exec backend python scripts/run_real_multi_embedding_eval_smoke.py` -> `REAL MULTI-EMBEDDING SMOKE RESULT: PASS`
+
+## 38. Commit Tracking
 
 Current `git log --oneline` history:
 
@@ -2124,7 +2221,7 @@ Future commit entry format:
 - Docker verified:
 ```
 
-## 38. Mandatory Future Rule
+## 39. Mandatory Future Rule
 
 This file is mandatory project tracking documentation and must be maintained continuously.
 
