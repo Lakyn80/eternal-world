@@ -2713,3 +2713,34 @@ Every new entry must include:
 - tests run
 - migration status if relevant
 - whether Docker was verified
+
+## Úkol 38 Fix Incremental Eval Winner Count Consistency
+
+Changed area:
+
+- `backend/app/modules/real_question_eval/`
+- `backend/tests/test_real_question_eval.py`
+- incremental comparison artifacts in `backend/artifacts/real_question_eval/latest_incremental_new_providers/` and `backend/artifacts/real_question_eval/runs/20260625_181027Z_incremental_new_providers/`
+
+What was added:
+
+- fixed the mismatch between per-question winners and aggregate `question_wins` by recomputing aggregate wins from persisted question winners during incremental result assembly
+- added artifact-only incremental re-render support from existing JSON so the stale incremental report can be normalized without rerunning embeddings or retrieval
+- added regression coverage proving the incremental artifact cannot keep stale `question_wins` values that disagree with question-level winners
+- overall winner remains `multilingual_e5_base`
+
+Verification commands and results:
+
+- `python -m pytest tests/test_real_question_eval.py -q` -> `14 passed`
+- `python -m pytest -q` -> timed out twice in shell (`246.9s` and `604.1s`), no failing assertion was returned before timeout
+- `Select-String -Path ".\backend\artifacts\real_question_eval\latest_incremental_new_providers\real_question_eval_report.md" -Pattern "Question wins:"` -> visible counts corrected to `1, 0, 0, 2`
+
+Safety / runtime notes:
+
+- no real-local eval was rerun
+- no embeddings were recomputed
+- no model downloads or inference were run for this fix
+
+Next planned work:
+
+- broader full-version embedding benchmark plan

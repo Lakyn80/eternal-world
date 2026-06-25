@@ -15,10 +15,10 @@
   "used_fake_models": false,
   "status": "PASS",
   "artifact_paths": {
-    "latest_markdown_report": "/app/artifacts/real_question_eval/latest_incremental_new_providers/real_question_eval_report.md",
-    "latest_json_result": "/app/artifacts/real_question_eval/latest_incremental_new_providers/real_question_eval_result.json",
-    "archived_markdown_report": "/app/artifacts/real_question_eval/runs/20260625_181027Z_incremental_new_providers/real_question_eval_report.md",
-    "archived_json_result": "/app/artifacts/real_question_eval/runs/20260625_181027Z_incremental_new_providers/real_question_eval_result.json"
+    "latest_markdown_report": "artifacts\\real_question_eval\\latest_incremental_new_providers\\real_question_eval_report.md",
+    "latest_json_result": "artifacts\\real_question_eval\\latest_incremental_new_providers\\real_question_eval_result.json",
+    "archived_markdown_report": "artifacts\\real_question_eval\\runs\\20260625_181027Z_incremental_new_providers\\real_question_eval_report.md",
+    "archived_json_result": "artifacts\\real_question_eval\\runs\\20260625_181027Z_incremental_new_providers\\real_question_eval_result.json"
   },
   "client_view": {
     "source_dataset_note": "deterministic fictional eval corpus",
@@ -668,7 +668,7 @@
       {
         "model_code": "multilingual_e5_small",
         "collection_name": "eternal_world_rag_chunks__multilingual_e5_small__real_question_eval",
-        "question_wins": 2,
+        "question_wins": 1,
         "passed_questions": 2,
         "average_evidence_coverage": 0.8333,
         "average_first_relevant_rank": 1.0,
@@ -690,7 +690,7 @@
       {
         "model_code": "bge_m3",
         "collection_name": "eternal_world_rag_chunks__bge_m3__real_question_eval",
-        "question_wins": 1,
+        "question_wins": 0,
         "passed_questions": 3,
         "average_evidence_coverage": 1.0,
         "average_first_relevant_rank": 1.0,
@@ -734,7 +734,7 @@
       {
         "model_code": "multilingual_e5_base",
         "collection_name": "eternal_world_rag_chunks__multilingual_e5_base__real_question_eval",
-        "question_wins": 3,
+        "question_wins": 2,
         "passed_questions": 3,
         "average_evidence_coverage": 1.0,
         "average_first_relevant_rank": 1.0,

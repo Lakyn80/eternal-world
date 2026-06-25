@@ -12,6 +12,7 @@ from app.modules.real_question_eval import (
     run_incremental_real_question_eval,
 )
 from app.modules.real_question_eval.service import _QuestionEvalFakeSentenceTransformer
+from app.modules.real_question_eval.service import rerender_incremental_real_artifacts_from_existing_json
 from scripts.run_real_question_eval import (
     _print_text_result,
     resolve_real_question_eval_execution_mode,
@@ -567,3 +568,392 @@ def test_incremental_real_question_eval_writes_incremental_artifacts_and_preserv
     assert latest_json_payload["client_view"]["questions"][0]["question_id"] == "question-sunflower-house"
     assert latest_json_payload["client_view"]["questions"][1]["question_id"] == "question-winter-trip"
     assert latest_json_payload["client_view"]["questions"][2]["question_id"] == "question-grandmother-soup"
+
+
+def test_incremental_artifact_rerender_recomputes_question_wins_from_per_question_winners(tmp_path):
+    artifact_dir = tmp_path / "real_question_eval_artifacts"
+    latest_dir = artifact_dir / "latest_incremental_new_providers"
+    latest_dir.mkdir(parents=True, exist_ok=True)
+
+    source_payload = {
+        "task": "Task 32 Real Local Model Question Evaluation",
+        "run_id": "20260625_181027Z",
+        "run_type": "incremental_real",
+        "execution_mode": "incremental_real_eval",
+        "historical_providers": ["multilingual_e5_small", "bge_m3"],
+        "new_real_providers": [
+            "paraphrase_multilingual_mpnet_base_v2",
+            "multilingual_e5_base",
+        ],
+        "timestamp": "2026-06-25T18:10:27.590404+00:00",
+        "used_fake_models": False,
+        "status": "PASS",
+        "artifact_paths": {
+            "latest_markdown_report": "/app/artifacts/real_question_eval/latest_incremental_new_providers/real_question_eval_report.md",
+            "latest_json_result": "/app/artifacts/real_question_eval/latest_incremental_new_providers/real_question_eval_result.json",
+            "archived_markdown_report": "/app/artifacts/real_question_eval/runs/20260625_181027Z_incremental_new_providers/real_question_eval_report.md",
+            "archived_json_result": "/app/artifacts/real_question_eval/runs/20260625_181027Z_incremental_new_providers/real_question_eval_result.json",
+        },
+        "client_view": {
+            "source_dataset_note": "deterministic fictional eval corpus",
+            "real_client_user_data": "no",
+            "purpose": "retrieval quality testing",
+            "dataset": {
+                "id": "real-question-eval-dataset",
+                "name": "Real Question Evaluation Dataset",
+            },
+            "models_compared": [
+                "multilingual_e5_small",
+                "bge_m3",
+                "paraphrase_multilingual_mpnet_base_v2",
+                "multilingual_e5_base",
+            ],
+            "overall_winner": "multilingual_e5_base",
+            "recommended_active_model": "multilingual_e5_base",
+            "speed_vs_accuracy_tradeoff": "Historical multilingual_e5_small and bge_m3 results were preserved and compared against the two new real-provider runs using the same dataset and selector rules.",
+            "production_recommendation": "A new provider beat historical `bge_m3`; promote `multilingual_e5_base` after reviewing the incremental real comparison.",
+            "activated": False,
+            "runtime_verified": False,
+            "historical_baseline_providers": ["multilingual_e5_small", "bge_m3"],
+            "new_real_run_providers": [
+                "paraphrase_multilingual_mpnet_base_v2",
+                "multilingual_e5_base",
+            ],
+            "historical_overall_winner": "bge_m3",
+            "any_new_provider_beat_historical_winner": True,
+        },
+        "developer_view": {
+            "dataset": {
+                "id": "real-question-eval-dataset",
+                "name": "Real Question Evaluation Dataset",
+            },
+            "models_compared": [
+                "multilingual_e5_small",
+                "bge_m3",
+                "paraphrase_multilingual_mpnet_base_v2",
+                "multilingual_e5_base",
+            ],
+            "questions": [
+                {
+                    "question_id": "question-sunflower-house",
+                    "question": "What details show which flower was kept at the old village house and what part of the entrance is mentioned?",
+                    "expected_markers": ["sunflower seeds", "blue gate latch"],
+                    "expected_distractors": ["rose market poster"],
+                    "winner": "multilingual_e5_small",
+                    "reason": "Tie broken by stronger top retrieval score and overall selector alignment.",
+                    "model_results": [
+                        {
+                            "model_code": "multilingual_e5_small",
+                            "collection_name": "c_e5_small",
+                            "top_chunks": [{"rank": 1, "chunk_id": 101, "score": 1.0, "preview": "sunflower"}],
+                            "matched_markers": ["sunflower seeds", "blue gate latch"],
+                            "missing_markers": [],
+                            "distractors": [],
+                            "evidence_coverage": 1.0,
+                            "first_relevant_rank": 1,
+                            "answer_summary": "Grounded by retrieved evidence for: blue gate latch, sunflower seeds.",
+                            "verdict": "grounded",
+                        },
+                        {
+                            "model_code": "bge_m3",
+                            "collection_name": "c_bge",
+                            "top_chunks": [{"rank": 1, "chunk_id": 102, "score": 0.99, "preview": "sunflower"}],
+                            "matched_markers": ["sunflower seeds", "blue gate latch"],
+                            "missing_markers": [],
+                            "distractors": [],
+                            "evidence_coverage": 1.0,
+                            "first_relevant_rank": 1,
+                            "answer_summary": "Grounded by retrieved evidence for: blue gate latch, sunflower seeds.",
+                            "verdict": "grounded",
+                        },
+                        {
+                            "model_code": "paraphrase_multilingual_mpnet_base_v2",
+                            "collection_name": "c_mpnet",
+                            "top_chunks": [{"rank": 1, "chunk_id": 103, "score": 0.98, "preview": "sunflower"}],
+                            "matched_markers": ["sunflower seeds", "blue gate latch"],
+                            "missing_markers": [],
+                            "distractors": [],
+                            "evidence_coverage": 1.0,
+                            "first_relevant_rank": 1,
+                            "answer_summary": "Grounded by retrieved evidence for: blue gate latch, sunflower seeds.",
+                            "verdict": "grounded",
+                        },
+                        {
+                            "model_code": "multilingual_e5_base",
+                            "collection_name": "c_e5_base",
+                            "top_chunks": [{"rank": 1, "chunk_id": 104, "score": 0.97, "preview": "sunflower"}],
+                            "matched_markers": ["sunflower seeds", "blue gate latch"],
+                            "missing_markers": [],
+                            "distractors": [],
+                            "evidence_coverage": 1.0,
+                            "first_relevant_rank": 1,
+                            "answer_summary": "Grounded by retrieved evidence for: blue gate latch, sunflower seeds.",
+                            "verdict": "grounded",
+                        },
+                    ],
+                },
+                {
+                    "question_id": "question-winter-trip",
+                    "question": "During the winter trip, what travel item was saved and what container kept everyone warm?",
+                    "expected_markers": ["overnight train ticket", "wooden thermos"],
+                    "expected_distractors": ["summer bus timetable"],
+                    "winner": "multilingual_e5_base",
+                    "reason": "Tie broken by stronger top retrieval score and overall selector alignment.",
+                    "model_results": [
+                        {
+                            "model_code": "multilingual_e5_small",
+                            "collection_name": "c_e5_small",
+                            "top_chunks": [{"rank": 1, "chunk_id": 201, "score": 0.96, "preview": "winter"}],
+                            "matched_markers": ["overnight train ticket", "wooden thermos"],
+                            "missing_markers": [],
+                            "distractors": [],
+                            "evidence_coverage": 1.0,
+                            "first_relevant_rank": 1,
+                            "answer_summary": "Grounded by retrieved evidence for: overnight train ticket, wooden thermos.",
+                            "verdict": "grounded",
+                        },
+                        {
+                            "model_code": "bge_m3",
+                            "collection_name": "c_bge",
+                            "top_chunks": [{"rank": 1, "chunk_id": 202, "score": 0.97, "preview": "winter"}],
+                            "matched_markers": ["overnight train ticket", "wooden thermos"],
+                            "missing_markers": [],
+                            "distractors": [],
+                            "evidence_coverage": 1.0,
+                            "first_relevant_rank": 1,
+                            "answer_summary": "Grounded by retrieved evidence for: overnight train ticket, wooden thermos.",
+                            "verdict": "grounded",
+                        },
+                        {
+                            "model_code": "paraphrase_multilingual_mpnet_base_v2",
+                            "collection_name": "c_mpnet",
+                            "top_chunks": [{"rank": 1, "chunk_id": 203, "score": 0.98, "preview": "winter"}],
+                            "matched_markers": ["overnight train ticket", "wooden thermos"],
+                            "missing_markers": [],
+                            "distractors": [],
+                            "evidence_coverage": 1.0,
+                            "first_relevant_rank": 1,
+                            "answer_summary": "Grounded by retrieved evidence for: overnight train ticket, wooden thermos.",
+                            "verdict": "grounded",
+                        },
+                        {
+                            "model_code": "multilingual_e5_base",
+                            "collection_name": "c_e5_base",
+                            "top_chunks": [{"rank": 1, "chunk_id": 204, "score": 1.01, "preview": "winter"}],
+                            "matched_markers": ["overnight train ticket", "wooden thermos"],
+                            "missing_markers": [],
+                            "distractors": [],
+                            "evidence_coverage": 1.0,
+                            "first_relevant_rank": 1,
+                            "answer_summary": "Grounded by retrieved evidence for: overnight train ticket, wooden thermos.",
+                            "verdict": "grounded",
+                        },
+                    ],
+                },
+                {
+                    "question_id": "question-grandmother-soup",
+                    "question": "Which ingredients and cooking setup explain why grandmother's soup tasted smoky?",
+                    "expected_markers": ["dried mushrooms", "oak stove"],
+                    "expected_distractors": ["vanilla jam"],
+                    "winner": "multilingual_e5_base",
+                    "reason": "Tie broken by stronger top retrieval score and overall selector alignment.",
+                    "model_results": [
+                        {
+                            "model_code": "multilingual_e5_small",
+                            "collection_name": "c_e5_small",
+                            "top_chunks": [{"rank": 1, "chunk_id": 301, "score": 0.7, "preview": "soup"}],
+                            "matched_markers": ["dried mushrooms"],
+                            "missing_markers": ["oak stove"],
+                            "distractors": ["vanilla jam"],
+                            "evidence_coverage": 0.5,
+                            "first_relevant_rank": 1,
+                            "answer_summary": "Partially grounded by: dried mushrooms. Missing: oak stove. Distractors present: vanilla jam.",
+                            "verdict": "partial",
+                        },
+                        {
+                            "model_code": "bge_m3",
+                            "collection_name": "c_bge",
+                            "top_chunks": [{"rank": 1, "chunk_id": 302, "score": 0.94, "preview": "soup"}],
+                            "matched_markers": ["dried mushrooms", "oak stove"],
+                            "missing_markers": [],
+                            "distractors": [],
+                            "evidence_coverage": 1.0,
+                            "first_relevant_rank": 1,
+                            "answer_summary": "Grounded by retrieved evidence for: dried mushrooms, oak stove.",
+                            "verdict": "grounded",
+                        },
+                        {
+                            "model_code": "paraphrase_multilingual_mpnet_base_v2",
+                            "collection_name": "c_mpnet",
+                            "top_chunks": [{"rank": 1, "chunk_id": 303, "score": 0.2, "preview": "jam"}],
+                            "matched_markers": [],
+                            "missing_markers": ["dried mushrooms", "oak stove"],
+                            "distractors": ["vanilla jam"],
+                            "evidence_coverage": 0.0,
+                            "first_relevant_rank": None,
+                            "answer_summary": "Ungrounded. Retrieved distractors: vanilla jam.",
+                            "verdict": "distracted",
+                        },
+                        {
+                            "model_code": "multilingual_e5_base",
+                            "collection_name": "c_e5_base",
+                            "top_chunks": [{"rank": 1, "chunk_id": 304, "score": 0.95, "preview": "soup"}],
+                            "matched_markers": ["dried mushrooms", "oak stove"],
+                            "missing_markers": [],
+                            "distractors": [],
+                            "evidence_coverage": 1.0,
+                            "first_relevant_rank": 1,
+                            "answer_summary": "Grounded by retrieved evidence for: dried mushrooms, oak stove.",
+                            "verdict": "grounded",
+                        },
+                    ],
+                },
+            ],
+            "aggregate_results": [
+                {
+                    "model_code": "multilingual_e5_small",
+                    "collection_name": "c_e5_small",
+                    "question_wins": 2,
+                    "passed_questions": 2,
+                    "average_evidence_coverage": 0.8333,
+                    "average_first_relevant_rank": 1.0,
+                    "total_matched_markers": 5,
+                    "total_missing_markers": 1,
+                    "total_false_positive_markers": 1,
+                    "official_metrics": {
+                        "hit_rate": 0.6667,
+                        "recall_at_k": 0.8333,
+                        "mrr": 1.0,
+                        "forbidden_marker_rate": 0.3333,
+                        "average_latency_ms": 12.0,
+                        "cost_estimate_total": 0.0,
+                        "evidence_marker_coverage": 0.8333,
+                        "missing_expected_marker_count": 1,
+                        "false_positive_count": 1,
+                    },
+                },
+                {
+                    "model_code": "bge_m3",
+                    "collection_name": "c_bge",
+                    "question_wins": 1,
+                    "passed_questions": 3,
+                    "average_evidence_coverage": 1.0,
+                    "average_first_relevant_rank": 1.0,
+                    "total_matched_markers": 6,
+                    "total_missing_markers": 0,
+                    "total_false_positive_markers": 0,
+                    "official_metrics": {
+                        "hit_rate": 1.0,
+                        "recall_at_k": 1.0,
+                        "mrr": 1.0,
+                        "forbidden_marker_rate": 0.0,
+                        "average_latency_ms": 42.0,
+                        "cost_estimate_total": 0.0,
+                        "evidence_marker_coverage": 1.0,
+                        "missing_expected_marker_count": 0,
+                        "false_positive_count": 0,
+                    },
+                },
+                {
+                    "model_code": "paraphrase_multilingual_mpnet_base_v2",
+                    "collection_name": "c_mpnet",
+                    "question_wins": 0,
+                    "passed_questions": 2,
+                    "average_evidence_coverage": 0.6667,
+                    "average_first_relevant_rank": 1.0,
+                    "total_matched_markers": 4,
+                    "total_missing_markers": 2,
+                    "total_false_positive_markers": 1,
+                    "official_metrics": {
+                        "hit_rate": 0.6667,
+                        "recall_at_k": 0.6667,
+                        "mrr": 1.0,
+                        "forbidden_marker_rate": 0.3333,
+                        "average_latency_ms": 21.0,
+                        "cost_estimate_total": 0.0,
+                        "evidence_marker_coverage": 0.6667,
+                        "missing_expected_marker_count": 2,
+                        "false_positive_count": 1,
+                    },
+                },
+                {
+                    "model_code": "multilingual_e5_base",
+                    "collection_name": "c_e5_base",
+                    "question_wins": 3,
+                    "passed_questions": 3,
+                    "average_evidence_coverage": 1.0,
+                    "average_first_relevant_rank": 1.0,
+                    "total_matched_markers": 6,
+                    "total_missing_markers": 0,
+                    "total_false_positive_markers": 0,
+                    "official_metrics": {
+                        "hit_rate": 1.0,
+                        "recall_at_k": 1.0,
+                        "mrr": 1.0,
+                        "forbidden_marker_rate": 0.0,
+                        "average_latency_ms": 18.0,
+                        "cost_estimate_total": 0.0,
+                        "evidence_marker_coverage": 1.0,
+                        "missing_expected_marker_count": 0,
+                        "false_positive_count": 0,
+                    },
+                },
+            ],
+            "selected_config": {
+                "best_model_code": "multilingual_e5_base",
+                "best_collection_name": "c_e5_base",
+            },
+            "activated_config": {},
+            "runtime_retrieval_verification": {},
+            "historical_providers": ["multilingual_e5_small", "bge_m3"],
+            "new_real_providers": [
+                "paraphrase_multilingual_mpnet_base_v2",
+                "multilingual_e5_base",
+            ],
+            "historical_overall_winner": "bge_m3",
+            "any_new_provider_beat_historical_winner": True,
+        },
+    }
+
+    source_json_path = latest_dir / "real_question_eval_result.json"
+    source_markdown_path = latest_dir / "real_question_eval_report.md"
+    source_json_path.write_text(json.dumps(source_payload, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    source_markdown_path.write_text("# stale incremental report\n", encoding="utf-8")
+
+    result = rerender_incremental_real_artifacts_from_existing_json(artifact_dir=artifact_dir)
+
+    assert result.overall_winner_model_code == "multilingual_e5_base"
+    assert [item.question_id for item in result.question_results] == [
+        "question-sunflower-house",
+        "question-winter-trip",
+        "question-grandmother-soup",
+    ]
+
+    corrected_payload = json.loads(source_json_path.read_text(encoding="utf-8"))
+    corrected_counts = {
+        item["model_code"]: item["question_wins"]
+        for item in corrected_payload["developer_view"]["aggregate_results"]
+    }
+    assert corrected_counts == {
+        "multilingual_e5_small": 1,
+        "bge_m3": 0,
+        "paraphrase_multilingual_mpnet_base_v2": 0,
+        "multilingual_e5_base": 2,
+    }
+
+    per_question_counts: dict[str, int] = {}
+    for question in corrected_payload["developer_view"]["questions"]:
+        per_question_counts.setdefault(question["winner"], 0)
+        per_question_counts[question["winner"]] += 1
+
+    assert corrected_counts["multilingual_e5_small"] == per_question_counts["multilingual_e5_small"]
+    assert corrected_counts["multilingual_e5_base"] == per_question_counts["multilingual_e5_base"]
+    assert corrected_payload["client_view"]["overall_winner"] == "multilingual_e5_base"
+
+    rewritten_markdown = source_markdown_path.read_text(encoding="utf-8")
+    assert "#### multilingual_e5_small" in rewritten_markdown
+    assert "- Question wins: 1" in rewritten_markdown
+    assert "#### bge_m3" in rewritten_markdown
+    assert "#### paraphrase_multilingual_mpnet_base_v2" in rewritten_markdown
+    assert "#### multilingual_e5_base" in rewritten_markdown
+    assert "- Question wins: 2" in rewritten_markdown

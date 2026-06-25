@@ -45,6 +45,7 @@ from app.modules.rag_sources.service import create_rag_source, update_rag_source
 from app.modules.real_question_eval.report import write_real_question_eval_artifacts
 from app.modules.real_question_eval.schemas import (
     RealQuestionEvalAggregateModelResult,
+    RealQuestionEvalArtifactPaths,
     RealQuestionEvalConfig,
     RealQuestionEvalModelResult,
     RealQuestionEvalQuestionResult,
@@ -621,6 +622,10 @@ class RealQuestionEvalRunner:
             )
             for candidate in request_payload.candidates
         ]
+        aggregate_results = _recompute_aggregate_question_wins(
+            question_results=question_results,
+            aggregate_results=aggregate_results,
+        )
         return question_results, aggregate_results
 
     def _is_run_successful_without_artifacts(self, result: RealQuestionEvalResult) -> bool:
@@ -791,6 +796,24 @@ def _build_aggregate_result(
         passed_questions=sum(1 for item in model_results if item.passed),
         official_metrics=official_metrics,
     )
+
+
+def _recompute_aggregate_question_wins(
+    *,
+    question_results: list[RealQuestionEvalQuestionResult],
+    aggregate_results: list[RealQuestionEvalAggregateModelResult],
+) -> list[RealQuestionEvalAggregateModelResult]:
+    wins_by_model = {aggregate_result.model_code: 0 for aggregate_result in aggregate_results}
+    for question_result in question_results:
+        if question_result.winner_model_code is None:
+            continue
+        wins_by_model.setdefault(question_result.winner_model_code, 0)
+        wins_by_model[question_result.winner_model_code] += 1
+
+    return [
+        aggregate_result.model_copy(update={"question_wins": wins_by_model.get(aggregate_result.model_code, 0)})
+        for aggregate_result in aggregate_results
+    ]
 
 
 def _extract_official_best_model_code(result_payload: dict[str, object]) -> str | None:
@@ -1015,6 +1038,119 @@ def _build_historical_aggregate_results(payload: dict[str, object]) -> list[Real
     return aggregate_results
 
 
+def _build_result_from_json_payload(payload: dict[str, object]) -> RealQuestionEvalResult:
+    client_view = payload.get("client_view") if isinstance(payload.get("client_view"), dict) else {}
+    developer_view = payload.get("developer_view") if isinstance(payload.get("developer_view"), dict) else {}
+    dataset_payload = (
+        client_view.get("dataset")
+        if isinstance(client_view.get("dataset"), dict)
+        else developer_view.get("dataset")
+        if isinstance(developer_view.get("dataset"), dict)
+        else {}
+    )
+    question_results = _build_historical_question_results(payload)
+    aggregate_results = _recompute_aggregate_question_wins(
+        question_results=question_results,
+        aggregate_results=_build_historical_aggregate_results(payload),
+    )
+    artifact_paths_payload = payload.get("artifact_paths")
+
+    return RealQuestionEvalResult(
+        passed=str(payload.get("status") or "").upper() == "PASS",
+        used_fake_models=bool(payload.get("used_fake_models")),
+        run_type=str(payload.get("run_type") or "") or None,
+        execution_mode=str(payload.get("execution_mode") or "") or None,
+        historical_providers=[
+            str(item)
+            for item in payload.get("historical_providers", developer_view.get("historical_providers", []))
+        ],
+        new_real_providers=[
+            str(item)
+            for item in payload.get("new_real_providers", developer_view.get("new_real_providers", []))
+        ],
+        historical_overall_winner_model_code=(
+            str(client_view.get("historical_overall_winner"))
+            if client_view.get("historical_overall_winner") is not None
+            else None
+        ),
+        any_new_provider_beat_historical_winner=(
+            bool(client_view.get("any_new_provider_beat_historical_winner"))
+            if client_view.get("any_new_provider_beat_historical_winner") is not None
+            else None
+        ),
+        generated_at=str(payload.get("timestamp") or "") or None,
+        run_id=str(payload.get("run_id") or "") or None,
+        dataset_id=str(dataset_payload.get("id") or ""),
+        dataset_name=str(dataset_payload.get("name") or ""),
+        compared_models=[
+            str(item)
+            for item in developer_view.get("models_compared", client_view.get("models_compared", []))
+        ],
+        question_results=question_results,
+        aggregate_results=aggregate_results,
+        overall_winner_model_code=(
+            str(client_view.get("overall_winner"))
+            if client_view.get("overall_winner") is not None
+            else None
+        ),
+        official_best_config=(
+            dict(developer_view["selected_config"])
+            if isinstance(developer_view.get("selected_config"), dict)
+            else None
+        ),
+        activated=bool(client_view.get("activated")),
+        runtime_verified=bool(client_view.get("runtime_verified")),
+        activated_config=(
+            dict(developer_view["activated_config"])
+            if isinstance(developer_view.get("activated_config"), dict)
+            else None
+        ),
+        runtime_retrieval=(
+            dict(developer_view["runtime_retrieval_verification"])
+            if isinstance(developer_view.get("runtime_retrieval_verification"), dict)
+            else None
+        ),
+        artifact_paths=(
+            RealQuestionEvalArtifactPaths.model_validate(artifact_paths_payload)
+            if isinstance(artifact_paths_payload, dict)
+            else RealQuestionEvalArtifactPaths()
+        ),
+    )
+
+
+def rerender_incremental_real_artifacts_from_existing_json(
+    *,
+    artifact_dir: Path,
+    source_json_path: Path | None = None,
+) -> RealQuestionEvalResult:
+    resolved_source_json_path = source_json_path or (
+        artifact_dir / "latest_incremental_new_providers" / "real_question_eval_result.json"
+    )
+    payload = json.loads(resolved_source_json_path.read_text(encoding="utf-8"))
+    if str(payload.get("run_type") or "") != "incremental_real":
+        raise ValueError("Incremental artifact re-render expects an incremental_real payload")
+
+    result = _build_result_from_json_payload(payload)
+    if result.run_id is None:
+        raise ValueError("Incremental artifact re-render requires a persisted run_id")
+
+    artifact_paths = write_real_question_eval_artifacts(
+        artifact_dir=artifact_dir,
+        result=result,
+    )
+    result.artifact_paths = artifact_paths
+    result.markdown_report_path = artifact_paths.latest_markdown_report
+    result.json_result_path = artifact_paths.latest_json_result
+    result.passed = (
+        result.passed
+        and result.markdown_report_path is not None
+        and Path(result.markdown_report_path).exists()
+        and result.json_result_path is not None
+        and Path(result.json_result_path).exists()
+    )
+    return result
+
+
 def _build_config_evaluation_from_aggregate_result(
     aggregate_result: RealQuestionEvalAggregateModelResult,
     *,
@@ -1168,6 +1304,10 @@ def run_incremental_real_question_eval(
         historical_question_results=historical_question_results,
         new_question_results=new_provider_result.question_results,
         official_best_model_code=selection_result.best_model_code,
+    )
+    combined_aggregate_results = _recompute_aggregate_question_wins(
+        question_results=combined_question_results,
+        aggregate_results=combined_aggregate_results,
     )
     any_new_provider_beat_historical_winner = (
         selection_result.best_model_code in new_provider_codes

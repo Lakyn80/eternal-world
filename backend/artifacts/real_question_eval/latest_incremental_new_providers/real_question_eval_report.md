@@ -24,10 +24,10 @@
 - Any new provider beat historical bge_m3: `true`
 
 ## Artifact Files
-- Latest Markdown: `/app/artifacts/real_question_eval/latest_incremental_new_providers/real_question_eval_report.md`
-- Latest JSON: `/app/artifacts/real_question_eval/latest_incremental_new_providers/real_question_eval_result.json`
-- Archived Markdown: `/app/artifacts/real_question_eval/runs/20260625_181027Z_incremental_new_providers/real_question_eval_report.md`
-- Archived JSON: `/app/artifacts/real_question_eval/runs/20260625_181027Z_incremental_new_providers/real_question_eval_result.json`
+- Latest Markdown: `artifacts\real_question_eval\latest_incremental_new_providers\real_question_eval_report.md`
+- Latest JSON: `artifacts\real_question_eval\latest_incremental_new_providers\real_question_eval_result.json`
+- Archived Markdown: `artifacts\real_question_eval\runs\20260625_181027Z_incremental_new_providers\real_question_eval_report.md`
+- Archived JSON: `artifacts\real_question_eval\runs\20260625_181027Z_incremental_new_providers\real_question_eval_result.json`
 
 ## Client Question Breakdown
 ### Question 1 - question-sunflower-house
@@ -313,7 +313,7 @@ Expected distractors:
 
 #### multilingual_e5_small
 - Collection: `eternal_world_rag_chunks__multilingual_e5_small__real_question_eval`
-- Question wins: 2
+- Question wins: 1
 - Passed questions: 2
 - Average evidence coverage: 0.8333
 - Average first relevant rank: 1.0
@@ -324,7 +324,7 @@ Expected distractors:
 
 #### bge_m3
 - Collection: `eternal_world_rag_chunks__bge_m3__real_question_eval`
-- Question wins: 1
+- Question wins: 0
 - Passed questions: 3
 - Average evidence coverage: 1.0
 - Average first relevant rank: 1.0
@@ -346,7 +346,7 @@ Expected distractors:
 
 #### multilingual_e5_base
 - Collection: `eternal_world_rag_chunks__multilingual_e5_base__real_question_eval`
-- Question wins: 3
+- Question wins: 2
 - Passed questions: 3
 - Average evidence coverage: 1.0
 - Average first relevant rank: 1.0
