@@ -184,6 +184,7 @@ def build_real_question_eval_json_payload(result: RealQuestionEvalResult) -> dic
         "task": TASK_NAME,
         "run_id": result.run_id,
         "run_type": result.run_type,
+        "execution_mode": result.execution_mode,
         "timestamp": result.generated_at,
         "used_fake_models": result.used_fake_models,
         "status": "PASS" if result.passed else "FAIL",
@@ -369,6 +370,10 @@ def _resolve_run_type(*, result: RealQuestionEvalResult) -> str:
     return "fake" if result.used_fake_models else "real"
 
 
+def _resolve_execution_mode(*, result: RealQuestionEvalResult) -> str:
+    return "fake_eval" if result.used_fake_models else "real_eval"
+
+
 def build_real_question_eval_artifact_paths(*, artifact_dir: Path, run_id: str) -> RealQuestionEvalArtifactPaths:
     raise NotImplementedError("Use build_real_question_eval_artifact_paths_for_result")
 
@@ -393,6 +398,7 @@ def build_real_question_eval_artifact_paths_for_result(
 def write_real_question_eval_artifacts(*, artifact_dir: Path, result: RealQuestionEvalResult) -> RealQuestionEvalArtifactPaths:
     run_id = result.run_id or build_real_question_eval_run_id(generated_at=result.generated_at)
     result.run_type = _resolve_run_type(result=result)
+    result.execution_mode = _resolve_execution_mode(result=result)
     artifact_paths = build_real_question_eval_artifact_paths_for_result(
         artifact_dir=artifact_dir,
         run_id=run_id,

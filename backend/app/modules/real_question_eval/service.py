@@ -58,6 +58,14 @@ REAL_QUESTION_EVAL_MODELS = (DEFAULT_EMBEDDING_MODEL_CODE, "bge_m3")
 REAL_QUESTION_EVAL_TOP_K = 2
 
 
+def _resolve_eval_run_type(*, use_real_local_models: bool) -> str:
+    return "real" if use_real_local_models else "fake"
+
+
+def _resolve_eval_execution_mode(*, use_real_local_models: bool) -> str:
+    return "real_eval" if use_real_local_models else "fake_eval"
+
+
 def _build_fixture_paragraph(anchor_sentence: str, *, label: str) -> str:
     filler_sentences = [
         (
@@ -315,7 +323,10 @@ class RealQuestionEvalRunner:
                 result = RealQuestionEvalResult(
                     passed=False,
                     used_fake_models=not self.config.use_real_local_models,
-                    run_type="fake" if not self.config.use_real_local_models else "real",
+                    run_type=_resolve_eval_run_type(use_real_local_models=self.config.use_real_local_models),
+                    execution_mode=_resolve_eval_execution_mode(
+                        use_real_local_models=self.config.use_real_local_models
+                    ),
                     generated_at=str((process_result.get("result_payload") or {}).get("completed_at") or datetime.now(timezone.utc).isoformat()),
                     profile_id=profile.id,
                     source_id=source.id,
@@ -351,7 +362,8 @@ class RealQuestionEvalRunner:
             return RealQuestionEvalResult(
                 passed=False,
                 used_fake_models=not self.config.use_real_local_models,
-                run_type="fake" if not self.config.use_real_local_models else "real",
+                run_type=_resolve_eval_run_type(use_real_local_models=self.config.use_real_local_models),
+                execution_mode=_resolve_eval_execution_mode(use_real_local_models=self.config.use_real_local_models),
                 error=f"{exc.__class__.__name__}: {exc}",
             )
 

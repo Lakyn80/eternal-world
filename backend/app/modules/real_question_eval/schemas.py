@@ -86,6 +86,7 @@ class RealQuestionEvalResult(BaseModel):
     passed: bool
     used_fake_models: bool
     run_type: str | None = None
+    execution_mode: str | None = None
     generated_at: str | None = None
     run_id: str | None = None
     profile_id: int | None = None

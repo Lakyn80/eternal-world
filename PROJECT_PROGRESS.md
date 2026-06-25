@@ -2403,6 +2403,50 @@ Artifact export follow-up verification:
   - full Docker pytest matrix
   - real-local model evaluation
 
+## Úkol 33 Runtime Guardrails for Evaluation vs Production Retrieval
+
+Changed area:
+
+- backend-only guardrails for `real_question_eval` execution mode separation and artifact safety
+
+What was added:
+
+- explicit evaluation execution-mode persistence in `real_question_eval` JSON artifacts:
+  - `fake_eval`
+  - `real_eval`
+- manual-only real-local evaluation guard in `backend/scripts/run_real_question_eval.py`
+  - real-local eval now requires both:
+    - CLI flag `--use-real-local-models`
+    - env var `REAL_QUESTION_EVAL_USE_REAL_LOCAL_MODELS=1`
+  - if only one signal is present, the script fails fast with a clear error
+  - if neither signal is present, the script defaults to fake-safe mode
+- fake/report validation remains isolated from preserved real artifacts:
+  - fake runs write only to `latest_fake/` and `runs/<run_id>_fake/`
+  - fake runs do not overwrite `latest_real/`
+- production retrieval remains separated from evaluation flow:
+  - this task adds runtime guardrails to the evaluation path only
+  - no production chat or retrieval behavior was modified to execute evaluation
+- focused test coverage now verifies:
+  - default mode resolves to `execution_mode=fake_eval`
+  - persisted JSON contains `execution_mode`
+  - client and developer views remain present
+  - artifact paths remain separated
+  - real-local mode requires both manual signals
+  - CLI-only and env-only real-local requests fail fast
+
+Verification commands and results:
+
+- `python -m pytest tests/test_real_question_eval.py -q` -> `9 passed`
+- `docker compose exec backend python scripts/run_real_question_eval.py` -> `REAL QUESTION EVAL RESULT: PASS`
+  - `execution_mode: fake_eval`
+  - `used_fake_models: true`
+  - `overall_winner: bge_m3`
+  - `latest_markdown_report: /app/artifacts/real_question_eval/latest_fake/real_question_eval_report.md`
+  - `latest_json_result: /app/artifacts/real_question_eval/latest_fake/real_question_eval_result.json`
+  - `archived_markdown_report: /app/artifacts/real_question_eval/runs/20260625_135748Z_fake/real_question_eval_report.md`
+  - `archived_json_result: /app/artifacts/real_question_eval/runs/20260625_135748Z_fake/real_question_eval_result.json`
+  - preserved `latest_real/` was not targeted by the fake-safe run
+
 ## 39. Commit Tracking
 
 Current `git log --oneline` history:

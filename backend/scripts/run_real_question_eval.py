@@ -15,6 +15,10 @@ from app.modules.real_question_eval import (
 )
 
 
+FAKE_EVAL_EXECUTION_MODE = "fake_eval"
+REAL_EVAL_EXECUTION_MODE = "real_eval"
+
+
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Run the real question-based embedding evaluation flow.")
     parser.add_argument("--email", default=REAL_QUESTION_EVAL_EMAIL)
@@ -28,11 +32,37 @@ def _build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def _is_truthy_env_flag(raw_value: str | None) -> bool:
+    return (raw_value or "").strip().lower() in {"1", "true", "yes", "on"}
+
+
+def resolve_real_question_eval_execution_mode(
+    *,
+    cli_use_real_local_models: bool,
+    env_use_real_local_models: str | None,
+) -> tuple[str, bool]:
+    env_enabled = _is_truthy_env_flag(env_use_real_local_models)
+    if cli_use_real_local_models and not env_enabled:
+        raise ValueError(
+            "Real-local evaluation is manual-only and requires BOTH --use-real-local-models "
+            "and REAL_QUESTION_EVAL_USE_REAL_LOCAL_MODELS=1."
+        )
+    if env_enabled and not cli_use_real_local_models:
+        raise ValueError(
+            "REAL_QUESTION_EVAL_USE_REAL_LOCAL_MODELS=1 was set without --use-real-local-models. "
+            "Real-local evaluation is manual-only and requires BOTH signals."
+        )
+    if cli_use_real_local_models and env_enabled:
+        return REAL_EVAL_EXECUTION_MODE, True
+    return FAKE_EVAL_EXECUTION_MODE, False
+
+
 def _print_text_result(result) -> None:
     print(f"REAL QUESTION EVAL RESULT: {'PASS' if result.passed else 'FAIL'}")
     print()
     print(f"dataset: {result.dataset_name} ({result.dataset_id})")
     print(f"overall_winner: {result.overall_winner_model_code}")
+    print(f"execution_mode: {result.execution_mode}")
     print(f"used_fake_models: {str(result.used_fake_models).lower()}")
     print(f"activated: {str(result.activated).lower()}")
     print(f"runtime_verified: {str(result.runtime_verified).lower()}")
@@ -63,8 +93,15 @@ def _print_text_result(result) -> None:
 
 def main() -> int:
     args = _build_parser().parse_args()
-    env_flag = os.getenv("REAL_QUESTION_EVAL_USE_REAL_LOCAL_MODELS", "").strip().lower()
-    use_real_local_models = args.use_real_local_models or env_flag in {"1", "true", "yes", "on"}
+    try:
+        execution_mode, use_real_local_models = resolve_real_question_eval_execution_mode(
+            cli_use_real_local_models=args.use_real_local_models,
+            env_use_real_local_models=os.getenv("REAL_QUESTION_EVAL_USE_REAL_LOCAL_MODELS"),
+        )
+    except ValueError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+
     config = RealQuestionEvalConfig(
         email=args.email,
         profile_name=args.profile_name,
@@ -77,6 +114,8 @@ def main() -> int:
         result = run_real_question_eval(db, config)
     finally:
         db.close()
+
+    result.execution_mode = execution_mode
 
     if args.json_output:
         print(json.dumps(result.model_dump(mode="json"), indent=2, sort_keys=True))

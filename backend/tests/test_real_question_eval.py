@@ -7,7 +7,10 @@ from app.db.models import ActiveRetrievalConfig
 from app.db.session import get_db
 from app.main import app
 from app.modules.real_question_eval import RealQuestionEvalConfig, RealQuestionEvalRunner
-from scripts.run_real_question_eval import _print_text_result
+from scripts.run_real_question_eval import (
+    _print_text_result,
+    resolve_real_question_eval_execution_mode,
+)
 
 
 class FakeQdrantRetrievalClient:
@@ -169,6 +172,7 @@ def test_real_question_eval_compares_both_candidates_writes_report_and_verifies_
     assert result.passed is True
     assert result.used_fake_models is True
     assert result.run_type == "fake"
+    assert result.execution_mode == "fake_eval"
     assert result.dataset_id == "real-question-eval-dataset"
     assert len(result.question_results) == 3
     assert result.overall_winner_model_code == "bge_m3"
@@ -208,6 +212,7 @@ def test_real_question_eval_compares_both_candidates_writes_report_and_verifies_
     latest_json_payload = json.loads(Path(result.artifact_paths.latest_json_result).read_text(encoding="utf-8"))
     assert latest_json_payload["run_id"] == result.run_id
     assert latest_json_payload["run_type"] == "fake"
+    assert latest_json_payload["execution_mode"] == "fake_eval"
     assert latest_json_payload["timestamp"] == result.generated_at
     assert latest_json_payload["status"] == "PASS"
     assert latest_json_payload["used_fake_models"] is True
@@ -274,6 +279,8 @@ def test_fake_run_does_not_overwrite_existing_latest_real_and_can_backfill_it_fr
         json.dumps(
             {
                 "run_id": "20260625_122732Z",
+                "run_type": "real",
+                "execution_mode": "real_eval",
                 "used_fake_models": False,
                 "status": "PASS",
             },
@@ -353,6 +360,7 @@ def test_real_question_eval_script_output_prints_latest_and_archived_artifact_pa
     assert "latest_json_result:" in captured.out
     assert "archived_markdown_report:" in captured.out
     assert "archived_json_result:" in captured.out
+    assert "execution_mode: fake_eval" in captured.out
     assert "latest_fake" in captured.out
 
 
@@ -381,3 +389,48 @@ def test_real_question_eval_defaults_to_fake_models_and_avoids_real_network_call
 
     assert result.passed is True
     assert result.used_fake_models is True
+    assert result.execution_mode == "fake_eval"
+
+
+def test_real_question_eval_execution_mode_defaults_to_fake_eval_when_no_manual_real_signals_are_present():
+    execution_mode, use_real_local_models = resolve_real_question_eval_execution_mode(
+        cli_use_real_local_models=False,
+        env_use_real_local_models=None,
+    )
+
+    assert execution_mode == "fake_eval"
+    assert use_real_local_models is False
+
+
+def test_real_question_eval_execution_mode_requires_both_cli_flag_and_env_var_for_real_eval():
+    execution_mode, use_real_local_models = resolve_real_question_eval_execution_mode(
+        cli_use_real_local_models=True,
+        env_use_real_local_models="1",
+    )
+
+    assert execution_mode == "real_eval"
+    assert use_real_local_models is True
+
+
+def test_real_question_eval_execution_mode_fails_fast_when_only_cli_flag_is_present():
+    try:
+        resolve_real_question_eval_execution_mode(
+            cli_use_real_local_models=True,
+            env_use_real_local_models=None,
+        )
+    except ValueError as exc:
+        assert "requires BOTH --use-real-local-models and REAL_QUESTION_EVAL_USE_REAL_LOCAL_MODELS=1" in str(exc)
+    else:
+        raise AssertionError("Expected ValueError when only CLI flag is present")
+
+
+def test_real_question_eval_execution_mode_fails_fast_when_only_env_var_is_present():
+    try:
+        resolve_real_question_eval_execution_mode(
+            cli_use_real_local_models=False,
+            env_use_real_local_models="1",
+        )
+    except ValueError as exc:
+        assert "requires BOTH signals" in str(exc)
+    else:
+        raise AssertionError("Expected ValueError when only env var is present")
