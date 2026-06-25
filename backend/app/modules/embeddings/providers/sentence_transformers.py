@@ -11,6 +11,7 @@ from app.modules.embeddings.providers.base import BaseEmbeddingProvider, Embeddi
 
 SENTENCE_TRANSFORMERS_PROVIDER_NAME = "sentence_transformers"
 E5_SMALL_MODEL_NAME = "intfloat/multilingual-e5-small"
+BGE_M3_MODEL_NAME = "BAAI/bge-m3"
 QUERY_PREFIX = "query: "
 PASSAGE_PREFIX = "passage: "
 SAFE_PROVIDER_FAILURE_MESSAGE = "SentenceTransformers embedding generation failed"
@@ -36,30 +37,49 @@ class SentenceTransformersEmbeddingProvider(BaseEmbeddingProvider):
         return self.embed_passage(text, model_code)
 
     def embed_batch(self, texts: list[str], model_code: str) -> list[EmbeddingVector]:
-        prepared_texts = [self._prepare_passage_text(text) for text in texts]
-        return self._encode(prepared_texts, model_code=model_code, input_type="passage")
+        prepared_texts = [
+            self._prepare_text(text, model_code=model_code, input_type="passage")
+            for text in texts
+        ]
+        return self._encode(
+            prepared_texts,
+            model_code=model_code,
+            input_type="passage",
+        )
 
     def embed_query(self, text: str, model_code: str) -> EmbeddingVector:
         return self._encode(
-            [self._prepare_query_text(text)],
+            [self._prepare_text(text, model_code=model_code, input_type="query")],
             model_code=model_code,
             input_type="query",
         )[0]
 
     def embed_passage(self, text: str, model_code: str) -> EmbeddingVector:
         return self._encode(
-            [self._prepare_passage_text(text)],
+            [self._prepare_text(text, model_code=model_code, input_type="passage")],
             model_code=model_code,
             input_type="passage",
         )[0]
 
-    def _prepare_query_text(self, text: str) -> str:
+    def _prepare_text(
+        self,
+        text: str,
+        *,
+        model_code: str,
+        input_type: str,
+    ) -> str:
         normalized_text = self._normalize_text(text)
-        return f"{QUERY_PREFIX}{normalized_text}"
+        normalized_model_code = model_code.strip().lower()
+        if normalized_model_code == "multilingual_e5_small":
+            if input_type == "query":
+                return f"{QUERY_PREFIX}{normalized_text}"
+            return f"{PASSAGE_PREFIX}{normalized_text}"
+        if normalized_model_code == "bge_m3":
+            return normalized_text
 
-    def _prepare_passage_text(self, text: str) -> str:
-        normalized_text = self._normalize_text(text)
-        return f"{PASSAGE_PREFIX}{normalized_text}"
+        raise SentenceTransformersProviderError(
+            "SentenceTransformers model input format is not configured"
+        )
 
     def _normalize_text(self, text: str) -> str:
         normalized_text = " ".join(text.split())
@@ -103,6 +123,8 @@ class SentenceTransformersEmbeddingProvider(BaseEmbeddingProvider):
     def _resolve_model_name(self, model_code: str) -> str:
         if model_code == "multilingual_e5_small":
             return E5_SMALL_MODEL_NAME
+        if model_code == "bge_m3":
+            return BGE_M3_MODEL_NAME
 
         raise SentenceTransformersProviderError("SentenceTransformers model is not configured")
 
@@ -135,6 +157,10 @@ class SentenceTransformersEmbeddingProvider(BaseEmbeddingProvider):
                 raise SentenceTransformersProviderError(
                     "SentenceTransformers embedding dimension is invalid"
                 )
+            input_prefix = self._resolve_input_prefix(
+                model_code=model_definition.code,
+                input_type=input_type,
+            )
 
             embedding_vectors.append(
                 EmbeddingVector(
@@ -144,9 +170,7 @@ class SentenceTransformersEmbeddingProvider(BaseEmbeddingProvider):
                         "provider_name": SENTENCE_TRANSFORMERS_PROVIDER_NAME,
                         "provider_model_name": self._resolve_model_name(model_definition.code),
                         "input_type": input_type,
-                        "input_prefix": QUERY_PREFIX.strip()
-                        if input_type == "query"
-                        else PASSAGE_PREFIX.strip(),
+                        "input_prefix": input_prefix,
                         "prepared_text_char_count": len(prepared_text),
                         "normalized_vectors": model_definition.normalized_vectors,
                         "supports_batching": model_definition.supports_batching,
@@ -172,4 +196,20 @@ class SentenceTransformersEmbeddingProvider(BaseEmbeddingProvider):
 
         raise SentenceTransformersProviderError(
             "SentenceTransformers embedding output is invalid"
+        )
+
+    def _resolve_input_prefix(
+        self,
+        *,
+        model_code: str,
+        input_type: str,
+    ) -> str | None:
+        normalized_model_code = model_code.strip().lower()
+        if normalized_model_code == "multilingual_e5_small":
+            return QUERY_PREFIX.strip() if input_type == "query" else PASSAGE_PREFIX.strip()
+        if normalized_model_code == "bge_m3":
+            return None
+
+        raise SentenceTransformersProviderError(
+            "SentenceTransformers model input format is not configured"
         )

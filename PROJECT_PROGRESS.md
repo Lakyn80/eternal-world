@@ -1982,7 +1982,95 @@ Verification commands and results:
   - `Invoke-RestMethod http://localhost:8033/health/runtime` -> `{"status":"ok","database":"ok","redis":"ok"}`
   - `docker compose exec backend python scripts/run_e2e_demo_smoke.py` -> `E2E DEMO SMOKE RESULT: PASS`
 
-## 36. Commit Tracking
+## 36. Task 30 BGE-M3 Embedding Provider
+
+Changed area:
+
+- backend-only extension of the existing local `SentenceTransformers` embedding path so `model_code=bge_m3` can execute against `BAAI/bge-m3` without changing default mock behavior
+
+What was added:
+
+- `SentenceTransformersEmbeddingProvider` now supports both:
+  - `multilingual_e5_small` -> `intfloat/multilingual-e5-small`
+  - `bge_m3` -> `BAAI/bge-m3`
+- existing provider resolution now allows `bge_m3` to use the real local provider only when `EMBEDDING_PROVIDER=sentence_transformers`
+- BGE-M3 query embedding support through the current retrieval path
+- BGE-M3 passage/chunk embedding support through the current chunk/source embedding path
+- model-specific input preparation:
+  - E5 keeps `query:` / `passage:` prefixes
+  - BGE-M3 uses normalized raw text without those prefixes
+- fake-model test coverage for:
+  - BGE provider resolution
+  - BGE lazy loading
+  - BGE query/passage formatting
+  - BGE vector dimension validation
+  - chunk embedding with `bge_m3`
+  - query embedding with `bge_m3` without persisted query embeddings
+  - Qdrant indexing compatibility for `bge_m3`
+  - `multi_embedding_eval` support for a `bge_m3` candidate
+
+Why BGE-M3 was added as a separate slice after `multilingual_e5_small`:
+
+- Task 29 established the reusable local `SentenceTransformers` execution path with the narrower `multilingual_e5_small` model first
+- this slice extends that already-proven path to a second production-relevant local model without widening the architecture to new provider families
+- shipping BGE-M3 separately keeps the change surface constrained while validating that the current embedding, indexing, retrieval, and evaluation pipeline can support multiple real local dense models behind the same provider gate
+
+How mock remains default for tests/dev:
+
+- `EMBEDDING_PROVIDER` still defaults to `mock`
+- `mock_embedding` still always resolves to `MockEmbeddingProvider`
+- real local `SentenceTransformers` execution is only used when explicitly enabled
+- tests use fake loader/inference stubs and do not download real models
+
+How to configure and use `bge_m3`:
+
+- set `EMBEDDING_PROVIDER=sentence_transformers`
+- optionally set `SENTENCE_TRANSFORMERS_DEVICE`
+- optionally set `SENTENCE_TRANSFORMERS_CACHE_DIR`
+- use existing embedding/retrieval flows with `model_code=bge_m3`
+- chunk/source embedding persists dense BGE-M3 vectors through the existing `RagEmbedding` path
+- retrieval query embedding uses BGE-M3 at request time and still does not persist query embeddings
+
+How `bge_m3` is executed:
+
+- provider resolution stays inside `backend/app/modules/embeddings/providers/__init__.py`
+- `bge_m3` maps to `BAAI/bge-m3` inside `backend/app/modules/embeddings/providers/sentence_transformers.py`
+- model import and construction are lazy and happen only when the provider is first used
+- loaded model instances are cached per provider instance by normalized model code
+- dense output vectors are validated against the registry dimension `1024`
+- Qdrant indexing keeps one dense-vector collection per model/config and remains non-destructive
+
+Intentionally not implemented:
+
+- no frontend changes
+- no billing, subscription, tariff, or payment changes
+- no Brain Agent behavior changes
+- no production chat behavior changes
+- no active retrieval config behavior changes
+- no `rag_quality` selector/scoring changes
+- no `multi_embedding_eval` orchestration redesign beyond using the existing embedding service with `bge_m3`
+- no Jina provider
+- no OpenAI-compatible embedding provider
+- no sparse retrieval
+- no ColBERT / multi-vector retrieval
+- no pip package extraction
+- no external API calls
+
+Verification commands and results:
+
+- focused verification:
+  - `python -m pytest tests/test_embeddings_sentence_transformers.py tests/test_embeddings.py tests/test_rag_retrieval.py tests/test_qdrant_indexing.py tests/test_multi_embedding_eval.py` -> `77 passed`
+  - `python -m pytest tests/test_embedding_models.py tests/test_active_retrieval_config.py tests/test_rag_quality.py` -> `36 passed`
+- required full verification:
+  - `python -m pytest` -> `326 passed`
+  - `docker compose up -d --build` -> success
+  - `docker compose exec backend alembic upgrade head` -> success
+  - `docker compose exec backend alembic current` -> `20260624_0013 (head)`
+  - `docker compose exec backend python -m pytest` -> `324 passed, 2 skipped`
+  - `Invoke-RestMethod http://localhost:8033/health/runtime` -> `{"status":"ok","database":"ok","redis":"ok"}`
+  - `docker compose exec backend python scripts/run_e2e_demo_smoke.py` -> `E2E DEMO SMOKE RESULT: PASS`
+
+## 37. Commit Tracking
 
 Current `git log --oneline` history:
 
@@ -2036,7 +2124,7 @@ Future commit entry format:
 - Docker verified:
 ```
 
-## 37. Mandatory Future Rule
+## 38. Mandatory Future Rule
 
 This file is mandatory project tracking documentation and must be maintained continuously.
 

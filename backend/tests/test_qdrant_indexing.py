@@ -139,8 +139,9 @@ def _install_fake_sentence_transformers(monkeypatch):
 
         def encode(self, texts, **kwargs):
             materialized_texts = list(texts)
+            dimension = 384 if self.model_name == "intfloat/multilingual-e5-small" else 1024
             return [
-                [round((index + 1) / 1000, 6) for index in range(384)]
+                [round((index + 1) / 1000, 6) for index in range(dimension)]
                 for _ in materialized_texts
             ]
 
@@ -468,6 +469,31 @@ def test_qdrant_indexing_accepts_sentence_transformers_multilingual_e5_small_emb
 
     assert response.status_code == 200
     assert fake_qdrant_client.collections["eternal_world_rag_chunks__multilingual_e5_small"] == 384
+
+
+def test_qdrant_indexing_accepts_sentence_transformers_bge_m3_embeddings(client, monkeypatch):
+    fake_qdrant_client = _install_fake_qdrant_client(monkeypatch)
+    _install_fake_sentence_transformers(monkeypatch)
+    token = _register_and_login(client, "qdrant-bge-real-local@example.com")
+    profile_id = _create_profile(client, token, "Qdrant BGE Profile")
+    source_id = _create_rag_source(client, token, profile_id).json()["id"]
+    assert _chunk_source(client, token, source_id).status_code == 200
+    chunk_id = _list_chunks(client, token, source_id).json()[0]["id"]
+    embed_response = client.post(
+        f"/api/rag-chunks/{chunk_id}/embed",
+        headers=_auth_headers(token),
+        json={"model_code": "bge_m3"},
+    )
+    assert embed_response.status_code == 200
+    embedding_id = embed_response.json()["id"]
+
+    response = client.post(
+        f"/api/rag-embeddings/{embedding_id}/index",
+        headers=_auth_headers(token),
+    )
+
+    assert response.status_code == 200
+    assert fake_qdrant_client.collections["eternal_world_rag_chunks__bge_m3"] == 1024
 
 
 def test_collection_dimension_mismatch_returns_safe_error(client, monkeypatch):

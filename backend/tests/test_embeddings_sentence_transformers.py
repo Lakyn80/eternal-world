@@ -46,10 +46,12 @@ class FakeSentenceTransformer:
                 "convert_to_numpy": convert_to_numpy,
                 "normalize_embeddings": normalize_embeddings,
                 "show_progress_bar": show_progress_bar,
+                "model_name": self.model_name,
             }
         )
+        dimension = 384 if self.model_name == "intfloat/multilingual-e5-small" else 1024
         return [
-            [round((index + 1) / 1000, 6) for index in range(384)]
+            [round((index + 1) / 1000, 6) for index in range(dimension)]
             for _ in materialized_texts
         ]
 
@@ -75,6 +77,14 @@ def test_multilingual_e5_small_provider_can_be_resolved_when_enabled(monkeypatch
     monkeypatch.setattr(settings, "embedding_provider", SENTENCE_TRANSFORMERS_PROVIDER_NAME)
 
     provider = build_embedding_provider(model_code="multilingual_e5_small")
+
+    assert isinstance(provider, SentenceTransformersEmbeddingProvider)
+
+
+def test_bge_m3_provider_can_be_resolved_when_enabled(monkeypatch):
+    monkeypatch.setattr(settings, "embedding_provider", SENTENCE_TRANSFORMERS_PROVIDER_NAME)
+
+    provider = build_embedding_provider(model_code="bge_m3")
 
     assert isinstance(provider, SentenceTransformersEmbeddingProvider)
 
@@ -105,6 +115,33 @@ def test_sentence_transformers_provider_lazy_loads_model_only_when_used(monkeypa
     assert len(FakeSentenceTransformer.init_calls) == 1
 
 
+def test_bge_m3_provider_lazy_loads_model_only_when_used(monkeypatch):
+    monkeypatch.setattr(settings, "embedding_provider", SENTENCE_TRANSFORMERS_PROVIDER_NAME)
+    import_calls: list[str] = []
+
+    def fake_import_module(module_name: str):
+        import_calls.append(module_name)
+        return SimpleNamespace(SentenceTransformer=FakeSentenceTransformer)
+
+    FakeSentenceTransformer.init_calls = []
+    FakeSentenceTransformer.encode_calls = []
+    monkeypatch.setattr(
+        "app.modules.embeddings.providers.sentence_transformers.import_module",
+        fake_import_module,
+    )
+    provider = SentenceTransformersEmbeddingProvider()
+
+    assert import_calls == []
+    assert FakeSentenceTransformer.init_calls == []
+
+    result = provider.embed_query("Where is Brno?", "bge_m3")
+
+    assert result.dimension == 1024
+    assert import_calls == ["sentence_transformers"]
+    assert len(FakeSentenceTransformer.init_calls) == 1
+    assert FakeSentenceTransformer.init_calls[0]["model_name"] == "BAAI/bge-m3"
+
+
 def test_provider_formats_query_and_passage_text_with_e5_prefixes(monkeypatch):
     monkeypatch.setattr(settings, "embedding_provider", SENTENCE_TRANSFORMERS_PROVIDER_NAME)
     _install_fake_sentence_transformers(monkeypatch)
@@ -117,6 +154,18 @@ def test_provider_formats_query_and_passage_text_with_e5_prefixes(monkeypatch):
     assert FakeSentenceTransformer.encode_calls[1]["texts"] == ["passage: Brno station archive note."]
 
 
+def test_provider_formats_bge_m3_query_and_passage_text_without_prefixes(monkeypatch):
+    monkeypatch.setattr(settings, "embedding_provider", SENTENCE_TRANSFORMERS_PROVIDER_NAME)
+    _install_fake_sentence_transformers(monkeypatch)
+    provider = SentenceTransformersEmbeddingProvider()
+
+    provider.embed_query("What happened in Brno?", "bge_m3")
+    provider.embed_passage("Brno station archive note.", "bge_m3")
+
+    assert FakeSentenceTransformer.encode_calls[0]["texts"] == ["What happened in Brno?"]
+    assert FakeSentenceTransformer.encode_calls[1]["texts"] == ["Brno station archive note."]
+
+
 def test_provider_returns_vector_list_with_registry_dimension(monkeypatch):
     monkeypatch.setattr(settings, "embedding_provider", SENTENCE_TRANSFORMERS_PROVIDER_NAME)
     _install_fake_sentence_transformers(monkeypatch)
@@ -127,6 +176,19 @@ def test_provider_returns_vector_list_with_registry_dimension(monkeypatch):
     assert result.dimension == 384
     assert len(result.values) == 384
     assert result.metadata["provider_name"] == "sentence_transformers"
+
+
+def test_bge_m3_provider_returns_vector_list_with_registry_dimension(monkeypatch):
+    monkeypatch.setattr(settings, "embedding_provider", SENTENCE_TRANSFORMERS_PROVIDER_NAME)
+    _install_fake_sentence_transformers(monkeypatch)
+    provider = SentenceTransformersEmbeddingProvider()
+
+    result = provider.embed_passage("Deterministic archive sentence.", "bge_m3")
+
+    assert result.dimension == 1024
+    assert len(result.values) == 1024
+    assert result.metadata["provider_name"] == "sentence_transformers"
+    assert result.metadata["input_prefix"] is None
 
 
 def test_provider_rejects_empty_input_text(monkeypatch):

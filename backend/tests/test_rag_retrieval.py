@@ -235,8 +235,9 @@ def _install_fake_sentence_transformers(monkeypatch):
 
         def encode(self, texts, **kwargs):
             materialized_texts = list(texts)
+            dimension = 384 if self.model_name == "intfloat/multilingual-e5-small" else 1024
             return [
-                [round((index + 1) / 1000, 6) for index in range(384)]
+                [round((index + 1) / 1000, 6) for index in range(dimension)]
                 for _ in materialized_texts
             ]
 
@@ -430,6 +431,61 @@ def test_query_embedding_can_use_sentence_transformers_without_persisting_query_
 
     assert response.status_code == 200
     assert response.json()["model_code"] == "multilingual_e5_small"
+    assert before_count == after_count
+
+
+def test_bge_m3_query_embedding_can_use_sentence_transformers_without_persisting_query_embeddings(client, monkeypatch):
+    _install_fake_qdrant_client(monkeypatch)
+    _install_fake_sentence_transformers(monkeypatch)
+    token = _register_and_login(client, "retrieval-bge-query@example.com")
+    profile_id = _create_profile(client, token, "Retrieval BGE Query Profile")
+    source_id = _create_rag_source(
+        client,
+        token,
+        profile_id,
+        raw_text="brno retrieval query for bge model path. " * 18,
+    ).json()["id"]
+    assert _chunk_source(client, token, source_id).status_code == 200
+    chunk_id = _list_chunks(client, token, source_id).json()[0]["id"]
+    embed_response = client.post(
+        f"/api/rag-chunks/{chunk_id}/embed",
+        headers=_auth_headers(token),
+        json={"model_code": "bge_m3"},
+    )
+    assert embed_response.status_code == 200
+    embedding_id = embed_response.json()["id"]
+    index_response = client.post(
+        f"/api/rag-embeddings/{embedding_id}/index",
+        headers=_auth_headers(token),
+    )
+    assert index_response.status_code == 200
+
+    db, session_generator = _get_test_db_session()
+    try:
+        before_count = db.query(RagEmbedding).count()
+    finally:
+        try:
+            next(session_generator)
+        except StopIteration:
+            pass
+
+    response = client.post(
+        f"/api/memory-profiles/{profile_id}/rag/retrieve",
+        headers=_auth_headers(token),
+        json={"query": "brno retrieval query", "model_code": "bge_m3"},
+    )
+
+    db, session_generator = _get_test_db_session()
+    try:
+        after_count = db.query(RagEmbedding).count()
+    finally:
+        try:
+            next(session_generator)
+        except StopIteration:
+            pass
+
+    assert response.status_code == 200
+    assert response.json()["model_code"] == "bge_m3"
     assert before_count == after_count
 
 

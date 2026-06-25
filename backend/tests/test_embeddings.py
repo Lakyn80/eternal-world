@@ -92,8 +92,9 @@ def _install_fake_sentence_transformers(monkeypatch):
 
         def encode(self, texts, **kwargs):
             materialized_texts = list(texts)
+            dimension = 384 if self.model_name == "intfloat/multilingual-e5-small" else 1024
             return [
-                [round((index + 1) / 1000, 6) for index in range(384)]
+                [round((index + 1) / 1000, 6) for index in range(dimension)]
                 for _ in materialized_texts
             ]
 
@@ -146,6 +147,32 @@ def test_chunk_embedding_can_use_sentence_transformers_multilingual_e5_small_wit
     assert response.status_code == 200
     assert metadata_response.status_code == 200
     assert metadata_response.json()["vector_dimension"] == 384
+    assert metadata_response.json()["embedding_metadata"]["provider_name"] == "sentence_transformers"
+
+
+def test_chunk_embedding_can_use_sentence_transformers_bge_m3_without_downloads(client, monkeypatch):
+    _install_fake_sentence_transformers(monkeypatch)
+    token = _register_and_login(client, "embed-bge-real-local@example.com")
+    profile_id = _create_profile(client, token, "Embedding BGE Real Local Profile")
+    source_id = _create_rag_source(client, token, profile_id).json()["id"]
+    assert _chunk_source(client, token, source_id).status_code == 200
+    chunk_id = _list_chunks(client, token, source_id).json()[0]["id"]
+
+    response = client.post(
+        f"/api/rag-chunks/{chunk_id}/embed",
+        headers=_auth_headers(token),
+        json={"model_code": "bge_m3"},
+    )
+    embedding_id = response.json()["id"]
+    metadata_response = client.get(
+        f"/api/rag-embeddings/{embedding_id}?include_vector=true",
+        headers=_auth_headers(token),
+    )
+
+    assert response.status_code == 200
+    assert metadata_response.status_code == 200
+    assert metadata_response.json()["model_code"] == "bge_m3"
+    assert metadata_response.json()["vector_dimension"] == 1024
     assert metadata_response.json()["embedding_metadata"]["provider_name"] == "sentence_transformers"
 
 
