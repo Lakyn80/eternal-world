@@ -1,0 +1,480 @@
+{
+  "task": "Task 32 Real Local Model Question Evaluation",
+  "run_id": "20260625_122732Z",
+  "run_type": "real",
+  "timestamp": "2026-06-25T12:27:32.747249+00:00",
+  "used_fake_models": false,
+  "status": "PASS",
+  "artifact_paths": {
+    "latest_markdown_report": "/app/artifacts/real_question_eval/latest_real/real_question_eval_report.md",
+    "latest_json_result": "/app/artifacts/real_question_eval/latest_real/real_question_eval_result.json",
+    "archived_markdown_report": "/app/artifacts/real_question_eval/runs/20260625_122732Z_real/real_question_eval_report.md",
+    "archived_json_result": "/app/artifacts/real_question_eval/runs/20260625_122732Z_real/real_question_eval_result.json"
+  },
+  "client_view": {
+    "source_dataset_note": "deterministic fictional eval corpus",
+    "real_client_user_data": "no",
+    "purpose": "retrieval quality testing",
+    "dataset": {
+      "id": "real-question-eval-dataset",
+      "name": "Real Question Evaluation Dataset"
+    },
+    "models_compared": [
+      "multilingual_e5_small",
+      "bge_m3"
+    ],
+    "overall_winner": "bge_m3",
+    "recommended_active_model": "bge_m3",
+    "speed_vs_accuracy_tradeoff": "multilingual_e5_small was faster and won two simple questions by score tie-break, but bge_m3 was more complete and safer.",
+    "production_recommendation": "bge_m3 is safer for evidence-based retrieval because it had full evidence coverage, zero missing markers, and zero distractors.",
+    "activated": true,
+    "runtime_verified": true,
+    "questions": [
+      {
+        "question_id": "question-sunflower-house",
+        "question": "What details show which flower was kept at the old village house and what part of the entrance is mentioned?",
+        "expected_markers": [
+          "sunflower seeds",
+          "blue gate latch"
+        ],
+        "expected_distractors": [
+          "rose market poster"
+        ],
+        "winner": "multilingual_e5_small",
+        "reason": "Tie broken by stronger top retrieval score and overall selector alignment.",
+        "final_evaluated_answer": "The old village house kept sunflower seeds, and the entrance detail was the blue gate latch.",
+        "correctness_verdict": "grounded",
+        "evidence_used": "sunflower seeds; blue gate latch",
+        "model_comparison": "Both models were grounded; multilingual_e5_small won on stronger top retrieval score.",
+        "losing_model_issue": "No evidence gap; it lost only on top retrieval score tie-break.",
+        "distractors_or_false_positives": "none",
+        "model_summaries": [
+          {
+            "model_code": "multilingual_e5_small",
+            "verdict": "grounded",
+            "evidence_coverage": 1.0,
+            "matched_markers": [
+              "blue gate latch",
+              "sunflower seeds"
+            ],
+            "missing_markers": [],
+            "distractors": [],
+            "answer_summary": "Grounded by retrieved evidence for: blue gate latch, sunflower seeds."
+          },
+          {
+            "model_code": "bge_m3",
+            "verdict": "grounded",
+            "evidence_coverage": 1.0,
+            "matched_markers": [
+              "blue gate latch",
+              "sunflower seeds"
+            ],
+            "missing_markers": [],
+            "distractors": [],
+            "answer_summary": "Grounded by retrieved evidence for: blue gate latch, sunflower seeds."
+          }
+        ]
+      },
+      {
+        "question_id": "question-winter-trip",
+        "question": "During the winter trip, what travel item was saved and what container kept everyone warm?",
+        "expected_markers": [
+          "overnight train ticket",
+          "wooden thermos"
+        ],
+        "expected_distractors": [
+          "summer bus timetable"
+        ],
+        "winner": "multilingual_e5_small",
+        "reason": "Tie broken by stronger top retrieval score and overall selector alignment.",
+        "final_evaluated_answer": "The saved travel item was an overnight train ticket, and the container that kept everyone warm was a wooden thermos.",
+        "correctness_verdict": "grounded",
+        "evidence_used": "overnight train ticket; wooden thermos",
+        "model_comparison": "Both models were grounded; multilingual_e5_small won on stronger top retrieval score.",
+        "losing_model_issue": "No evidence gap; it lost only on top retrieval score tie-break.",
+        "distractors_or_false_positives": "none",
+        "model_summaries": [
+          {
+            "model_code": "multilingual_e5_small",
+            "verdict": "grounded",
+            "evidence_coverage": 1.0,
+            "matched_markers": [
+              "overnight train ticket",
+              "wooden thermos"
+            ],
+            "missing_markers": [],
+            "distractors": [],
+            "answer_summary": "Grounded by retrieved evidence for: overnight train ticket, wooden thermos."
+          },
+          {
+            "model_code": "bge_m3",
+            "verdict": "grounded",
+            "evidence_coverage": 1.0,
+            "matched_markers": [
+              "overnight train ticket",
+              "wooden thermos"
+            ],
+            "missing_markers": [],
+            "distractors": [],
+            "answer_summary": "Grounded by retrieved evidence for: overnight train ticket, wooden thermos."
+          }
+        ]
+      },
+      {
+        "question_id": "question-grandmother-soup",
+        "question": "Which ingredients and cooking setup explain why grandmother's soup tasted smoky?",
+        "expected_markers": [
+          "dried mushrooms",
+          "oak stove"
+        ],
+        "expected_distractors": [
+          "vanilla jam"
+        ],
+        "winner": "bge_m3",
+        "reason": "Higher evidence coverage (1.00 vs 0.50).",
+        "final_evaluated_answer": "Grandmother's soup tasted smoky because it used dried mushrooms and was cooked on an oak stove.",
+        "correctness_verdict": "grounded",
+        "evidence_used": "dried mushrooms; oak stove",
+        "model_comparison": "bge_m3 was grounded; multilingual_e5_small was partial.",
+        "losing_model_issue": "multilingual_e5_small missed oak stove and retrieved the vanilla jam distractor.",
+        "distractors_or_false_positives": "vanilla jam",
+        "model_summaries": [
+          {
+            "model_code": "multilingual_e5_small",
+            "verdict": "partial",
+            "evidence_coverage": 0.5,
+            "matched_markers": [
+              "dried mushrooms"
+            ],
+            "missing_markers": [
+              "oak stove"
+            ],
+            "distractors": [
+              "vanilla jam"
+            ],
+            "answer_summary": "Partially grounded by: dried mushrooms. Missing: oak stove. Distractors present: vanilla jam."
+          },
+          {
+            "model_code": "bge_m3",
+            "verdict": "grounded",
+            "evidence_coverage": 1.0,
+            "matched_markers": [
+              "dried mushrooms",
+              "oak stove"
+            ],
+            "missing_markers": [],
+            "distractors": [],
+            "answer_summary": "Grounded by retrieved evidence for: dried mushrooms, oak stove."
+          }
+        ]
+      }
+    ]
+  },
+  "developer_view": {
+    "dataset": {
+      "id": "real-question-eval-dataset",
+      "name": "Real Question Evaluation Dataset"
+    },
+    "models_compared": [
+      "multilingual_e5_small",
+      "bge_m3"
+    ],
+    "questions": [
+      {
+        "question_id": "question-sunflower-house",
+        "question": "What details show which flower was kept at the old village house and what part of the entrance is mentioned?",
+        "expected_markers": [
+          "sunflower seeds",
+          "blue gate latch"
+        ],
+        "expected_distractors": [
+          "rose market poster"
+        ],
+        "winner": "multilingual_e5_small",
+        "reason": "Tie broken by stronger top retrieval score and overall selector alignment.",
+        "model_results": [
+          {
+            "model_code": "multilingual_e5_small",
+            "collection_name": "eternal_world_rag_chunks__multilingual_e5_small__real_question_eval",
+            "top_chunks": [
+              {
+                "rank": 1,
+                "chunk_id": 7,
+                "score": 0.83428454,
+                "preview": "The old village house kept a paper envelope of sunflower seeds beneath the porch bench so spring planting would not be forgotten. Sunflower section archive s..."
+              },
+              {
+                "rank": 2,
+                "chunk_id": 8,
+                "score": 0.7729034,
+                "preview": "Sunflower section archive sentence 6 keeps the fictional diary section long enough for chunk separation while repeating only safe non-personal details. Every..."
+              }
+            ],
+            "matched_markers": [
+              "blue gate latch",
+              "sunflower seeds"
+            ],
+            "missing_markers": [],
+            "distractors": [],
+            "evidence_coverage": 1.0,
+            "first_relevant_rank": 1,
+            "answer_summary": "Grounded by retrieved evidence for: blue gate latch, sunflower seeds.",
+            "verdict": "grounded"
+          },
+          {
+            "model_code": "bge_m3",
+            "collection_name": "eternal_world_rag_chunks__bge_m3__real_question_eval",
+            "top_chunks": [
+              {
+                "rank": 1,
+                "chunk_id": 7,
+                "score": 0.5818076,
+                "preview": "The old village house kept a paper envelope of sunflower seeds beneath the porch bench so spring planting would not be forgotten. Sunflower section archive s..."
+              },
+              {
+                "rank": 2,
+                "chunk_id": 8,
+                "score": 0.47193596,
+                "preview": "Sunflower section archive sentence 6 keeps the fictional diary section long enough for chunk separation while repeating only safe non-personal details. Every..."
+              }
+            ],
+            "matched_markers": [
+              "blue gate latch",
+              "sunflower seeds"
+            ],
+            "missing_markers": [],
+            "distractors": [],
+            "evidence_coverage": 1.0,
+            "first_relevant_rank": 1,
+            "answer_summary": "Grounded by retrieved evidence for: blue gate latch, sunflower seeds.",
+            "verdict": "grounded"
+          }
+        ]
+      },
+      {
+        "question_id": "question-winter-trip",
+        "question": "During the winter trip, what travel item was saved and what container kept everyone warm?",
+        "expected_markers": [
+          "overnight train ticket",
+          "wooden thermos"
+        ],
+        "expected_distractors": [
+          "summer bus timetable"
+        ],
+        "winner": "multilingual_e5_small",
+        "reason": "Tie broken by stronger top retrieval score and overall selector alignment.",
+        "model_results": [
+          {
+            "model_code": "multilingual_e5_small",
+            "collection_name": "eternal_world_rag_chunks__multilingual_e5_small__real_question_eval",
+            "top_chunks": [
+              {
+                "rank": 1,
+                "chunk_id": 9,
+                "score": 0.8288485,
+                "preview": "Gate section archive sentence 5 keeps the fictional diary section long enough for chunk separation while repeating only safe non-personal details. Gate secti..."
+              },
+              {
+                "rank": 2,
+                "chunk_id": 10,
+                "score": 0.82404536,
+                "preview": "Winter ticket section archive sentence 4 keeps the fictional diary section long enough for chunk separation while repeating only safe non-personal details. W..."
+              }
+            ],
+            "matched_markers": [
+              "overnight train ticket",
+              "wooden thermos"
+            ],
+            "missing_markers": [],
+            "distractors": [],
+            "evidence_coverage": 1.0,
+            "first_relevant_rank": 1,
+            "answer_summary": "Grounded by retrieved evidence for: overnight train ticket, wooden thermos.",
+            "verdict": "grounded"
+          },
+          {
+            "model_code": "bge_m3",
+            "collection_name": "eternal_world_rag_chunks__bge_m3__real_question_eval",
+            "top_chunks": [
+              {
+                "rank": 1,
+                "chunk_id": 10,
+                "score": 0.56648356,
+                "preview": "Winter ticket section archive sentence 4 keeps the fictional diary section long enough for chunk separation while repeating only safe non-personal details. W..."
+              },
+              {
+                "rank": 2,
+                "chunk_id": 9,
+                "score": 0.5481872,
+                "preview": "Gate section archive sentence 5 keeps the fictional diary section long enough for chunk separation while repeating only safe non-personal details. Gate secti..."
+              }
+            ],
+            "matched_markers": [
+              "overnight train ticket",
+              "wooden thermos"
+            ],
+            "missing_markers": [],
+            "distractors": [],
+            "evidence_coverage": 1.0,
+            "first_relevant_rank": 1,
+            "answer_summary": "Grounded by retrieved evidence for: overnight train ticket, wooden thermos.",
+            "verdict": "grounded"
+          }
+        ]
+      },
+      {
+        "question_id": "question-grandmother-soup",
+        "question": "Which ingredients and cooking setup explain why grandmother's soup tasted smoky?",
+        "expected_markers": [
+          "dried mushrooms",
+          "oak stove"
+        ],
+        "expected_distractors": [
+          "vanilla jam"
+        ],
+        "winner": "bge_m3",
+        "reason": "Higher evidence coverage (1.00 vs 0.50).",
+        "model_results": [
+          {
+            "model_code": "multilingual_e5_small",
+            "collection_name": "eternal_world_rag_chunks__multilingual_e5_small__real_question_eval",
+            "top_chunks": [
+              {
+                "rank": 1,
+                "chunk_id": 11,
+                "score": 0.8132355,
+                "preview": "Winter thermos section archive sentence 3 keeps the fictional diary section long enough for chunk separation while repeating only safe non-personal details...."
+              },
+              {
+                "rank": 2,
+                "chunk_id": 13,
+                "score": 0.80252993,
+                "preview": "Stove section archive sentence 1 keeps the fictional diary section long enough for chunk separation while repeating only safe non-personal details. Stove sec..."
+              }
+            ],
+            "matched_markers": [
+              "dried mushrooms"
+            ],
+            "missing_markers": [
+              "oak stove"
+            ],
+            "distractors": [
+              "vanilla jam"
+            ],
+            "evidence_coverage": 0.5,
+            "first_relevant_rank": 1,
+            "answer_summary": "Partially grounded by: dried mushrooms. Missing: oak stove. Distractors present: vanilla jam.",
+            "verdict": "partial"
+          },
+          {
+            "model_code": "bge_m3",
+            "collection_name": "eternal_world_rag_chunks__bge_m3__real_question_eval",
+            "top_chunks": [
+              {
+                "rank": 1,
+                "chunk_id": 11,
+                "score": 0.50995576,
+                "preview": "Winter thermos section archive sentence 3 keeps the fictional diary section long enough for chunk separation while repeating only safe non-personal details...."
+              },
+              {
+                "rank": 2,
+                "chunk_id": 12,
+                "score": 0.48795283,
+                "preview": "Mushroom section archive sentence 2 keeps the fictional diary section long enough for chunk separation while repeating only safe non-personal details. Mushro..."
+              }
+            ],
+            "matched_markers": [
+              "dried mushrooms",
+              "oak stove"
+            ],
+            "missing_markers": [],
+            "distractors": [],
+            "evidence_coverage": 1.0,
+            "first_relevant_rank": 1,
+            "answer_summary": "Grounded by retrieved evidence for: dried mushrooms, oak stove.",
+            "verdict": "grounded"
+          }
+        ]
+      }
+    ],
+    "aggregate_results": [
+      {
+        "model_code": "multilingual_e5_small",
+        "collection_name": "eternal_world_rag_chunks__multilingual_e5_small__real_question_eval",
+        "question_wins": 2,
+        "passed_questions": 2,
+        "average_evidence_coverage": 0.8333,
+        "average_first_relevant_rank": 1.0,
+        "total_matched_markers": 5,
+        "total_missing_markers": 1,
+        "total_false_positive_markers": 1,
+        "official_metrics": {
+          "hit_rate": 0.6666666666666666,
+          "recall_at_k": 0.8333333333333334,
+          "mrr": 1.0,
+          "forbidden_marker_rate": 0.16666666666666666,
+          "average_latency_ms": 7182.6410000000005,
+          "cost_estimate_total": null,
+          "evidence_marker_coverage": 0.8333333333333334,
+          "missing_expected_marker_count": 1,
+          "false_positive_count": 1
+        }
+      },
+      {
+        "model_code": "bge_m3",
+        "collection_name": "eternal_world_rag_chunks__bge_m3__real_question_eval",
+        "question_wins": 1,
+        "passed_questions": 3,
+        "average_evidence_coverage": 1.0,
+        "average_first_relevant_rank": 1.0,
+        "total_matched_markers": 6,
+        "total_missing_markers": 0,
+        "total_false_positive_markers": 0,
+        "official_metrics": {
+          "hit_rate": 1.0,
+          "recall_at_k": 1.0,
+          "mrr": 1.0,
+          "forbidden_marker_rate": 0.0,
+          "average_latency_ms": 15471.300333333333,
+          "cost_estimate_total": null,
+          "evidence_marker_coverage": 1.0,
+          "missing_expected_marker_count": 0,
+          "false_positive_count": 0
+        }
+      }
+    ],
+    "selected_config": {
+      "best_config_id": "bge_m3",
+      "best_model_code": "bge_m3",
+      "best_collection_name": "eternal_world_rag_chunks__bge_m3__real_question_eval",
+      "selected_metrics": {
+        "hit_rate": 1.0,
+        "recall_at_k": 1.0,
+        "mrr": 1.0,
+        "forbidden_marker_rate": 0.0,
+        "average_latency_ms": 15471.300333333333,
+        "cost_estimate_total": null,
+        "evidence_marker_coverage": 1.0,
+        "missing_expected_marker_count": 0,
+        "false_positive_count": 0
+      }
+    },
+    "activated_config": {
+      "id": 2,
+      "profile_id": 6,
+      "model_code": "bge_m3",
+      "collection_name": "eternal_world_rag_chunks__bge_m3__real_question_eval",
+      "top_k": 2,
+      "score_threshold": null,
+      "retrieval_mode": "hybrid",
+      "source_eval_job_id": 19,
+      "source_eval_dataset_id": "real-question-eval-dataset"
+    },
+    "runtime_retrieval_verification": {
+      "model_code": "bge_m3",
+      "result_count": 2,
+      "qdrant_collection": "eternal_world_rag_chunks__bge_m3__real_question_eval",
+      "top_chunk_id": 7
+    }
+  }
+}

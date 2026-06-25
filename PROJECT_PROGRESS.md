@@ -2167,7 +2167,243 @@ Verification commands and results:
   - `docker compose exec backend python scripts/run_e2e_demo_smoke.py` -> `E2E DEMO SMOKE RESULT: PASS`
   - `docker compose exec backend python scripts/run_real_multi_embedding_eval_smoke.py` -> `REAL MULTI-EMBEDDING SMOKE RESULT: PASS`
 
-## 38. Commit Tracking
+## 38. Task 32 Real Local Model Question Evaluation
+
+Changed area:
+
+- backend-only real question-based retrieval evaluation for the already implemented local embedding candidates `multilingual_e5_small` and `bge_m3`
+
+What was added:
+
+- new module `backend/app/modules/real_question_eval/`
+  - `__init__.py`
+  - `schemas.py`
+  - `service.py`
+  - `report.py`
+- new script `backend/scripts/run_real_question_eval.py`
+- new focused test `backend/tests/test_real_question_eval.py`
+- a deterministic fictional evaluation fixture that:
+  - creates or reuses one dedicated evaluation user/profile/source
+  - builds a multi-question dataset with real retrieval queries
+  - reuses the existing chunking, embedding, indexing, retrieval, `multi_embedding_eval`, `rag_quality`, and `active_retrieval_config` services
+  - writes a human-readable markdown artifact to `backend/artifacts/real_question_eval/real_question_eval_report.md`
+- default fake `SentenceTransformers` runtime for tests and default script runs
+- explicit opt-in real-local-model mode through:
+  - env flag `REAL_QUESTION_EVAL_USE_REAL_LOCAL_MODELS=1`
+  - CLI flag `--use-real-local-models`
+
+Why this task was added before Jina/OpenAI-compatible providers:
+
+- the project already had two local dense candidates wired through the same provider family and selector path
+- this slice answers the first product-critical retrieval question before widening provider surface area:
+  - which current local model actually retrieves better evidence for real questions
+- running a question-based comparison now hardens the current local retrieval path before adding Jina, OpenAI-compatible embeddings, sparse retrieval, or ColBERT-style changes
+
+Question fixture used:
+
+- safe fictional archive-style corpus stored in one deterministic manual-text RAG source
+- topics covered:
+  - old village house / `sunflower seeds` / `blue gate latch`
+  - winter trip / `overnight train ticket` / `wooden thermos`
+  - grandmother soup / `dried mushrooms` / `oak stove`
+  - one shared distractor section with:
+    - `rose market poster`
+    - `summer bus timetable`
+    - `vanilla jam`
+- dataset size:
+  - 3 real questions
+  - 2 candidates per question
+  - top-k retrieval recorded per candidate
+
+How questions are evaluated:
+
+- the runner submits exactly these two candidates into one `MultiEmbeddingEvalRequest`:
+  - `multilingual_e5_small`
+  - `bge_m3`
+- `process_multi_embedding_eval_job(...)` remains the official selector path and still performs:
+  - chunk reuse/creation
+  - model-specific source embeddings
+  - per-candidate Qdrant indexing
+  - per-question retrieval
+  - aggregate `rag_quality` scoring
+  - best-config selection
+- after the official eval completes, the new runner performs another deterministic retrieval pass per question/per candidate to capture report details:
+  - top chunks
+  - chunk ids
+  - scores
+  - previews
+  - matched expected markers
+  - missing expected markers
+  - distractor markers
+  - evidence coverage
+  - first relevant rank
+  - deterministic answer summary
+  - groundedness verdict
+
+How `multilingual_e5_small` and `bge_m3` are compared:
+
+- both candidates index the same chunk corpus into different Qdrant collections
+- both candidates receive the same 3 real questions
+- the markdown report shows the actual retrieved chunks and evidence differences for every question
+- `rag_quality` remains the official aggregate selector for activation
+- the per-question winner shown in the report is derived from retrieval evidence quality, with priority on:
+  - passed/failed retrieval quality
+  - evidence coverage
+  - distractor count
+  - first relevant rank
+  - top retrieval score
+
+How markdown report is produced:
+
+- `backend/app/modules/real_question_eval/report.py` renders a VS Code-friendly markdown file
+- the report includes:
+  - timestamp
+  - dataset/model summary
+  - per-question expectations
+  - per-model retrieved chunks with scores and previews
+  - matched/missing/distractor markers
+  - deterministic answer summaries and groundedness verdicts
+  - per-question winner and reason
+  - aggregate model metrics
+  - final activation/runtime verification details
+
+Task 32 artifact export completion update:
+
+- current runtime export now writes only into:
+  - `backend/artifacts/real_question_eval/latest_real/`
+  - `backend/artifacts/real_question_eval/latest_fake/`
+  - `backend/artifacts/real_question_eval/runs/<run_id>_real/`
+  - `backend/artifacts/real_question_eval/runs/<run_id>_fake/`
+- each run writes both:
+  - `real_question_eval_report.md`
+  - `real_question_eval_result.json`
+- fake runs update only `latest_fake/` and never overwrite `latest_real/`
+- if `latest_real/` is missing, the exporter can backfill it from the newest existing historical real run artifact on disk without rerunning real-local models
+- the root-level artifact file is kept only as historical evidence from the earlier manual real-local run and is not used as the current output target
+- markdown is now intentionally ordered as:
+  - `## Client Summary`
+  - `## Artifact Files`
+  - `## Client Question Breakdown`
+  - `## Aggregate Client Decision`
+  - `## Developer Details`
+- JSON is now intentionally split into:
+  - `client_view`
+  - `developer_view`
+- JSON now also includes `run_type` with `real` or `fake`
+- artifact paths are embedded in both markdown and JSON so the latest and archived files are easy to open in VS Code
+
+Historical real-local evidence handling:
+
+- an existing manual real-local report on disk remains valid historical evidence
+- follow-up export-fix work does not require inventing new real-local results
+- in the final constrained follow-up run, real-local evaluation was intentionally not rerun by user instruction
+
+How Qdrant collections are kept separate:
+
+- the runner uses explicit candidate collection names:
+  - `eternal_world_rag_chunks__multilingual_e5_small__real_question_eval`
+  - `eternal_world_rag_chunks__bge_m3__real_question_eval`
+- model-specific dimensions remain separate:
+  - `multilingual_e5_small` -> `384`
+  - `bge_m3` -> `1024`
+- indexing remains non-destructive
+- existing Qdrant collections are not wiped
+- existing Qdrant points are not deleted
+
+How the selected config is activated:
+
+- after `multi_embedding_eval` succeeds, the runner calls `activate_best_multi_embedding_eval_result(...)`
+- the existing activation service reads the winning candidate from the successful background job payload
+- the selected candidate is stored in `active_retrieval_config` with:
+  - model code
+  - collection name
+  - top_k
+  - source eval job id
+  - source eval dataset id
+  - selected metrics
+  - all config scores
+
+How runtime retrieval is verified:
+
+- after activation, the runner calls `get_active_retrieval_config(...)`
+- then it calls `retrieve_profile_rag(...)` without overriding `model_code`
+- verification passes only if runtime retrieval resolves:
+  - the activated model code
+  - the activated collection name
+  - the expected active-config top-k path
+
+How tests avoid real model downloads and network:
+
+- tests default to fake local models and never enable real local model loading
+- the runner temporarily forces the existing `sentence_transformers` provider path but swaps in deterministic fake `SentenceTransformer` objects
+- fake vectors preserve the real configured dimensions:
+  - `multilingual_e5_small` -> `384`
+  - `bge_m3` -> `1024`
+- tests use a fake in-memory Qdrant client
+- tests install explicit HTTP failure guards so external network calls fail immediately
+- no real external API calls are used in tests
+
+What is intentionally not implemented:
+
+- no new embedding provider
+- no Jina provider
+- no OpenAI-compatible embedding provider
+- no sparse retrieval
+- no ColBERT / multi-vector retrieval
+- no frontend changes
+- no billing, subscription, tariff, or payment changes
+- no Brain Agent production answer-behavior changes
+- no production chat behavior changes
+- no pip package extraction
+- no real external API calls in tests
+
+Verification commands and results:
+
+- focused verification:
+  - `python -m pytest tests/test_real_question_eval.py tests/test_real_multi_embedding_eval_smoke.py tests/test_multi_embedding_eval.py tests/test_active_retrieval_config.py tests/test_rag_retrieval.py tests/test_qdrant_indexing.py` -> `56 passed in 58.48s`
+  - `python -m pytest tests/test_embeddings_sentence_transformers.py tests/test_embeddings.py tests/test_rag_quality.py` -> `45 passed in 22.27s`
+- required full verification:
+  - `python -m pytest` -> `330 passed in 294.62s`
+  - `docker compose up -d --build` -> success
+  - `docker compose exec backend alembic upgrade head` -> success
+  - `docker compose exec backend alembic current` -> `20260624_0013 (head)`
+  - `docker compose exec backend python -m pytest` -> `328 passed, 2 skipped, 1 warning in 253.77s`
+  - `Invoke-RestMethod http://localhost:8033/health/runtime` -> `{"status":"ok","database":"ok","redis":"ok"}`
+  - `docker compose exec backend python scripts/run_e2e_demo_smoke.py` -> `E2E DEMO SMOKE RESULT: PASS`
+  - `docker compose exec backend python scripts/run_real_multi_embedding_eval_smoke.py` -> `REAL MULTI-EMBEDDING SMOKE RESULT: PASS`
+  - `docker compose exec backend python scripts/run_real_question_eval.py` -> `REAL QUESTION EVAL RESULT: PASS`
+    - overall winner: `bge_m3`
+    - per-question winners:
+      - `question-sunflower-house` -> `bge_m3`
+      - `question-winter-trip` -> `bge_m3`
+      - `question-grandmother-soup` -> `bge_m3`
+    - report path inside container: `/app/artifacts/real_question_eval/real_question_eval_report.md`
+- notes:
+  - no transient failures or retries were required
+  - existing pytest warnings remained:
+    - local runs emit the existing `pytest_asyncio` default-loop-scope deprecation warning
+    - docker pytest emits the existing `passlib` `crypt` deprecation warning
+
+Artifact export follow-up verification:
+
+- constrained verification only, per user instruction:
+  - `python -m pytest tests/test_real_question_eval.py` -> `5 passed in 21.20s`
+  - `docker compose exec backend python scripts/run_real_question_eval.py` -> `REAL QUESTION EVAL RESULT: PASS`
+    - used fake models: `true`
+    - overall winner: `bge_m3`
+    - activated: `true`
+    - runtime verified: `true`
+    - latest markdown: `/app/artifacts/real_question_eval/latest_fake/real_question_eval_report.md`
+    - latest json: `/app/artifacts/real_question_eval/latest_fake/real_question_eval_result.json`
+    - archived markdown: `/app/artifacts/real_question_eval/runs/20260625_131055Z_fake/real_question_eval_report.md`
+    - archived json: `/app/artifacts/real_question_eval/runs/20260625_131055Z_fake/real_question_eval_result.json`
+    - preserved historical real latest slot: `latest_real/` was not overwritten by the fake run
+- intentionally not rerun in this constrained follow-up:
+  - full local pytest
+  - full Docker pytest matrix
+  - real-local model evaluation
+
+## 39. Commit Tracking
 
 Current `git log --oneline` history:
 
@@ -2221,7 +2457,7 @@ Future commit entry format:
 - Docker verified:
 ```
 
-## 39. Mandatory Future Rule
+## 40. Mandatory Future Rule
 
 This file is mandatory project tracking documentation and must be maintained continuously.
 
