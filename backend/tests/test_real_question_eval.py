@@ -6,7 +6,12 @@ from pathlib import Path
 from app.db.models import ActiveRetrievalConfig
 from app.db.session import get_db
 from app.main import app
-from app.modules.real_question_eval import RealQuestionEvalConfig, RealQuestionEvalRunner
+from app.modules.real_question_eval import (
+    RealQuestionEvalConfig,
+    RealQuestionEvalRunner,
+    run_incremental_real_question_eval,
+)
+from app.modules.real_question_eval.service import _QuestionEvalFakeSentenceTransformer
 from scripts.run_real_question_eval import (
     _print_text_result,
     resolve_real_question_eval_execution_mode,
@@ -146,6 +151,17 @@ def _install_fake_qdrant_client(monkeypatch) -> FakeQdrantRetrievalClient:
         lambda: fake_qdrant_client,
     )
     return fake_qdrant_client
+
+
+def _install_fake_real_sentence_transformers(monkeypatch) -> None:
+    monkeypatch.setattr(
+        "app.modules.embeddings.providers.sentence_transformers.import_module",
+        lambda module_name: type(
+            "FakeSentenceTransformersModule",
+            (),
+            {"SentenceTransformer": _QuestionEvalFakeSentenceTransformer},
+        )(),
+    )
 
 
 def test_real_question_eval_compares_both_candidates_writes_report_and_verifies_runtime_retrieval(
@@ -393,23 +409,40 @@ def test_real_question_eval_defaults_to_fake_models_and_avoids_real_network_call
 
 
 def test_real_question_eval_execution_mode_defaults_to_fake_eval_when_no_manual_real_signals_are_present():
-    execution_mode, use_real_local_models = resolve_real_question_eval_execution_mode(
+    execution_mode, use_real_local_models, incremental_real_providers = resolve_real_question_eval_execution_mode(
         cli_use_real_local_models=False,
         env_use_real_local_models=None,
     )
 
     assert execution_mode == "fake_eval"
     assert use_real_local_models is False
+    assert incremental_real_providers is None
 
 
 def test_real_question_eval_execution_mode_requires_both_cli_flag_and_env_var_for_real_eval():
-    execution_mode, use_real_local_models = resolve_real_question_eval_execution_mode(
+    execution_mode, use_real_local_models, incremental_real_providers = resolve_real_question_eval_execution_mode(
         cli_use_real_local_models=True,
         env_use_real_local_models="1",
     )
 
     assert execution_mode == "real_eval"
     assert use_real_local_models is True
+    assert incremental_real_providers is None
+
+
+def test_incremental_real_question_eval_execution_mode_requires_env_var_and_explicit_provider_list():
+    execution_mode, use_real_local_models, incremental_real_providers = resolve_real_question_eval_execution_mode(
+        cli_use_real_local_models=False,
+        env_use_real_local_models="1",
+        incremental_real_providers_raw="paraphrase_multilingual_mpnet_base_v2,multilingual_e5_base",
+    )
+
+    assert execution_mode == "incremental_real_eval"
+    assert use_real_local_models is True
+    assert incremental_real_providers == [
+        "paraphrase_multilingual_mpnet_base_v2",
+        "multilingual_e5_base",
+    ]
 
 
 def test_real_question_eval_execution_mode_fails_fast_when_only_cli_flag_is_present():
@@ -434,3 +467,103 @@ def test_real_question_eval_execution_mode_fails_fast_when_only_env_var_is_prese
         assert "requires BOTH signals" in str(exc)
     else:
         raise AssertionError("Expected ValueError when only env var is present")
+
+
+def test_incremental_real_question_eval_execution_mode_fails_fast_without_env_var():
+    try:
+        resolve_real_question_eval_execution_mode(
+            cli_use_real_local_models=False,
+            env_use_real_local_models=None,
+            incremental_real_providers_raw="paraphrase_multilingual_mpnet_base_v2,multilingual_e5_base",
+        )
+    except ValueError as exc:
+        assert "requires REAL_QUESTION_EVAL_USE_REAL_LOCAL_MODELS=1" in str(exc)
+    else:
+        raise AssertionError("Expected ValueError when incremental real providers are provided without env var")
+
+
+def test_incremental_real_question_eval_execution_mode_rejects_historical_providers():
+    try:
+        resolve_real_question_eval_execution_mode(
+            cli_use_real_local_models=False,
+            env_use_real_local_models="1",
+            incremental_real_providers_raw="multilingual_e5_small,multilingual_e5_base",
+        )
+    except ValueError as exc:
+        assert "must not rerun historical providers" in str(exc)
+    else:
+        raise AssertionError("Expected ValueError when historical providers are included in incremental mode")
+
+
+def test_incremental_real_question_eval_writes_incremental_artifacts_and_preserves_exact_question_ids(
+    client,
+    monkeypatch,
+    tmp_path,
+):
+    _install_fake_qdrant_client(monkeypatch)
+    _install_fake_real_sentence_transformers(monkeypatch)
+
+    repo_artifact_dir = Path(__file__).resolve().parents[1] / "artifacts" / "real_question_eval"
+    source_latest_real_json = repo_artifact_dir / "latest_real" / "real_question_eval_result.json"
+    source_latest_real_markdown = repo_artifact_dir / "latest_real" / "real_question_eval_report.md"
+
+    artifact_dir = tmp_path / "real_question_eval_artifacts"
+    latest_real_dir = artifact_dir / "latest_real"
+    latest_real_dir.mkdir(parents=True, exist_ok=True)
+    latest_real_json = latest_real_dir / "real_question_eval_result.json"
+    latest_real_markdown = latest_real_dir / "real_question_eval_report.md"
+    latest_real_json.write_text(source_latest_real_json.read_text(encoding="utf-8"), encoding="utf-8")
+    latest_real_markdown.write_text(source_latest_real_markdown.read_text(encoding="utf-8"), encoding="utf-8")
+    latest_real_json_before = latest_real_json.read_text(encoding="utf-8")
+    latest_real_markdown_before = latest_real_markdown.read_text(encoding="utf-8")
+
+    db, session_generator = _get_test_db_session()
+    try:
+        result = run_incremental_real_question_eval(
+            db,
+            RealQuestionEvalConfig(
+                artifact_dir=artifact_dir,
+                use_real_local_models=True,
+                candidate_model_codes=[
+                    "paraphrase_multilingual_mpnet_base_v2",
+                    "multilingual_e5_base",
+                ],
+            ),
+        )
+    finally:
+        _close_test_db_session(session_generator)
+
+    assert result.passed is True
+    assert result.used_fake_models is False
+    assert result.run_type == "incremental_real"
+    assert result.execution_mode == "incremental_real_eval"
+    assert result.historical_providers == ["multilingual_e5_small", "bge_m3"]
+    assert result.new_real_providers == [
+        "paraphrase_multilingual_mpnet_base_v2",
+        "multilingual_e5_base",
+    ]
+    assert result.artifact_paths.latest_markdown_report is not None
+    assert "latest_incremental_new_providers" in result.artifact_paths.latest_markdown_report
+    assert result.artifact_paths.archived_markdown_report is not None
+    assert "_incremental_new_providers" in result.artifact_paths.archived_markdown_report
+    assert result.artifact_paths.archived_markdown_report.endswith("real_question_eval_report.md")
+    assert [item.question_id for item in result.question_results] == [
+        "question-sunflower-house",
+        "question-winter-trip",
+        "question-grandmother-soup",
+    ]
+    assert latest_real_json.read_text(encoding="utf-8") == latest_real_json_before
+    assert latest_real_markdown.read_text(encoding="utf-8") == latest_real_markdown_before
+
+    latest_json_payload = json.loads(Path(result.artifact_paths.latest_json_result).read_text(encoding="utf-8"))
+    assert latest_json_payload["execution_mode"] == "incremental_real_eval"
+    assert latest_json_payload["run_type"] == "incremental_real"
+    assert latest_json_payload["used_fake_models"] is False
+    assert latest_json_payload["historical_providers"] == ["multilingual_e5_small", "bge_m3"]
+    assert latest_json_payload["new_real_providers"] == [
+        "paraphrase_multilingual_mpnet_base_v2",
+        "multilingual_e5_base",
+    ]
+    assert latest_json_payload["client_view"]["questions"][0]["question_id"] == "question-sunflower-house"
+    assert latest_json_payload["client_view"]["questions"][1]["question_id"] == "question-winter-trip"
+    assert latest_json_payload["client_view"]["questions"][2]["question_id"] == "question-grandmother-soup"

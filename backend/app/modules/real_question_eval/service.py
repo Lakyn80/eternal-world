@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
@@ -18,7 +19,9 @@ from app.modules.auth.service import DuplicateEmailError, register_user
 from app.modules.embedding_models.registry import DEFAULT_EMBEDDING_MODEL_CODE
 from app.modules.embeddings.providers.sentence_transformers import (
     BGE_M3_MODEL_NAME,
+    E5_BASE_MODEL_NAME,
     E5_SMALL_MODEL_NAME,
+    PARAPHRASE_MULTILINGUAL_MPNET_BASE_V2_MODEL_NAME,
 )
 from app.modules.job_tracking.enums import BackgroundJobType
 from app.modules.job_tracking.service import create_job
@@ -28,7 +31,11 @@ from app.modules.memory_profiles.service import create_memory_profile
 from app.modules.multi_embedding_eval.schemas import MultiEmbeddingEvalRequest
 from app.modules.multi_embedding_eval.service import WORKFLOW_NAME, process_multi_embedding_eval_job
 from app.modules.rag_chunks.service import list_rag_chunks
-from app.modules.rag_quality.schemas import RagQualityEvalCase
+from app.modules.rag_quality.schemas import (
+    RagQualityAggregateMetrics,
+    RagQualityConfigEvaluation,
+    RagQualityEvalCase,
+)
 from app.modules.rag_quality.service import RagQualityService
 from app.modules.rag_retrieval.schemas import RagRetrievalRequest
 from app.modules.rag_retrieval.service import retrieve_profile_rag, retrieve_profile_rag_for_collection
@@ -55,6 +62,11 @@ REAL_QUESTION_EVAL_SOURCE_KEY = "real_question_eval_v1"
 REAL_QUESTION_EVAL_DATASET_ID = "real-question-eval-dataset"
 REAL_QUESTION_EVAL_DATASET_NAME = "Real Question Evaluation Dataset"
 REAL_QUESTION_EVAL_MODELS = (DEFAULT_EMBEDDING_MODEL_CODE, "bge_m3")
+REAL_QUESTION_EVAL_HISTORICAL_PROVIDERS = ("multilingual_e5_small", "bge_m3")
+REAL_QUESTION_EVAL_INCREMENTAL_NEW_PROVIDER_CODES = (
+    "paraphrase_multilingual_mpnet_base_v2",
+    "multilingual_e5_base",
+)
 REAL_QUESTION_EVAL_TOP_K = 2
 
 
@@ -64,6 +76,18 @@ def _resolve_eval_run_type(*, use_real_local_models: bool) -> str:
 
 def _resolve_eval_execution_mode(*, use_real_local_models: bool) -> str:
     return "real_eval" if use_real_local_models else "fake_eval"
+
+
+def _resolve_configured_run_type(config: RealQuestionEvalConfig) -> str:
+    if config.run_type_override:
+        return config.run_type_override
+    return _resolve_eval_run_type(use_real_local_models=config.use_real_local_models)
+
+
+def _resolve_configured_execution_mode(config: RealQuestionEvalConfig) -> str:
+    if config.execution_mode_override:
+        return config.execution_mode_override
+    return _resolve_eval_execution_mode(use_real_local_models=config.use_real_local_models)
 
 
 def _build_fixture_paragraph(anchor_sentence: str, *, label: str) -> str:
@@ -155,7 +179,14 @@ class _QuestionEvalFakeSentenceTransformer:
 
 def _build_fake_vector(text: str, model_name: str) -> list[float]:
     normalized_text = " ".join(text.lower().split())
-    dimension = 384 if model_name == E5_SMALL_MODEL_NAME else 1024 if model_name == BGE_M3_MODEL_NAME else 8
+    if model_name == E5_SMALL_MODEL_NAME:
+        dimension = 384
+    elif model_name in {E5_BASE_MODEL_NAME, PARAPHRASE_MULTILINGUAL_MPNET_BASE_V2_MODEL_NAME}:
+        dimension = 768
+    elif model_name == BGE_M3_MODEL_NAME:
+        dimension = 1024
+    else:
+        dimension = 8
     vector = [0.0] * dimension
 
     topic_dimensions = {
@@ -176,6 +207,18 @@ def _build_fake_vector(text: str, model_name: str) -> list[float]:
                 (relevant_a, 1.0),
                 (relevant_b, 1.0),
                 (distractor, 0.1),
+            )
+        elif model_name == PARAPHRASE_MULTILINGUAL_MPNET_BASE_V2_MODEL_NAME:
+            set_values(
+                (relevant_a, 0.95),
+                (relevant_b, 0.95),
+                (distractor, 0.05),
+            )
+        elif model_name == E5_BASE_MODEL_NAME:
+            set_values(
+                (relevant_a, 0.92),
+                (relevant_b, 0.92),
+                (distractor, 0.12),
             )
         elif model_name == E5_SMALL_MODEL_NAME:
             set_values(
@@ -323,10 +366,8 @@ class RealQuestionEvalRunner:
                 result = RealQuestionEvalResult(
                     passed=False,
                     used_fake_models=not self.config.use_real_local_models,
-                    run_type=_resolve_eval_run_type(use_real_local_models=self.config.use_real_local_models),
-                    execution_mode=_resolve_eval_execution_mode(
-                        use_real_local_models=self.config.use_real_local_models
-                    ),
+                    run_type=_resolve_configured_run_type(self.config),
+                    execution_mode=_resolve_configured_execution_mode(self.config),
                     generated_at=str((process_result.get("result_payload") or {}).get("completed_at") or datetime.now(timezone.utc).isoformat()),
                     profile_id=profile.id,
                     source_id=source.id,
@@ -346,24 +387,25 @@ class RealQuestionEvalRunner:
                     warnings=_extract_warning_messages(process_result.get("result_payload") or {}),
                 )
                 result.passed = self._is_run_successful_without_artifacts(result)
-                artifact_paths = write_real_question_eval_artifacts(
-                    artifact_dir=Path(self.config.artifact_dir),
-                    result=result,
-                )
-                result.artifact_paths = artifact_paths
-                result.passed = self._is_run_successful(result)
-                if result.artifact_paths.latest_markdown_report is not None:
-                    result.markdown_report_path = result.artifact_paths.latest_markdown_report
-                if result.artifact_paths.latest_json_result is not None:
-                    result.json_result_path = result.artifact_paths.latest_json_result
-                result.passed = self._is_run_successful(result)
+                if self.config.write_artifacts:
+                    artifact_paths = write_real_question_eval_artifacts(
+                        artifact_dir=Path(self.config.artifact_dir),
+                        result=result,
+                    )
+                    result.artifact_paths = artifact_paths
+                    result.passed = self._is_run_successful(result)
+                    if result.artifact_paths.latest_markdown_report is not None:
+                        result.markdown_report_path = result.artifact_paths.latest_markdown_report
+                    if result.artifact_paths.latest_json_result is not None:
+                        result.json_result_path = result.artifact_paths.latest_json_result
+                    result.passed = self._is_run_successful(result)
                 return result
         except Exception as exc:
             return RealQuestionEvalResult(
                 passed=False,
                 used_fake_models=not self.config.use_real_local_models,
-                run_type=_resolve_eval_run_type(use_real_local_models=self.config.use_real_local_models),
-                execution_mode=_resolve_eval_execution_mode(use_real_local_models=self.config.use_real_local_models),
+                run_type=_resolve_configured_run_type(self.config),
+                execution_mode=_resolve_configured_execution_mode(self.config),
                 error=f"{exc.__class__.__name__}: {exc}",
             )
 
@@ -454,6 +496,7 @@ class RealQuestionEvalRunner:
 
     def build_request(self) -> MultiEmbeddingEvalRequest:
         collection_prefix = settings.qdrant_collection_name
+        candidate_model_codes = list(self.config.candidate_model_codes or REAL_QUESTION_EVAL_MODELS)
         return MultiEmbeddingEvalRequest(
             dataset={
                 "dataset_id": REAL_QUESTION_EVAL_DATASET_ID,
@@ -462,19 +505,13 @@ class RealQuestionEvalRunner:
             },
             candidates=[
                 {
-                    "config_id": DEFAULT_EMBEDDING_MODEL_CODE,
-                    "model_code": DEFAULT_EMBEDDING_MODEL_CODE,
-                    "collection_name": f"{collection_prefix}__multilingual_e5_small__real_question_eval",
+                    "config_id": model_code,
+                    "model_code": model_code,
+                    "collection_name": f"{collection_prefix}__{model_code}__real_question_eval",
                     "top_k": REAL_QUESTION_EVAL_TOP_K,
                     "retrieval_mode": "hybrid",
-                },
-                {
-                    "config_id": "bge_m3",
-                    "model_code": "bge_m3",
-                    "collection_name": f"{collection_prefix}__bge_m3__real_question_eval",
-                    "top_k": REAL_QUESTION_EVAL_TOP_K,
-                    "retrieval_mode": "hybrid",
-                },
+                }
+                for model_code in candidate_model_codes
             ],
         )
 
@@ -587,11 +624,14 @@ class RealQuestionEvalRunner:
         return question_results, aggregate_results
 
     def _is_run_successful_without_artifacts(self, result: RealQuestionEvalResult) -> bool:
+        expected_question_count = len(_build_question_cases())
+        expected_model_count = len(result.compared_models)
         return (
-            len(result.question_results) >= 3
-            and all(len(question_result.model_results) == 2 for question_result in result.question_results)
+            len(result.question_results) >= expected_question_count
+            and expected_model_count > 0
+            and all(len(question_result.model_results) == expected_model_count for question_result in result.question_results)
             and all(question_result.winner_model_code is not None for question_result in result.question_results)
-            and len({aggregate_result.collection_name for aggregate_result in result.aggregate_results}) == 2
+            and len({aggregate_result.collection_name for aggregate_result in result.aggregate_results}) == expected_model_count
             and result.overall_winner_model_code is not None
             and result.activated
             and result.runtime_verified
@@ -817,8 +857,381 @@ def _serialize_active_config(active_config: ActiveRetrievalConfig) -> dict[str, 
     }
 
 
+def _validate_incremental_provider_codes(provider_codes: list[str]) -> list[str]:
+    normalized_codes = [item.strip().lower() for item in provider_codes if item.strip()]
+    if not normalized_codes:
+        raise ValueError("Incremental real evaluation requires an explicit provider list.")
+
+    unsupported_codes = [
+        item for item in normalized_codes if item not in REAL_QUESTION_EVAL_INCREMENTAL_NEW_PROVIDER_CODES
+    ]
+    if unsupported_codes:
+        raise ValueError(
+            "Incremental real evaluation only supports the new providers: "
+            + ", ".join(REAL_QUESTION_EVAL_INCREMENTAL_NEW_PROVIDER_CODES)
+            + ". Unsupported: "
+            + ", ".join(unsupported_codes)
+        )
+
+    historical_overlap = [
+        item for item in normalized_codes if item in REAL_QUESTION_EVAL_HISTORICAL_PROVIDERS
+    ]
+    if historical_overlap:
+        raise ValueError(
+            "Incremental real evaluation must not rerun historical providers: "
+            + ", ".join(historical_overlap)
+        )
+
+    return normalized_codes
+
+
+def _find_historical_real_json_path(*, artifact_dir: Path) -> Path:
+    preferred_path = artifact_dir / "latest_real" / "real_question_eval_result.json"
+    if preferred_path.exists():
+        return preferred_path
+
+    runs_dir = artifact_dir / "runs"
+    candidates: list[tuple[str, Path]] = []
+    if runs_dir.exists():
+        for run_dir in runs_dir.iterdir():
+            if not run_dir.is_dir() or not run_dir.name.endswith("_real"):
+                continue
+            json_path = run_dir / "real_question_eval_result.json"
+            if json_path.exists():
+                candidates.append((run_dir.name, json_path))
+
+    if not candidates:
+        raise FileNotFoundError("Historical real question eval JSON artifact was not found")
+
+    candidates.sort(key=lambda item: item[0], reverse=True)
+    return candidates[0][1]
+
+
+def _load_historical_real_payload(*, artifact_dir: Path) -> dict[str, object]:
+    historical_json_path = _find_historical_real_json_path(artifact_dir=artifact_dir)
+    payload = json.loads(historical_json_path.read_text(encoding="utf-8"))
+    if not isinstance(payload, dict):
+        raise ValueError("Historical real question eval JSON artifact is invalid")
+    return payload
+
+
+def _build_historical_model_result(model_payload: dict[str, object]) -> RealQuestionEvalModelResult:
+    top_chunks = [
+        RealQuestionEvalRetrievedChunk(
+            rank=int(chunk["rank"]),
+            chunk_id=int(chunk["chunk_id"]),
+            score=float(chunk["score"]),
+            preview=str(chunk["preview"]),
+        )
+        for chunk in model_payload.get("top_chunks", [])
+        if isinstance(chunk, dict)
+    ]
+    verdict = str(model_payload.get("verdict") or "unknown")
+    first_relevant_rank = model_payload.get("first_relevant_rank")
+    return RealQuestionEvalModelResult(
+        model_code=str(model_payload["model_code"]),
+        collection_name=str(model_payload["collection_name"]),
+        top_chunks=top_chunks,
+        matched_expected_markers=[str(item) for item in model_payload.get("matched_markers", [])],
+        missing_expected_markers=[str(item) for item in model_payload.get("missing_markers", [])],
+        false_positive_markers=[str(item) for item in model_payload.get("distractors", [])],
+        evidence_coverage=(
+            float(model_payload["evidence_coverage"])
+            if model_payload.get("evidence_coverage") is not None
+            else None
+        ),
+        first_relevant_rank=int(first_relevant_rank) if first_relevant_rank is not None else None,
+        relevant_result_count=len(top_chunks),
+        false_positive_count=len(model_payload.get("distractors", [])),
+        answer_summary=str(model_payload.get("answer_summary") or ""),
+        groundedness_verdict=verdict,
+        passed=verdict == "grounded",
+        hit=first_relevant_rank is not None,
+        reasons=[],
+    )
+
+
+def _build_historical_question_results(payload: dict[str, object]) -> list[RealQuestionEvalQuestionResult]:
+    developer_view = payload.get("developer_view")
+    if not isinstance(developer_view, dict):
+        raise ValueError("Historical real question eval JSON is missing developer_view")
+
+    question_results: list[RealQuestionEvalQuestionResult] = []
+    for question_payload in developer_view.get("questions", []):
+        if not isinstance(question_payload, dict):
+            continue
+        model_results = [
+            _build_historical_model_result(model_payload)
+            for model_payload in question_payload.get("model_results", [])
+            if isinstance(model_payload, dict)
+        ]
+        question_results.append(
+            RealQuestionEvalQuestionResult(
+                question_id=str(question_payload["question_id"]),
+                question_text=str(question_payload["question"]),
+                expected_markers=[str(item) for item in question_payload.get("expected_markers", [])],
+                forbidden_markers=[str(item) for item in question_payload.get("expected_distractors", [])],
+                model_results=model_results,
+                winner_model_code=str(question_payload.get("winner")) if question_payload.get("winner") is not None else None,
+                winner_reason=str(question_payload.get("reason") or ""),
+            )
+        )
+
+    return question_results
+
+
+def _build_historical_aggregate_results(payload: dict[str, object]) -> list[RealQuestionEvalAggregateModelResult]:
+    developer_view = payload.get("developer_view")
+    if not isinstance(developer_view, dict):
+        raise ValueError("Historical real question eval JSON is missing developer_view")
+
+    aggregate_results: list[RealQuestionEvalAggregateModelResult] = []
+    for aggregate_payload in developer_view.get("aggregate_results", []):
+        if not isinstance(aggregate_payload, dict):
+            continue
+        aggregate_results.append(
+            RealQuestionEvalAggregateModelResult(
+                model_code=str(aggregate_payload["model_code"]),
+                collection_name=str(aggregate_payload["collection_name"]),
+                question_wins=int(aggregate_payload.get("question_wins") or 0),
+                passed_questions=int(aggregate_payload.get("passed_questions") or 0),
+                average_evidence_coverage=float(aggregate_payload.get("average_evidence_coverage") or 0.0),
+                average_first_relevant_rank=(
+                    float(aggregate_payload["average_first_relevant_rank"])
+                    if aggregate_payload.get("average_first_relevant_rank") is not None
+                    else None
+                ),
+                total_matched_markers=int(aggregate_payload.get("total_matched_markers") or 0),
+                total_missing_markers=int(aggregate_payload.get("total_missing_markers") or 0),
+                total_false_positive_markers=int(aggregate_payload.get("total_false_positive_markers") or 0),
+                official_metrics=(
+                    dict(aggregate_payload["official_metrics"])
+                    if isinstance(aggregate_payload.get("official_metrics"), dict)
+                    else None
+                ),
+            )
+        )
+
+    return aggregate_results
+
+
+def _build_config_evaluation_from_aggregate_result(
+    aggregate_result: RealQuestionEvalAggregateModelResult,
+    *,
+    total_cases: int,
+) -> RagQualityConfigEvaluation:
+    official_metrics = aggregate_result.official_metrics or {}
+    metrics = RagQualityAggregateMetrics.model_validate(
+        official_metrics
+        if official_metrics
+        else {
+            "hit_rate": aggregate_result.passed_questions / total_cases if total_cases else 0.0,
+            "recall_at_k": aggregate_result.average_evidence_coverage,
+            "mrr": 1.0 / aggregate_result.average_first_relevant_rank
+            if aggregate_result.average_first_relevant_rank
+            else 0.0,
+            "forbidden_marker_rate": (
+                aggregate_result.total_false_positive_markers / total_cases if total_cases else 0.0
+            ),
+            "average_latency_ms": None,
+            "cost_estimate_total": None,
+            "evidence_marker_coverage": aggregate_result.average_evidence_coverage,
+            "missing_expected_marker_count": aggregate_result.total_missing_markers,
+            "false_positive_count": aggregate_result.total_false_positive_markers,
+        }
+    )
+    return RagQualityConfigEvaluation(
+        config_id=aggregate_result.model_code,
+        model_code=aggregate_result.model_code,
+        collection_name=aggregate_result.collection_name,
+        retrieval_mode="hybrid",
+        passed_case_count=aggregate_result.passed_questions,
+        failed_case_count=max(total_cases - aggregate_result.passed_questions, 0),
+        metrics=metrics,
+        case_evaluations=[],
+        reasons=[],
+        warnings=[],
+        metadata={},
+    )
+
+
+def _merge_question_results(
+    *,
+    historical_question_results: list[RealQuestionEvalQuestionResult],
+    new_question_results: list[RealQuestionEvalQuestionResult],
+    official_best_model_code: str | None,
+) -> list[RealQuestionEvalQuestionResult]:
+    question_order = [case.case_id for case in _build_question_cases()]
+    historical_by_id = {item.question_id: item for item in historical_question_results}
+    new_by_id = {item.question_id: item for item in new_question_results}
+    merged_results: list[RealQuestionEvalQuestionResult] = []
+
+    for question_id in question_order:
+        historical_question = historical_by_id.get(question_id)
+        new_question = new_by_id.get(question_id)
+        if historical_question is None or new_question is None:
+            raise ValueError(f"Incremental comparison is missing question result for {question_id}")
+
+        model_results = [*historical_question.model_results, *new_question.model_results]
+        winner_model_code, winner_reason = _choose_question_winner(
+            model_results=model_results,
+            official_best_model_code=official_best_model_code,
+        )
+        merged_results.append(
+            RealQuestionEvalQuestionResult(
+                question_id=historical_question.question_id,
+                question_text=historical_question.question_text,
+                expected_markers=list(historical_question.expected_markers),
+                forbidden_markers=list(historical_question.forbidden_markers),
+                model_results=model_results,
+                winner_model_code=winner_model_code,
+                winner_reason=winner_reason,
+            )
+        )
+
+    return merged_results
+
+
+def _build_incremental_official_best_config(selection_result) -> dict[str, object]:
+    return {
+        "best_config_id": selection_result.best_config_id,
+        "best_model_code": selection_result.best_model_code,
+        "best_collection_name": selection_result.best_collection_name,
+        "selected_metrics": (
+            selection_result.selected_metrics.model_dump(mode="json")
+            if selection_result.selected_metrics is not None
+            else None
+        ),
+        "all_config_scores": [
+            score.model_dump(mode="json")
+            for score in selection_result.all_config_scores
+        ],
+        "reasons": list(selection_result.reasons),
+        "warnings": list(selection_result.warnings),
+    }
+
+
+def run_incremental_real_question_eval(
+    db: Session,
+    config: RealQuestionEvalConfig,
+) -> RealQuestionEvalResult:
+    new_provider_codes = _validate_incremental_provider_codes(list(config.candidate_model_codes or []))
+    historical_payload = _load_historical_real_payload(artifact_dir=Path(config.artifact_dir))
+    historical_question_results = _build_historical_question_results(historical_payload)
+    historical_aggregate_results = _build_historical_aggregate_results(historical_payload)
+    historical_client_view = historical_payload.get("client_view") if isinstance(historical_payload.get("client_view"), dict) else {}
+    historical_overall_winner = (
+        str(historical_client_view.get("overall_winner"))
+        if historical_client_view.get("overall_winner") is not None
+        else None
+    )
+
+    new_run_config = config.model_copy(
+        update={
+            "candidate_model_codes": new_provider_codes,
+            "write_artifacts": False,
+            "run_type_override": "incremental_real",
+            "execution_mode_override": "incremental_real_eval",
+        }
+    )
+    new_provider_result = RealQuestionEvalRunner(db, new_run_config).run()
+    if new_provider_result.error:
+        new_provider_result.run_type = "incremental_real"
+        new_provider_result.execution_mode = "incremental_real_eval"
+        new_provider_result.historical_providers = list(REAL_QUESTION_EVAL_HISTORICAL_PROVIDERS)
+        new_provider_result.new_real_providers = list(new_provider_codes)
+        new_provider_result.historical_overall_winner_model_code = historical_overall_winner
+        return new_provider_result
+
+    expected_question_ids = [case.case_id for case in _build_question_cases()]
+    historical_question_ids = [item.question_id for item in historical_question_results]
+    new_question_ids = [item.question_id for item in new_provider_result.question_results]
+    if historical_question_ids != expected_question_ids or new_question_ids != expected_question_ids:
+        raise ValueError("Incremental real evaluation question IDs changed unexpectedly")
+
+    combined_model_codes = list(REAL_QUESTION_EVAL_HISTORICAL_PROVIDERS) + list(new_provider_codes)
+    aggregate_by_model = {
+        aggregate_result.model_code: aggregate_result
+        for aggregate_result in [*historical_aggregate_results, *new_provider_result.aggregate_results]
+    }
+    combined_aggregate_results = [aggregate_by_model[model_code] for model_code in combined_model_codes]
+    selection_result = RagQualityService().select_best_config(
+        config_evaluations=[
+            _build_config_evaluation_from_aggregate_result(
+                aggregate_result,
+                total_cases=len(expected_question_ids),
+            )
+            for aggregate_result in combined_aggregate_results
+        ]
+    )
+    combined_question_results = _merge_question_results(
+        historical_question_results=historical_question_results,
+        new_question_results=new_provider_result.question_results,
+        official_best_model_code=selection_result.best_model_code,
+    )
+    any_new_provider_beat_historical_winner = (
+        selection_result.best_model_code in new_provider_codes
+        and selection_result.best_model_code != historical_overall_winner
+    )
+
+    combined_result = RealQuestionEvalResult(
+        passed=False,
+        used_fake_models=new_provider_result.used_fake_models,
+        run_type="incremental_real",
+        execution_mode="incremental_real_eval",
+        historical_providers=list(REAL_QUESTION_EVAL_HISTORICAL_PROVIDERS),
+        new_real_providers=list(new_provider_codes),
+        historical_overall_winner_model_code=historical_overall_winner,
+        any_new_provider_beat_historical_winner=any_new_provider_beat_historical_winner,
+        generated_at=new_provider_result.generated_at,
+        profile_id=new_provider_result.profile_id,
+        source_id=new_provider_result.source_id,
+        job_id=new_provider_result.job_id,
+        dataset_id=new_provider_result.dataset_id,
+        dataset_name=new_provider_result.dataset_name,
+        source_chunk_count=new_provider_result.source_chunk_count,
+        compared_models=combined_model_codes,
+        question_results=combined_question_results,
+        aggregate_results=combined_aggregate_results,
+        overall_winner_model_code=selection_result.best_model_code,
+        official_best_config=_build_incremental_official_best_config(selection_result),
+        activated=False,
+        runtime_verified=False,
+        warnings=[
+            *new_provider_result.warnings,
+            *selection_result.warnings,
+        ],
+    )
+    combined_result.passed = (
+        bool(selection_result.best_model_code)
+        and historical_question_ids == expected_question_ids
+        and new_question_ids == expected_question_ids
+        and new_provider_result.passed
+    )
+    artifact_paths = write_real_question_eval_artifacts(
+        artifact_dir=Path(config.artifact_dir),
+        result=combined_result,
+    )
+    combined_result.artifact_paths = artifact_paths
+    if artifact_paths.latest_markdown_report is not None:
+        combined_result.markdown_report_path = artifact_paths.latest_markdown_report
+    if artifact_paths.latest_json_result is not None:
+        combined_result.json_result_path = artifact_paths.latest_json_result
+    combined_result.passed = (
+        combined_result.passed
+        and combined_result.markdown_report_path is not None
+        and Path(combined_result.markdown_report_path).exists()
+        and combined_result.json_result_path is not None
+        and Path(combined_result.json_result_path).exists()
+    )
+    return combined_result
+
+
 def run_real_question_eval(
     db: Session,
     config: RealQuestionEvalConfig | None = None,
 ) -> RealQuestionEvalResult:
-    return RealQuestionEvalRunner(db, config).run()
+    resolved_config = config or RealQuestionEvalConfig()
+    if resolved_config.execution_mode_override == "incremental_real_eval":
+        return run_incremental_real_question_eval(db, resolved_config)
+    return RealQuestionEvalRunner(db, resolved_config).run()

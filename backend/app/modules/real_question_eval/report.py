@@ -31,6 +31,31 @@ def build_real_question_eval_markdown(result: RealQuestionEvalResult) -> str:
             f"- Production recommendation: {client_view['production_recommendation']}",
             f"- Timestamp: {result.generated_at or 'unknown'}",
             f"- Run type: `{result.run_type or 'unknown'}`",
+            *(
+                ["- Historical baseline providers:"]
+                + [f"  - `{model_code}`" for model_code in client_view["historical_baseline_providers"]]
+                if client_view["historical_baseline_providers"]
+                else []
+            ),
+            *(
+                ["- New real run providers:"]
+                + [f"  - `{model_code}`" for model_code in client_view["new_real_run_providers"]]
+                if client_view["new_real_run_providers"]
+                else []
+            ),
+            *(
+                [f"- Historical overall winner: `{client_view['historical_overall_winner']}`"]
+                if client_view["historical_overall_winner"] is not None
+                else []
+            ),
+            *(
+                [
+                    "- Any new provider beat historical bge_m3: "
+                    f"`{str(client_view['any_new_provider_beat_historical_winner']).lower()}`"
+                ]
+                if client_view["any_new_provider_beat_historical_winner"] is not None
+                else []
+            ),
             "",
             "## Artifact Files",
             f"- Latest Markdown: `{result.artifact_paths.latest_markdown_report or 'n/a'}`",
@@ -185,6 +210,8 @@ def build_real_question_eval_json_payload(result: RealQuestionEvalResult) -> dic
         "run_id": result.run_id,
         "run_type": result.run_type,
         "execution_mode": result.execution_mode,
+        "historical_providers": list(result.historical_providers),
+        "new_real_providers": list(result.new_real_providers),
         "timestamp": result.generated_at,
         "used_fake_models": result.used_fake_models,
         "status": "PASS" if result.passed else "FAIL",
@@ -260,14 +287,27 @@ def build_real_question_eval_client_view(result: RealQuestionEvalResult) -> dict
             "Keep the fake-mode result for test coverage only; use the preserved latest real evaluation for production-facing model decisions."
         )
     else:
-        speed_vs_accuracy_tradeoff = (
-            "The winning model delivered stronger evidence quality, while the losing model can be faster or lighter but less reliable on grounded retrieval."
-        )
-        production_recommendation = (
-            f"Use `{recommended_active_model}` as the active production retrieval model for this evaluation corpus."
-            if recommended_active_model
-            else "No production recommendation available."
-        )
+        if result.execution_mode == "incremental_real_eval":
+            speed_vs_accuracy_tradeoff = (
+                "Historical multilingual_e5_small and bge_m3 results were preserved and compared against the two new real-provider runs using the same dataset and selector rules."
+            )
+            if result.any_new_provider_beat_historical_winner:
+                production_recommendation = (
+                    f"A new provider beat historical `{result.historical_overall_winner_model_code}`; promote `{recommended_active_model}` after reviewing the incremental real comparison."
+                )
+            else:
+                production_recommendation = (
+                    f"No new provider beat historical `{result.historical_overall_winner_model_code}`; keep `{result.historical_overall_winner_model_code}` as the production recommendation."
+                )
+        else:
+            speed_vs_accuracy_tradeoff = (
+                "The winning model delivered stronger evidence quality, while the losing model can be faster or lighter but less reliable on grounded retrieval."
+            )
+            production_recommendation = (
+                f"Use `{recommended_active_model}` as the active production retrieval model for this evaluation corpus."
+                if recommended_active_model
+                else "No production recommendation available."
+            )
 
     return {
         "source_dataset_note": "deterministic fictional eval corpus",
@@ -284,6 +324,10 @@ def build_real_question_eval_client_view(result: RealQuestionEvalResult) -> dict
         "production_recommendation": production_recommendation,
         "activated": result.activated,
         "runtime_verified": result.runtime_verified,
+        "historical_baseline_providers": list(result.historical_providers),
+        "new_real_run_providers": list(result.new_real_providers),
+        "historical_overall_winner": result.historical_overall_winner_model_code,
+        "any_new_provider_beat_historical_winner": result.any_new_provider_beat_historical_winner,
         "questions": questions,
     }
 
@@ -347,6 +391,10 @@ def build_real_question_eval_developer_view(result: RealQuestionEvalResult) -> d
         "selected_config": result.official_best_config or {},
         "activated_config": result.activated_config or {},
         "runtime_retrieval_verification": result.runtime_retrieval or {},
+        "historical_providers": list(result.historical_providers),
+        "new_real_providers": list(result.new_real_providers),
+        "historical_overall_winner": result.historical_overall_winner_model_code,
+        "any_new_provider_beat_historical_winner": result.any_new_provider_beat_historical_winner,
     }
 
 
@@ -374,6 +422,12 @@ def _resolve_execution_mode(*, result: RealQuestionEvalResult) -> str:
     return "fake_eval" if result.used_fake_models else "real_eval"
 
 
+def _resolve_artifact_variant(*, result: RealQuestionEvalResult) -> str:
+    if result.run_type == "incremental_real":
+        return "incremental_new_providers"
+    return _resolve_run_type(result=result)
+
+
 def build_real_question_eval_artifact_paths(*, artifact_dir: Path, run_id: str) -> RealQuestionEvalArtifactPaths:
     raise NotImplementedError("Use build_real_question_eval_artifact_paths_for_result")
 
@@ -384,9 +438,9 @@ def build_real_question_eval_artifact_paths_for_result(
     run_id: str,
     result: RealQuestionEvalResult,
 ) -> RealQuestionEvalArtifactPaths:
-    run_type = _resolve_run_type(result=result)
-    latest_dir = artifact_dir / f"latest_{run_type}"
-    archived_dir = artifact_dir / "runs" / f"{run_id}_{run_type}"
+    artifact_variant = _resolve_artifact_variant(result=result)
+    latest_dir = artifact_dir / f"latest_{artifact_variant}"
+    archived_dir = artifact_dir / "runs" / f"{run_id}_{artifact_variant}"
     return RealQuestionEvalArtifactPaths(
         latest_markdown_report=str(latest_dir / "real_question_eval_report.md"),
         latest_json_result=str(latest_dir / "real_question_eval_result.json"),
@@ -397,8 +451,8 @@ def build_real_question_eval_artifact_paths_for_result(
 
 def write_real_question_eval_artifacts(*, artifact_dir: Path, result: RealQuestionEvalResult) -> RealQuestionEvalArtifactPaths:
     run_id = result.run_id or build_real_question_eval_run_id(generated_at=result.generated_at)
-    result.run_type = _resolve_run_type(result=result)
-    result.execution_mode = _resolve_execution_mode(result=result)
+    result.run_type = result.run_type or _resolve_run_type(result=result)
+    result.execution_mode = result.execution_mode or _resolve_execution_mode(result=result)
     artifact_paths = build_real_question_eval_artifact_paths_for_result(
         artifact_dir=artifact_dir,
         run_id=run_id,
@@ -425,7 +479,8 @@ def write_real_question_eval_artifacts(*, artifact_dir: Path, result: RealQuesti
     latest_json_path.write_text(json_content, encoding="utf-8")
     archived_markdown_path.write_text(markdown_content, encoding="utf-8")
     archived_json_path.write_text(json_content, encoding="utf-8")
-    _ensure_other_latest_variant_preserved(artifact_dir=artifact_dir, current_run_type=result.run_type)
+    if result.run_type in {"fake", "real"}:
+        _ensure_other_latest_variant_preserved(artifact_dir=artifact_dir, current_run_type=result.run_type)
 
     return artifact_paths
 

@@ -11,6 +11,10 @@ class RealQuestionEvalConfig(BaseModel):
     profile_name: str = Field(default="Demo Real Question Eval Profile", max_length=120)
     artifact_dir: Path = Field(default=Path("backend/artifacts/real_question_eval"))
     use_real_local_models: bool = False
+    candidate_model_codes: list[str] | None = None
+    write_artifacts: bool = True
+    run_type_override: str | None = None
+    execution_mode_override: str | None = None
 
     @field_validator("email")
     @classmethod
@@ -25,6 +29,28 @@ class RealQuestionEvalConfig(BaseModel):
             raise ValueError("profile_name must not be empty")
 
         return normalized_value
+
+    @field_validator("candidate_model_codes")
+    @classmethod
+    def normalize_candidate_model_codes(cls, value: list[str] | None) -> list[str] | None:
+        if value is None:
+            return None
+
+        normalized_values: list[str] = []
+        seen: set[str] = set()
+        for item in value:
+            normalized_item = item.strip().lower()
+            if not normalized_item:
+                continue
+            if normalized_item in seen:
+                raise ValueError("candidate_model_codes must be unique")
+            seen.add(normalized_item)
+            normalized_values.append(normalized_item)
+
+        if not normalized_values:
+            raise ValueError("candidate_model_codes must not be empty when provided")
+
+        return normalized_values
 
 
 class RealQuestionEvalRetrievedChunk(BaseModel):
@@ -87,6 +113,10 @@ class RealQuestionEvalResult(BaseModel):
     used_fake_models: bool
     run_type: str | None = None
     execution_mode: str | None = None
+    historical_providers: list[str] = Field(default_factory=list)
+    new_real_providers: list[str] = Field(default_factory=list)
+    historical_overall_winner_model_code: str | None = None
+    any_new_provider_beat_historical_winner: bool | None = None
     generated_at: str | None = None
     run_id: str | None = None
     profile_id: int | None = None

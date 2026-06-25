@@ -2577,6 +2577,69 @@ Verification commands and results:
 - `python -m pytest -q` -> `352 passed`
 - `python -m pytest --collect-only -q` -> `352 tests collected`
 
+## Úkol 37 Incremental Real Eval for New Embedding Providers
+
+Changed area:
+
+- backend-only incremental real question evaluation flow for new local embedding providers while preserving the historical Task 32 baseline
+
+What was added:
+
+- explicit incremental real eval mode in `scripts/run_real_question_eval.py`:
+  - `--incremental-real-providers paraphrase_multilingual_mpnet_base_v2,multilingual_e5_base`
+- incremental mode requires:
+  - `REAL_QUESTION_EVAL_USE_REAL_LOCAL_MODELS=1`
+- historical providers are preserved and not rerun:
+  - `multilingual_e5_small`
+  - `bge_m3`
+- incremental comparison reads the preserved historical real artifact and combines it with a fresh real run for only:
+  - `paraphrase_multilingual_mpnet_base_v2`
+  - `multilingual_e5_base`
+- the exact Task 32 dataset remained unchanged:
+  - `question-sunflower-house`
+  - `question-winter-trip`
+  - `question-grandmother-soup`
+- the exact fictional dataset text, evidence markers, distractors, chunking, scoring, and selector rules were preserved
+- incremental comparison artifacts now write to:
+  - `backend/artifacts/real_question_eval/latest_incremental_new_providers/`
+  - `backend/artifacts/real_question_eval/runs/<run_id>_incremental_new_providers/`
+- historical `latest_real/` is preserved and is not overwritten by incremental runs
+
+Real incremental run outcome:
+
+- exact command run:
+  - `docker compose exec -e REAL_QUESTION_EVAL_USE_REAL_LOCAL_MODELS=1 backend python scripts/run_real_question_eval.py --incremental-real-providers paraphrase_multilingual_mpnet_base_v2,multilingual_e5_base`
+- historical providers were not rerun
+- real model inference ran only for:
+  - `paraphrase_multilingual_mpnet_base_v2`
+  - `multilingual_e5_base`
+- final per-question winners:
+  - `question-sunflower-house` -> `multilingual_e5_small`
+  - `question-winter-trip` -> `multilingual_e5_base`
+  - `question-grandmother-soup` -> `multilingual_e5_base`
+- final overall winner:
+  - `multilingual_e5_base`
+- comparison against the historical winner:
+  - `multilingual_e5_base` beat historical `bge_m3`
+  - `paraphrase_multilingual_mpnet_base_v2` did not beat `bge_m3`
+- final production recommendation:
+  - promote `multilingual_e5_base` after reviewing the incremental real comparison artifact
+
+Comparison artifact paths:
+
+- latest:
+  - `backend/artifacts/real_question_eval/latest_incremental_new_providers/real_question_eval_report.md`
+  - `backend/artifacts/real_question_eval/latest_incremental_new_providers/real_question_eval_result.json`
+- archived:
+  - `backend/artifacts/real_question_eval/runs/20260625_181027Z_incremental_new_providers/real_question_eval_report.md`
+  - `backend/artifacts/real_question_eval/runs/20260625_181027Z_incremental_new_providers/real_question_eval_result.json`
+
+Verification commands and results:
+
+- `python -m pytest tests/test_real_question_eval.py tests/test_embeddings_sentence_transformers.py tests/test_multi_embedding_eval.py -q` -> `50 passed`
+- `python -m pytest -q` -> `356 passed`
+- `python -m pytest --collect-only -q` -> `356 tests collected`
+
 ## 39. Commit Tracking
 
 Current `git log --oneline` history:
