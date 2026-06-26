@@ -10,6 +10,7 @@ from app.modules.embeddings.providers import build_embedding_provider
 from app.modules.embeddings.providers.mock import MockEmbeddingProvider
 from app.modules.embeddings.providers.sentence_transformers import (
     E5_BASE_MODEL_NAME,
+    E5_LARGE_MODEL_NAME,
     PARAPHRASE_MULTILINGUAL_MPNET_BASE_V2_MODEL_NAME,
     SENTENCE_TRANSFORMERS_PROVIDER_NAME,
     SentenceTransformersEmbeddingProvider,
@@ -53,6 +54,8 @@ class FakeSentenceTransformer:
         )
         if self.model_name == "intfloat/multilingual-e5-small":
             dimension = 384
+        elif self.model_name == E5_LARGE_MODEL_NAME:
+            dimension = 1024
         elif self.model_name in {
             E5_BASE_MODEL_NAME,
             PARAPHRASE_MULTILINGUAL_MPNET_BASE_V2_MODEL_NAME,
@@ -103,6 +106,14 @@ def test_multilingual_e5_base_provider_can_be_resolved_when_enabled(monkeypatch)
     monkeypatch.setattr(settings, "embedding_provider", SENTENCE_TRANSFORMERS_PROVIDER_NAME)
 
     provider = build_embedding_provider(model_code="multilingual_e5_base")
+
+    assert isinstance(provider, SentenceTransformersEmbeddingProvider)
+
+
+def test_multilingual_e5_large_provider_can_be_resolved_when_enabled(monkeypatch):
+    monkeypatch.setattr(settings, "embedding_provider", SENTENCE_TRANSFORMERS_PROVIDER_NAME)
+
+    provider = build_embedding_provider(model_code="multilingual_e5_large")
 
     assert isinstance(provider, SentenceTransformersEmbeddingProvider)
 
@@ -192,6 +203,30 @@ def test_multilingual_e5_base_provider_lazy_loads_expected_model_name(monkeypatc
     assert FakeSentenceTransformer.init_calls[0]["model_name"] == E5_BASE_MODEL_NAME
 
 
+def test_multilingual_e5_large_provider_lazy_loads_expected_model_name(monkeypatch):
+    monkeypatch.setattr(settings, "embedding_provider", SENTENCE_TRANSFORMERS_PROVIDER_NAME)
+    import_calls: list[str] = []
+
+    def fake_import_module(module_name: str):
+        import_calls.append(module_name)
+        return SimpleNamespace(SentenceTransformer=FakeSentenceTransformer)
+
+    FakeSentenceTransformer.init_calls = []
+    FakeSentenceTransformer.encode_calls = []
+    monkeypatch.setattr(
+        "app.modules.embeddings.providers.sentence_transformers.import_module",
+        fake_import_module,
+    )
+    provider = SentenceTransformersEmbeddingProvider()
+
+    result = provider.embed_query("Where is Presov?", "multilingual_e5_large")
+
+    assert result.dimension == 1024
+    assert import_calls == ["sentence_transformers"]
+    assert len(FakeSentenceTransformer.init_calls) == 1
+    assert FakeSentenceTransformer.init_calls[0]["model_name"] == E5_LARGE_MODEL_NAME
+
+
 def test_paraphrase_multilingual_mpnet_base_v2_provider_lazy_loads_expected_model_name(monkeypatch):
     monkeypatch.setattr(settings, "embedding_provider", SENTENCE_TRANSFORMERS_PROVIDER_NAME)
     import_calls: list[str] = []
@@ -243,6 +278,18 @@ def test_provider_formats_query_and_passage_text_with_e5_base_prefixes(monkeypat
     assert FakeSentenceTransformer.encode_calls[1]["texts"] == ["passage: Kosice station archive note."]
 
 
+def test_provider_formats_query_and_passage_text_with_e5_large_prefixes(monkeypatch):
+    monkeypatch.setattr(settings, "embedding_provider", SENTENCE_TRANSFORMERS_PROVIDER_NAME)
+    _install_fake_sentence_transformers(monkeypatch)
+    provider = SentenceTransformersEmbeddingProvider()
+
+    provider.embed_query("What happened in Zilina?", "multilingual_e5_large")
+    provider.embed_passage("Zilina station archive note.", "multilingual_e5_large")
+
+    assert FakeSentenceTransformer.encode_calls[0]["texts"] == ["query: What happened in Zilina?"]
+    assert FakeSentenceTransformer.encode_calls[1]["texts"] == ["passage: Zilina station archive note."]
+
+
 def test_provider_formats_bge_m3_query_and_passage_text_without_prefixes(monkeypatch):
     monkeypatch.setattr(settings, "embedding_provider", SENTENCE_TRANSFORMERS_PROVIDER_NAME)
     _install_fake_sentence_transformers(monkeypatch)
@@ -290,6 +337,20 @@ def test_e5_base_provider_returns_vector_list_with_registry_dimension(monkeypatc
     assert len(result.values) == 768
     assert result.metadata["provider_name"] == "sentence_transformers"
     assert result.metadata["provider_model_name"] == E5_BASE_MODEL_NAME
+    assert result.metadata["input_prefix"] == "passage:"
+
+
+def test_e5_large_provider_returns_vector_list_with_registry_dimension(monkeypatch):
+    monkeypatch.setattr(settings, "embedding_provider", SENTENCE_TRANSFORMERS_PROVIDER_NAME)
+    _install_fake_sentence_transformers(monkeypatch)
+    provider = SentenceTransformersEmbeddingProvider()
+
+    result = provider.embed_passage("Deterministic archive sentence.", "multilingual_e5_large")
+
+    assert result.dimension == 1024
+    assert len(result.values) == 1024
+    assert result.metadata["provider_name"] == "sentence_transformers"
+    assert result.metadata["provider_model_name"] == E5_LARGE_MODEL_NAME
     assert result.metadata["input_prefix"] == "passage:"
 
 

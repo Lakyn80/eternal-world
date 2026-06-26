@@ -20,8 +20,13 @@ from app.modules.embedding_models.registry import DEFAULT_EMBEDDING_MODEL_CODE
 from app.modules.embeddings.providers.sentence_transformers import (
     BGE_M3_MODEL_NAME,
     E5_BASE_MODEL_NAME,
+    E5_LARGE_MODEL_NAME,
     E5_SMALL_MODEL_NAME,
+    JINA_EMBEDDINGS_V3_MODEL_NAME,
     PARAPHRASE_MULTILINGUAL_MPNET_BASE_V2_MODEL_NAME,
+    QWEN3_EMBEDDING_0_6B_MODEL_NAME,
+    QWEN3_EMBEDDING_4B_MODEL_NAME,
+    QWEN3_EMBEDDING_8B_MODEL_NAME,
 )
 from app.modules.job_tracking.enums import BackgroundJobType
 from app.modules.job_tracking.service import create_job
@@ -52,6 +57,11 @@ from app.modules.real_question_eval.schemas import (
     RealQuestionEvalResult,
     RealQuestionEvalRetrievedChunk,
 )
+from app.modules.real_question_eval.dataset_foundation import (
+    REAL_QUESTION_EVAL_DATASET_ID,
+    REAL_QUESTION_EVAL_DATASET_NAME,
+    build_core_real_question_eval_cases,
+)
 from app.modules.users.repository import get_user_by_email
 
 
@@ -60,8 +70,6 @@ REAL_QUESTION_EVAL_PASSWORD = "RealQuestionEvalPass123"
 REAL_QUESTION_EVAL_PROFILE_NAME = "Demo Real Question Eval Profile"
 REAL_QUESTION_EVAL_SOURCE_TITLE = "Real Question Evaluation Source"
 REAL_QUESTION_EVAL_SOURCE_KEY = "real_question_eval_v1"
-REAL_QUESTION_EVAL_DATASET_ID = "real-question-eval-dataset"
-REAL_QUESTION_EVAL_DATASET_NAME = "Real Question Evaluation Dataset"
 REAL_QUESTION_EVAL_MODELS = (DEFAULT_EMBEDDING_MODEL_CODE, "bge_m3")
 REAL_QUESTION_EVAL_HISTORICAL_PROVIDERS = ("multilingual_e5_small", "bge_m3")
 REAL_QUESTION_EVAL_INCREMENTAL_NEW_PROVIDER_CODES = (
@@ -137,35 +145,7 @@ REAL_QUESTION_EVAL_SOURCE_TEXT = "\n\n".join(
 
 
 def _build_question_cases() -> list[RagQualityEvalCase]:
-    return [
-        RagQualityEvalCase(
-            case_id="question-sunflower-house",
-            title="Village house flower evidence",
-            query="What details show which flower was kept at the old village house and what part of the entrance is mentioned?",
-            expected_markers=["sunflower seeds", "blue gate latch"],
-            forbidden_markers=["rose market poster"],
-            expected_behavior="retrieval_only",
-            minimum_relevant_results=2,
-        ),
-        RagQualityEvalCase(
-            case_id="question-winter-trip",
-            title="Winter trip travel evidence",
-            query="During the winter trip, what travel item was saved and what container kept everyone warm?",
-            expected_markers=["overnight train ticket", "wooden thermos"],
-            forbidden_markers=["summer bus timetable"],
-            expected_behavior="retrieval_only",
-            minimum_relevant_results=2,
-        ),
-        RagQualityEvalCase(
-            case_id="question-grandmother-soup",
-            title="Grandmother soup evidence",
-            query="Which ingredients and cooking setup explain why grandmother's soup tasted smoky?",
-            expected_markers=["dried mushrooms", "oak stove"],
-            forbidden_markers=["vanilla jam"],
-            expected_behavior="retrieval_only",
-            minimum_relevant_results=2,
-        ),
-    ]
+    return build_core_real_question_eval_cases()
 
 
 class _QuestionEvalFakeSentenceTransformer:
@@ -182,10 +162,22 @@ def _build_fake_vector(text: str, model_name: str) -> list[float]:
     normalized_text = " ".join(text.lower().split())
     if model_name == E5_SMALL_MODEL_NAME:
         dimension = 384
-    elif model_name in {E5_BASE_MODEL_NAME, PARAPHRASE_MULTILINGUAL_MPNET_BASE_V2_MODEL_NAME}:
+    elif model_name in {
+        E5_BASE_MODEL_NAME,
+        PARAPHRASE_MULTILINGUAL_MPNET_BASE_V2_MODEL_NAME,
+    }:
         dimension = 768
-    elif model_name == BGE_M3_MODEL_NAME:
+    elif model_name in {
+        E5_LARGE_MODEL_NAME,
+        BGE_M3_MODEL_NAME,
+        QWEN3_EMBEDDING_0_6B_MODEL_NAME,
+        JINA_EMBEDDINGS_V3_MODEL_NAME,
+    }:
         dimension = 1024
+    elif model_name == QWEN3_EMBEDDING_4B_MODEL_NAME:
+        dimension = 2560
+    elif model_name == QWEN3_EMBEDDING_8B_MODEL_NAME:
+        dimension = 4096
     else:
         dimension = 8
     vector = [0.0] * dimension

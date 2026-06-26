@@ -2744,3 +2744,36 @@ Safety / runtime notes:
 Next planned work:
 
 - broader full-version embedding benchmark plan
+
+## Tasks 40-45 Full-Version Embedding Benchmark Preparation
+
+Changed area:
+
+- `backend/app/modules/embedding_models/`
+- `backend/app/modules/embeddings/`
+- `backend/app/modules/real_question_eval/`
+- `backend/tests/`
+- `backend/artifacts/embedding_benchmark_plan/`
+
+What was added:
+
+- Task 40: added `multilingual_e5_large` as a lazy SentenceTransformers adapter mapped to `intfloat/multilingual-e5-large` with dimension `1024`
+- Task 41: added registry foundations for `qwen3_embedding_0_6b`, `qwen3_embedding_4b`, and `qwen3_embedding_8b` with manual-only benchmark metadata
+- Task 42: converted `jina_embeddings_v3` into a local/HF-compatible manual-only benchmark foundation with long-context and task-adapter metadata
+- Task 43: added `backend/artifacts/embedding_benchmark_plan/bge_m3_full_hybrid_design.md`
+- Task 44: added extended real eval dataset planning foundations while preserving the original three Task 32 question IDs unchanged
+- Task 45: added `backend/artifacts/embedding_benchmark_plan/full_version_embedding_benchmark_runbook.md` without executing the benchmark
+- registry metadata now carries provider model identifiers, runtime adapter, manual-only/high-resource flags, CI-safety markers, planning tags, and supported retrieval modes
+
+Verification commands and results:
+
+- no tests executed in this task by instruction
+- next step is to run focused test batches manually in controlled order
+
+Safety / runtime notes:
+
+- no real-local eval was run
+- no model downloads or inference were run
+- no DeepSeek/OpenAI/Jina API calls were made
+- this task is preparation only
+- the real benchmark will be executed later in controlled batches

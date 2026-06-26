@@ -110,11 +110,17 @@ def _install_fake_sentence_transformers(monkeypatch):
             materialized_texts = list(texts)
             if self.model_name == "intfloat/multilingual-e5-small":
                 dimension = 384
+            elif self.model_name == "intfloat/multilingual-e5-large":
+                dimension = 1024
             elif self.model_name in {
                 "intfloat/multilingual-e5-base",
                 "sentence-transformers/paraphrase-multilingual-mpnet-base-v2",
             }:
                 dimension = 768
+            elif self.model_name == "Qwen/Qwen3-Embedding-4B":
+                dimension = 2560
+            elif self.model_name == "Qwen/Qwen3-Embedding-8B":
+                dimension = 4096
             else:
                 dimension = 1024
             return [
@@ -1123,3 +1129,117 @@ def test_multi_embedding_eval_can_include_multilingual_e5_base_candidate_using_f
     assert chunk_count > 0
     assert len(e5_base_embeddings) == chunk_count
     assert all(embedding.vector_dimension == 768 for embedding in e5_base_embeddings)
+
+
+def test_multi_embedding_eval_can_include_multilingual_e5_large_candidate_using_fake_sentence_transformers(client, monkeypatch):
+    _install_fake_sentence_transformers(monkeypatch)
+    token = _register_and_login(client, "multi-eval-e5-large@example.com")
+    profile_id = _create_profile(client, token, "Multi Eval E5 Large Profile")
+    source_id = _create_rag_source(
+        client,
+        token,
+        profile_id,
+        raw_text="Vilnius archive memory sentence. Another Vilnius sentence for evaluation chunking.",
+    ).json()["id"]
+    payload = MultiEmbeddingEvalRequest(
+        dataset=_build_dataset(),
+        candidates=[
+            {
+                "config_id": "candidate-e5-large",
+                "model_code": "multilingual_e5_large",
+                "collection_name": "eternal_world_rag_chunks__multilingual_e5_large_eval",
+                "top_k": 3,
+                "retrieval_mode": "hybrid",
+            }
+        ],
+    )
+
+    monkeypatch.setattr(
+        "app.modules.multi_embedding_eval.service.index_source_embeddings",
+        lambda db, *, current_user, source_id, model_code=None, collection_name=None: RagSourceIndexingSummaryRead(
+            source_id=source_id,
+            model_code=model_code,
+            total_embeddings=db.query(RagEmbedding).filter(
+                RagEmbedding.source_id == source_id,
+                RagEmbedding.model_code == model_code,
+            ).count(),
+            indexed_count=db.query(RagEmbedding).filter(
+                RagEmbedding.source_id == source_id,
+                RagEmbedding.model_code == model_code,
+            ).count(),
+            skipped_count=0,
+            failed_count=0,
+        ),
+    )
+    monkeypatch.setattr(
+        "app.modules.multi_embedding_eval.service.retrieve_profile_rag_for_collection",
+        lambda db, *, current_user, profile_id, payload, collection_name=None: _build_retrieval_response(
+            model_code=str(payload.model_code),
+            collection_name=str(collection_name),
+        ),
+    )
+
+    db, session_generator = _get_test_db_session()
+    try:
+        background_job = _create_multi_eval_job(
+            db=db,
+            owner_user_id=1,
+            profile_id=profile_id,
+            source_id=source_id,
+            payload=payload,
+        )
+        result = process_multi_embedding_eval_job(db, job_id=background_job.id)
+        chunk_count = db.query(RagChunk).filter(RagChunk.source_id == source_id).count()
+        e5_large_embeddings = db.query(RagEmbedding).filter(
+            RagEmbedding.source_id == source_id,
+            RagEmbedding.model_code == "multilingual_e5_large",
+        ).all()
+    finally:
+        _close_test_db_session(session_generator)
+
+    assert result["status"] == "succeeded"
+    assert result["result_payload"]["best_config"]["best_model_code"] == "multilingual_e5_large"
+    assert chunk_count > 0
+    assert len(e5_large_embeddings) == chunk_count
+    assert all(embedding.vector_dimension == 1024 for embedding in e5_large_embeddings)
+
+
+def test_multi_embedding_eval_request_accepts_manual_only_benchmark_candidates_without_model_loading():
+    payload = MultiEmbeddingEvalRequest(
+        dataset=_build_dataset(),
+        candidates=[
+            {
+                "config_id": "candidate-qwen-0-6b",
+                "model_code": "qwen3_embedding_0_6b",
+                "collection_name": "eternal_world_rag_chunks__qwen3_embedding_0_6b_eval",
+                "top_k": 3,
+                "retrieval_mode": "hybrid",
+                "metadata": {
+                    "manual_only_real_eval": True,
+                    "high_resource": True,
+                    "real_benchmark_only": True,
+                    "ci_safe_real_inference": False,
+                },
+            },
+            {
+                "config_id": "candidate-jina-v3",
+                "model_code": "jina_embeddings_v3",
+                "collection_name": "eternal_world_rag_chunks__jina_embeddings_v3_eval",
+                "top_k": 3,
+                "retrieval_mode": "hybrid",
+                "metadata": {
+                    "manual_only_real_eval": True,
+                    "supports_long_context": True,
+                    "supports_task_adapters": True,
+                    "real_benchmark_only": True,
+                },
+            },
+        ],
+    )
+
+    assert [candidate.model_code for candidate in payload.candidates] == [
+        "qwen3_embedding_0_6b",
+        "jina_embeddings_v3",
+    ]
+    assert payload.candidates[0].metadata["manual_only_real_eval"] is True
+    assert payload.candidates[1].metadata["supports_task_adapters"] is True

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from app.core.config import settings
+from app.modules.embedding_models.registry import SENTENCE_TRANSFORMERS_ADAPTER, get_embedding_model_definition
 from app.modules.embeddings.providers.base import BaseEmbeddingProvider
 from app.modules.embeddings.providers.mock import MockEmbeddingProvider
 from app.modules.embeddings.providers.sentence_transformers import (
@@ -17,13 +18,10 @@ def build_embedding_provider(*, model_code: str) -> BaseEmbeddingProvider:
     if normalized_model_code == "mock_embedding":
         return MockEmbeddingProvider()
 
+    model_definition = get_embedding_model_definition(normalized_model_code)
     if (
-        normalized_model_code in {
-            "multilingual_e5_small",
-            "multilingual_e5_base",
-            "bge_m3",
-            "paraphrase_multilingual_mpnet_base_v2",
-        }
+        model_definition is not None
+        and model_definition.runtime_adapter == SENTENCE_TRANSFORMERS_ADAPTER
         and settings.embedding_provider == SENTENCE_TRANSFORMERS_PROVIDER_NAME
     ):
         return SentenceTransformersEmbeddingProvider(

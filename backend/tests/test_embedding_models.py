@@ -22,16 +22,23 @@ def test_list_endpoint_returns_enabled_models_by_default(client):
         "bge_m3",
         "paraphrase_multilingual_mpnet_base_v2",
         "multilingual_e5_base",
+        "multilingual_e5_large",
         "mock_embedding",
     ]
 
 
-def test_disabled_external_model_is_hidden_unless_include_disabled_true(client):
+def test_disabled_manual_only_models_are_hidden_unless_include_disabled_true(client):
     enabled_response = client.get("/api/embedding-models")
     all_response = client.get("/api/embedding-models?include_disabled=true")
 
     assert enabled_response.status_code == 200
     assert all_response.status_code == 200
+    assert "qwen3_embedding_0_6b" not in [model["code"] for model in enabled_response.json()]
+    assert "qwen3_embedding_0_6b" in [model["code"] for model in all_response.json()]
+    assert "qwen3_embedding_4b" not in [model["code"] for model in enabled_response.json()]
+    assert "qwen3_embedding_4b" in [model["code"] for model in all_response.json()]
+    assert "qwen3_embedding_8b" not in [model["code"] for model in enabled_response.json()]
+    assert "qwen3_embedding_8b" in [model["code"] for model in all_response.json()]
     assert "jina_embeddings_v3" not in [model["code"] for model in enabled_response.json()]
     assert "jina_embeddings_v3" in [model["code"] for model in all_response.json()]
 
@@ -75,6 +82,47 @@ def test_get_by_code_returns_new_e5_base_model(client):
     assert body["dimension"] == 768
 
 
+def test_get_by_code_returns_new_e5_large_model(client):
+    response = client.get("/api/embedding-models/multilingual_e5_large")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["code"] == "multilingual_e5_large"
+    assert body["provider_type"] == "local"
+    assert body["dimension"] == 1024
+    assert body["provider_model_name"] == "intfloat/multilingual-e5-large"
+    assert body["runtime_adapter"] == "sentence_transformers"
+    assert body["manual_only_real_eval"] is True
+    assert body["high_resource"] is True
+
+
+def test_get_by_code_returns_disabled_qwen3_registry_foundation(client):
+    response = client.get("/api/embedding-models/qwen3_embedding_0_6b")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["code"] == "qwen3_embedding_0_6b"
+    assert body["enabled"] is False
+    assert body["provider_model_name"] == "Qwen/Qwen3-Embedding-0.6B"
+    assert body["runtime_adapter"] == "sentence_transformers"
+    assert body["manual_only_real_eval"] is True
+    assert body["real_benchmark_only"] is True
+    assert body["ci_safe_real_inference"] is False
+
+
+def test_get_by_code_returns_disabled_jina_registry_foundation(client):
+    response = client.get("/api/embedding-models/jina_embeddings_v3")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["code"] == "jina_embeddings_v3"
+    assert body["enabled"] is False
+    assert body["provider_type"] == "local"
+    assert body["provider_model_name"] == "jinaai/jina-embeddings-v3"
+    assert body["supports_task_adapters"] is True
+    assert body["supports_long_context"] is True
+
+
 def test_unknown_model_code_returns_404(client):
     response = client.get("/api/embedding-models/not_real")
 
@@ -88,6 +136,10 @@ def test_model_codes_are_stable():
         "bge_m3",
         "paraphrase_multilingual_mpnet_base_v2",
         "multilingual_e5_base",
+        "multilingual_e5_large",
+        "qwen3_embedding_0_6b",
+        "qwen3_embedding_4b",
+        "qwen3_embedding_8b",
         "jina_embeddings_v3",
         "mock_embedding",
     ]
@@ -114,6 +166,7 @@ def test_candidate_selection_for_ru_includes_multilingual_capable_models():
         "bge_m3",
         "paraphrase_multilingual_mpnet_base_v2",
         "multilingual_e5_base",
+        "multilingual_e5_large",
     ]
 
 
@@ -125,6 +178,7 @@ def test_candidate_selection_for_cs_includes_multilingual_capable_models():
         "bge_m3",
         "paraphrase_multilingual_mpnet_base_v2",
         "multilingual_e5_base",
+        "multilingual_e5_large",
     ]
 
 
@@ -136,6 +190,7 @@ def test_candidate_selection_for_unknown_language_returns_multilingual_default_c
         "bge_m3",
         "paraphrase_multilingual_mpnet_base_v2",
         "multilingual_e5_base",
+        "multilingual_e5_large",
     ]
 
 
@@ -157,6 +212,7 @@ def test_enabled_models_helper_hides_disabled_external_models():
         "bge_m3",
         "paraphrase_multilingual_mpnet_base_v2",
         "multilingual_e5_base",
+        "multilingual_e5_large",
         "mock_embedding",
     ]
 

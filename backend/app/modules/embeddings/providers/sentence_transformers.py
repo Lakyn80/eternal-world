@@ -5,6 +5,7 @@ from pathlib import Path
 from threading import Lock
 from typing import Any
 
+from app.modules.embedding_models.registry import SENTENCE_TRANSFORMERS_ADAPTER
 from app.modules.embedding_models.service import get_embedding_model
 from app.modules.embeddings.providers.base import BaseEmbeddingProvider, EmbeddingVector
 
@@ -12,8 +13,26 @@ from app.modules.embeddings.providers.base import BaseEmbeddingProvider, Embeddi
 SENTENCE_TRANSFORMERS_PROVIDER_NAME = "sentence_transformers"
 E5_SMALL_MODEL_NAME = "intfloat/multilingual-e5-small"
 E5_BASE_MODEL_NAME = "intfloat/multilingual-e5-base"
+E5_LARGE_MODEL_NAME = "intfloat/multilingual-e5-large"
 BGE_M3_MODEL_NAME = "BAAI/bge-m3"
 PARAPHRASE_MULTILINGUAL_MPNET_BASE_V2_MODEL_NAME = "sentence-transformers/paraphrase-multilingual-mpnet-base-v2"
+QWEN3_EMBEDDING_0_6B_MODEL_NAME = "Qwen/Qwen3-Embedding-0.6B"
+QWEN3_EMBEDDING_4B_MODEL_NAME = "Qwen/Qwen3-Embedding-4B"
+QWEN3_EMBEDDING_8B_MODEL_NAME = "Qwen/Qwen3-Embedding-8B"
+JINA_EMBEDDINGS_V3_MODEL_NAME = "jinaai/jina-embeddings-v3"
+E5_PREFIXED_MODEL_CODES = {
+    "multilingual_e5_small",
+    "multilingual_e5_base",
+    "multilingual_e5_large",
+}
+PLAIN_TEXT_MODEL_CODES = {
+    "bge_m3",
+    "paraphrase_multilingual_mpnet_base_v2",
+    "qwen3_embedding_0_6b",
+    "qwen3_embedding_4b",
+    "qwen3_embedding_8b",
+    "jina_embeddings_v3",
+}
 QUERY_PREFIX = "query: "
 PASSAGE_PREFIX = "passage: "
 SAFE_PROVIDER_FAILURE_MESSAGE = "SentenceTransformers embedding generation failed"
@@ -72,11 +91,11 @@ class SentenceTransformersEmbeddingProvider(BaseEmbeddingProvider):
     ) -> str:
         normalized_text = self._normalize_text(text)
         normalized_model_code = model_code.strip().lower()
-        if normalized_model_code in {"multilingual_e5_small", "multilingual_e5_base"}:
+        if normalized_model_code in E5_PREFIXED_MODEL_CODES:
             if input_type == "query":
                 return f"{QUERY_PREFIX}{normalized_text}"
             return f"{PASSAGE_PREFIX}{normalized_text}"
-        if normalized_model_code in {"bge_m3", "paraphrase_multilingual_mpnet_base_v2"}:
+        if normalized_model_code in PLAIN_TEXT_MODEL_CODES:
             return normalized_text
 
         raise SentenceTransformersProviderError(
@@ -123,16 +142,14 @@ class SentenceTransformersEmbeddingProvider(BaseEmbeddingProvider):
             ) from exc
 
     def _resolve_model_name(self, model_code: str) -> str:
-        if model_code == "multilingual_e5_small":
-            return E5_SMALL_MODEL_NAME
-        if model_code == "multilingual_e5_base":
-            return E5_BASE_MODEL_NAME
-        if model_code == "bge_m3":
-            return BGE_M3_MODEL_NAME
-        if model_code == "paraphrase_multilingual_mpnet_base_v2":
-            return PARAPHRASE_MULTILINGUAL_MPNET_BASE_V2_MODEL_NAME
+        model_definition = get_embedding_model(model_code)
+        if (
+            model_definition.runtime_adapter != SENTENCE_TRANSFORMERS_ADAPTER
+            or model_definition.provider_model_name is None
+        ):
+            raise SentenceTransformersProviderError("SentenceTransformers model is not configured")
 
-        raise SentenceTransformersProviderError("SentenceTransformers model is not configured")
+        return model_definition.provider_model_name
 
     def _encode(
         self,
@@ -211,9 +228,9 @@ class SentenceTransformersEmbeddingProvider(BaseEmbeddingProvider):
         input_type: str,
     ) -> str | None:
         normalized_model_code = model_code.strip().lower()
-        if normalized_model_code in {"multilingual_e5_small", "multilingual_e5_base"}:
+        if normalized_model_code in E5_PREFIXED_MODEL_CODES:
             return QUERY_PREFIX.strip() if input_type == "query" else PASSAGE_PREFIX.strip()
-        if normalized_model_code in {"bge_m3", "paraphrase_multilingual_mpnet_base_v2"}:
+        if normalized_model_code in PLAIN_TEXT_MODEL_CODES:
             return None
 
         raise SentenceTransformersProviderError(
