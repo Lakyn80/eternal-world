@@ -9,6 +9,7 @@ from app.core.config import BACKEND_DIR
 from app.db.session import SessionLocal
 from app.modules.real_question_eval import (
     REAL_QUESTION_EVAL_EMAIL,
+    REAL_QUESTION_EVAL_FULL_VERSION_BATCH_A_BASELINE_PROVIDER,
     REAL_QUESTION_EVAL_HISTORICAL_PROVIDERS,
     REAL_QUESTION_EVAL_INCREMENTAL_NEW_PROVIDER_CODES,
     REAL_QUESTION_EVAL_PROFILE_NAME,
@@ -20,6 +21,7 @@ from app.modules.real_question_eval import (
 FAKE_EVAL_EXECUTION_MODE = "fake_eval"
 REAL_EVAL_EXECUTION_MODE = "real_eval"
 INCREMENTAL_REAL_EVAL_EXECUTION_MODE = "incremental_real_eval"
+FULL_VERSION_BATCH_A_REAL_EVAL_EXECUTION_MODE = "full_version_batch_a_real_eval"
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -33,6 +35,7 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--json", action="store_true", dest="json_output")
     parser.add_argument("--use-real-local-models", action="store_true")
     parser.add_argument("--incremental-real-providers")
+    parser.add_argument("--full-version-batch-a-providers")
     return parser
 
 
@@ -61,6 +64,29 @@ def _parse_incremental_real_providers(raw_value: str | None) -> list[str] | None
         deduplicated_values.append(item)
 
     return deduplicated_values
+
+
+def resolve_full_version_batch_a_providers(
+    *,
+    cli_use_real_local_models: bool,
+    env_use_real_local_models: str | None,
+    full_version_batch_a_providers_raw: str | None,
+) -> list[str] | None:
+    batch_a_providers = _parse_incremental_real_providers(full_version_batch_a_providers_raw)
+    if batch_a_providers is None:
+        return None
+
+    if not cli_use_real_local_models or not _is_truthy_env_flag(env_use_real_local_models):
+        raise ValueError(
+            "Full-version Batch A is manual-only and requires BOTH --use-real-local-models "
+            "and REAL_QUESTION_EVAL_USE_REAL_LOCAL_MODELS=1."
+        )
+    if batch_a_providers != ["multilingual_e5_large"]:
+        raise ValueError(
+            "Full-version Batch A requires the explicit provider list: multilingual_e5_large."
+        )
+
+    return batch_a_providers
 
 
 def resolve_real_question_eval_execution_mode(
@@ -119,6 +145,14 @@ def _print_text_result(result) -> None:
     print(f"overall_winner: {result.overall_winner_model_code}")
     print(f"execution_mode: {result.execution_mode}")
     print(f"used_fake_models: {str(result.used_fake_models).lower()}")
+    if result.benchmark_batch_label:
+        print(f"benchmark_batch_label: {result.benchmark_batch_label}")
+    if result.baseline_provider_codes:
+        print(f"baseline_provider_codes: {result.baseline_provider_codes}")
+    if result.newly_evaluated_provider_codes:
+        print(f"newly_evaluated_provider_codes: {result.newly_evaluated_provider_codes}")
+    if result.excluded_provider_codes:
+        print(f"excluded_provider_codes: {result.excluded_provider_codes}")
     if result.historical_providers:
         print(f"historical_providers: {result.historical_providers}")
     if result.new_real_providers:
@@ -159,12 +193,23 @@ def _print_text_result(result) -> None:
 
 def main() -> int:
     args = _build_parser().parse_args()
+    env_use_real_local_models = os.getenv("REAL_QUESTION_EVAL_USE_REAL_LOCAL_MODELS")
     try:
-        execution_mode, use_real_local_models, incremental_real_providers = resolve_real_question_eval_execution_mode(
+        batch_a_providers = resolve_full_version_batch_a_providers(
             cli_use_real_local_models=args.use_real_local_models,
-            env_use_real_local_models=os.getenv("REAL_QUESTION_EVAL_USE_REAL_LOCAL_MODELS"),
-            incremental_real_providers_raw=args.incremental_real_providers,
+            env_use_real_local_models=env_use_real_local_models,
+            full_version_batch_a_providers_raw=args.full_version_batch_a_providers,
         )
+        if batch_a_providers is not None:
+            execution_mode = FULL_VERSION_BATCH_A_REAL_EVAL_EXECUTION_MODE
+            use_real_local_models = True
+            incremental_real_providers = None
+        else:
+            execution_mode, use_real_local_models, incremental_real_providers = resolve_real_question_eval_execution_mode(
+                cli_use_real_local_models=args.use_real_local_models,
+                env_use_real_local_models=env_use_real_local_models,
+                incremental_real_providers_raw=args.incremental_real_providers,
+            )
     except ValueError as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 2
@@ -174,9 +219,19 @@ def main() -> int:
         profile_name=args.profile_name,
         artifact_dir=args.artifact_dir,
         use_real_local_models=use_real_local_models,
-        candidate_model_codes=incremental_real_providers,
-        run_type_override="incremental_real" if execution_mode == INCREMENTAL_REAL_EVAL_EXECUTION_MODE else None,
-        execution_mode_override=execution_mode if execution_mode == INCREMENTAL_REAL_EVAL_EXECUTION_MODE else None,
+        candidate_model_codes=batch_a_providers or incremental_real_providers,
+        run_type_override=(
+            "full_version_batch_a"
+            if execution_mode == FULL_VERSION_BATCH_A_REAL_EVAL_EXECUTION_MODE
+            else "incremental_real"
+            if execution_mode == INCREMENTAL_REAL_EVAL_EXECUTION_MODE
+            else None
+        ),
+        execution_mode_override=(
+            execution_mode
+            if execution_mode in {FULL_VERSION_BATCH_A_REAL_EVAL_EXECUTION_MODE, INCREMENTAL_REAL_EVAL_EXECUTION_MODE}
+            else None
+        ),
     )
 
     db = SessionLocal()
@@ -186,6 +241,9 @@ def main() -> int:
         db.close()
 
     result.execution_mode = execution_mode
+    if execution_mode == FULL_VERSION_BATCH_A_REAL_EVAL_EXECUTION_MODE:
+        result.baseline_provider_codes = [REAL_QUESTION_EVAL_FULL_VERSION_BATCH_A_BASELINE_PROVIDER]
+        result.newly_evaluated_provider_codes = ["multilingual_e5_large"]
 
     if args.json_output:
         print(json.dumps(result.model_dump(mode="json"), indent=2, sort_keys=True))

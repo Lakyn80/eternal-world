@@ -113,6 +113,11 @@ class RealQuestionEvalResult(BaseModel):
     used_fake_models: bool
     run_type: str | None = None
     execution_mode: str | None = None
+    benchmark_batch_label: str | None = None
+    baseline_provider_codes: list[str] = Field(default_factory=list)
+    excluded_provider_codes: list[str] = Field(default_factory=list)
+    newly_evaluated_provider_codes: list[str] = Field(default_factory=list)
+    comparison_scope_note: str | None = None
     historical_providers: list[str] = Field(default_factory=list)
     new_real_providers: list[str] = Field(default_factory=list)
     historical_overall_winner_model_code: str | None = None

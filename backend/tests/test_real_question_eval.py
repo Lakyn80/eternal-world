@@ -9,12 +9,14 @@ from app.main import app
 from app.modules.real_question_eval import (
     RealQuestionEvalConfig,
     RealQuestionEvalRunner,
+    run_full_version_batch_a_question_eval,
     run_incremental_real_question_eval,
 )
 from app.modules.real_question_eval.service import _QuestionEvalFakeSentenceTransformer
 from app.modules.real_question_eval.service import rerender_incremental_real_artifacts_from_existing_json
 from scripts.run_real_question_eval import (
     _print_text_result,
+    resolve_full_version_batch_a_providers,
     resolve_real_question_eval_execution_mode,
 )
 
@@ -496,6 +498,42 @@ def test_incremental_real_question_eval_execution_mode_rejects_historical_provid
         raise AssertionError("Expected ValueError when historical providers are included in incremental mode")
 
 
+def test_full_version_batch_a_requires_both_cli_flag_and_env_var_and_exact_large_provider_list():
+    provider_codes = resolve_full_version_batch_a_providers(
+        cli_use_real_local_models=True,
+        env_use_real_local_models="1",
+        full_version_batch_a_providers_raw="multilingual_e5_large",
+    )
+
+    assert provider_codes == ["multilingual_e5_large"]
+
+
+def test_full_version_batch_a_fails_fast_without_both_manual_real_signals():
+    try:
+        resolve_full_version_batch_a_providers(
+            cli_use_real_local_models=False,
+            env_use_real_local_models="1",
+            full_version_batch_a_providers_raw="multilingual_e5_large",
+        )
+    except ValueError as exc:
+        assert "requires BOTH --use-real-local-models and REAL_QUESTION_EVAL_USE_REAL_LOCAL_MODELS=1" in str(exc)
+    else:
+        raise AssertionError("Expected ValueError when Batch A is requested without both manual real signals")
+
+
+def test_full_version_batch_a_rejects_any_provider_list_other_than_multilingual_e5_large():
+    try:
+        resolve_full_version_batch_a_providers(
+            cli_use_real_local_models=True,
+            env_use_real_local_models="1",
+            full_version_batch_a_providers_raw="multilingual_e5_base,multilingual_e5_large",
+        )
+    except ValueError as exc:
+        assert "requires the explicit provider list: multilingual_e5_large" in str(exc)
+    else:
+        raise AssertionError("Expected ValueError when Batch A provider list includes anything other than multilingual_e5_large")
+
+
 def test_incremental_real_question_eval_writes_incremental_artifacts_and_preserves_exact_question_ids(
     client,
     monkeypatch,
@@ -568,6 +606,124 @@ def test_incremental_real_question_eval_writes_incremental_artifacts_and_preserv
     assert latest_json_payload["client_view"]["questions"][0]["question_id"] == "question-sunflower-house"
     assert latest_json_payload["client_view"]["questions"][1]["question_id"] == "question-winter-trip"
     assert latest_json_payload["client_view"]["questions"][2]["question_id"] == "question-grandmother-soup"
+
+
+def test_full_version_batch_a_writes_separate_artifacts_and_compares_only_baseline_and_e5_large(
+    client,
+    monkeypatch,
+    tmp_path,
+):
+    _install_fake_qdrant_client(monkeypatch)
+    _install_fake_real_sentence_transformers(monkeypatch)
+
+    repo_artifact_dir = Path(__file__).resolve().parents[1] / "artifacts" / "real_question_eval"
+    source_incremental_json = (
+        repo_artifact_dir / "latest_incremental_new_providers" / "real_question_eval_result.json"
+    )
+    source_incremental_markdown = (
+        repo_artifact_dir / "latest_incremental_new_providers" / "real_question_eval_report.md"
+    )
+
+    artifact_dir = tmp_path / "real_question_eval_artifacts"
+    latest_incremental_dir = artifact_dir / "latest_incremental_new_providers"
+    latest_incremental_dir.mkdir(parents=True, exist_ok=True)
+    latest_incremental_json = latest_incremental_dir / "real_question_eval_result.json"
+    latest_incremental_markdown = latest_incremental_dir / "real_question_eval_report.md"
+    latest_incremental_json.write_text(source_incremental_json.read_text(encoding="utf-8"), encoding="utf-8")
+    latest_incremental_markdown.write_text(source_incremental_markdown.read_text(encoding="utf-8"), encoding="utf-8")
+    latest_incremental_json_before = latest_incremental_json.read_text(encoding="utf-8")
+    latest_incremental_markdown_before = latest_incremental_markdown.read_text(encoding="utf-8")
+
+    latest_real_dir = artifact_dir / "latest_real"
+    latest_real_dir.mkdir(parents=True, exist_ok=True)
+    latest_real_markdown = latest_real_dir / "real_question_eval_report.md"
+    latest_real_json = latest_real_dir / "real_question_eval_result.json"
+    latest_real_markdown.write_text("keep-real-batch-a\n", encoding="utf-8")
+    latest_real_json.write_text('{"run_type":"real"}\n', encoding="utf-8")
+
+    latest_fake_dir = artifact_dir / "latest_fake"
+    latest_fake_dir.mkdir(parents=True, exist_ok=True)
+    latest_fake_markdown = latest_fake_dir / "real_question_eval_report.md"
+    latest_fake_json = latest_fake_dir / "real_question_eval_result.json"
+    latest_fake_markdown.write_text("keep-fake-batch-a\n", encoding="utf-8")
+    latest_fake_json.write_text('{"run_type":"fake"}\n', encoding="utf-8")
+
+    db, session_generator = _get_test_db_session()
+    try:
+        result = run_full_version_batch_a_question_eval(
+            db,
+            RealQuestionEvalConfig(
+                artifact_dir=artifact_dir,
+                use_real_local_models=True,
+                candidate_model_codes=["multilingual_e5_large"],
+                run_type_override="full_version_batch_a",
+                execution_mode_override="full_version_batch_a_real_eval",
+            ),
+        )
+    finally:
+        _close_test_db_session(session_generator)
+
+    assert result.passed is True
+    assert result.used_fake_models is False
+    assert result.run_type == "full_version_batch_a"
+    assert result.execution_mode == "full_version_batch_a_real_eval"
+    assert result.benchmark_batch_label == "Batch A"
+    assert result.baseline_provider_codes == ["multilingual_e5_base"]
+    assert result.newly_evaluated_provider_codes == ["multilingual_e5_large"]
+    assert result.compared_models == ["multilingual_e5_base", "multilingual_e5_large"]
+    assert result.excluded_provider_codes == [
+        "multilingual_e5_small",
+        "bge_m3",
+        "paraphrase_multilingual_mpnet_base_v2",
+    ]
+    assert [item.question_id for item in result.question_results] == [
+        "question-sunflower-house",
+        "question-winter-trip",
+        "question-grandmother-soup",
+    ]
+    assert "latest_full_version_batch_a" in result.artifact_paths.latest_markdown_report
+    assert "_full_version_batch_a" in result.artifact_paths.archived_markdown_report
+
+    assert latest_incremental_json.read_text(encoding="utf-8") == latest_incremental_json_before
+    assert latest_incremental_markdown.read_text(encoding="utf-8") == latest_incremental_markdown_before
+    assert latest_real_markdown.read_text(encoding="utf-8") == "keep-real-batch-a\n"
+    assert latest_real_json.read_text(encoding="utf-8") == '{"run_type":"real"}\n'
+    assert latest_fake_markdown.read_text(encoding="utf-8") == "keep-fake-batch-a\n"
+    assert latest_fake_json.read_text(encoding="utf-8") == '{"run_type":"fake"}\n'
+
+    latest_json_payload = json.loads(Path(result.artifact_paths.latest_json_result).read_text(encoding="utf-8"))
+    assert latest_json_payload["execution_mode"] == "full_version_batch_a_real_eval"
+    assert latest_json_payload["run_type"] == "full_version_batch_a"
+    assert latest_json_payload["baseline_provider_codes"] == ["multilingual_e5_base"]
+    assert latest_json_payload["newly_evaluated_provider_codes"] == ["multilingual_e5_large"]
+    assert latest_json_payload["client_view"]["baseline_provider_codes"] == ["multilingual_e5_base"]
+    assert latest_json_payload["client_view"]["newly_evaluated_provider_codes"] == ["multilingual_e5_large"]
+    assert latest_json_payload["client_view"]["questions"][0]["question_id"] == "question-sunflower-house"
+    assert latest_json_payload["client_view"]["questions"][1]["question_id"] == "question-winter-trip"
+    assert latest_json_payload["client_view"]["questions"][2]["question_id"] == "question-grandmother-soup"
+    assert latest_json_payload["developer_view"]["models_compared"] == [
+        "multilingual_e5_base",
+        "multilingual_e5_large",
+    ]
+    assert {
+        item["model_code"] for item in latest_json_payload["developer_view"]["aggregate_results"]
+    } == {"multilingual_e5_base", "multilingual_e5_large"}
+
+    markdown_text = Path(result.artifact_paths.latest_markdown_report).read_text(encoding="utf-8")
+    assert "## Technical Summary" in markdown_text
+    assert "## Dataset Questions Used" in markdown_text
+    assert "## Baseline Provider" in markdown_text
+    assert "## Newly Evaluated Provider" in markdown_text
+    assert "## Per-Question Result Comparison" in markdown_text
+    assert "## Aggregate Metrics" in markdown_text
+    assert "## Winner" in markdown_text
+    assert "## Recommendation" in markdown_text
+    assert "## Safety Notes" in markdown_text
+    assert "multilingual_e5_base" in markdown_text
+    assert "multilingual_e5_large" in markdown_text
+    assert "#### multilingual_e5_small" not in markdown_text
+    assert "#### bge_m3" not in markdown_text
+    assert "#### paraphrase_multilingual_mpnet_base_v2" not in markdown_text
 
 
 def test_incremental_artifact_rerender_recomputes_question_wins_from_per_question_winners(tmp_path):

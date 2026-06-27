@@ -2777,3 +2777,66 @@ Safety / runtime notes:
 - no DeepSeek/OpenAI/Jina API calls were made
 - this task is preparation only
 - the real benchmark will be executed later in controlled batches
+
+## Task 46 Run Full-Version Benchmark Batch A: multilingual_e5_large
+
+Goal:
+
+- run one controlled real-local benchmark batch for `multilingual_e5_large`
+- reuse persisted `multilingual_e5_base` as the baseline/current winner
+- exclude weaker historical providers from the final client-facing comparison
+
+Changed files:
+
+- `backend/app/modules/real_question_eval/__init__.py`
+- `backend/app/modules/real_question_eval/report.py`
+- `backend/app/modules/real_question_eval/schemas.py`
+- `backend/app/modules/real_question_eval/service.py`
+- `backend/scripts/run_real_question_eval.py`
+- `backend/tests/test_real_question_eval.py`
+
+Safety constraints:
+
+- real-local benchmark was run only for `multilingual_e5_large`
+- `multilingual_e5_base` was reused from the preserved incremental artifact as the baseline
+- `multilingual_e5_small`, `bge_m3`, and `paraphrase_multilingual_mpnet_base_v2` were not rerun
+- Qwen3 was not run
+- Jina embeddings v3 was not run
+- BGE-M3 full hybrid was not run
+- `latest_real`, `latest_fake`, and `latest_incremental_new_providers` were not overwritten
+
+Exact fake-safe test commands run:
+
+- `python -m pytest tests/test_embedding_models.py tests/test_embedding_benchmark_foundation.py -q` -> `26 passed`
+- `python -m pytest tests/test_embeddings_sentence_transformers.py tests/test_embeddings.py -q` -> `48 passed`
+- `python -m pytest tests/test_multi_embedding_eval.py tests/test_real_question_eval.py -q` -> `37 passed`
+- `python -m pytest -q --durations=20` -> `376 passed`
+
+Exact real command run:
+
+- `docker compose exec -e REAL_QUESTION_EVAL_USE_REAL_LOCAL_MODELS=1 backend python scripts/run_real_question_eval.py --use-real-local-models --full-version-batch-a-providers multilingual_e5_large`
+
+Final result:
+
+- Batch A winner: `multilingual_e5_base`
+- `multilingual_e5_large` did not beat `multilingual_e5_base`
+- production recommendation did not change
+- per-question winners:
+  - `question-sunflower-house` -> `multilingual_e5_large`
+  - `question-winter-trip` -> `multilingual_e5_base`
+  - `question-grandmother-soup` -> `multilingual_e5_base`
+
+Artifact paths:
+
+- latest:
+  - `backend/artifacts/real_question_eval/latest_full_version_batch_a/real_question_eval_report.md`
+  - `backend/artifacts/real_question_eval/latest_full_version_batch_a/real_question_eval_result.json`
+- archived:
+  - `backend/artifacts/real_question_eval/runs/20260626_220907Z_full_version_batch_a/real_question_eval_report.md`
+  - `backend/artifacts/real_question_eval/runs/20260626_220907Z_full_version_batch_a/real_question_eval_result.json`
+
+Download / inference confirmation:
+
+- model download happened for `intfloat/multilingual-e5-large` in the Docker runtime cache during the approved Batch A run
+- real inference happened for `multilingual_e5_large`
+- no other providers were rerun

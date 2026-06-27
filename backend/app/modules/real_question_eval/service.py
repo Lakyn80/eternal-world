@@ -76,6 +76,13 @@ REAL_QUESTION_EVAL_INCREMENTAL_NEW_PROVIDER_CODES = (
     "paraphrase_multilingual_mpnet_base_v2",
     "multilingual_e5_base",
 )
+REAL_QUESTION_EVAL_FULL_VERSION_BATCH_A_BASELINE_PROVIDER = "multilingual_e5_base"
+REAL_QUESTION_EVAL_FULL_VERSION_BATCH_A_NEW_PROVIDER_CODES = ("multilingual_e5_large",)
+REAL_QUESTION_EVAL_FULL_VERSION_BATCH_A_EXCLUDED_PROVIDERS = (
+    "multilingual_e5_small",
+    "bge_m3",
+    "paraphrase_multilingual_mpnet_base_v2",
+)
 REAL_QUESTION_EVAL_TOP_K = 2
 
 
@@ -212,6 +219,12 @@ def _build_fake_vector(text: str, model_name: str) -> list[float]:
                 (relevant_a, 0.92),
                 (relevant_b, 0.92),
                 (distractor, 0.12),
+            )
+        elif model_name == E5_LARGE_MODEL_NAME:
+            set_values(
+                (relevant_a, 0.93),
+                (relevant_b, 0.93),
+                (distractor, 0.08),
             )
         elif model_name == E5_SMALL_MODEL_NAME:
             set_values(
@@ -900,6 +913,18 @@ def _validate_incremental_provider_codes(provider_codes: list[str]) -> list[str]
     return normalized_codes
 
 
+def _validate_full_version_batch_a_provider_codes(provider_codes: list[str]) -> list[str]:
+    normalized_codes = [item.strip().lower() for item in provider_codes if item.strip()]
+    if not normalized_codes:
+        raise ValueError("Full-version Batch A requires an explicit provider list.")
+    if normalized_codes != list(REAL_QUESTION_EVAL_FULL_VERSION_BATCH_A_NEW_PROVIDER_CODES):
+        raise ValueError(
+            "Full-version Batch A only supports the new provider list: "
+            + ", ".join(REAL_QUESTION_EVAL_FULL_VERSION_BATCH_A_NEW_PROVIDER_CODES)
+        )
+    return normalized_codes
+
+
 def _find_historical_real_json_path(*, artifact_dir: Path) -> Path:
     preferred_path = artifact_dir / "latest_real" / "real_question_eval_result.json"
     if preferred_path.exists():
@@ -927,6 +952,18 @@ def _load_historical_real_payload(*, artifact_dir: Path) -> dict[str, object]:
     payload = json.loads(historical_json_path.read_text(encoding="utf-8"))
     if not isinstance(payload, dict):
         raise ValueError("Historical real question eval JSON artifact is invalid")
+    return payload
+
+
+def _load_incremental_new_provider_payload(*, artifact_dir: Path) -> dict[str, object]:
+    incremental_json_path = (
+        artifact_dir / "latest_incremental_new_providers" / "real_question_eval_result.json"
+    )
+    if not incremental_json_path.exists():
+        raise FileNotFoundError("Incremental real question eval JSON artifact was not found")
+    payload = json.loads(incremental_json_path.read_text(encoding="utf-8"))
+    if not isinstance(payload, dict):
+        raise ValueError("Incremental real question eval JSON artifact is invalid")
     return payload
 
 
@@ -1030,6 +1067,56 @@ def _build_historical_aggregate_results(payload: dict[str, object]) -> list[Real
     return aggregate_results
 
 
+def _filter_question_results_to_model_codes(
+    question_results: list[RealQuestionEvalQuestionResult],
+    *,
+    model_codes: list[str],
+) -> list[RealQuestionEvalQuestionResult]:
+    expected_question_ids = [case.case_id for case in _build_question_cases()]
+    filtered_results: list[RealQuestionEvalQuestionResult] = []
+    for question_result in question_results:
+        filtered_model_results = [
+            model_result
+            for model_result in question_result.model_results
+            if model_result.model_code in model_codes
+        ]
+        if len(filtered_model_results) != len(model_codes):
+            raise ValueError(
+                f"Expected filtered model results for {question_result.question_id} to contain only: "
+                + ", ".join(model_codes)
+            )
+        filtered_results.append(
+            RealQuestionEvalQuestionResult(
+                question_id=question_result.question_id,
+                question_text=question_result.question_text,
+                expected_markers=list(question_result.expected_markers),
+                forbidden_markers=list(question_result.forbidden_markers),
+                model_results=filtered_model_results,
+                winner_model_code=filtered_model_results[0].model_code if len(filtered_model_results) == 1 else None,
+                winner_reason=(
+                    "Baseline reused from existing preserved artifact."
+                    if len(filtered_model_results) == 1
+                    else ""
+                ),
+            )
+        )
+    if [item.question_id for item in filtered_results] != expected_question_ids:
+        raise ValueError("Filtered question results changed the expected core question ordering")
+    return filtered_results
+
+
+def _filter_aggregate_results_to_model_codes(
+    aggregate_results: list[RealQuestionEvalAggregateModelResult],
+    *,
+    model_codes: list[str],
+) -> list[RealQuestionEvalAggregateModelResult]:
+    aggregate_by_model = {aggregate_result.model_code: aggregate_result for aggregate_result in aggregate_results}
+    missing_model_codes = [model_code for model_code in model_codes if model_code not in aggregate_by_model]
+    if missing_model_codes:
+        raise ValueError("Missing aggregate results for: " + ", ".join(missing_model_codes))
+    return [aggregate_by_model[model_code] for model_code in model_codes]
+
+
 def _build_result_from_json_payload(payload: dict[str, object]) -> RealQuestionEvalResult:
     client_view = payload.get("client_view") if isinstance(payload.get("client_view"), dict) else {}
     developer_view = payload.get("developer_view") if isinstance(payload.get("developer_view"), dict) else {}
@@ -1052,6 +1139,19 @@ def _build_result_from_json_payload(payload: dict[str, object]) -> RealQuestionE
         used_fake_models=bool(payload.get("used_fake_models")),
         run_type=str(payload.get("run_type") or "") or None,
         execution_mode=str(payload.get("execution_mode") or "") or None,
+        benchmark_batch_label=(
+            str(payload.get("benchmark_batch_label"))
+            if payload.get("benchmark_batch_label") is not None
+            else None
+        ),
+        baseline_provider_codes=[str(item) for item in payload.get("baseline_provider_codes", [])],
+        excluded_provider_codes=[str(item) for item in payload.get("excluded_provider_codes", [])],
+        newly_evaluated_provider_codes=[str(item) for item in payload.get("newly_evaluated_provider_codes", [])],
+        comparison_scope_note=(
+            str(payload.get("comparison_scope_note"))
+            if payload.get("comparison_scope_note") is not None
+            else None
+        ),
         historical_providers=[
             str(item)
             for item in payload.get("historical_providers", developer_view.get("historical_providers", []))
@@ -1239,6 +1339,10 @@ def _build_incremental_official_best_config(selection_result) -> dict[str, objec
     }
 
 
+def _build_batch_a_official_best_config(selection_result) -> dict[str, object]:
+    return _build_incremental_official_best_config(selection_result)
+
+
 def run_incremental_real_question_eval(
     db: Session,
     config: RealQuestionEvalConfig,
@@ -1359,11 +1463,159 @@ def run_incremental_real_question_eval(
     return combined_result
 
 
+def run_full_version_batch_a_question_eval(
+    db: Session,
+    config: RealQuestionEvalConfig,
+) -> RealQuestionEvalResult:
+    new_provider_codes = _validate_full_version_batch_a_provider_codes(list(config.candidate_model_codes or []))
+    baseline_provider_code = REAL_QUESTION_EVAL_FULL_VERSION_BATCH_A_BASELINE_PROVIDER
+    excluded_provider_codes = list(REAL_QUESTION_EVAL_FULL_VERSION_BATCH_A_EXCLUDED_PROVIDERS)
+    incremental_payload = _load_incremental_new_provider_payload(artifact_dir=Path(config.artifact_dir))
+    incremental_question_results = _build_historical_question_results(incremental_payload)
+    incremental_aggregate_results = _build_historical_aggregate_results(incremental_payload)
+    baseline_question_results = _filter_question_results_to_model_codes(
+        incremental_question_results,
+        model_codes=[baseline_provider_code],
+    )
+    baseline_aggregate_results = _filter_aggregate_results_to_model_codes(
+        incremental_aggregate_results,
+        model_codes=[baseline_provider_code],
+    )
+    baseline_client_view = (
+        incremental_payload.get("client_view")
+        if isinstance(incremental_payload.get("client_view"), dict)
+        else {}
+    )
+    baseline_overall_winner = (
+        str(baseline_client_view.get("overall_winner"))
+        if baseline_client_view.get("overall_winner") is not None
+        else baseline_provider_code
+    )
+
+    new_run_config = config.model_copy(
+        update={
+            "candidate_model_codes": new_provider_codes,
+            "write_artifacts": False,
+            "run_type_override": "full_version_batch_a",
+            "execution_mode_override": "full_version_batch_a_real_eval",
+        }
+    )
+    new_provider_result = RealQuestionEvalRunner(db, new_run_config).run()
+    if new_provider_result.error:
+        new_provider_result.run_type = "full_version_batch_a"
+        new_provider_result.execution_mode = "full_version_batch_a_real_eval"
+        new_provider_result.benchmark_batch_label = "Batch A"
+        new_provider_result.baseline_provider_codes = [baseline_provider_code]
+        new_provider_result.excluded_provider_codes = excluded_provider_codes
+        new_provider_result.newly_evaluated_provider_codes = list(new_provider_codes)
+        new_provider_result.historical_overall_winner_model_code = baseline_overall_winner
+        new_provider_result.comparison_scope_note = (
+            "Only multilingual_e5_base and multilingual_e5_large are included in the final Batch A comparison."
+        )
+        return new_provider_result
+
+    expected_question_ids = [case.case_id for case in _build_question_cases()]
+    baseline_question_ids = [item.question_id for item in baseline_question_results]
+    new_question_ids = [item.question_id for item in new_provider_result.question_results]
+    if baseline_question_ids != expected_question_ids or new_question_ids != expected_question_ids:
+        raise ValueError("Full-version Batch A question IDs changed unexpectedly")
+
+    combined_model_codes = [baseline_provider_code, *new_provider_codes]
+    aggregate_by_model = {
+        aggregate_result.model_code: aggregate_result
+        for aggregate_result in [*baseline_aggregate_results, *new_provider_result.aggregate_results]
+    }
+    combined_aggregate_results = [aggregate_by_model[model_code] for model_code in combined_model_codes]
+    selection_result = RagQualityService().select_best_config(
+        config_evaluations=[
+            _build_config_evaluation_from_aggregate_result(
+                aggregate_result,
+                total_cases=len(expected_question_ids),
+            )
+            for aggregate_result in combined_aggregate_results
+        ]
+    )
+    combined_question_results = _merge_question_results(
+        historical_question_results=baseline_question_results,
+        new_question_results=new_provider_result.question_results,
+        official_best_model_code=selection_result.best_model_code,
+    )
+    combined_aggregate_results = _recompute_aggregate_question_wins(
+        question_results=combined_question_results,
+        aggregate_results=combined_aggregate_results,
+    )
+    any_new_provider_beat_baseline = (
+        selection_result.best_model_code in new_provider_codes
+        and selection_result.best_model_code != baseline_provider_code
+    )
+
+    combined_result = RealQuestionEvalResult(
+        passed=False,
+        used_fake_models=new_provider_result.used_fake_models,
+        run_type="full_version_batch_a",
+        execution_mode="full_version_batch_a_real_eval",
+        benchmark_batch_label="Batch A",
+        baseline_provider_codes=[baseline_provider_code],
+        excluded_provider_codes=excluded_provider_codes,
+        newly_evaluated_provider_codes=list(new_provider_codes),
+        comparison_scope_note=(
+            "Only multilingual_e5_base and multilingual_e5_large are included in the final Batch A comparison; weaker historical providers are excluded."
+        ),
+        historical_providers=[baseline_provider_code],
+        new_real_providers=list(new_provider_codes),
+        historical_overall_winner_model_code=baseline_overall_winner,
+        any_new_provider_beat_historical_winner=any_new_provider_beat_baseline,
+        generated_at=new_provider_result.generated_at,
+        profile_id=new_provider_result.profile_id,
+        source_id=new_provider_result.source_id,
+        job_id=new_provider_result.job_id,
+        dataset_id=new_provider_result.dataset_id,
+        dataset_name=new_provider_result.dataset_name,
+        source_chunk_count=new_provider_result.source_chunk_count,
+        compared_models=combined_model_codes,
+        question_results=combined_question_results,
+        aggregate_results=combined_aggregate_results,
+        overall_winner_model_code=selection_result.best_model_code,
+        official_best_config=_build_batch_a_official_best_config(selection_result),
+        activated=False,
+        runtime_verified=False,
+        warnings=[
+            *new_provider_result.warnings,
+            *selection_result.warnings,
+        ],
+    )
+    combined_result.passed = (
+        bool(selection_result.best_model_code)
+        and baseline_question_ids == expected_question_ids
+        and new_question_ids == expected_question_ids
+        and new_provider_result.passed
+    )
+    artifact_paths = write_real_question_eval_artifacts(
+        artifact_dir=Path(config.artifact_dir),
+        result=combined_result,
+    )
+    combined_result.artifact_paths = artifact_paths
+    if artifact_paths.latest_markdown_report is not None:
+        combined_result.markdown_report_path = artifact_paths.latest_markdown_report
+    if artifact_paths.latest_json_result is not None:
+        combined_result.json_result_path = artifact_paths.latest_json_result
+    combined_result.passed = (
+        combined_result.passed
+        and combined_result.markdown_report_path is not None
+        and Path(combined_result.markdown_report_path).exists()
+        and combined_result.json_result_path is not None
+        and Path(combined_result.json_result_path).exists()
+    )
+    return combined_result
+
+
 def run_real_question_eval(
     db: Session,
     config: RealQuestionEvalConfig | None = None,
 ) -> RealQuestionEvalResult:
     resolved_config = config or RealQuestionEvalConfig()
+    if resolved_config.execution_mode_override == "full_version_batch_a_real_eval":
+        return run_full_version_batch_a_question_eval(db, resolved_config)
     if resolved_config.execution_mode_override == "incremental_real_eval":
         return run_incremental_real_question_eval(db, resolved_config)
     return RealQuestionEvalRunner(db, resolved_config).run()
