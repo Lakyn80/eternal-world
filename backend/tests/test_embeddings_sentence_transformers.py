@@ -11,10 +11,14 @@ from app.modules.embeddings.providers.mock import MockEmbeddingProvider
 from app.modules.embeddings.providers.sentence_transformers import (
     E5_BASE_MODEL_NAME,
     E5_LARGE_MODEL_NAME,
+    JINA_EMBEDDINGS_V3_MODEL_NAME,
     PARAPHRASE_MULTILINGUAL_MPNET_BASE_V2_MODEL_NAME,
+    QWEN3_EMBEDDING_0_6B_MODEL_NAME,
     SENTENCE_TRANSFORMERS_PROVIDER_NAME,
     SentenceTransformersEmbeddingProvider,
     SentenceTransformersProviderError,
+    clear_sentence_transformers_shared_model_cache,
+    enable_sentence_transformers_shared_model_cache,
 )
 
 
@@ -22,7 +26,14 @@ class FakeSentenceTransformer:
     init_calls: list[dict[str, object]] = []
     encode_calls: list[dict[str, object]] = []
 
-    def __init__(self, model_name: str, *, device: str = "cpu", cache_folder: str | None = None):
+    def __init__(
+        self,
+        model_name: str,
+        *,
+        device: str = "cpu",
+        cache_folder: str | None = None,
+        **kwargs,
+    ):
         self.model_name = model_name
         self.device = device
         self.cache_folder = cache_folder
@@ -31,6 +42,7 @@ class FakeSentenceTransformer:
                 "model_name": model_name,
                 "device": device,
                 "cache_folder": cache_folder,
+                "kwargs": dict(kwargs),
             }
         )
 
@@ -70,6 +82,7 @@ class FakeSentenceTransformer:
 
 
 def _install_fake_sentence_transformers(monkeypatch, fake_class=FakeSentenceTransformer):
+    clear_sentence_transformers_shared_model_cache()
     fake_class.init_calls = []
     fake_class.encode_calls = []
     monkeypatch.setattr(
@@ -122,6 +135,22 @@ def test_paraphrase_multilingual_mpnet_base_v2_provider_can_be_resolved_when_ena
     monkeypatch.setattr(settings, "embedding_provider", SENTENCE_TRANSFORMERS_PROVIDER_NAME)
 
     provider = build_embedding_provider(model_code="paraphrase_multilingual_mpnet_base_v2")
+
+    assert isinstance(provider, SentenceTransformersEmbeddingProvider)
+
+
+def test_jina_embeddings_v3_provider_can_be_resolved_when_enabled(monkeypatch):
+    monkeypatch.setattr(settings, "embedding_provider", SENTENCE_TRANSFORMERS_PROVIDER_NAME)
+
+    provider = build_embedding_provider(model_code="jina_embeddings_v3")
+
+    assert isinstance(provider, SentenceTransformersEmbeddingProvider)
+
+
+def test_qwen3_embedding_0_6b_provider_can_be_resolved_when_enabled(monkeypatch):
+    monkeypatch.setattr(settings, "embedding_provider", SENTENCE_TRANSFORMERS_PROVIDER_NAME)
+
+    provider = build_embedding_provider(model_code="qwen3_embedding_0_6b")
 
     assert isinstance(provider, SentenceTransformersEmbeddingProvider)
 
@@ -252,6 +281,92 @@ def test_paraphrase_multilingual_mpnet_base_v2_provider_lazy_loads_expected_mode
         FakeSentenceTransformer.init_calls[0]["model_name"]
         == PARAPHRASE_MULTILINGUAL_MPNET_BASE_V2_MODEL_NAME
     )
+
+
+def test_jina_embeddings_v3_provider_lazy_loads_expected_model_name_and_trust_remote_code(monkeypatch):
+    monkeypatch.setattr(settings, "embedding_provider", SENTENCE_TRANSFORMERS_PROVIDER_NAME)
+    import_calls: list[str] = []
+
+    def fake_import_module(module_name: str):
+        import_calls.append(module_name)
+        return SimpleNamespace(SentenceTransformer=FakeSentenceTransformer)
+
+    FakeSentenceTransformer.init_calls = []
+    FakeSentenceTransformer.encode_calls = []
+    monkeypatch.setattr(
+        "app.modules.embeddings.providers.sentence_transformers.import_module",
+        fake_import_module,
+    )
+    provider = SentenceTransformersEmbeddingProvider()
+
+    result = provider.embed_query("Where is Tula?", "jina_embeddings_v3")
+
+    assert result.dimension == 1024
+    assert import_calls == ["sentence_transformers"]
+    assert len(FakeSentenceTransformer.init_calls) == 1
+    assert FakeSentenceTransformer.init_calls[0]["model_name"] == JINA_EMBEDDINGS_V3_MODEL_NAME
+    assert FakeSentenceTransformer.init_calls[0]["kwargs"] == {"trust_remote_code": True}
+
+
+def test_qwen3_embedding_0_6b_provider_lazy_loads_expected_model_name(monkeypatch):
+    monkeypatch.setattr(settings, "embedding_provider", SENTENCE_TRANSFORMERS_PROVIDER_NAME)
+    import_calls: list[str] = []
+
+    def fake_import_module(module_name: str):
+        import_calls.append(module_name)
+        return SimpleNamespace(SentenceTransformer=FakeSentenceTransformer)
+
+    FakeSentenceTransformer.init_calls = []
+    FakeSentenceTransformer.encode_calls = []
+    monkeypatch.setattr(
+        "app.modules.embeddings.providers.sentence_transformers.import_module",
+        fake_import_module,
+    )
+    provider = SentenceTransformersEmbeddingProvider()
+
+    result = provider.embed_query("Where is Kaluga?", "qwen3_embedding_0_6b")
+
+    assert result.dimension == 1024
+    assert import_calls == ["sentence_transformers"]
+    assert len(FakeSentenceTransformer.init_calls) == 1
+    assert FakeSentenceTransformer.init_calls[0]["model_name"] == QWEN3_EMBEDDING_0_6B_MODEL_NAME
+    assert FakeSentenceTransformer.init_calls[0]["kwargs"] == {}
+
+
+def test_shared_model_cache_reuses_local_model_across_provider_instances(monkeypatch):
+    monkeypatch.setattr(settings, "embedding_provider", SENTENCE_TRANSFORMERS_PROVIDER_NAME)
+    _install_fake_sentence_transformers(monkeypatch)
+
+    with enable_sentence_transformers_shared_model_cache(clear_on_exit=True):
+        first_provider = SentenceTransformersEmbeddingProvider()
+        second_provider = SentenceTransformersEmbeddingProvider()
+
+        first_provider.embed_query("Where is Tula?", "jina_embeddings_v3")
+        second_provider.embed_query("Where is Ryazan?", "jina_embeddings_v3")
+
+    assert len(FakeSentenceTransformer.init_calls) == 1
+    assert [call["model_name"] for call in FakeSentenceTransformer.init_calls] == [
+        JINA_EMBEDDINGS_V3_MODEL_NAME
+    ]
+    assert len(FakeSentenceTransformer.encode_calls) == 2
+
+
+def test_shared_model_cache_reuses_qwen_model_across_provider_instances(monkeypatch):
+    monkeypatch.setattr(settings, "embedding_provider", SENTENCE_TRANSFORMERS_PROVIDER_NAME)
+    _install_fake_sentence_transformers(monkeypatch)
+
+    with enable_sentence_transformers_shared_model_cache(clear_on_exit=True):
+        first_provider = SentenceTransformersEmbeddingProvider()
+        second_provider = SentenceTransformersEmbeddingProvider()
+
+        first_provider.embed_query("Where is Kaluga?", "qwen3_embedding_0_6b")
+        second_provider.embed_query("Where is Omsk?", "qwen3_embedding_0_6b")
+
+    assert len(FakeSentenceTransformer.init_calls) == 1
+    assert [call["model_name"] for call in FakeSentenceTransformer.init_calls] == [
+        QWEN3_EMBEDDING_0_6B_MODEL_NAME
+    ]
+    assert len(FakeSentenceTransformer.encode_calls) == 2
 
 
 def test_provider_formats_query_and_passage_text_with_e5_prefixes(monkeypatch):

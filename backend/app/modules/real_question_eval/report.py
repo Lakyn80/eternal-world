@@ -11,8 +11,13 @@ TASK_NAME = "Task 32 Real Local Model Question Evaluation"
 
 
 def build_real_question_eval_markdown(result: RealQuestionEvalResult) -> str:
-    if result.execution_mode == "full_version_batch_a_real_eval":
-        return build_real_question_eval_batch_a_markdown(result)
+    if result.execution_mode in {
+        "full_version_batch_a_real_eval",
+        "full_version_batch_b_real_eval",
+        "full_version_batch_c_real_eval",
+        "full_version_batch_b_attempted",
+    }:
+        return build_real_question_eval_benchmark_batch_markdown(result)
 
     client_view = build_real_question_eval_client_view(result)
     developer_view = build_real_question_eval_developer_view(result)
@@ -205,14 +210,17 @@ def build_real_question_eval_markdown(result: RealQuestionEvalResult) -> str:
     return "\n".join(lines).rstrip() + "\n"
 
 
-def build_real_question_eval_batch_a_markdown(result: RealQuestionEvalResult) -> str:
+def build_real_question_eval_benchmark_batch_markdown(result: RealQuestionEvalResult) -> str:
     client_view = build_real_question_eval_client_view(result)
     developer_view = build_real_question_eval_developer_view(result)
+    batch_label = client_view["benchmark_batch_label"] or "Benchmark Batch"
+    baseline_provider = (client_view["baseline_provider_codes"] or ["none"])[0]
+    newly_evaluated_provider = (client_view["newly_evaluated_provider_codes"] or ["none"])[0]
     lines: list[str] = [
         "# Real Question Evaluation Report",
         "",
         "## Client Summary",
-        f"- Batch label: `{client_view['benchmark_batch_label'] or 'Batch A'}`",
+        f"- Batch label: `{batch_label}`",
         f"- Source dataset: {client_view['source_dataset_note']}",
         f"- Real client/user data: {client_view['real_client_user_data']}",
         f"- Purpose: {client_view['purpose']}",
@@ -222,8 +230,8 @@ def build_real_question_eval_batch_a_markdown(result: RealQuestionEvalResult) ->
         lines.append(f"  - `{model_code}`")
     lines.extend(
         [
-            f"- Baseline provider: `{(client_view['baseline_provider_codes'] or ['none'])[0]}`",
-            f"- Newly evaluated provider: `{(client_view['newly_evaluated_provider_codes'] or ['none'])[0]}`",
+            f"- Baseline provider: `{baseline_provider}`",
+            f"- Newly evaluated provider: `{newly_evaluated_provider}`",
             f"- Comparison scope: {client_view['comparison_scope_note'] or 'n/a'}",
             f"- Weaker historical providers intentionally excluded: {', '.join(client_view['excluded_provider_codes']) or 'none'}",
             f"- Winner: `{client_view['overall_winner'] or 'none'}`",
@@ -232,10 +240,16 @@ def build_real_question_eval_batch_a_markdown(result: RealQuestionEvalResult) ->
             "## Technical Summary",
             f"- Run type: `{result.run_type or 'unknown'}`",
             f"- Execution mode: `{result.execution_mode or 'unknown'}`",
+            f"- Benchmark status: `{client_view['benchmark_status'] or 'unknown'}`",
             f"- Used fake models: `{str(result.used_fake_models).lower()}`",
-            f"- Historical current winner before Batch A: `{client_view['historical_overall_winner'] or 'none'}`",
+            f"- Historical current winner before {batch_label}: `{client_view['historical_overall_winner'] or 'none'}`",
             f"- Any new provider beat baseline/current winner: `{str(client_view['any_new_provider_beat_historical_winner']).lower()}`",
             f"- Timestamp: {result.generated_at or 'unknown'}",
+            *(
+                [f"- Incomplete reason: {client_view['incomplete_reason']}"]
+                if client_view["incomplete_reason"]
+                else []
+            ),
             "",
             "## Dataset Questions Used",
         ]
@@ -289,19 +303,21 @@ def build_real_question_eval_batch_a_markdown(result: RealQuestionEvalResult) ->
     lines.extend(
         [
             "## Winner",
-            f"- Batch A winner: `{client_view['overall_winner'] or 'none'}`",
+            f"- {batch_label} winner: `{client_view['overall_winner'] or 'none'}`",
             "",
             "## Recommendation",
             f"- Recommended active model: `{client_view['recommended_active_model'] or 'none'}`",
             f"- Production recommendation: {client_view['production_recommendation']}",
             "",
             "## Safety Notes",
-            f"- Only newly run provider: `{(client_view['newly_evaluated_provider_codes'] or ['none'])[0]}`",
-            f"- Baseline reused from existing artifact: `{(client_view['baseline_provider_codes'] or ['none'])[0]}`",
+            f"- Only newly run provider: `{newly_evaluated_provider}`",
+            f"- Baseline reused from existing artifact: `{baseline_provider}`",
             f"- Excluded weaker historical providers: {', '.join(client_view['excluded_provider_codes']) or 'none'}",
             f"- Latest real artifacts overwritten: `false`",
             f"- Latest fake artifacts overwritten: `false`",
             f"- Latest incremental artifacts overwritten: `false`",
+            f"- Latest full-version Batch A artifacts overwritten: `false`",
+            *[f"- {note}" for note in client_view["non_compared_notes"]],
             "",
             "## Artifact Files",
             f"- Latest Markdown: `{result.artifact_paths.latest_markdown_report or 'n/a'}`",
@@ -359,6 +375,9 @@ def build_real_question_eval_json_payload(result: RealQuestionEvalResult) -> dic
         "timestamp": result.generated_at,
         "used_fake_models": result.used_fake_models,
         "status": "PASS" if result.passed else "FAIL",
+        "benchmark_status": result.benchmark_status,
+        "incomplete_reason": result.incomplete_reason,
+        "non_compared_notes": list(result.non_compared_notes),
         "artifact_paths": result.artifact_paths.model_dump(mode="json"),
         "client_view": client_view,
         "developer_view": developer_view,
@@ -423,6 +442,11 @@ def build_real_question_eval_client_view(result: RealQuestionEvalResult) -> dict
         )
 
     recommended_active_model = result.overall_winner_model_code
+    if recommended_active_model is None and result.benchmark_status == "attempted_not_completed":
+        recommended_active_model = (
+            result.historical_overall_winner_model_code
+            or (result.baseline_provider_codes[0] if result.baseline_provider_codes else None)
+        )
     if result.used_fake_models:
         speed_vs_accuracy_tradeoff = (
             "Fake-mode evaluation is optimized for deterministic regression checks, not runtime speed measurements."
@@ -431,18 +455,40 @@ def build_real_question_eval_client_view(result: RealQuestionEvalResult) -> dict
             "Keep the fake-mode result for test coverage only; use the preserved latest real evaluation for production-facing model decisions."
         )
     else:
-        if result.execution_mode == "full_version_batch_a_real_eval":
+        if result.execution_mode in {
+            "full_version_batch_a_real_eval",
+            "full_version_batch_b_real_eval",
+            "full_version_batch_c_real_eval",
+        }:
+            batch_label = result.benchmark_batch_label or "benchmark batch"
+            baseline_provider = (result.baseline_provider_codes or ["baseline"])[0]
+            newly_evaluated_provider = (result.newly_evaluated_provider_codes or ["candidate"])[0]
             speed_vs_accuracy_tradeoff = (
-                "Batch A compares the persisted current winner multilingual_e5_base against one newly run provider, multilingual_e5_large. If quality is effectively tied, the lower-latency and lighter baseline remains preferred."
+                f"{batch_label} compares the persisted current winner `{baseline_provider}` against one newly run provider, `{newly_evaluated_provider}`. If quality is effectively tied, the lower-latency and lighter baseline remains preferred."
             )
-            if result.any_new_provider_beat_historical_winner:
+            if result.benchmark_status == "attempted_not_completed":
                 production_recommendation = (
-                    f"Batch A indicates `{recommended_active_model}` beat the baseline `multilingual_e5_base`; review multilingual_e5_large for promotion."
+                    f"{batch_label} did not complete, so keep `{baseline_provider}` as the production recommendation."
+                )
+            elif result.any_new_provider_beat_historical_winner:
+                production_recommendation = (
+                    f"{batch_label} indicates `{recommended_active_model}` beat the baseline `{baseline_provider}`; review `{newly_evaluated_provider}` for promotion."
                 )
             else:
                 production_recommendation = (
-                    "Batch A does not show a clear enough win over the baseline multilingual_e5_base; keep multilingual_e5_base as the production recommendation."
+                    f"{batch_label} does not show a clear enough win over the baseline `{baseline_provider}`; keep `{baseline_provider}` as the production recommendation."
                 )
+        elif result.execution_mode == "full_version_batch_b_attempted":
+            baseline_provider = (
+                result.historical_overall_winner_model_code
+                or (result.baseline_provider_codes[0] if result.baseline_provider_codes else "multilingual_e5_base")
+            )
+            speed_vs_accuracy_tradeoff = (
+                "Qwen3 0.6B was attempted in the local Docker runtime but did not complete, so no useful latency or quality tradeoff was established."
+            )
+            production_recommendation = (
+                f"Keep `{baseline_provider}` as the production recommendation and skip Qwen for now in this environment."
+            )
         elif result.execution_mode == "incremental_real_eval":
             speed_vs_accuracy_tradeoff = (
                 "Historical multilingual_e5_small and bge_m3 results were preserved and compared against the two new real-provider runs using the same dataset and selector rules."
@@ -489,6 +535,9 @@ def build_real_question_eval_client_view(result: RealQuestionEvalResult) -> dict
         "new_real_run_providers": list(result.new_real_providers),
         "historical_overall_winner": result.historical_overall_winner_model_code,
         "any_new_provider_beat_historical_winner": result.any_new_provider_beat_historical_winner,
+        "benchmark_status": result.benchmark_status,
+        "incomplete_reason": result.incomplete_reason,
+        "non_compared_notes": list(result.non_compared_notes),
         "questions": questions,
     }
 
@@ -561,6 +610,9 @@ def build_real_question_eval_developer_view(result: RealQuestionEvalResult) -> d
         "new_real_providers": list(result.new_real_providers),
         "historical_overall_winner": result.historical_overall_winner_model_code,
         "any_new_provider_beat_historical_winner": result.any_new_provider_beat_historical_winner,
+        "benchmark_status": result.benchmark_status,
+        "incomplete_reason": result.incomplete_reason,
+        "non_compared_notes": list(result.non_compared_notes),
     }
 
 
@@ -589,6 +641,12 @@ def _resolve_execution_mode(*, result: RealQuestionEvalResult) -> str:
 
 
 def _resolve_artifact_variant(*, result: RealQuestionEvalResult) -> str:
+    if result.run_type == "full_version_batch_b_attempted":
+        return "full_version_batch_b_attempted"
+    if result.run_type == "full_version_batch_c":
+        return "full_version_batch_c"
+    if result.run_type == "full_version_batch_b":
+        return "full_version_batch_b"
     if result.run_type == "full_version_batch_a":
         return "full_version_batch_a"
     if result.run_type == "incremental_real":

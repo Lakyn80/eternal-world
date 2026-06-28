@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from types import SimpleNamespace
 
 from app.db.models import ActiveRetrievalConfig
 from app.db.session import get_db
@@ -10,13 +11,18 @@ from app.modules.real_question_eval import (
     RealQuestionEvalConfig,
     RealQuestionEvalRunner,
     run_full_version_batch_a_question_eval,
+    run_full_version_batch_b_question_eval,
+    run_full_version_batch_c_question_eval,
     run_incremental_real_question_eval,
+    write_full_version_batch_b_attempted_artifact,
 )
 from app.modules.real_question_eval.service import _QuestionEvalFakeSentenceTransformer
 from app.modules.real_question_eval.service import rerender_incremental_real_artifacts_from_existing_json
 from scripts.run_real_question_eval import (
     _print_text_result,
     resolve_full_version_batch_a_providers,
+    resolve_full_version_batch_b_providers,
+    resolve_full_version_batch_c_providers,
     resolve_real_question_eval_execution_mode,
 )
 
@@ -165,6 +171,38 @@ def _install_fake_real_sentence_transformers(monkeypatch) -> None:
             {"SentenceTransformer": _QuestionEvalFakeSentenceTransformer},
         )(),
     )
+
+
+class _TrackingQuestionEvalFakeSentenceTransformer(_QuestionEvalFakeSentenceTransformer):
+    init_calls: list[dict[str, object]] = []
+    encode_calls: list[dict[str, object]] = []
+
+    def __init__(self, model_name: str, *, device: str = "cpu", cache_folder: str | None = None, **kwargs):
+        super().__init__(
+            model_name,
+            device=device,
+            cache_folder=cache_folder,
+            **kwargs,
+        )
+        self.__class__.init_calls.append(
+            {
+                "model_name": model_name,
+                "device": device,
+                "cache_folder": cache_folder,
+                "kwargs": dict(kwargs),
+            }
+        )
+
+    def encode(self, texts, **kwargs):
+        materialized_texts = list(texts)
+        self.__class__.encode_calls.append(
+            {
+                "model_name": self.model_name,
+                "texts": materialized_texts,
+                "kwargs": dict(kwargs),
+            }
+        )
+        return super().encode(materialized_texts, **kwargs)
 
 
 def test_real_question_eval_compares_both_candidates_writes_report_and_verifies_runtime_retrieval(
@@ -411,6 +449,78 @@ def test_real_question_eval_defaults_to_fake_models_and_avoids_real_network_call
     assert result.execution_mode == "fake_eval"
 
 
+def test_real_local_jina_eval_reuses_single_model_instance_across_chunking_and_questions(
+    client,
+    monkeypatch,
+    tmp_path,
+):
+    _install_fake_qdrant_client(monkeypatch)
+    _TrackingQuestionEvalFakeSentenceTransformer.init_calls = []
+    _TrackingQuestionEvalFakeSentenceTransformer.encode_calls = []
+    monkeypatch.setattr(
+        "app.modules.embeddings.providers.sentence_transformers.import_module",
+        lambda module_name: SimpleNamespace(
+            SentenceTransformer=_TrackingQuestionEvalFakeSentenceTransformer
+        ),
+    )
+
+    db, session_generator = _get_test_db_session()
+    try:
+        result = RealQuestionEvalRunner(
+            db,
+            RealQuestionEvalConfig(
+                artifact_dir=tmp_path / "real_question_eval_artifacts",
+                use_real_local_models=True,
+                candidate_model_codes=["jina_embeddings_v3"],
+            ),
+        ).run()
+    finally:
+        _close_test_db_session(session_generator)
+
+    assert result.passed is True
+    assert result.used_fake_models is False
+    assert len(_TrackingQuestionEvalFakeSentenceTransformer.init_calls) == 1
+    assert _TrackingQuestionEvalFakeSentenceTransformer.init_calls[0]["model_name"] == "jinaai/jina-embeddings-v3"
+    assert _TrackingQuestionEvalFakeSentenceTransformer.init_calls[0]["kwargs"] == {"trust_remote_code": True}
+    assert len(_TrackingQuestionEvalFakeSentenceTransformer.encode_calls) >= 4
+
+
+def test_real_local_qwen_eval_reuses_single_model_instance_across_chunking_and_questions(
+    client,
+    monkeypatch,
+    tmp_path,
+):
+    _install_fake_qdrant_client(monkeypatch)
+    _TrackingQuestionEvalFakeSentenceTransformer.init_calls = []
+    _TrackingQuestionEvalFakeSentenceTransformer.encode_calls = []
+    monkeypatch.setattr(
+        "app.modules.embeddings.providers.sentence_transformers.import_module",
+        lambda module_name: SimpleNamespace(
+            SentenceTransformer=_TrackingQuestionEvalFakeSentenceTransformer
+        ),
+    )
+
+    db, session_generator = _get_test_db_session()
+    try:
+        result = RealQuestionEvalRunner(
+            db,
+            RealQuestionEvalConfig(
+                artifact_dir=tmp_path / "real_question_eval_artifacts",
+                use_real_local_models=True,
+                candidate_model_codes=["qwen3_embedding_0_6b"],
+            ),
+        ).run()
+    finally:
+        _close_test_db_session(session_generator)
+
+    assert result.passed is True
+    assert result.used_fake_models is False
+    assert len(_TrackingQuestionEvalFakeSentenceTransformer.init_calls) == 1
+    assert _TrackingQuestionEvalFakeSentenceTransformer.init_calls[0]["model_name"] == "Qwen/Qwen3-Embedding-0.6B"
+    assert _TrackingQuestionEvalFakeSentenceTransformer.init_calls[0]["kwargs"] == {}
+    assert len(_TrackingQuestionEvalFakeSentenceTransformer.encode_calls) >= 4
+
+
 def test_real_question_eval_execution_mode_defaults_to_fake_eval_when_no_manual_real_signals_are_present():
     execution_mode, use_real_local_models, incremental_real_providers = resolve_real_question_eval_execution_mode(
         cli_use_real_local_models=False,
@@ -532,6 +642,67 @@ def test_full_version_batch_a_rejects_any_provider_list_other_than_multilingual_
         assert "requires the explicit provider list: multilingual_e5_large" in str(exc)
     else:
         raise AssertionError("Expected ValueError when Batch A provider list includes anything other than multilingual_e5_large")
+
+
+def test_full_version_batch_b_cli_path_is_closed_and_refuses_qwen_reruns():
+    try:
+        resolve_full_version_batch_b_providers(
+            cli_use_real_local_models=True,
+            env_use_real_local_models="1",
+            full_version_batch_b_providers_raw="qwen3_embedding_0_6b",
+            rerun_attempted_full_version_batch_b=False,
+        )
+    except ValueError as exc:
+        assert "--rerun-attempted-full-version-batch-b" in str(exc)
+    else:
+        raise AssertionError("Expected ValueError when Batch B rerun is requested")
+
+
+def test_full_version_batch_b_accepts_explicit_guarded_rerun_for_qwen():
+    provider_codes = resolve_full_version_batch_b_providers(
+        cli_use_real_local_models=True,
+        env_use_real_local_models="1",
+        full_version_batch_b_providers_raw="qwen3_embedding_0_6b",
+        rerun_attempted_full_version_batch_b=True,
+    )
+
+    assert provider_codes == ["qwen3_embedding_0_6b"]
+
+
+def test_full_version_batch_c_requires_both_cli_flag_and_env_var_and_exact_jina_provider_list():
+    provider_codes = resolve_full_version_batch_c_providers(
+        cli_use_real_local_models=True,
+        env_use_real_local_models="1",
+        full_version_batch_c_providers_raw="jina_embeddings_v3",
+    )
+
+    assert provider_codes == ["jina_embeddings_v3"]
+
+
+def test_full_version_batch_c_fails_fast_without_both_manual_real_signals():
+    try:
+        resolve_full_version_batch_c_providers(
+            cli_use_real_local_models=False,
+            env_use_real_local_models="1",
+            full_version_batch_c_providers_raw="jina_embeddings_v3",
+        )
+    except ValueError as exc:
+        assert "requires BOTH --use-real-local-models and REAL_QUESTION_EVAL_USE_REAL_LOCAL_MODELS=1" in str(exc)
+    else:
+        raise AssertionError("Expected ValueError when Batch C is requested without both manual real signals")
+
+
+def test_full_version_batch_c_rejects_any_provider_list_other_than_jina_embeddings_v3():
+    try:
+        resolve_full_version_batch_c_providers(
+            cli_use_real_local_models=True,
+            env_use_real_local_models="1",
+            full_version_batch_c_providers_raw="qwen3_embedding_0_6b",
+        )
+    except ValueError as exc:
+        assert "requires the explicit provider list: jina_embeddings_v3" in str(exc)
+    else:
+        raise AssertionError("Expected ValueError when Batch C provider list includes anything other than jina_embeddings_v3")
 
 
 def test_incremental_real_question_eval_writes_incremental_artifacts_and_preserves_exact_question_ids(
@@ -724,6 +895,401 @@ def test_full_version_batch_a_writes_separate_artifacts_and_compares_only_baseli
     assert "#### multilingual_e5_small" not in markdown_text
     assert "#### bge_m3" not in markdown_text
     assert "#### paraphrase_multilingual_mpnet_base_v2" not in markdown_text
+
+
+def test_full_version_batch_b_writes_attempted_artifact_without_running_qwen(
+    monkeypatch,
+    tmp_path,
+):
+    repo_artifact_dir = Path(__file__).resolve().parents[1] / "artifacts" / "real_question_eval"
+    source_incremental_json = (
+        repo_artifact_dir / "latest_incremental_new_providers" / "real_question_eval_result.json"
+    )
+    source_incremental_markdown = (
+        repo_artifact_dir / "latest_incremental_new_providers" / "real_question_eval_report.md"
+    )
+
+    artifact_dir = tmp_path / "real_question_eval_artifacts"
+    latest_incremental_dir = artifact_dir / "latest_incremental_new_providers"
+    latest_incremental_dir.mkdir(parents=True, exist_ok=True)
+    latest_incremental_json = latest_incremental_dir / "real_question_eval_result.json"
+    latest_incremental_markdown = latest_incremental_dir / "real_question_eval_report.md"
+    latest_incremental_json.write_text(source_incremental_json.read_text(encoding="utf-8"), encoding="utf-8")
+    latest_incremental_markdown.write_text(source_incremental_markdown.read_text(encoding="utf-8"), encoding="utf-8")
+    latest_incremental_json_before = latest_incremental_json.read_text(encoding="utf-8")
+    latest_incremental_markdown_before = latest_incremental_markdown.read_text(encoding="utf-8")
+
+    latest_real_dir = artifact_dir / "latest_real"
+    latest_real_dir.mkdir(parents=True, exist_ok=True)
+    latest_real_markdown = latest_real_dir / "real_question_eval_report.md"
+    latest_real_json = latest_real_dir / "real_question_eval_result.json"
+    latest_real_markdown.write_text("keep-real-batch-b\n", encoding="utf-8")
+    latest_real_json.write_text('{"run_type":"real"}\n', encoding="utf-8")
+
+    latest_fake_dir = artifact_dir / "latest_fake"
+    latest_fake_dir.mkdir(parents=True, exist_ok=True)
+    latest_fake_markdown = latest_fake_dir / "real_question_eval_report.md"
+    latest_fake_json = latest_fake_dir / "real_question_eval_result.json"
+    latest_fake_markdown.write_text("keep-fake-batch-b\n", encoding="utf-8")
+    latest_fake_json.write_text('{"run_type":"fake"}\n', encoding="utf-8")
+
+    latest_batch_a_dir = artifact_dir / "latest_full_version_batch_a"
+    latest_batch_a_dir.mkdir(parents=True, exist_ok=True)
+    latest_batch_a_markdown = latest_batch_a_dir / "real_question_eval_report.md"
+    latest_batch_a_json = latest_batch_a_dir / "real_question_eval_result.json"
+    latest_batch_a_markdown.write_text("keep-batch-a\n", encoding="utf-8")
+    latest_batch_a_json.write_text('{"run_type":"full_version_batch_a"}\n', encoding="utf-8")
+
+    runner_called = {"value": False}
+
+    def fail_runner(*args, **kwargs):
+        runner_called["value"] = True
+        raise AssertionError("Qwen Batch B should not invoke the runner anymore")
+
+    monkeypatch.setattr(
+        "app.modules.real_question_eval.service.RealQuestionEvalRunner.run",
+        fail_runner,
+    )
+
+    result = run_full_version_batch_b_question_eval(
+        None,
+        RealQuestionEvalConfig(
+            artifact_dir=artifact_dir,
+            use_real_local_models=True,
+            candidate_model_codes=["qwen3_embedding_0_6b"],
+            run_type_override="full_version_batch_b",
+            execution_mode_override="full_version_batch_b_real_eval",
+            rerun_attempted_full_version_batch_b=False,
+        ),
+    )
+
+    assert runner_called["value"] is False
+    assert result.passed is False
+    assert result.used_fake_models is False
+    assert result.run_type == "full_version_batch_b_attempted"
+    assert result.execution_mode == "full_version_batch_b_attempted"
+    assert result.benchmark_batch_label == "Batch B Attempted"
+    assert result.benchmark_status == "attempted_not_completed"
+    assert result.incomplete_reason is not None
+    assert result.baseline_provider_codes == ["multilingual_e5_base"]
+    assert result.newly_evaluated_provider_codes == ["qwen3_embedding_0_6b"]
+    assert result.compared_models == ["multilingual_e5_base", "qwen3_embedding_0_6b"]
+    assert result.overall_winner_model_code is None
+    assert "latest_full_version_batch_b_attempted" in result.artifact_paths.latest_markdown_report
+    assert "_full_version_batch_b_attempted" in result.artifact_paths.archived_markdown_report
+
+    assert latest_incremental_json.read_text(encoding="utf-8") == latest_incremental_json_before
+    assert latest_incremental_markdown.read_text(encoding="utf-8") == latest_incremental_markdown_before
+    assert latest_real_markdown.read_text(encoding="utf-8") == "keep-real-batch-b\n"
+    assert latest_real_json.read_text(encoding="utf-8") == '{"run_type":"real"}\n'
+    assert latest_fake_markdown.read_text(encoding="utf-8") == "keep-fake-batch-b\n"
+    assert latest_fake_json.read_text(encoding="utf-8") == '{"run_type":"fake"}\n'
+    assert latest_batch_a_markdown.read_text(encoding="utf-8") == "keep-batch-a\n"
+    assert latest_batch_a_json.read_text(encoding="utf-8") == '{"run_type":"full_version_batch_a"}\n'
+
+    latest_json_payload = json.loads(Path(result.artifact_paths.latest_json_result).read_text(encoding="utf-8"))
+    assert latest_json_payload["execution_mode"] == "full_version_batch_b_attempted"
+    assert latest_json_payload["run_type"] == "full_version_batch_b_attempted"
+    assert latest_json_payload["benchmark_status"] == "attempted_not_completed"
+    assert latest_json_payload["used_fake_models"] is False
+    assert latest_json_payload["client_view"]["benchmark_status"] == "attempted_not_completed"
+    assert latest_json_payload["client_view"]["recommended_active_model"] == "multilingual_e5_base"
+    assert latest_json_payload["developer_view"]["models_compared"] == [
+        "multilingual_e5_base",
+        "qwen3_embedding_0_6b",
+    ]
+
+    markdown_text = Path(result.artifact_paths.latest_markdown_report).read_text(encoding="utf-8")
+    assert "## Technical Summary" in markdown_text
+    assert "Benchmark status: `attempted_not_completed`" in markdown_text
+    assert "`multilingual_e5_base`" in markdown_text
+    assert "production recommendation" in markdown_text.lower()
+    assert "Qwen3 0.6B benchmark attempted but not completed in this environment." in markdown_text
+
+
+def test_full_version_batch_b_rerun_writes_separate_artifacts_and_compares_only_baseline_and_qwen(
+    client,
+    monkeypatch,
+    tmp_path,
+):
+    _install_fake_qdrant_client(monkeypatch)
+    _install_fake_real_sentence_transformers(monkeypatch)
+
+    repo_artifact_dir = Path(__file__).resolve().parents[1] / "artifacts" / "real_question_eval"
+    source_incremental_json = (
+        repo_artifact_dir / "latest_incremental_new_providers" / "real_question_eval_result.json"
+    )
+    source_incremental_markdown = (
+        repo_artifact_dir / "latest_incremental_new_providers" / "real_question_eval_report.md"
+    )
+
+    artifact_dir = tmp_path / "real_question_eval_artifacts"
+    latest_incremental_dir = artifact_dir / "latest_incremental_new_providers"
+    latest_incremental_dir.mkdir(parents=True, exist_ok=True)
+    latest_incremental_json = latest_incremental_dir / "real_question_eval_result.json"
+    latest_incremental_markdown = latest_incremental_dir / "real_question_eval_report.md"
+    latest_incremental_json.write_text(source_incremental_json.read_text(encoding="utf-8"), encoding="utf-8")
+    latest_incremental_markdown.write_text(source_incremental_markdown.read_text(encoding="utf-8"), encoding="utf-8")
+    latest_incremental_json_before = latest_incremental_json.read_text(encoding="utf-8")
+    latest_incremental_markdown_before = latest_incremental_markdown.read_text(encoding="utf-8")
+
+    latest_real_dir = artifact_dir / "latest_real"
+    latest_real_dir.mkdir(parents=True, exist_ok=True)
+    latest_real_markdown = latest_real_dir / "real_question_eval_report.md"
+    latest_real_json = latest_real_dir / "real_question_eval_result.json"
+    latest_real_markdown.write_text("keep-real-batch-b-rerun\n", encoding="utf-8")
+    latest_real_json.write_text('{"run_type":"real"}\n', encoding="utf-8")
+
+    latest_fake_dir = artifact_dir / "latest_fake"
+    latest_fake_dir.mkdir(parents=True, exist_ok=True)
+    latest_fake_markdown = latest_fake_dir / "real_question_eval_report.md"
+    latest_fake_json = latest_fake_dir / "real_question_eval_result.json"
+    latest_fake_markdown.write_text("keep-fake-batch-b-rerun\n", encoding="utf-8")
+    latest_fake_json.write_text('{"run_type":"fake"}\n', encoding="utf-8")
+
+    latest_batch_a_dir = artifact_dir / "latest_full_version_batch_a"
+    latest_batch_a_dir.mkdir(parents=True, exist_ok=True)
+    latest_batch_a_markdown = latest_batch_a_dir / "real_question_eval_report.md"
+    latest_batch_a_json = latest_batch_a_dir / "real_question_eval_result.json"
+    latest_batch_a_markdown.write_text("keep-batch-a\n", encoding="utf-8")
+    latest_batch_a_json.write_text('{"run_type":"full_version_batch_a"}\n', encoding="utf-8")
+
+    latest_batch_c_dir = artifact_dir / "latest_full_version_batch_c"
+    latest_batch_c_dir.mkdir(parents=True, exist_ok=True)
+    latest_batch_c_markdown = latest_batch_c_dir / "real_question_eval_report.md"
+    latest_batch_c_json = latest_batch_c_dir / "real_question_eval_result.json"
+    latest_batch_c_markdown.write_text("keep-batch-c\n", encoding="utf-8")
+    latest_batch_c_json.write_text('{"run_type":"full_version_batch_c"}\n', encoding="utf-8")
+
+    db, session_generator = _get_test_db_session()
+    try:
+        result = run_full_version_batch_b_question_eval(
+            db,
+            RealQuestionEvalConfig(
+                artifact_dir=artifact_dir,
+                use_real_local_models=True,
+                candidate_model_codes=["qwen3_embedding_0_6b"],
+                run_type_override="full_version_batch_b",
+                execution_mode_override="full_version_batch_b_real_eval",
+                rerun_attempted_full_version_batch_b=True,
+            ),
+        )
+    finally:
+        _close_test_db_session(session_generator)
+
+    assert result.passed is True
+    assert result.used_fake_models is False
+    assert result.run_type == "full_version_batch_b"
+    assert result.execution_mode == "full_version_batch_b_real_eval"
+    assert result.benchmark_batch_label == "Batch B"
+    assert result.benchmark_status == "completed"
+    assert result.baseline_provider_codes == ["multilingual_e5_base"]
+    assert result.newly_evaluated_provider_codes == ["qwen3_embedding_0_6b"]
+    assert result.compared_models == ["multilingual_e5_base", "qwen3_embedding_0_6b"]
+    assert result.excluded_provider_codes == [
+        "multilingual_e5_small",
+        "bge_m3",
+        "paraphrase_multilingual_mpnet_base_v2",
+        "multilingual_e5_large",
+        "jina_embeddings_v3",
+        "qwen3_embedding_4b",
+        "qwen3_embedding_8b",
+    ]
+    assert [item.question_id for item in result.question_results] == [
+        "question-sunflower-house",
+        "question-winter-trip",
+        "question-grandmother-soup",
+    ]
+    assert "latest_full_version_batch_b" in result.artifact_paths.latest_markdown_report
+    assert "_full_version_batch_b" in result.artifact_paths.archived_markdown_report
+
+    assert latest_incremental_json.read_text(encoding="utf-8") == latest_incremental_json_before
+    assert latest_incremental_markdown.read_text(encoding="utf-8") == latest_incremental_markdown_before
+    assert latest_real_markdown.read_text(encoding="utf-8") == "keep-real-batch-b-rerun\n"
+    assert latest_real_json.read_text(encoding="utf-8") == '{"run_type":"real"}\n'
+    assert latest_fake_markdown.read_text(encoding="utf-8") == "keep-fake-batch-b-rerun\n"
+    assert latest_fake_json.read_text(encoding="utf-8") == '{"run_type":"fake"}\n'
+    assert latest_batch_a_markdown.read_text(encoding="utf-8") == "keep-batch-a\n"
+    assert latest_batch_a_json.read_text(encoding="utf-8") == '{"run_type":"full_version_batch_a"}\n'
+    assert latest_batch_c_markdown.read_text(encoding="utf-8") == "keep-batch-c\n"
+    assert latest_batch_c_json.read_text(encoding="utf-8") == '{"run_type":"full_version_batch_c"}\n'
+
+    latest_json_payload = json.loads(Path(result.artifact_paths.latest_json_result).read_text(encoding="utf-8"))
+    assert latest_json_payload["execution_mode"] == "full_version_batch_b_real_eval"
+    assert latest_json_payload["run_type"] == "full_version_batch_b"
+    assert latest_json_payload["benchmark_status"] == "completed"
+    assert latest_json_payload["baseline_provider_codes"] == ["multilingual_e5_base"]
+    assert latest_json_payload["newly_evaluated_provider_codes"] == ["qwen3_embedding_0_6b"]
+    assert latest_json_payload["client_view"]["baseline_provider_codes"] == ["multilingual_e5_base"]
+    assert latest_json_payload["client_view"]["newly_evaluated_provider_codes"] == ["qwen3_embedding_0_6b"]
+    assert latest_json_payload["developer_view"]["models_compared"] == [
+        "multilingual_e5_base",
+        "qwen3_embedding_0_6b",
+    ]
+    assert latest_json_payload["client_view"]["non_compared_notes"] == [
+        "Jina Embeddings v3 was not rerun and is not compared in Batch B.",
+    ]
+    assert {
+        item["model_code"] for item in latest_json_payload["developer_view"]["aggregate_results"]
+    } == {"multilingual_e5_base", "qwen3_embedding_0_6b"}
+
+    markdown_text = Path(result.artifact_paths.latest_markdown_report).read_text(encoding="utf-8")
+    assert "## Technical Summary" in markdown_text
+    assert "## Dataset Questions Used" in markdown_text
+    assert "## Baseline Provider" in markdown_text
+    assert "## Newly Evaluated Provider" in markdown_text
+    assert "## Per-Question Result Comparison" in markdown_text
+    assert "## Aggregate Metrics" in markdown_text
+    assert "## Winner" in markdown_text
+    assert "## Recommendation" in markdown_text
+    assert "## Safety Notes" in markdown_text
+    assert "multilingual_e5_base" in markdown_text
+    assert "qwen3_embedding_0_6b" in markdown_text
+    assert "Jina Embeddings v3 was not rerun and is not compared in Batch B." in markdown_text
+    assert "#### multilingual_e5_small" not in markdown_text
+    assert "#### bge_m3" not in markdown_text
+    assert "#### paraphrase_multilingual_mpnet_base_v2" not in markdown_text
+    assert "#### multilingual_e5_large" not in markdown_text
+    assert "#### jina_embeddings_v3" not in markdown_text
+
+
+def test_full_version_batch_c_writes_separate_artifacts_and_compares_only_baseline_and_jina(
+    client,
+    monkeypatch,
+    tmp_path,
+):
+    _install_fake_qdrant_client(monkeypatch)
+    _install_fake_real_sentence_transformers(monkeypatch)
+
+    repo_artifact_dir = Path(__file__).resolve().parents[1] / "artifacts" / "real_question_eval"
+    source_incremental_json = (
+        repo_artifact_dir / "latest_incremental_new_providers" / "real_question_eval_result.json"
+    )
+    source_incremental_markdown = (
+        repo_artifact_dir / "latest_incremental_new_providers" / "real_question_eval_report.md"
+    )
+
+    artifact_dir = tmp_path / "real_question_eval_artifacts"
+    latest_incremental_dir = artifact_dir / "latest_incremental_new_providers"
+    latest_incremental_dir.mkdir(parents=True, exist_ok=True)
+    latest_incremental_json = latest_incremental_dir / "real_question_eval_result.json"
+    latest_incremental_markdown = latest_incremental_dir / "real_question_eval_report.md"
+    latest_incremental_json.write_text(source_incremental_json.read_text(encoding="utf-8"), encoding="utf-8")
+    latest_incremental_markdown.write_text(source_incremental_markdown.read_text(encoding="utf-8"), encoding="utf-8")
+    latest_incremental_json_before = latest_incremental_json.read_text(encoding="utf-8")
+    latest_incremental_markdown_before = latest_incremental_markdown.read_text(encoding="utf-8")
+
+    latest_real_dir = artifact_dir / "latest_real"
+    latest_real_dir.mkdir(parents=True, exist_ok=True)
+    latest_real_markdown = latest_real_dir / "real_question_eval_report.md"
+    latest_real_json = latest_real_dir / "real_question_eval_result.json"
+    latest_real_markdown.write_text("keep-real-batch-c\n", encoding="utf-8")
+    latest_real_json.write_text('{"run_type":"real"}\n', encoding="utf-8")
+
+    latest_fake_dir = artifact_dir / "latest_fake"
+    latest_fake_dir.mkdir(parents=True, exist_ok=True)
+    latest_fake_markdown = latest_fake_dir / "real_question_eval_report.md"
+    latest_fake_json = latest_fake_dir / "real_question_eval_result.json"
+    latest_fake_markdown.write_text("keep-fake-batch-c\n", encoding="utf-8")
+    latest_fake_json.write_text('{"run_type":"fake"}\n', encoding="utf-8")
+
+    latest_batch_a_dir = artifact_dir / "latest_full_version_batch_a"
+    latest_batch_a_dir.mkdir(parents=True, exist_ok=True)
+    latest_batch_a_markdown = latest_batch_a_dir / "real_question_eval_report.md"
+    latest_batch_a_json = latest_batch_a_dir / "real_question_eval_result.json"
+    latest_batch_a_markdown.write_text("keep-batch-a\n", encoding="utf-8")
+    latest_batch_a_json.write_text('{"run_type":"full_version_batch_a"}\n', encoding="utf-8")
+
+    db, session_generator = _get_test_db_session()
+    try:
+        result = run_full_version_batch_c_question_eval(
+            db,
+            RealQuestionEvalConfig(
+                artifact_dir=artifact_dir,
+                use_real_local_models=True,
+                candidate_model_codes=["jina_embeddings_v3"],
+                run_type_override="full_version_batch_c",
+                execution_mode_override="full_version_batch_c_real_eval",
+            ),
+        )
+    finally:
+        _close_test_db_session(session_generator)
+
+    assert result.passed is True
+    assert result.used_fake_models is False
+    assert result.run_type == "full_version_batch_c"
+    assert result.execution_mode == "full_version_batch_c_real_eval"
+    assert result.benchmark_batch_label == "Batch C"
+    assert result.benchmark_status == "completed"
+    assert result.baseline_provider_codes == ["multilingual_e5_base"]
+    assert result.newly_evaluated_provider_codes == ["jina_embeddings_v3"]
+    assert result.compared_models == ["multilingual_e5_base", "jina_embeddings_v3"]
+    assert result.excluded_provider_codes == [
+        "multilingual_e5_small",
+        "bge_m3",
+        "paraphrase_multilingual_mpnet_base_v2",
+        "multilingual_e5_large",
+        "qwen3_embedding_0_6b",
+        "qwen3_embedding_4b",
+        "qwen3_embedding_8b",
+    ]
+    assert [item.question_id for item in result.question_results] == [
+        "question-sunflower-house",
+        "question-winter-trip",
+        "question-grandmother-soup",
+    ]
+    assert "latest_full_version_batch_c" in result.artifact_paths.latest_markdown_report
+    assert "_full_version_batch_c" in result.artifact_paths.archived_markdown_report
+
+    assert latest_incremental_json.read_text(encoding="utf-8") == latest_incremental_json_before
+    assert latest_incremental_markdown.read_text(encoding="utf-8") == latest_incremental_markdown_before
+    assert latest_real_markdown.read_text(encoding="utf-8") == "keep-real-batch-c\n"
+    assert latest_real_json.read_text(encoding="utf-8") == '{"run_type":"real"}\n'
+    assert latest_fake_markdown.read_text(encoding="utf-8") == "keep-fake-batch-c\n"
+    assert latest_fake_json.read_text(encoding="utf-8") == '{"run_type":"fake"}\n'
+    assert latest_batch_a_markdown.read_text(encoding="utf-8") == "keep-batch-a\n"
+    assert latest_batch_a_json.read_text(encoding="utf-8") == '{"run_type":"full_version_batch_a"}\n'
+
+    latest_json_payload = json.loads(Path(result.artifact_paths.latest_json_result).read_text(encoding="utf-8"))
+    assert latest_json_payload["execution_mode"] == "full_version_batch_c_real_eval"
+    assert latest_json_payload["run_type"] == "full_version_batch_c"
+    assert latest_json_payload["benchmark_status"] == "completed"
+    assert latest_json_payload["baseline_provider_codes"] == ["multilingual_e5_base"]
+    assert latest_json_payload["newly_evaluated_provider_codes"] == ["jina_embeddings_v3"]
+    assert latest_json_payload["client_view"]["baseline_provider_codes"] == ["multilingual_e5_base"]
+    assert latest_json_payload["client_view"]["newly_evaluated_provider_codes"] == ["jina_embeddings_v3"]
+    assert latest_json_payload["client_view"]["questions"][0]["question_id"] == "question-sunflower-house"
+    assert latest_json_payload["client_view"]["questions"][1]["question_id"] == "question-winter-trip"
+    assert latest_json_payload["client_view"]["questions"][2]["question_id"] == "question-grandmother-soup"
+    assert latest_json_payload["developer_view"]["models_compared"] == [
+        "multilingual_e5_base",
+        "jina_embeddings_v3",
+    ]
+    assert {
+        item["model_code"] for item in latest_json_payload["developer_view"]["aggregate_results"]
+    } == {"multilingual_e5_base", "jina_embeddings_v3"}
+    assert latest_json_payload["client_view"]["non_compared_notes"] == [
+        "Qwen3 0.6B was skipped as attempted/not completed and is not compared in Batch C.",
+    ]
+
+    markdown_text = Path(result.artifact_paths.latest_markdown_report).read_text(encoding="utf-8")
+    assert "## Technical Summary" in markdown_text
+    assert "## Dataset Questions Used" in markdown_text
+    assert "## Baseline Provider" in markdown_text
+    assert "## Newly Evaluated Provider" in markdown_text
+    assert "## Per-Question Result Comparison" in markdown_text
+    assert "## Aggregate Metrics" in markdown_text
+    assert "## Winner" in markdown_text
+    assert "## Recommendation" in markdown_text
+    assert "## Safety Notes" in markdown_text
+    assert "multilingual_e5_base" in markdown_text
+    assert "jina_embeddings_v3" in markdown_text
+    assert "Qwen3 0.6B was skipped as attempted/not completed and is not compared in Batch C." in markdown_text
+    assert "#### multilingual_e5_small" not in markdown_text
+    assert "#### bge_m3" not in markdown_text
+    assert "#### paraphrase_multilingual_mpnet_base_v2" not in markdown_text
+    assert "#### multilingual_e5_large" not in markdown_text
+    assert "#### qwen3_embedding_0_6b" not in markdown_text
 
 
 def test_incremental_artifact_rerender_recomputes_question_wins_from_per_question_winners(tmp_path):

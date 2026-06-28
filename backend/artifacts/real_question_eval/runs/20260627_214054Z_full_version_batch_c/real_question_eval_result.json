@@ -1,0 +1,144 @@
+{
+  "task": "Task 32 Real Local Model Question Evaluation",
+  "run_id": "20260627_214054Z",
+  "run_type": "full_version_batch_c",
+  "execution_mode": "full_version_batch_c_real_eval",
+  "benchmark_batch_label": "Batch C",
+  "baseline_provider_codes": [
+    "multilingual_e5_base"
+  ],
+  "excluded_provider_codes": [
+    "multilingual_e5_small",
+    "bge_m3",
+    "paraphrase_multilingual_mpnet_base_v2",
+    "multilingual_e5_large",
+    "qwen3_embedding_0_6b",
+    "qwen3_embedding_4b",
+    "qwen3_embedding_8b"
+  ],
+  "newly_evaluated_provider_codes": [
+    "jina_embeddings_v3"
+  ],
+  "comparison_scope_note": "Only multilingual_e5_base and jina_embeddings_v3 are allowed in the final Batch C comparison.",
+  "historical_providers": [
+    "multilingual_e5_base"
+  ],
+  "new_real_providers": [
+    "jina_embeddings_v3"
+  ],
+  "timestamp": "2026-06-27T21:40:54.116214+00:00",
+  "used_fake_models": false,
+  "status": "FAIL",
+  "benchmark_status": "failed",
+  "incomplete_reason": "Jina Batch C did not complete after successful Hugging Face asset prefetch because the backend process was killed during repeated jina_embeddings_v3 local model loads, consistent with container memory exhaustion. No completed comparison result was produced.",
+  "non_compared_notes": [
+    "Qwen3 0.6B was skipped as attempted/not completed and is not part of Batch C.",
+    "Hugging Face asset prefetch succeeded and removed the earlier network/cache blocker.",
+    "The post-prefetch offline rerun still ended with the local backend process being killed during repeated jina_embeddings_v3 loads, so no completed Batch C comparison was produced."
+  ],
+  "artifact_paths": {
+    "latest_markdown_report": "/app/artifacts/real_question_eval/latest_full_version_batch_c/real_question_eval_report.md",
+    "latest_json_result": "/app/artifacts/real_question_eval/latest_full_version_batch_c/real_question_eval_result.json",
+    "archived_markdown_report": "/app/artifacts/real_question_eval/runs/20260627_214054Z_full_version_batch_c/real_question_eval_report.md",
+    "archived_json_result": "/app/artifacts/real_question_eval/runs/20260627_214054Z_full_version_batch_c/real_question_eval_result.json"
+  },
+  "client_view": {
+    "source_dataset_note": "deterministic fictional eval corpus",
+    "real_client_user_data": "no",
+    "purpose": "retrieval quality testing",
+    "dataset": {
+      "id": "real-question-eval-dataset",
+      "name": "Real Question Evaluation Dataset"
+    },
+    "models_compared": [
+      "multilingual_e5_base",
+      "jina_embeddings_v3"
+    ],
+    "overall_winner": null,
+    "recommended_active_model": null,
+    "speed_vs_accuracy_tradeoff": "Batch C compares the persisted current winner `multilingual_e5_base` against one newly run provider, `jina_embeddings_v3`. If quality is effectively tied, the lower-latency and lighter baseline remains preferred.",
+    "production_recommendation": "Batch C does not show a clear enough win over the baseline `multilingual_e5_base`; keep `multilingual_e5_base` as the production recommendation.",
+    "activated": false,
+    "runtime_verified": false,
+    "benchmark_batch_label": "Batch C",
+    "baseline_provider_codes": [
+      "multilingual_e5_base"
+    ],
+    "excluded_provider_codes": [
+      "multilingual_e5_small",
+      "bge_m3",
+      "paraphrase_multilingual_mpnet_base_v2",
+      "multilingual_e5_large",
+      "qwen3_embedding_0_6b",
+      "qwen3_embedding_4b",
+      "qwen3_embedding_8b"
+    ],
+    "newly_evaluated_provider_codes": [
+      "jina_embeddings_v3"
+    ],
+    "comparison_scope_note": "Only multilingual_e5_base and jina_embeddings_v3 are allowed in the final Batch C comparison.",
+    "historical_baseline_providers": [
+      "multilingual_e5_base"
+    ],
+    "new_real_run_providers": [
+      "jina_embeddings_v3"
+    ],
+    "historical_overall_winner": "multilingual_e5_base",
+    "any_new_provider_beat_historical_winner": null,
+    "benchmark_status": "failed",
+    "incomplete_reason": "Jina Batch C did not complete after successful Hugging Face asset prefetch because the backend process was killed during repeated jina_embeddings_v3 local model loads, consistent with container memory exhaustion. No completed comparison result was produced.",
+    "non_compared_notes": [
+      "Qwen3 0.6B was skipped as attempted/not completed and is not part of Batch C.",
+      "Hugging Face asset prefetch succeeded and removed the earlier network/cache blocker.",
+      "The post-prefetch offline rerun still ended with the local backend process being killed during repeated jina_embeddings_v3 loads, so no completed Batch C comparison was produced."
+    ],
+    "questions": []
+  },
+  "developer_view": {
+    "dataset": {
+      "id": "real-question-eval-dataset",
+      "name": "Real Question Evaluation Dataset"
+    },
+    "models_compared": [
+      "multilingual_e5_base",
+      "jina_embeddings_v3"
+    ],
+    "questions": [],
+    "aggregate_results": [],
+    "selected_config": {},
+    "activated_config": {},
+    "runtime_retrieval_verification": {},
+    "benchmark_batch_label": "Batch C",
+    "baseline_provider_codes": [
+      "multilingual_e5_base"
+    ],
+    "excluded_provider_codes": [
+      "multilingual_e5_small",
+      "bge_m3",
+      "paraphrase_multilingual_mpnet_base_v2",
+      "multilingual_e5_large",
+      "qwen3_embedding_0_6b",
+      "qwen3_embedding_4b",
+      "qwen3_embedding_8b"
+    ],
+    "newly_evaluated_provider_codes": [
+      "jina_embeddings_v3"
+    ],
+    "comparison_scope_note": "Only multilingual_e5_base and jina_embeddings_v3 are allowed in the final Batch C comparison.",
+    "historical_providers": [
+      "multilingual_e5_base"
+    ],
+    "new_real_providers": [
+      "jina_embeddings_v3"
+    ],
+    "historical_overall_winner": "multilingual_e5_base",
+    "any_new_provider_beat_historical_winner": null,
+    "benchmark_status": "failed",
+    "incomplete_reason": "Jina Batch C did not complete after successful Hugging Face asset prefetch because the backend process was killed during repeated jina_embeddings_v3 local model loads, consistent with container memory exhaustion. No completed comparison result was produced.",
+    "non_compared_notes": [
+      "Qwen3 0.6B was skipped as attempted/not completed and is not part of Batch C.",
+      "Hugging Face asset prefetch succeeded and removed the earlier network/cache blocker.",
+      "The post-prefetch offline rerun still ended with the local backend process being killed during repeated jina_embeddings_v3 loads, so no completed Batch C comparison was produced."
+    ]
+  }
+}

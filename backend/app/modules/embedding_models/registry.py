@@ -190,7 +190,10 @@ EMBEDDING_MODEL_DEFINITIONS: tuple[EmbeddingModelDefinition, ...] = (
         supports_long_context=True,
         planning_tags=("qwen3", "manual_only_real_eval", "high_resource", "not_ci_safe"),
         supported_retrieval_modes=("dense",),
-        notes="Qwen3 embedding foundation is registry-only for planning and manual benchmark batches; keep disabled in CI and default runtime.",
+        notes=(
+            "Qwen3 0.6B benchmark was attempted but not completed in this local Docker runtime; "
+            "keep the adapter available, but treat it as manual-only and not verified in this environment."
+        ),
     ),
     EmbeddingModelDefinition(
         code="qwen3_embedding_4b",

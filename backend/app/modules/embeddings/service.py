@@ -4,7 +4,11 @@ from sqlalchemy.orm import Session
 
 from app.db.models import RagChunk, RagEmbedding, User
 from app.modules.embedding_models.exceptions import EmbeddingModelNotFoundError
-from app.modules.embedding_models.service import get_default_embedding_model, get_embedding_model
+from app.modules.embedding_models.service import (
+    get_default_embedding_model,
+    get_embedding_model,
+    is_embedding_model_runtime_available,
+)
 from app.modules.embeddings import repository
 from app.modules.embeddings.exceptions import (
     RagEmbeddingChunkNotFoundError,
@@ -65,7 +69,7 @@ def _resolve_model(model_code: str | None):
     except EmbeddingModelNotFoundError as exc:
         raise RagEmbeddingModelUnavailableError("Embedding model not found") from exc
 
-    if not model.enabled:
+    if not is_embedding_model_runtime_available(model.code):
         raise RagEmbeddingModelUnavailableError("Embedding model not available")
 
     return model

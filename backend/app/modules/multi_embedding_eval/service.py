@@ -64,6 +64,10 @@ STEP_RAG_QUALITY_EVALUATED = "rag_quality_evaluated"
 WORKFLOW_NAME = "multi_embedding_eval"
 
 
+def _emit_multi_embedding_eval_log(message: str) -> None:
+    print(f"[multi_embedding_eval] {message}", flush=True)
+
+
 def _get_background_job_or_raise(db: Session, *, job_id: int) -> BackgroundJob:
     background_job = db.get(BackgroundJob, job_id)
     if background_job is None:
@@ -359,6 +363,10 @@ def process_multi_embedding_eval_job(
         for index, candidate in enumerate(request_payload.candidates):
             quality_candidate = candidate.to_rag_quality_candidate()
             candidate_warnings: list[CandidateExecutionWarning] = []
+            _emit_multi_embedding_eval_log(
+                "candidate start "
+                f"model_code={candidate.model_code} collection={candidate.collection_name}"
+            )
 
             try:
                 embedding_summary = embed_source_chunks(
@@ -422,6 +430,10 @@ def process_multi_embedding_eval_job(
                     progress_current=(index * MAJOR_STEPS_PER_CANDIDATE) + 3,
                     progress_total=total_candidates * MAJOR_STEPS_PER_CANDIDATE,
                 )
+                _emit_multi_embedding_eval_log(
+                    "candidate succeeded "
+                    f"model_code={candidate.model_code} retrieval_cases={len(request_payload.dataset.cases)}"
+                )
 
                 successful_candidates.append(quality_candidate)
                 candidate_execution_results.append(
@@ -439,6 +451,10 @@ def process_multi_embedding_eval_job(
                     )
                 )
             except Exception as exc:
+                _emit_multi_embedding_eval_log(
+                    "candidate failed "
+                    f"model_code={candidate.model_code} error={exc.__class__.__name__}: {exc}"
+                )
                 candidate_warning = _map_candidate_exception(
                     exc,
                     candidate=candidate,

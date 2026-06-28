@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import sys
 from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
@@ -17,6 +18,7 @@ from app.modules.active_retrieval_config.service import (
 from app.modules.auth.schemas import RegisterRequest
 from app.modules.auth.service import DuplicateEmailError, register_user
 from app.modules.embedding_models.registry import DEFAULT_EMBEDDING_MODEL_CODE
+from app.modules.embedding_models.service import allow_disabled_runtime_embedding_models
 from app.modules.embeddings.providers.sentence_transformers import (
     BGE_M3_MODEL_NAME,
     E5_BASE_MODEL_NAME,
@@ -27,6 +29,7 @@ from app.modules.embeddings.providers.sentence_transformers import (
     QWEN3_EMBEDDING_0_6B_MODEL_NAME,
     QWEN3_EMBEDDING_4B_MODEL_NAME,
     QWEN3_EMBEDDING_8B_MODEL_NAME,
+    enable_sentence_transformers_shared_model_cache,
 )
 from app.modules.job_tracking.enums import BackgroundJobType
 from app.modules.job_tracking.service import create_job
@@ -83,7 +86,38 @@ REAL_QUESTION_EVAL_FULL_VERSION_BATCH_A_EXCLUDED_PROVIDERS = (
     "bge_m3",
     "paraphrase_multilingual_mpnet_base_v2",
 )
+REAL_QUESTION_EVAL_FULL_VERSION_BATCH_B_BASELINE_PROVIDER = "multilingual_e5_base"
+REAL_QUESTION_EVAL_FULL_VERSION_BATCH_B_NEW_PROVIDER_CODES = ("qwen3_embedding_0_6b",)
+REAL_QUESTION_EVAL_FULL_VERSION_BATCH_B_EXCLUDED_PROVIDERS = (
+    "multilingual_e5_small",
+    "bge_m3",
+    "paraphrase_multilingual_mpnet_base_v2",
+    "multilingual_e5_large",
+    "jina_embeddings_v3",
+    "qwen3_embedding_4b",
+    "qwen3_embedding_8b",
+)
+REAL_QUESTION_EVAL_FULL_VERSION_BATCH_B_ATTEMPTED_REASON = (
+    "Qwen3 0.6B benchmark attempt was not completed in this local Docker runtime due to "
+    "runtime instability and poor cost-benefit for continued debugging."
+)
+REAL_QUESTION_EVAL_FULL_VERSION_BATCH_C_BASELINE_PROVIDER = "multilingual_e5_base"
+REAL_QUESTION_EVAL_FULL_VERSION_BATCH_C_NEW_PROVIDER_CODES = ("jina_embeddings_v3",)
+REAL_QUESTION_EVAL_FULL_VERSION_BATCH_C_EXCLUDED_PROVIDERS = (
+    "multilingual_e5_small",
+    "bge_m3",
+    "paraphrase_multilingual_mpnet_base_v2",
+    "multilingual_e5_large",
+    "qwen3_embedding_0_6b",
+    "qwen3_embedding_4b",
+    "qwen3_embedding_8b",
+)
 REAL_QUESTION_EVAL_TOP_K = 2
+
+try:
+    import resource
+except ImportError:  # pragma: no cover - resource is unavailable on some local test hosts.
+    resource = None
 
 
 def _resolve_eval_run_type(*, use_real_local_models: bool) -> str:
@@ -104,6 +138,35 @@ def _resolve_configured_execution_mode(config: RealQuestionEvalConfig) -> str:
     if config.execution_mode_override:
         return config.execution_mode_override
     return _resolve_eval_execution_mode(use_real_local_models=config.use_real_local_models)
+
+
+def _emit_runtime_log(message: str) -> None:
+    print(f"[real_question_eval] {message}", flush=True)
+
+
+def _get_process_rss_mb() -> float | None:
+    if resource is None:
+        return None
+
+    rss_value = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+    if rss_value <= 0:
+        return None
+
+    if sys.platform == "darwin":
+        return round(rss_value / (1024 * 1024), 2)
+
+    return round(rss_value / 1024, 2)
+
+
+def _emit_runtime_memory_log(*, stage: str, question_id: str | None = None) -> None:
+    rss_mb = _get_process_rss_mb()
+    if rss_mb is None:
+        return
+
+    payload = f"memory stage={stage} rss_mb={rss_mb}"
+    if question_id is not None:
+        payload += f" question_id={question_id}"
+    _emit_runtime_log(payload)
 
 
 def _build_fixture_paragraph(anchor_sentence: str, *, label: str) -> str:
@@ -156,10 +219,18 @@ def _build_question_cases() -> list[RagQualityEvalCase]:
 
 
 class _QuestionEvalFakeSentenceTransformer:
-    def __init__(self, model_name: str, *, device: str = "cpu", cache_folder: str | None = None):
+    def __init__(
+        self,
+        model_name: str,
+        *,
+        device: str = "cpu",
+        cache_folder: str | None = None,
+        **kwargs,
+    ):
         self.model_name = model_name
         self.device = device
         self.cache_folder = cache_folder
+        self.kwargs = dict(kwargs)
 
     def encode(self, texts, **kwargs):
         return [_build_fake_vector(str(text), self.model_name) for text in list(texts)]
@@ -219,6 +290,18 @@ def _build_fake_vector(text: str, model_name: str) -> list[float]:
                 (relevant_a, 0.92),
                 (relevant_b, 0.92),
                 (distractor, 0.12),
+            )
+        elif model_name == QWEN3_EMBEDDING_0_6B_MODEL_NAME:
+            set_values(
+                (relevant_a, 0.91),
+                (relevant_b, 0.91),
+                (distractor, 0.09),
+            )
+        elif model_name == JINA_EMBEDDINGS_V3_MODEL_NAME:
+            set_values(
+                (relevant_a, 0.9),
+                (relevant_b, 0.9),
+                (distractor, 0.11),
             )
         elif model_name == E5_LARGE_MODEL_NAME:
             set_values(
@@ -304,31 +387,46 @@ class RealQuestionEvalRunner:
         original_embedding_provider = settings.embedding_provider
         original_import_module = sentence_transformers_provider.import_module
         settings.embedding_provider = "sentence_transformers"
-        if not self.config.use_real_local_models:
-            sentence_transformers_provider.import_module = (
-                lambda module_name: SimpleNamespace(SentenceTransformer=_QuestionEvalFakeSentenceTransformer)
-            )
+        with allow_disabled_runtime_embedding_models(tuple(self.config.candidate_model_codes or [])):
+            with enable_sentence_transformers_shared_model_cache(clear_on_exit=True):
+                if not self.config.use_real_local_models:
+                    sentence_transformers_provider.import_module = (
+                        lambda module_name: SimpleNamespace(SentenceTransformer=_QuestionEvalFakeSentenceTransformer)
+                    )
 
-        try:
-            yield
-        finally:
-            settings.embedding_provider = original_embedding_provider
-            sentence_transformers_provider.import_module = original_import_module
+                try:
+                    yield
+                finally:
+                    settings.embedding_provider = original_embedding_provider
+                    sentence_transformers_provider.import_module = original_import_module
 
     def run(self) -> RealQuestionEvalResult:
         try:
             with self._embedding_runtime():
+                _emit_runtime_log(
+                    "starting run "
+                    f"mode={_resolve_configured_execution_mode(self.config)} "
+                    f"run_type={_resolve_configured_run_type(self.config)} "
+                    f"candidates={list(self.config.candidate_model_codes or REAL_QUESTION_EVAL_MODELS)}"
+                )
                 user = self.ensure_user()
                 profile = self.ensure_profile(user)
                 source = self.ensure_source(user, profile)
                 request_payload = self.build_request()
+                _emit_runtime_log(
+                    "request built "
+                    f"questions={len(request_payload.dataset.cases)} "
+                    f"candidates={[candidate.model_code for candidate in request_payload.candidates]}"
+                )
                 background_job = self.create_job(
                     user,
                     profile_id=profile.id,
                     source_id=source.id,
                     payload=request_payload,
                 )
+                _emit_runtime_log(f"multi-embedding eval job created job_id={background_job.id}")
                 process_result = process_multi_embedding_eval_job(self.db, job_id=background_job.id)
+                _emit_runtime_log("multi-embedding eval job completed")
                 official_metrics_by_model = _extract_official_metrics_by_model(process_result.get("result_payload") or {})
                 question_results, aggregate_results = self.collect_question_results(
                     user=user,
@@ -398,6 +496,11 @@ class RealQuestionEvalRunner:
                         artifact_dir=Path(self.config.artifact_dir),
                         result=result,
                     )
+                    _emit_runtime_log(
+                        "artifacts written "
+                        f"latest_markdown={artifact_paths.latest_markdown_report} "
+                        f"latest_json={artifact_paths.latest_json_result}"
+                    )
                     result.artifact_paths = artifact_paths
                     result.passed = self._is_run_successful(result)
                     if result.artifact_paths.latest_markdown_report is not None:
@@ -407,13 +510,30 @@ class RealQuestionEvalRunner:
                     result.passed = self._is_run_successful(result)
                 return result
         except Exception as exc:
-            return RealQuestionEvalResult(
+            _emit_runtime_log(f"run failed error={exc.__class__.__name__}: {exc}")
+            failed_result = RealQuestionEvalResult(
                 passed=False,
                 used_fake_models=not self.config.use_real_local_models,
                 run_type=_resolve_configured_run_type(self.config),
                 execution_mode=_resolve_configured_execution_mode(self.config),
                 error=f"{exc.__class__.__name__}: {exc}",
+                benchmark_status="failed",
+                incomplete_reason=f"{exc.__class__.__name__}: {exc}",
             )
+            if self.config.write_artifacts:
+                artifact_paths = write_real_question_eval_artifacts(
+                    artifact_dir=Path(self.config.artifact_dir),
+                    result=failed_result,
+                )
+                failed_result.artifact_paths = artifact_paths
+                failed_result.markdown_report_path = artifact_paths.latest_markdown_report
+                failed_result.json_result_path = artifact_paths.latest_json_result
+                _emit_runtime_log(
+                    "failure artifacts written "
+                    f"latest_markdown={artifact_paths.latest_markdown_report} "
+                    f"latest_json={artifact_paths.latest_json_result}"
+                )
+            return failed_result
 
     def ensure_user(self) -> User:
         user = get_user_by_email(self.db, self.config.email)
@@ -562,6 +682,8 @@ class RealQuestionEvalRunner:
         wins_by_model = {candidate.model_code: 0 for candidate in request_payload.candidates}
 
         for case in request_payload.dataset.cases:
+            _emit_runtime_log(f"question start question_id={case.case_id}")
+            _emit_runtime_memory_log(stage="before_question", question_id=case.case_id)
             model_results: list[RealQuestionEvalModelResult] = []
             for candidate in request_payload.candidates:
                 retrieval_response = retrieve_profile_rag_for_collection(
@@ -616,6 +738,10 @@ class RealQuestionEvalRunner:
                     winner_reason=winner_reason,
                 )
             )
+            _emit_runtime_log(
+                f"question done question_id={case.case_id} winner={winner_model_code or 'none'}"
+            )
+            _emit_runtime_memory_log(stage="after_question", question_id=case.case_id)
 
         aggregate_results = [
             _build_aggregate_result(
@@ -921,6 +1047,30 @@ def _validate_full_version_batch_a_provider_codes(provider_codes: list[str]) -> 
         raise ValueError(
             "Full-version Batch A only supports the new provider list: "
             + ", ".join(REAL_QUESTION_EVAL_FULL_VERSION_BATCH_A_NEW_PROVIDER_CODES)
+        )
+    return normalized_codes
+
+
+def _validate_full_version_batch_b_provider_codes(provider_codes: list[str]) -> list[str]:
+    normalized_codes = [item.strip().lower() for item in provider_codes if item.strip()]
+    if not normalized_codes:
+        raise ValueError("Full-version Batch B requires an explicit provider list.")
+    if normalized_codes != list(REAL_QUESTION_EVAL_FULL_VERSION_BATCH_B_NEW_PROVIDER_CODES):
+        raise ValueError(
+            "Full-version Batch B only supports the new provider list: "
+            + ", ".join(REAL_QUESTION_EVAL_FULL_VERSION_BATCH_B_NEW_PROVIDER_CODES)
+        )
+    return normalized_codes
+
+
+def _validate_full_version_batch_c_provider_codes(provider_codes: list[str]) -> list[str]:
+    normalized_codes = [item.strip().lower() for item in provider_codes if item.strip()]
+    if not normalized_codes:
+        raise ValueError("Full-version Batch C requires an explicit provider list.")
+    if normalized_codes != list(REAL_QUESTION_EVAL_FULL_VERSION_BATCH_C_NEW_PROVIDER_CODES):
+        raise ValueError(
+            "Full-version Batch C only supports the new provider list: "
+            + ", ".join(REAL_QUESTION_EVAL_FULL_VERSION_BATCH_C_NEW_PROVIDER_CODES)
         )
     return normalized_codes
 
@@ -1343,6 +1493,72 @@ def _build_batch_a_official_best_config(selection_result) -> dict[str, object]:
     return _build_incremental_official_best_config(selection_result)
 
 
+def _build_batch_b_official_best_config(selection_result) -> dict[str, object]:
+    return _build_incremental_official_best_config(selection_result)
+
+
+def _build_batch_c_official_best_config(selection_result) -> dict[str, object]:
+    return _build_incremental_official_best_config(selection_result)
+
+
+def write_full_version_batch_b_attempted_artifact(
+    *,
+    artifact_dir: Path,
+) -> RealQuestionEvalResult:
+    incremental_payload = _load_incremental_new_provider_payload(artifact_dir=artifact_dir)
+    incremental_client_view = (
+        incremental_payload.get("client_view")
+        if isinstance(incremental_payload.get("client_view"), dict)
+        else {}
+    )
+    baseline_provider_code = REAL_QUESTION_EVAL_FULL_VERSION_BATCH_B_BASELINE_PROVIDER
+    result = RealQuestionEvalResult(
+        passed=False,
+        used_fake_models=False,
+        run_type="full_version_batch_b_attempted",
+        execution_mode="full_version_batch_b_attempted",
+        benchmark_batch_label="Batch B Attempted",
+        benchmark_status="attempted_not_completed",
+        incomplete_reason=REAL_QUESTION_EVAL_FULL_VERSION_BATCH_B_ATTEMPTED_REASON,
+        baseline_provider_codes=[baseline_provider_code],
+        excluded_provider_codes=list(REAL_QUESTION_EVAL_FULL_VERSION_BATCH_B_EXCLUDED_PROVIDERS),
+        newly_evaluated_provider_codes=list(REAL_QUESTION_EVAL_FULL_VERSION_BATCH_B_NEW_PROVIDER_CODES),
+        comparison_scope_note=(
+            "Qwen3 0.6B was attempted but not completed; no final Batch B comparison or winner was produced."
+        ),
+        non_compared_notes=[
+            "Qwen3 0.6B benchmark attempted but not completed in this environment.",
+            "Recommendation: skip Qwen for now and reconsider on a cleaner Linux/WSL/GPU/stronger runtime.",
+        ],
+        historical_providers=[baseline_provider_code],
+        historical_overall_winner_model_code=(
+            str(incremental_client_view.get("overall_winner"))
+            if incremental_client_view.get("overall_winner") is not None
+            else baseline_provider_code
+        ),
+        compared_models=[
+            baseline_provider_code,
+            *REAL_QUESTION_EVAL_FULL_VERSION_BATCH_B_NEW_PROVIDER_CODES,
+        ],
+        overall_winner_model_code=None,
+        activated=False,
+        runtime_verified=False,
+        warnings=[
+            REAL_QUESTION_EVAL_FULL_VERSION_BATCH_B_ATTEMPTED_REASON,
+            "Provider adapter remains available, but the provider is still manual-only and not verified in this environment.",
+        ],
+        error=REAL_QUESTION_EVAL_FULL_VERSION_BATCH_B_ATTEMPTED_REASON,
+    )
+    artifact_paths = write_real_question_eval_artifacts(
+        artifact_dir=artifact_dir,
+        result=result,
+    )
+    result.artifact_paths = artifact_paths
+    result.markdown_report_path = artifact_paths.latest_markdown_report
+    result.json_result_path = artifact_paths.latest_json_result
+    return result
+
+
 def run_incremental_real_question_eval(
     db: Session,
     config: RealQuestionEvalConfig,
@@ -1609,11 +1825,347 @@ def run_full_version_batch_a_question_eval(
     return combined_result
 
 
+def run_full_version_batch_b_question_eval(
+    db: Session,
+    config: RealQuestionEvalConfig,
+) -> RealQuestionEvalResult:
+    new_provider_codes = _validate_full_version_batch_b_provider_codes(list(config.candidate_model_codes or []))
+    if not config.rerun_attempted_full_version_batch_b:
+        del db
+        return write_full_version_batch_b_attempted_artifact(
+            artifact_dir=Path(config.artifact_dir),
+        )
+
+    baseline_provider_code = REAL_QUESTION_EVAL_FULL_VERSION_BATCH_B_BASELINE_PROVIDER
+    excluded_provider_codes = list(REAL_QUESTION_EVAL_FULL_VERSION_BATCH_B_EXCLUDED_PROVIDERS)
+    incremental_payload = _load_incremental_new_provider_payload(artifact_dir=Path(config.artifact_dir))
+    incremental_question_results = _build_historical_question_results(incremental_payload)
+    incremental_aggregate_results = _build_historical_aggregate_results(incremental_payload)
+    baseline_question_results = _filter_question_results_to_model_codes(
+        incremental_question_results,
+        model_codes=[baseline_provider_code],
+    )
+    baseline_aggregate_results = _filter_aggregate_results_to_model_codes(
+        incremental_aggregate_results,
+        model_codes=[baseline_provider_code],
+    )
+    baseline_client_view = (
+        incremental_payload.get("client_view")
+        if isinstance(incremental_payload.get("client_view"), dict)
+        else {}
+    )
+    baseline_overall_winner = (
+        str(baseline_client_view.get("overall_winner"))
+        if baseline_client_view.get("overall_winner") is not None
+        else baseline_provider_code
+    )
+
+    new_run_config = config.model_copy(
+        update={
+            "candidate_model_codes": new_provider_codes,
+            "write_artifacts": False,
+            "run_type_override": "full_version_batch_b",
+            "execution_mode_override": "full_version_batch_b_real_eval",
+        }
+    )
+    new_provider_result = RealQuestionEvalRunner(db, new_run_config).run()
+    if new_provider_result.error:
+        new_provider_result.run_type = "full_version_batch_b"
+        new_provider_result.execution_mode = "full_version_batch_b_real_eval"
+        new_provider_result.benchmark_batch_label = "Batch B"
+        new_provider_result.benchmark_status = "failed"
+        new_provider_result.incomplete_reason = str(new_provider_result.error)
+        new_provider_result.baseline_provider_codes = [baseline_provider_code]
+        new_provider_result.excluded_provider_codes = excluded_provider_codes
+        new_provider_result.newly_evaluated_provider_codes = list(new_provider_codes)
+        new_provider_result.historical_overall_winner_model_code = baseline_overall_winner
+        new_provider_result.comparison_scope_note = (
+            "Only multilingual_e5_base and qwen3_embedding_0_6b are allowed in the final Batch B comparison."
+        )
+        new_provider_result.non_compared_notes = [
+            "Jina Embeddings v3 was not rerun and is not part of Batch B.",
+        ]
+        if config.write_artifacts:
+            artifact_paths = write_real_question_eval_artifacts(
+                artifact_dir=Path(config.artifact_dir),
+                result=new_provider_result,
+            )
+            new_provider_result.artifact_paths = artifact_paths
+            new_provider_result.markdown_report_path = artifact_paths.latest_markdown_report
+            new_provider_result.json_result_path = artifact_paths.latest_json_result
+        return new_provider_result
+
+    expected_question_ids = [case.case_id for case in _build_question_cases()]
+    baseline_question_ids = [item.question_id for item in baseline_question_results]
+    new_question_ids = [item.question_id for item in new_provider_result.question_results]
+    if baseline_question_ids != expected_question_ids or new_question_ids != expected_question_ids:
+        raise ValueError("Full-version Batch B question IDs changed unexpectedly")
+
+    combined_model_codes = [baseline_provider_code, *new_provider_codes]
+    aggregate_by_model = {
+        aggregate_result.model_code: aggregate_result
+        for aggregate_result in [*baseline_aggregate_results, *new_provider_result.aggregate_results]
+    }
+    combined_aggregate_results = [aggregate_by_model[model_code] for model_code in combined_model_codes]
+    selection_result = RagQualityService().select_best_config(
+        config_evaluations=[
+            _build_config_evaluation_from_aggregate_result(
+                aggregate_result,
+                total_cases=len(expected_question_ids),
+            )
+            for aggregate_result in combined_aggregate_results
+        ]
+    )
+    combined_question_results = _merge_question_results(
+        historical_question_results=baseline_question_results,
+        new_question_results=new_provider_result.question_results,
+        official_best_model_code=selection_result.best_model_code,
+    )
+    combined_aggregate_results = _recompute_aggregate_question_wins(
+        question_results=combined_question_results,
+        aggregate_results=combined_aggregate_results,
+    )
+    any_new_provider_beat_baseline = (
+        selection_result.best_model_code in new_provider_codes
+        and selection_result.best_model_code != baseline_provider_code
+    )
+
+    combined_result = RealQuestionEvalResult(
+        passed=False,
+        used_fake_models=new_provider_result.used_fake_models,
+        run_type="full_version_batch_b",
+        execution_mode="full_version_batch_b_real_eval",
+        benchmark_batch_label="Batch B",
+        benchmark_status="completed" if new_provider_result.passed else "failed",
+        baseline_provider_codes=[baseline_provider_code],
+        excluded_provider_codes=excluded_provider_codes,
+        newly_evaluated_provider_codes=list(new_provider_codes),
+        comparison_scope_note=(
+            "Only multilingual_e5_base and qwen3_embedding_0_6b are included in the final Batch B comparison; weaker historical providers, Jina, and larger Qwen candidates are excluded."
+        ),
+        non_compared_notes=[
+            "Jina Embeddings v3 was not rerun and is not compared in Batch B.",
+        ],
+        historical_providers=[baseline_provider_code],
+        new_real_providers=list(new_provider_codes),
+        historical_overall_winner_model_code=baseline_overall_winner,
+        any_new_provider_beat_historical_winner=any_new_provider_beat_baseline,
+        generated_at=new_provider_result.generated_at,
+        profile_id=new_provider_result.profile_id,
+        source_id=new_provider_result.source_id,
+        job_id=new_provider_result.job_id,
+        dataset_id=new_provider_result.dataset_id,
+        dataset_name=new_provider_result.dataset_name,
+        source_chunk_count=new_provider_result.source_chunk_count,
+        compared_models=combined_model_codes,
+        question_results=combined_question_results,
+        aggregate_results=combined_aggregate_results,
+        overall_winner_model_code=selection_result.best_model_code,
+        official_best_config=_build_batch_b_official_best_config(selection_result),
+        activated=False,
+        runtime_verified=False,
+        warnings=[
+            *new_provider_result.warnings,
+            *selection_result.warnings,
+        ],
+    )
+    combined_result.passed = (
+        bool(selection_result.best_model_code)
+        and baseline_question_ids == expected_question_ids
+        and new_question_ids == expected_question_ids
+        and new_provider_result.passed
+    )
+    artifact_paths = write_real_question_eval_artifacts(
+        artifact_dir=Path(config.artifact_dir),
+        result=combined_result,
+    )
+    combined_result.artifact_paths = artifact_paths
+    if artifact_paths.latest_markdown_report is not None:
+        combined_result.markdown_report_path = artifact_paths.latest_markdown_report
+    if artifact_paths.latest_json_result is not None:
+        combined_result.json_result_path = artifact_paths.latest_json_result
+    combined_result.passed = (
+        combined_result.passed
+        and combined_result.markdown_report_path is not None
+        and Path(combined_result.markdown_report_path).exists()
+        and combined_result.json_result_path is not None
+        and Path(combined_result.json_result_path).exists()
+    )
+    return combined_result
+
+
+def run_full_version_batch_c_question_eval(
+    db: Session,
+    config: RealQuestionEvalConfig,
+) -> RealQuestionEvalResult:
+    new_provider_codes = _validate_full_version_batch_c_provider_codes(list(config.candidate_model_codes or []))
+    baseline_provider_code = REAL_QUESTION_EVAL_FULL_VERSION_BATCH_C_BASELINE_PROVIDER
+    excluded_provider_codes = list(REAL_QUESTION_EVAL_FULL_VERSION_BATCH_C_EXCLUDED_PROVIDERS)
+    incremental_payload = _load_incremental_new_provider_payload(artifact_dir=Path(config.artifact_dir))
+    incremental_question_results = _build_historical_question_results(incremental_payload)
+    incremental_aggregate_results = _build_historical_aggregate_results(incremental_payload)
+    baseline_question_results = _filter_question_results_to_model_codes(
+        incremental_question_results,
+        model_codes=[baseline_provider_code],
+    )
+    baseline_aggregate_results = _filter_aggregate_results_to_model_codes(
+        incremental_aggregate_results,
+        model_codes=[baseline_provider_code],
+    )
+    baseline_client_view = (
+        incremental_payload.get("client_view")
+        if isinstance(incremental_payload.get("client_view"), dict)
+        else {}
+    )
+    baseline_overall_winner = (
+        str(baseline_client_view.get("overall_winner"))
+        if baseline_client_view.get("overall_winner") is not None
+        else baseline_provider_code
+    )
+
+    new_run_config = config.model_copy(
+        update={
+            "candidate_model_codes": new_provider_codes,
+            "write_artifacts": False,
+            "run_type_override": "full_version_batch_c",
+            "execution_mode_override": "full_version_batch_c_real_eval",
+        }
+    )
+    new_provider_result = RealQuestionEvalRunner(db, new_run_config).run()
+    if new_provider_result.error:
+        new_provider_result.run_type = "full_version_batch_c"
+        new_provider_result.execution_mode = "full_version_batch_c_real_eval"
+        new_provider_result.benchmark_batch_label = "Batch C"
+        new_provider_result.benchmark_status = "failed"
+        new_provider_result.incomplete_reason = str(new_provider_result.error)
+        new_provider_result.baseline_provider_codes = [baseline_provider_code]
+        new_provider_result.excluded_provider_codes = excluded_provider_codes
+        new_provider_result.newly_evaluated_provider_codes = list(new_provider_codes)
+        new_provider_result.historical_overall_winner_model_code = baseline_overall_winner
+        new_provider_result.comparison_scope_note = (
+            "Only multilingual_e5_base and jina_embeddings_v3 are allowed in the final Batch C comparison."
+        )
+        new_provider_result.non_compared_notes = [
+            "Qwen3 0.6B was skipped as attempted/not completed and is not part of Batch C.",
+        ]
+        if config.write_artifacts:
+            artifact_paths = write_real_question_eval_artifacts(
+                artifact_dir=Path(config.artifact_dir),
+                result=new_provider_result,
+            )
+            new_provider_result.artifact_paths = artifact_paths
+            new_provider_result.markdown_report_path = artifact_paths.latest_markdown_report
+            new_provider_result.json_result_path = artifact_paths.latest_json_result
+        return new_provider_result
+
+    expected_question_ids = [case.case_id for case in _build_question_cases()]
+    baseline_question_ids = [item.question_id for item in baseline_question_results]
+    new_question_ids = [item.question_id for item in new_provider_result.question_results]
+    if baseline_question_ids != expected_question_ids or new_question_ids != expected_question_ids:
+        raise ValueError("Full-version Batch C question IDs changed unexpectedly")
+
+    combined_model_codes = [baseline_provider_code, *new_provider_codes]
+    aggregate_by_model = {
+        aggregate_result.model_code: aggregate_result
+        for aggregate_result in [*baseline_aggregate_results, *new_provider_result.aggregate_results]
+    }
+    combined_aggregate_results = [aggregate_by_model[model_code] for model_code in combined_model_codes]
+    selection_result = RagQualityService().select_best_config(
+        config_evaluations=[
+            _build_config_evaluation_from_aggregate_result(
+                aggregate_result,
+                total_cases=len(expected_question_ids),
+            )
+            for aggregate_result in combined_aggregate_results
+        ]
+    )
+    combined_question_results = _merge_question_results(
+        historical_question_results=baseline_question_results,
+        new_question_results=new_provider_result.question_results,
+        official_best_model_code=selection_result.best_model_code,
+    )
+    combined_aggregate_results = _recompute_aggregate_question_wins(
+        question_results=combined_question_results,
+        aggregate_results=combined_aggregate_results,
+    )
+    any_new_provider_beat_baseline = (
+        selection_result.best_model_code in new_provider_codes
+        and selection_result.best_model_code != baseline_provider_code
+    )
+
+    combined_result = RealQuestionEvalResult(
+        passed=False,
+        used_fake_models=new_provider_result.used_fake_models,
+        run_type="full_version_batch_c",
+        execution_mode="full_version_batch_c_real_eval",
+        benchmark_batch_label="Batch C",
+        benchmark_status="completed" if new_provider_result.passed else "failed",
+        baseline_provider_codes=[baseline_provider_code],
+        excluded_provider_codes=excluded_provider_codes,
+        newly_evaluated_provider_codes=list(new_provider_codes),
+        comparison_scope_note=(
+            "Only multilingual_e5_base and jina_embeddings_v3 are included in the final Batch C comparison; weaker historical providers and all Qwen candidates are excluded."
+        ),
+        non_compared_notes=[
+            "Qwen3 0.6B was skipped as attempted/not completed and is not compared in Batch C.",
+        ],
+        historical_providers=[baseline_provider_code],
+        new_real_providers=list(new_provider_codes),
+        historical_overall_winner_model_code=baseline_overall_winner,
+        any_new_provider_beat_historical_winner=any_new_provider_beat_baseline,
+        generated_at=new_provider_result.generated_at,
+        profile_id=new_provider_result.profile_id,
+        source_id=new_provider_result.source_id,
+        job_id=new_provider_result.job_id,
+        dataset_id=new_provider_result.dataset_id,
+        dataset_name=new_provider_result.dataset_name,
+        source_chunk_count=new_provider_result.source_chunk_count,
+        compared_models=combined_model_codes,
+        question_results=combined_question_results,
+        aggregate_results=combined_aggregate_results,
+        overall_winner_model_code=selection_result.best_model_code,
+        official_best_config=_build_batch_c_official_best_config(selection_result),
+        activated=False,
+        runtime_verified=False,
+        warnings=[
+            *new_provider_result.warnings,
+            *selection_result.warnings,
+        ],
+    )
+    combined_result.passed = (
+        bool(selection_result.best_model_code)
+        and baseline_question_ids == expected_question_ids
+        and new_question_ids == expected_question_ids
+        and new_provider_result.passed
+    )
+    artifact_paths = write_real_question_eval_artifacts(
+        artifact_dir=Path(config.artifact_dir),
+        result=combined_result,
+    )
+    combined_result.artifact_paths = artifact_paths
+    if artifact_paths.latest_markdown_report is not None:
+        combined_result.markdown_report_path = artifact_paths.latest_markdown_report
+    if artifact_paths.latest_json_result is not None:
+        combined_result.json_result_path = artifact_paths.latest_json_result
+    combined_result.passed = (
+        combined_result.passed
+        and combined_result.markdown_report_path is not None
+        and Path(combined_result.markdown_report_path).exists()
+        and combined_result.json_result_path is not None
+        and Path(combined_result.json_result_path).exists()
+    )
+    return combined_result
+
+
 def run_real_question_eval(
     db: Session,
     config: RealQuestionEvalConfig | None = None,
 ) -> RealQuestionEvalResult:
     resolved_config = config or RealQuestionEvalConfig()
+    if resolved_config.execution_mode_override == "full_version_batch_c_real_eval":
+        return run_full_version_batch_c_question_eval(db, resolved_config)
+    if resolved_config.execution_mode_override == "full_version_batch_b_real_eval":
+        return run_full_version_batch_b_question_eval(db, resolved_config)
     if resolved_config.execution_mode_override == "full_version_batch_a_real_eval":
         return run_full_version_batch_a_question_eval(db, resolved_config)
     if resolved_config.execution_mode_override == "incremental_real_eval":

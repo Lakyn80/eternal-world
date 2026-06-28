@@ -1,0 +1,126 @@
+{
+  "task": "Task 32 Real Local Model Question Evaluation",
+  "run_id": "20260627_143439Z",
+  "run_type": "full_version_batch_b_attempted",
+  "execution_mode": "full_version_batch_b_attempted",
+  "benchmark_batch_label": "Batch B Attempted",
+  "baseline_provider_codes": [
+    "multilingual_e5_base"
+  ],
+  "excluded_provider_codes": [
+    "multilingual_e5_small",
+    "bge_m3",
+    "paraphrase_multilingual_mpnet_base_v2",
+    "multilingual_e5_large"
+  ],
+  "newly_evaluated_provider_codes": [
+    "qwen3_embedding_0_6b"
+  ],
+  "comparison_scope_note": "Qwen3 0.6B was attempted but not completed; no final Batch B comparison or winner was produced.",
+  "historical_providers": [
+    "multilingual_e5_base"
+  ],
+  "new_real_providers": [],
+  "timestamp": null,
+  "used_fake_models": false,
+  "status": "FAIL",
+  "benchmark_status": "attempted_not_completed",
+  "incomplete_reason": "Qwen3 0.6B benchmark attempt was not completed in this local Docker runtime due to runtime instability and poor cost-benefit for continued debugging.",
+  "non_compared_notes": [
+    "Qwen3 0.6B benchmark attempted but not completed in this environment.",
+    "Recommendation: skip Qwen for now and reconsider on a cleaner Linux/WSL/GPU/stronger runtime."
+  ],
+  "artifact_paths": {
+    "latest_markdown_report": "artifacts\\real_question_eval\\latest_full_version_batch_b_attempted\\real_question_eval_report.md",
+    "latest_json_result": "artifacts\\real_question_eval\\latest_full_version_batch_b_attempted\\real_question_eval_result.json",
+    "archived_markdown_report": "artifacts\\real_question_eval\\runs\\20260627_143439Z_full_version_batch_b_attempted\\real_question_eval_report.md",
+    "archived_json_result": "artifacts\\real_question_eval\\runs\\20260627_143439Z_full_version_batch_b_attempted\\real_question_eval_result.json"
+  },
+  "client_view": {
+    "source_dataset_note": "deterministic fictional eval corpus",
+    "real_client_user_data": "no",
+    "purpose": "retrieval quality testing",
+    "dataset": {
+      "id": "",
+      "name": ""
+    },
+    "models_compared": [
+      "multilingual_e5_base",
+      "qwen3_embedding_0_6b"
+    ],
+    "overall_winner": null,
+    "recommended_active_model": "multilingual_e5_base",
+    "speed_vs_accuracy_tradeoff": "Qwen3 0.6B was attempted in the local Docker runtime but did not complete, so no useful latency or quality tradeoff was established.",
+    "production_recommendation": "Keep `multilingual_e5_base` as the production recommendation and skip Qwen for now in this environment.",
+    "activated": false,
+    "runtime_verified": false,
+    "benchmark_batch_label": "Batch B Attempted",
+    "baseline_provider_codes": [
+      "multilingual_e5_base"
+    ],
+    "excluded_provider_codes": [
+      "multilingual_e5_small",
+      "bge_m3",
+      "paraphrase_multilingual_mpnet_base_v2",
+      "multilingual_e5_large"
+    ],
+    "newly_evaluated_provider_codes": [
+      "qwen3_embedding_0_6b"
+    ],
+    "comparison_scope_note": "Qwen3 0.6B was attempted but not completed; no final Batch B comparison or winner was produced.",
+    "historical_baseline_providers": [
+      "multilingual_e5_base"
+    ],
+    "new_real_run_providers": [],
+    "historical_overall_winner": "multilingual_e5_base",
+    "any_new_provider_beat_historical_winner": null,
+    "benchmark_status": "attempted_not_completed",
+    "incomplete_reason": "Qwen3 0.6B benchmark attempt was not completed in this local Docker runtime due to runtime instability and poor cost-benefit for continued debugging.",
+    "non_compared_notes": [
+      "Qwen3 0.6B benchmark attempted but not completed in this environment.",
+      "Recommendation: skip Qwen for now and reconsider on a cleaner Linux/WSL/GPU/stronger runtime."
+    ],
+    "questions": []
+  },
+  "developer_view": {
+    "dataset": {
+      "id": "",
+      "name": ""
+    },
+    "models_compared": [
+      "multilingual_e5_base",
+      "qwen3_embedding_0_6b"
+    ],
+    "questions": [],
+    "aggregate_results": [],
+    "selected_config": {},
+    "activated_config": {},
+    "runtime_retrieval_verification": {},
+    "benchmark_batch_label": "Batch B Attempted",
+    "baseline_provider_codes": [
+      "multilingual_e5_base"
+    ],
+    "excluded_provider_codes": [
+      "multilingual_e5_small",
+      "bge_m3",
+      "paraphrase_multilingual_mpnet_base_v2",
+      "multilingual_e5_large"
+    ],
+    "newly_evaluated_provider_codes": [
+      "qwen3_embedding_0_6b"
+    ],
+    "comparison_scope_note": "Qwen3 0.6B was attempted but not completed; no final Batch B comparison or winner was produced.",
+    "historical_providers": [
+      "multilingual_e5_base"
+    ],
+    "new_real_providers": [],
+    "historical_overall_winner": "multilingual_e5_base",
+    "any_new_provider_beat_historical_winner": null,
+    "benchmark_status": "attempted_not_completed",
+    "incomplete_reason": "Qwen3 0.6B benchmark attempt was not completed in this local Docker runtime due to runtime instability and poor cost-benefit for continued debugging.",
+    "non_compared_notes": [
+      "Qwen3 0.6B benchmark attempted but not completed in this environment.",
+      "Recommendation: skip Qwen for now and reconsider on a cleaner Linux/WSL/GPU/stronger runtime."
+    ]
+  }
+}

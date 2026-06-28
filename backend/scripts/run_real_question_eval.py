@@ -10,6 +10,8 @@ from app.db.session import SessionLocal
 from app.modules.real_question_eval import (
     REAL_QUESTION_EVAL_EMAIL,
     REAL_QUESTION_EVAL_FULL_VERSION_BATCH_A_BASELINE_PROVIDER,
+    REAL_QUESTION_EVAL_FULL_VERSION_BATCH_B_BASELINE_PROVIDER,
+    REAL_QUESTION_EVAL_FULL_VERSION_BATCH_C_BASELINE_PROVIDER,
     REAL_QUESTION_EVAL_HISTORICAL_PROVIDERS,
     REAL_QUESTION_EVAL_INCREMENTAL_NEW_PROVIDER_CODES,
     REAL_QUESTION_EVAL_PROFILE_NAME,
@@ -22,6 +24,8 @@ FAKE_EVAL_EXECUTION_MODE = "fake_eval"
 REAL_EVAL_EXECUTION_MODE = "real_eval"
 INCREMENTAL_REAL_EVAL_EXECUTION_MODE = "incremental_real_eval"
 FULL_VERSION_BATCH_A_REAL_EVAL_EXECUTION_MODE = "full_version_batch_a_real_eval"
+FULL_VERSION_BATCH_B_REAL_EVAL_EXECUTION_MODE = "full_version_batch_b_real_eval"
+FULL_VERSION_BATCH_C_REAL_EVAL_EXECUTION_MODE = "full_version_batch_c_real_eval"
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -36,6 +40,9 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--use-real-local-models", action="store_true")
     parser.add_argument("--incremental-real-providers")
     parser.add_argument("--full-version-batch-a-providers")
+    parser.add_argument("--full-version-batch-b-providers")
+    parser.add_argument("--full-version-batch-c-providers")
+    parser.add_argument("--rerun-attempted-full-version-batch-b", action="store_true")
     return parser
 
 
@@ -87,6 +94,59 @@ def resolve_full_version_batch_a_providers(
         )
 
     return batch_a_providers
+
+
+def resolve_full_version_batch_b_providers(
+    *,
+    cli_use_real_local_models: bool,
+    env_use_real_local_models: str | None,
+    full_version_batch_b_providers_raw: str | None,
+    rerun_attempted_full_version_batch_b: bool = False,
+) -> list[str] | None:
+    batch_b_providers = _parse_incremental_real_providers(full_version_batch_b_providers_raw)
+    if batch_b_providers is None:
+        return None
+
+    if not rerun_attempted_full_version_batch_b:
+        raise ValueError(
+            "Full-version Batch B is closed in this environment by default. "
+            "Qwen3 0.6B was attempted but not completed and requires "
+            "--rerun-attempted-full-version-batch-b for one explicit guarded rerun."
+        )
+    if not cli_use_real_local_models or not _is_truthy_env_flag(env_use_real_local_models):
+        raise ValueError(
+            "Full-version Batch B rerun is manual-only and requires BOTH --use-real-local-models "
+            "and REAL_QUESTION_EVAL_USE_REAL_LOCAL_MODELS=1."
+        )
+    if batch_b_providers != ["qwen3_embedding_0_6b"]:
+        raise ValueError(
+            "Full-version Batch B requires the explicit provider list: qwen3_embedding_0_6b."
+        )
+
+    return batch_b_providers
+
+
+def resolve_full_version_batch_c_providers(
+    *,
+    cli_use_real_local_models: bool,
+    env_use_real_local_models: str | None,
+    full_version_batch_c_providers_raw: str | None,
+) -> list[str] | None:
+    batch_c_providers = _parse_incremental_real_providers(full_version_batch_c_providers_raw)
+    if batch_c_providers is None:
+        return None
+
+    if not cli_use_real_local_models or not _is_truthy_env_flag(env_use_real_local_models):
+        raise ValueError(
+            "Full-version Batch C is manual-only and requires BOTH --use-real-local-models "
+            "and REAL_QUESTION_EVAL_USE_REAL_LOCAL_MODELS=1."
+        )
+    if batch_c_providers != ["jina_embeddings_v3"]:
+        raise ValueError(
+            "Full-version Batch C requires the explicit provider list: jina_embeddings_v3."
+        )
+
+    return batch_c_providers
 
 
 def resolve_real_question_eval_execution_mode(
@@ -200,7 +260,32 @@ def main() -> int:
             env_use_real_local_models=env_use_real_local_models,
             full_version_batch_a_providers_raw=args.full_version_batch_a_providers,
         )
-        if batch_a_providers is not None:
+        batch_b_providers = resolve_full_version_batch_b_providers(
+            cli_use_real_local_models=args.use_real_local_models,
+            env_use_real_local_models=env_use_real_local_models,
+            full_version_batch_b_providers_raw=args.full_version_batch_b_providers,
+            rerun_attempted_full_version_batch_b=args.rerun_attempted_full_version_batch_b,
+        )
+        batch_c_providers = resolve_full_version_batch_c_providers(
+            cli_use_real_local_models=args.use_real_local_models,
+            env_use_real_local_models=env_use_real_local_models,
+            full_version_batch_c_providers_raw=args.full_version_batch_c_providers,
+        )
+        manual_batch_count = sum(
+            provider_list is not None
+            for provider_list in (batch_a_providers, batch_b_providers, batch_c_providers)
+        )
+        if manual_batch_count > 1:
+            raise ValueError("Choose exactly one manual full-version batch mode at a time.")
+        if batch_c_providers is not None:
+            execution_mode = FULL_VERSION_BATCH_C_REAL_EVAL_EXECUTION_MODE
+            use_real_local_models = True
+            incremental_real_providers = None
+        elif batch_b_providers is not None:
+            execution_mode = FULL_VERSION_BATCH_B_REAL_EVAL_EXECUTION_MODE
+            use_real_local_models = True
+            incremental_real_providers = None
+        elif batch_a_providers is not None:
             execution_mode = FULL_VERSION_BATCH_A_REAL_EVAL_EXECUTION_MODE
             use_real_local_models = True
             incremental_real_providers = None
@@ -219,9 +304,18 @@ def main() -> int:
         profile_name=args.profile_name,
         artifact_dir=args.artifact_dir,
         use_real_local_models=use_real_local_models,
-        candidate_model_codes=batch_a_providers or incremental_real_providers,
+        candidate_model_codes=(
+            batch_c_providers
+            or batch_b_providers
+            or batch_a_providers
+            or incremental_real_providers
+        ),
         run_type_override=(
-            "full_version_batch_a"
+            "full_version_batch_c"
+            if execution_mode == FULL_VERSION_BATCH_C_REAL_EVAL_EXECUTION_MODE
+            else "full_version_batch_b"
+            if execution_mode == FULL_VERSION_BATCH_B_REAL_EVAL_EXECUTION_MODE
+            else "full_version_batch_a"
             if execution_mode == FULL_VERSION_BATCH_A_REAL_EVAL_EXECUTION_MODE
             else "incremental_real"
             if execution_mode == INCREMENTAL_REAL_EVAL_EXECUTION_MODE
@@ -229,9 +323,16 @@ def main() -> int:
         ),
         execution_mode_override=(
             execution_mode
-            if execution_mode in {FULL_VERSION_BATCH_A_REAL_EVAL_EXECUTION_MODE, INCREMENTAL_REAL_EVAL_EXECUTION_MODE}
+            if execution_mode
+            in {
+                FULL_VERSION_BATCH_C_REAL_EVAL_EXECUTION_MODE,
+                FULL_VERSION_BATCH_A_REAL_EVAL_EXECUTION_MODE,
+                FULL_VERSION_BATCH_B_REAL_EVAL_EXECUTION_MODE,
+                INCREMENTAL_REAL_EVAL_EXECUTION_MODE,
+            }
             else None
         ),
+        rerun_attempted_full_version_batch_b=args.rerun_attempted_full_version_batch_b,
     )
 
     db = SessionLocal()
@@ -241,6 +342,12 @@ def main() -> int:
         db.close()
 
     result.execution_mode = execution_mode
+    if execution_mode == FULL_VERSION_BATCH_C_REAL_EVAL_EXECUTION_MODE:
+        result.baseline_provider_codes = [REAL_QUESTION_EVAL_FULL_VERSION_BATCH_C_BASELINE_PROVIDER]
+        result.newly_evaluated_provider_codes = ["jina_embeddings_v3"]
+    if execution_mode == FULL_VERSION_BATCH_B_REAL_EVAL_EXECUTION_MODE:
+        result.baseline_provider_codes = [REAL_QUESTION_EVAL_FULL_VERSION_BATCH_B_BASELINE_PROVIDER]
+        result.newly_evaluated_provider_codes = ["qwen3_embedding_0_6b"]
     if execution_mode == FULL_VERSION_BATCH_A_REAL_EVAL_EXECUTION_MODE:
         result.baseline_provider_codes = [REAL_QUESTION_EVAL_FULL_VERSION_BATCH_A_BASELINE_PROVIDER]
         result.newly_evaluated_provider_codes = ["multilingual_e5_large"]

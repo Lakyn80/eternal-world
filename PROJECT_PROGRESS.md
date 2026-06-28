@@ -2840,3 +2840,469 @@ Download / inference confirmation:
 - model download happened for `intfloat/multilingual-e5-large` in the Docker runtime cache during the approved Batch A run
 - real inference happened for `multilingual_e5_large`
 - no other providers were rerun
+
+## Task 47B Close Qwen3 Attempt and Run Jina Batch C
+
+Goal:
+
+- close the stalled Qwen3 0.6B Batch B attempt without deleting the provider adapter
+- prevent accidental Qwen Batch B reruns from the current CLI flow
+- run the next controlled provider batch only for `jina_embeddings_v3` against the current winner `multilingual_e5_base`
+
+Changed files:
+
+- `backend/app/modules/embedding_models/registry.py`
+- `backend/app/modules/real_question_eval/__init__.py`
+- `backend/app/modules/real_question_eval/report.py`
+- `backend/app/modules/real_question_eval/service.py`
+- `backend/scripts/run_real_question_eval.py`
+- `backend/tests/test_embedding_models.py`
+- `backend/tests/test_embeddings_sentence_transformers.py`
+- `backend/tests/test_real_question_eval.py`
+
+Safety constraints:
+
+- Qwen3 0.6B was not rerun
+- Qwen3 4B and Qwen3 8B were not run
+- BGE-M3 full hybrid was not run
+- no all-model benchmark was run
+- fake-safe validation remained fake-safe only
+- `latest_real`, `latest_fake`, `latest_incremental_new_providers`, and `latest_full_version_batch_a` were not overwritten
+
+What was added:
+
+- Batch B CLI flow is now explicitly closed in this environment with a fail-fast error instead of rerunning Qwen
+- Batch B attempted/skipped artifacts now write to `latest_full_version_batch_b_attempted/` and `runs/<timestamp>_full_version_batch_b_attempted/`
+- Batch C manual-only flow now accepts only `jina_embeddings_v3`
+- benchmark JSON now persists `benchmark_status`, `incomplete_reason`, and `non_compared_notes`
+- benchmark reports include explicit failure/attempted state details and safety notes
+- SentenceTransformers provider init now passes `trust_remote_code=True` for `jina_embeddings_v3`
+- fake-safe test scaffolding now supports Jina init kwargs without real model loading
+- Qwen3 0.6B registry notes now state attempted/not-completed/manual-only/not-verified status
+
+Exact fake-safe test commands and results:
+
+- `python -m pytest tests/test_embedding_models.py tests/test_embedding_benchmark_foundation.py -q` -> passed
+- `python -m pytest tests/test_embeddings_sentence_transformers.py tests/test_embeddings.py -q` -> passed
+- `python -m pytest tests/test_multi_embedding_eval.py tests/test_real_question_eval.py -q` -> passed
+- `python -m pytest -q --durations=20` -> passed
+
+Exact real command run:
+
+- `docker compose exec -e REAL_QUESTION_EVAL_USE_REAL_LOCAL_MODELS=1 backend python scripts/run_real_question_eval.py --use-real-local-models --full-version-batch-c-providers jina_embeddings_v3`
+
+Final real Batch C result:
+
+- the run reached the guarded Batch C real path and wrote failure artifacts
+- `jina_embeddings_v3` did not complete evaluation in this runtime
+- failure reason: `MultiEmbeddingEvalAllCandidatesFailedError: All candidate configurations failed`
+- runtime stderr/stdout also showed missing dependency evidence: `Encountered exception while importing einops: No module named 'einops'`
+- no successful Batch C winner was produced
+- production recommendation stays with `multilingual_e5_base`
+
+Artifact paths:
+
+- Batch B attempted latest:
+  - `backend/artifacts/real_question_eval/latest_full_version_batch_b_attempted/real_question_eval_report.md`
+  - `backend/artifacts/real_question_eval/latest_full_version_batch_b_attempted/real_question_eval_result.json`
+- Batch B attempted archived:
+  - `backend/artifacts/real_question_eval/runs/20260627_143439Z_full_version_batch_b_attempted/real_question_eval_report.md`
+  - `backend/artifacts/real_question_eval/runs/20260627_143439Z_full_version_batch_b_attempted/real_question_eval_result.json`
+- Batch C latest:
+  - `backend/artifacts/real_question_eval/latest_full_version_batch_c/real_question_eval_report.md`
+  - `backend/artifacts/real_question_eval/latest_full_version_batch_c/real_question_eval_result.json`
+- Batch C archived:
+  - `backend/artifacts/real_question_eval/runs/20260627_143644Z_full_version_batch_c/real_question_eval_report.md`
+  - `backend/artifacts/real_question_eval/runs/20260627_143644Z_full_version_batch_c/real_question_eval_result.json`
+
+Download / inference confirmation:
+
+- Jina remote code/model files were downloaded in Docker during the approved Batch C attempt
+- a real Jina runtime initialization attempt happened
+- Qwen was not rerun
+
+## Task 47C Fix Jina Runtime Dependencies and Complete Jina Batch C Benchmark
+
+Goal:
+
+- do not skip `jina_embeddings_v3` just because of a missing runtime dependency
+- add the minimal backend dependency fix required for local Jina runtime
+- rebuild only the backend runtime layer
+- rerun only Batch C against the current winner `multilingual_e5_base`
+
+Changed files:
+
+- `backend/requirements.txt`
+- `backend/Dockerfile`
+- `backend/app/modules/embeddings/providers/sentence_transformers.py`
+- `backend/app/modules/multi_embedding_eval/service.py`
+- `PROJECT_PROGRESS.md`
+
+Dependency fix:
+
+- added `einops==0.8.1` to `backend/requirements.txt`
+- updated `backend/Dockerfile` install command to `pip install --no-cache-dir --retries 10 --timeout 300 -r requirements.txt`
+
+Why Jina was not skipped:
+
+- the previous Batch C failure was caused by a missing Python dependency, not by a model-quality result
+- `jina_embeddings_v3` was therefore still eligible for a proper runtime attempt after fixing the dependency layer
+
+Observability/runtime changes:
+
+- SentenceTransformers model load now logs explicit load failures
+- SentenceTransformers encode now logs explicit encode failures
+- multi-embedding eval now logs candidate start, candidate success, and candidate failure for the evaluated provider
+
+Backend rebuild / runtime commands used:
+
+- `docker compose up -d --no-deps --build backend`
+- `docker compose exec backend python -c "import einops; print(einops.__version__)"`
+
+Dependency verification result:
+
+- container import check passed with `0.8.1`
+
+Exact fake-safe test commands and results:
+
+- `python -m pytest tests/test_embedding_models.py tests/test_embedding_benchmark_foundation.py -q` -> passed
+- `python -m pytest tests/test_embeddings_sentence_transformers.py tests/test_embeddings.py -q` -> passed
+- `python -m pytest tests/test_multi_embedding_eval.py tests/test_real_question_eval.py -q` -> passed
+- `python -m pytest -q --durations=20` -> passed
+
+Exact real Batch C commands used:
+
+- `docker compose exec -e REAL_QUESTION_EVAL_USE_REAL_LOCAL_MODELS=1 backend python scripts/run_real_question_eval.py --use-real-local-models --full-version-batch-c-providers jina_embeddings_v3`
+- the same command was retried once after the dependency fix and partial remote-code/model caching
+
+Final Batch C result:
+
+- the `einops` dependency issue was fixed
+- Jina runtime initialization, model loading, and additional remote-code/model downloads happened
+- Batch C still did not complete
+- the final preserved incomplete reason is:
+  - `Jina Batch C did not complete after the einops fix because additional Hugging Face model/tokenizer assets hit read-timeout and name-resolution failures during runtime fetches (sentence_camembert_config.json / tokenizer_config.json).`
+- no completed Batch C winner was produced
+- production recommendation remains `multilingual_e5_base`
+
+Artifact paths:
+
+- latest:
+  - `backend/artifacts/real_question_eval/latest_full_version_batch_c/real_question_eval_report.md`
+  - `backend/artifacts/real_question_eval/latest_full_version_batch_c/real_question_eval_result.json`
+- archived:
+  - `backend/artifacts/real_question_eval/runs/20260627_171928Z_full_version_batch_c/real_question_eval_report.md`
+  - `backend/artifacts/real_question_eval/runs/20260627_171928Z_full_version_batch_c/real_question_eval_result.json`
+
+Runtime cleanup:
+
+- stale Jina Batch C jobs `32` and `33` were marked failed in the local dev database with the preserved network failure reason so they no longer remain in `running`
+
+Download / inference confirmation:
+
+- Jina download happened
+- Jina real inference/runtime execution happened
+- Qwen was not rerun
+- BGE-M3 was not rerun
+- the all-model benchmark was not run
+
+## Task 47D Complete Jina v3 Benchmark with Hugging Face Asset Prefetch
+
+Goal:
+
+- audit the current uncommitted diff before adding more changes
+- keep only strictly required production runtime changes
+- prefetch Jina Hugging Face assets explicitly before the real Batch C rerun
+- rerun only `jina_embeddings_v3` against the current winner `multilingual_e5_base`
+- preserve a final incomplete artifact if Jina still does not complete
+
+Audit result:
+
+- no production runtime files were reverted in this step
+- `backend/app/modules/embedding_models/service.py`, `backend/app/modules/embeddings/service.py`, and `backend/app/modules/rag_retrieval/service.py` remain changed because manual-only disabled runtime providers must be executable for the guarded benchmark path without enabling them for normal production selection
+- `backend/app/modules/embeddings/providers/sentence_transformers.py` remains changed for Jina local-load logging and `trust_remote_code=True`
+- `backend/app/modules/multi_embedding_eval/service.py` remains changed for candidate start/success/failure logging during manual benchmark runs
+- the superseded pre-`einops` artifact folder `backend/artifacts/real_question_eval/runs/20260627_143644Z_full_version_batch_c/` was removed
+
+Dependency / build status:
+
+- `einops==0.8.1` remained installed in the backend image
+- backend image rebuild succeeded after increasing pip retries/timeouts in `backend/Dockerfile`
+- no Jina API client was added
+- no GPU-only package such as `flash-attn` was added
+
+CPU-only torch verification:
+
+- `docker compose exec backend python -c "import torch; print(torch.__version__); print(torch.cuda.is_available())"` -> `2.12.1+cu130` and `False`
+- the runtime remained CPU-only in practice because `torch.cuda.is_available()` returned `False`
+
+Prefetch step:
+
+- added `backend/scripts/prefetch_embedding_model.py`
+- added fake-safe unit coverage in `backend/tests/test_prefetch_embedding_model.py`
+- command run:
+  - `docker compose exec backend python scripts/prefetch_embedding_model.py --provider jina_embeddings_v3 --retries 5 --retry-delay-seconds 5`
+- result:
+  - prefetched `jinaai/jina-embeddings-v3`
+  - prefetched dependency repo `jinaai/xlm-roberta-flash-implementation`
+  - command exited successfully
+
+Exact fake-safe test commands and results:
+
+- `python -m pytest tests/test_prefetch_embedding_model.py tests/test_embedding_models.py tests/test_embedding_benchmark_foundation.py -q` -> `30 passed`
+- `python -m pytest tests/test_embeddings_sentence_transformers.py tests/test_embeddings.py -q` -> `50 passed`
+- `python -m pytest tests/test_multi_embedding_eval.py tests/test_real_question_eval.py -q` -> `43 passed`
+- `python -m pytest -q --durations=20` -> `385 passed`
+
+Exact real Batch C commands and results:
+
+- offline rerun command:
+  - `docker compose exec -e HF_HUB_OFFLINE=1 -e TRANSFORMERS_OFFLINE=1 -e REAL_QUESTION_EVAL_USE_REAL_LOCAL_MODELS=1 backend python scripts/run_real_question_eval.py --use-real-local-models --full-version-batch-c-providers jina_embeddings_v3`
+- diagnostic rerun command:
+  - `docker compose exec -e HF_HUB_OFFLINE=1 -e TRANSFORMERS_OFFLINE=1 -e PYTHONFAULTHANDLER=1 -e REAL_QUESTION_EVAL_USE_REAL_LOCAL_MODELS=1 backend sh -lc "python scripts/run_real_question_eval.py --use-real-local-models --full-version-batch-c-providers jina_embeddings_v3 2>&1 | tee /tmp/jina_batch_c.log; exit \${PIPESTATUS[0]}"`
+- result:
+  - Hugging Face cache/network fetch failures no longer blocked the run after prefetch
+  - Jina model loading progressed further
+  - the local backend process ended with terminal reason `Killed`
+  - no completed Batch C comparison was produced
+  - production recommendation remains `multilingual_e5_base`
+
+Runtime cleanup / preserved final state:
+
+- stale post-prefetch Batch C jobs `34` and `35` were marked `failed` with the final preserved reason:
+  - `Jina Batch C did not complete after successful Hugging Face asset prefetch because the backend process was killed during repeated jina_embeddings_v3 local model loads, consistent with container memory exhaustion. No completed comparison result was produced.`
+- `latest_full_version_batch_c/` was regenerated from the preserved failed state without rerunning any other provider
+- the older post-`einops` network-failure archive `20260627_171928Z_full_version_batch_c` was kept because it documents the prefetch-needed failure mode, while the new archive documents the post-prefetch memory/process-kill failure mode
+
+Artifact paths:
+
+- latest:
+  - `backend/artifacts/real_question_eval/latest_full_version_batch_c/real_question_eval_report.md`
+  - `backend/artifacts/real_question_eval/latest_full_version_batch_c/real_question_eval_result.json`
+- archived:
+  - `backend/artifacts/real_question_eval/runs/20260627_171928Z_full_version_batch_c/real_question_eval_report.md`
+  - `backend/artifacts/real_question_eval/runs/20260627_171928Z_full_version_batch_c/real_question_eval_result.json`
+  - `backend/artifacts/real_question_eval/runs/20260627_214054Z_full_version_batch_c/real_question_eval_report.md`
+  - `backend/artifacts/real_question_eval/runs/20260627_214054Z_full_version_batch_c/real_question_eval_result.json`
+
+Provider scope confirmation:
+
+- only `jina_embeddings_v3` was rerun in Batch C
+- `multilingual_e5_base` was reused as the historical/current winner baseline
+- Qwen providers were not rerun
+- BGE providers were not rerun
+- no all-model benchmark was run
+
+## Task 47F Stabilize CPU-only Jina Batch C
+
+Goal:
+
+- keep the backend PyTorch runtime CPU-only
+- prevent repeated local `jina_embeddings_v3` loads during one Batch C run
+- rerun only the guarded Jina Batch C comparison against the current winner `multilingual_e5_base`
+
+Previous issue:
+
+- the previous real Jina Batch C run put too much pressure on Docker Desktop because `jina_embeddings_v3` was being loaded repeatedly in one benchmark run and the backend process was eventually killed
+
+Changed files in this step:
+
+- `backend/app/modules/embeddings/providers/sentence_transformers.py`
+- `backend/app/modules/real_question_eval/service.py`
+- `backend/tests/test_embeddings_sentence_transformers.py`
+- `backend/tests/test_real_question_eval.py`
+- `PROJECT_PROGRESS.md`
+
+CPU-only PyTorch strategy used:
+
+- backend image keeps the explicit two-step install order in `backend/Dockerfile`
+- install `torch` first from `https://download.pytorch.org/whl/cpu`
+- install the rest of `backend/requirements.txt` only after CPU torch is already present
+- verify the live backend container instead of assuming the cached image state
+
+Backend rebuild and verification commands:
+
+- `docker compose up -d --no-deps --build backend`
+- `docker compose exec backend python -c "import torch; print(torch.__version__); print(torch.cuda.is_available())"`
+- `docker compose exec backend python -c "import einops; print(einops.__version__)"`
+- `docker compose exec backend python -m pip list --format=freeze`
+
+CPU-only verification result:
+
+- final torch version: `2.12.1+cpu`
+- final `torch.cuda.is_available()`: `False`
+- final `einops` version: `0.8.1`
+- build log pattern check for `nvidia-`, `cuda-`, and `triton` returned no matches
+- installed package list also contained no `nvidia-*`, `cuda-*`, or `triton`
+
+What changed to avoid repeated Jina model loading:
+
+- added a guarded shared SentenceTransformers model cache for the manual eval path only
+- cache keys include provider/model/device/cache folder/init options so local model objects are reused safely without cross-provider contamination
+- enabled that shared cache only inside the real-question-eval embedding runtime and cleared it after the run
+- added explicit logs for model load start/success, shared-cache hits, encode start/end, per-question start/end, artifact writes, and simple RSS memory checkpoints
+- fake-safe regression coverage now proves one Jina model instance is reused across provider instances and across the real eval path
+
+Prefetch result:
+
+- command run:
+  - `docker compose exec backend python scripts/prefetch_embedding_model.py --provider jina_embeddings_v3 --retries 5 --retry-delay-seconds 5`
+- result:
+  - prefetched `jinaai/jina-embeddings-v3`
+  - prefetched `jinaai/xlm-roberta-flash-implementation`
+  - command exited successfully
+
+Fake-safe test commands and results:
+
+- `python -m pytest tests/test_prefetch_embedding_model.py tests/test_embedding_models.py tests/test_embedding_benchmark_foundation.py -q` -> `30 passed`
+- `python -m pytest tests/test_embeddings_sentence_transformers.py tests/test_embeddings.py -q` -> `51 passed`
+- `python -m pytest tests/test_multi_embedding_eval.py tests/test_real_question_eval.py -q` -> `44 passed`
+- `python -m pytest -q --durations=20` -> `390 passed`
+
+Exact real Jina Batch C command:
+
+- `docker compose exec -e HF_HUB_OFFLINE=1 -e TRANSFORMERS_OFFLINE=1 -e REAL_QUESTION_EVAL_USE_REAL_LOCAL_MODELS=1 backend python scripts/run_real_question_eval.py --use-real-local-models --full-version-batch-c-providers jina_embeddings_v3`
+
+Real Batch C result:
+
+- Batch C completed successfully under CPU-only runtime
+- `jina_embeddings_v3` loaded once, then reused through shared-cache hits for chunk embedding and all query embeddings in the same run
+- archived run id: `20260628_195847Z_full_version_batch_c`
+- Batch C winner: `multilingual_e5_base`
+- `jina_embeddings_v3` did not beat `multilingual_e5_base`
+- production recommendation did not change and remains `multilingual_e5_base`
+
+Important runtime note:
+
+- even with `HF_HUB_OFFLINE=1` and `TRANSFORMERS_OFFLINE=1`, the completed Jina run still emitted Hugging Face remote-code refresh warnings for files from `jinaai/xlm-roberta-flash-implementation`
+- the benchmark still completed, but future hard-offline cleanup should pin or fully localize the trusted remote-code path if zero network touches are required
+
+Artifact paths:
+
+- latest:
+  - `backend/artifacts/real_question_eval/latest_full_version_batch_c/real_question_eval_report.md`
+  - `backend/artifacts/real_question_eval/latest_full_version_batch_c/real_question_eval_result.json`
+- archived:
+  - `backend/artifacts/real_question_eval/runs/20260628_195847Z_full_version_batch_c/real_question_eval_report.md`
+  - `backend/artifacts/real_question_eval/runs/20260628_195847Z_full_version_batch_c/real_question_eval_result.json`
+
+Scope confirmation:
+
+- Qwen providers were not rerun
+- BGE providers were not rerun
+- `multilingual_e5_large` was not rerun
+- no all-model benchmark was run
+- no unrelated Docker containers were stopped or removed
+
+## Task 48 Re-run Qwen3 0.6B with CPU-only Runtime
+
+Goal:
+
+- retry `qwen3_embedding_0_6b` once under the corrected CPU-only/manual real-eval runtime
+- compare only `multilingual_e5_base` versus `qwen3_embedding_0_6b`
+- keep the old attempted artifact as history while writing the new completed Batch B result separately
+
+Why Qwen was retried:
+
+- the earlier Batch B state was `attempted`, `not completed`, `manual-only`, and `not verified in this environment`
+- that earlier run happened before CPU-only Torch, explicit model prefetch, and guarded shared local-model reuse were in place
+- Task 47F proved the corrected runtime by completing Jina Batch C without repeated model loads
+
+Changed files in this step:
+
+- `backend/scripts/prefetch_embedding_model.py`
+- `backend/scripts/run_real_question_eval.py`
+- `backend/app/modules/real_question_eval/schemas.py`
+- `backend/app/modules/real_question_eval/service.py`
+- `backend/tests/test_prefetch_embedding_model.py`
+- `backend/tests/test_embeddings_sentence_transformers.py`
+- `backend/tests/test_real_question_eval.py`
+- `PROJECT_PROGRESS.md`
+
+CPU-only Torch verification:
+
+- command:
+  - `docker compose exec backend python -c "import torch; print(torch.__version__); print(torch.cuda.is_available())"`
+- result:
+  - `2.12.1+cpu`
+  - `False`
+
+einops verification:
+
+- command:
+  - `docker compose exec backend python -c "import einops; print(einops.__version__)"`
+- result:
+  - `0.8.1`
+
+Backend rebuild / dependency verification:
+
+- rebuild command:
+  - `docker compose up -d --no-deps --build backend`
+- result:
+  - rebuild reused cached CPU-only layers
+  - build-log grep for `nvidia-`, `cuda-`, and `triton` returned no matches
+  - installed package list still showed `torch==2.12.1+cpu` and no `nvidia-*`, `cuda-*`, or `triton`
+
+Qwen prefetch support/result:
+
+- `backend/scripts/prefetch_embedding_model.py` now supports `qwen3_embedding_0_6b`
+- exact command:
+  - `docker compose exec backend python scripts/prefetch_embedding_model.py --provider qwen3_embedding_0_6b --retries 5 --retry-delay-seconds 5`
+- result:
+  - prefetched `Qwen/Qwen3-Embedding-0.6B`
+  - command exited successfully
+
+What was changed/verified to avoid repeated Qwen model loading:
+
+- the guarded shared SentenceTransformers model cache added in Task 47F already applies to Qwen because cache keys include provider/model/device/cache-folder/init-options
+- Batch B now has an explicit rerun gate through:
+  - `--rerun-attempted-full-version-batch-b`
+- without that flag, the CLI still refuses Batch B reruns by default
+- with that flag and the exact provider list `qwen3_embedding_0_6b`, Batch B uses the same baseline-vs-candidate comparison flow as the completed Batch C path
+- runtime logs during the real Batch B rerun showed:
+  - one Qwen load start
+  - one Qwen load success
+  - repeated shared-cache hits afterward
+  - encode start/end logs for passages and queries
+  - per-question start/end and memory logs
+
+Fake-safe test commands and results:
+
+- `python -m pytest tests/test_prefetch_embedding_model.py tests/test_embedding_models.py tests/test_embedding_benchmark_foundation.py -q` -> `32 passed`
+- `python -m pytest tests/test_embeddings_sentence_transformers.py tests/test_embeddings.py -q` -> `54 passed`
+- `python -m pytest tests/test_multi_embedding_eval.py tests/test_real_question_eval.py -q` -> `47 passed`
+- `python -m pytest -q --durations=20` -> `398 passed`
+
+Exact real Qwen Batch B command:
+
+- `docker compose exec -e HF_HUB_OFFLINE=1 -e TRANSFORMERS_OFFLINE=1 -e REAL_QUESTION_EVAL_USE_REAL_LOCAL_MODELS=1 backend python scripts/run_real_question_eval.py --use-real-local-models --full-version-batch-b-providers qwen3_embedding_0_6b --rerun-attempted-full-version-batch-b`
+
+Real Batch B result:
+
+- Batch B completed successfully under CPU-only runtime
+- archived run id: `20260628_205520Z_full_version_batch_b`
+- `qwen3_embedding_0_6b` loaded once and was reused via shared-cache hits for the rest of the run
+- Batch B winner: `multilingual_e5_base`
+- `qwen3_embedding_0_6b` did not beat `multilingual_e5_base`
+- production recommendation remains `multilingual_e5_base`
+
+Artifact paths:
+
+- latest:
+  - `backend/artifacts/real_question_eval/latest_full_version_batch_b/real_question_eval_report.md`
+  - `backend/artifacts/real_question_eval/latest_full_version_batch_b/real_question_eval_result.json`
+- archived:
+  - `backend/artifacts/real_question_eval/runs/20260628_205520Z_full_version_batch_b/real_question_eval_report.md`
+  - `backend/artifacts/real_question_eval/runs/20260628_205520Z_full_version_batch_b/real_question_eval_result.json`
+- preserved old attempted history:
+  - `backend/artifacts/real_question_eval/latest_full_version_batch_b_attempted/`
+  - `backend/artifacts/real_question_eval/runs/20260627_143439Z_full_version_batch_b_attempted/`
+
+Scope confirmation:
+
+- Jina was not rerun
+- BGE-M3 was not rerun
+- `multilingual_e5_large` was not rerun
+- Qwen3 4B and Qwen3 8B were not run
+- no all-model benchmark was run
+- no unrelated Docker containers were stopped or removed

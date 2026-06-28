@@ -17,14 +17,19 @@ from app.modules.real_question_eval.service import (
     REAL_QUESTION_EVAL_DATASET_NAME,
     REAL_QUESTION_EVAL_EMAIL,
     REAL_QUESTION_EVAL_FULL_VERSION_BATCH_A_BASELINE_PROVIDER,
+    REAL_QUESTION_EVAL_FULL_VERSION_BATCH_B_BASELINE_PROVIDER,
+    REAL_QUESTION_EVAL_FULL_VERSION_BATCH_C_BASELINE_PROVIDER,
     REAL_QUESTION_EVAL_HISTORICAL_PROVIDERS,
     REAL_QUESTION_EVAL_INCREMENTAL_NEW_PROVIDER_CODES,
     REAL_QUESTION_EVAL_PROFILE_NAME,
     REAL_QUESTION_EVAL_SOURCE_TEXT,
     RealQuestionEvalRunner,
     run_full_version_batch_a_question_eval,
+    run_full_version_batch_b_question_eval,
+    run_full_version_batch_c_question_eval,
     run_incremental_real_question_eval,
     run_real_question_eval,
+    write_full_version_batch_b_attempted_artifact,
 )
 
 __all__ = [
@@ -32,6 +37,8 @@ __all__ = [
     "REAL_QUESTION_EVAL_DATASET_NAME",
     "REAL_QUESTION_EVAL_EMAIL",
     "REAL_QUESTION_EVAL_FULL_VERSION_BATCH_A_BASELINE_PROVIDER",
+    "REAL_QUESTION_EVAL_FULL_VERSION_BATCH_B_BASELINE_PROVIDER",
+    "REAL_QUESTION_EVAL_FULL_VERSION_BATCH_C_BASELINE_PROVIDER",
     "REAL_QUESTION_EVAL_HISTORICAL_PROVIDERS",
     "REAL_QUESTION_EVAL_INCREMENTAL_NEW_PROVIDER_CODES",
     "REAL_QUESTION_EVAL_PROFILE_NAME",
@@ -48,6 +55,9 @@ __all__ = [
     "build_core_real_question_eval_cases",
     "build_extended_real_question_eval_dataset",
     "run_full_version_batch_a_question_eval",
+    "run_full_version_batch_b_question_eval",
+    "run_full_version_batch_c_question_eval",
     "run_incremental_real_question_eval",
     "run_real_question_eval",
+    "write_full_version_batch_b_attempted_artifact",
 ]

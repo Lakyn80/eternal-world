@@ -1,8 +1,12 @@
 from __future__ import annotations
 
+import sys
+from contextlib import contextmanager
+from contextvars import ContextVar
 from importlib import import_module
 from pathlib import Path
 from threading import Lock
+from time import perf_counter
 from typing import Any
 
 from app.modules.embedding_models.registry import SENTENCE_TRANSFORMERS_ADAPTER
@@ -37,9 +41,66 @@ QUERY_PREFIX = "query: "
 PASSAGE_PREFIX = "passage: "
 SAFE_PROVIDER_FAILURE_MESSAGE = "SentenceTransformers embedding generation failed"
 
+try:
+    import resource
+except ImportError:  # pragma: no cover - resource is unavailable on some local test hosts.
+    resource = None
+
 
 class SentenceTransformersProviderError(Exception):
     pass
+
+
+_shared_model_cache_enabled: ContextVar[bool] = ContextVar(
+    "sentence_transformers_shared_model_cache_enabled",
+    default=False,
+)
+_shared_models: dict[tuple[object, ...], Any] = {}
+_shared_models_lock = Lock()
+
+
+def _emit_sentence_transformers_log(message: str) -> None:
+    print(f"[sentence_transformers] {message}", flush=True)
+
+
+def _get_process_rss_mb() -> float | None:
+    if resource is None:
+        return None
+
+    rss_value = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+    if rss_value <= 0:
+        return None
+
+    if sys.platform == "darwin":
+        return round(rss_value / (1024 * 1024), 2)
+
+    return round(rss_value / 1024, 2)
+
+
+def _emit_sentence_transformers_memory_log(*, stage: str, model_code: str, model_name: str) -> None:
+    rss_mb = _get_process_rss_mb()
+    if rss_mb is None:
+        return
+
+    _emit_sentence_transformers_log(
+        f"memory stage={stage} model_code={model_code} model_name={model_name} rss_mb={rss_mb}"
+    )
+
+
+@contextmanager
+def enable_sentence_transformers_shared_model_cache(*, clear_on_exit: bool = False):
+    token = _shared_model_cache_enabled.set(True)
+    try:
+        yield
+    finally:
+        _shared_model_cache_enabled.reset(token)
+        if clear_on_exit:
+            clear_sentence_transformers_shared_model_cache()
+
+
+def clear_sentence_transformers_shared_model_cache() -> None:
+    with _shared_models_lock:
+        _shared_models.clear()
 
 
 class SentenceTransformersEmbeddingProvider(BaseEmbeddingProvider):
@@ -112,19 +173,49 @@ class SentenceTransformersEmbeddingProvider(BaseEmbeddingProvider):
     def _get_or_load_model(self, model_code: str):
         normalized_model_code = model_code.strip().lower()
         if normalized_model_code in self._models:
+            _emit_sentence_transformers_log(f"cache hit scope=provider model_code={normalized_model_code}")
             return self._models[normalized_model_code]
 
         with self._lock:
             if normalized_model_code in self._models:
+                _emit_sentence_transformers_log(f"cache hit scope=provider model_code={normalized_model_code}")
                 return self._models[normalized_model_code]
 
             sentence_transformer_class = self._load_sentence_transformer_class()
             model_name = self._resolve_model_name(normalized_model_code)
-            model = sentence_transformer_class(
-                model_name,
-                device=self.device,
-                cache_folder=self.cache_dir,
+            model_init_kwargs = self._build_model_init_kwargs(normalized_model_code)
+            cache_key = self._build_shared_model_cache_key(
+                model_code=normalized_model_code,
+                model_name=model_name,
+                model_init_kwargs=model_init_kwargs,
             )
+
+            if _shared_model_cache_enabled.get():
+                with _shared_models_lock:
+                    shared_model = _shared_models.get(cache_key)
+                    if shared_model is not None:
+                        self._models[normalized_model_code] = shared_model
+                        _emit_sentence_transformers_log(
+                            "cache hit scope=shared "
+                            f"model_code={normalized_model_code} model_name={model_name} device={self.device}"
+                        )
+                        return shared_model
+
+                    model = self._load_model_instance(
+                        sentence_transformer_class=sentence_transformer_class,
+                        model_code=normalized_model_code,
+                        model_name=model_name,
+                        model_init_kwargs=model_init_kwargs,
+                    )
+                    _shared_models[cache_key] = model
+            else:
+                model = self._load_model_instance(
+                    sentence_transformer_class=sentence_transformer_class,
+                    model_code=normalized_model_code,
+                    model_name=model_name,
+                    model_init_kwargs=model_init_kwargs,
+                )
+
             self._models[normalized_model_code] = model
             return model
 
@@ -163,6 +254,11 @@ class SentenceTransformersEmbeddingProvider(BaseEmbeddingProvider):
 
         model_definition = get_embedding_model(model_code)
         model = self._get_or_load_model(model_definition.code)
+        _emit_sentence_transformers_log(
+            "encode start "
+            f"model_code={model_definition.code} input_type={input_type} batch_size={len(texts)}"
+        )
+        started_at = perf_counter()
         try:
             raw_vectors = model.encode(
                 texts,
@@ -171,7 +267,17 @@ class SentenceTransformersEmbeddingProvider(BaseEmbeddingProvider):
                 show_progress_bar=False,
             )
         except Exception as exc:
+            _emit_sentence_transformers_log(
+                "encode failed "
+                f"model_code={model_definition.code} input_type={input_type} "
+                f"batch_size={len(texts)} error={exc.__class__.__name__}: {exc}"
+            )
             raise SentenceTransformersProviderError(SAFE_PROVIDER_FAILURE_MESSAGE) from exc
+        _emit_sentence_transformers_log(
+            "encode done "
+            f"model_code={model_definition.code} input_type={input_type} "
+            f"batch_size={len(texts)} duration_ms={round((perf_counter() - started_at) * 1000, 2)}"
+        )
 
         vectors = self._coerce_vectors(raw_vectors)
         embedding_vectors: list[EmbeddingVector] = []
@@ -236,3 +342,69 @@ class SentenceTransformersEmbeddingProvider(BaseEmbeddingProvider):
         raise SentenceTransformersProviderError(
             "SentenceTransformers model input format is not configured"
         )
+
+    def _build_model_init_kwargs(self, model_code: str) -> dict[str, object]:
+        if model_code == "jina_embeddings_v3":
+            return {"trust_remote_code": True}
+
+        return {}
+
+    def _build_shared_model_cache_key(
+        self,
+        *,
+        model_code: str,
+        model_name: str,
+        model_init_kwargs: dict[str, object],
+    ) -> tuple[object, ...]:
+        frozen_kwargs = tuple(
+            sorted((key, repr(value)) for key, value in model_init_kwargs.items())
+        )
+        return (
+            SENTENCE_TRANSFORMERS_PROVIDER_NAME,
+            model_code,
+            model_name,
+            self.device,
+            self.cache_dir,
+            frozen_kwargs,
+        )
+
+    def _load_model_instance(
+        self,
+        *,
+        sentence_transformer_class,
+        model_code: str,
+        model_name: str,
+        model_init_kwargs: dict[str, object],
+    ):
+        _emit_sentence_transformers_memory_log(
+            stage="before_model_load",
+            model_code=model_code,
+            model_name=model_name,
+        )
+        _emit_sentence_transformers_log(
+            f"load start model_code={model_code} model_name={model_name} device={self.device}"
+        )
+        try:
+            model = sentence_transformer_class(
+                model_name,
+                device=self.device,
+                cache_folder=self.cache_dir,
+                **model_init_kwargs,
+            )
+        except Exception as exc:
+            _emit_sentence_transformers_log(
+                "load failed "
+                f"model_code={model_code} model_name={model_name} "
+                f"error={exc.__class__.__name__}: {exc}"
+            )
+            raise
+
+        _emit_sentence_transformers_memory_log(
+            stage="after_model_load",
+            model_code=model_code,
+            model_name=model_name,
+        )
+        _emit_sentence_transformers_log(
+            f"load success model_code={model_code} model_name={model_name} device={self.device}"
+        )
+        return model

@@ -4,10 +4,12 @@ import httpx
 import pytest
 
 from app.modules.embedding_models.service import (
+    allow_disabled_runtime_embedding_models,
     get_candidate_models_for_language,
     get_default_embedding_model,
     get_embedding_model,
     get_enabled_embedding_models,
+    is_embedding_model_runtime_available,
     list_embedding_models,
     validate_embedding_model_code,
 )
@@ -108,6 +110,8 @@ def test_get_by_code_returns_disabled_qwen3_registry_foundation(client):
     assert body["manual_only_real_eval"] is True
     assert body["real_benchmark_only"] is True
     assert body["ci_safe_real_inference"] is False
+    assert "attempted but not completed" in body["notes"]
+    assert "not verified in this environment" in body["notes"]
 
 
 def test_get_by_code_returns_disabled_jina_registry_foundation(client):
@@ -215,6 +219,16 @@ def test_enabled_models_helper_hides_disabled_external_models():
         "multilingual_e5_large",
         "mock_embedding",
     ]
+
+
+def test_disabled_qwen_runtime_is_blocked_by_default_and_allowed_only_inside_manual_context():
+    assert is_embedding_model_runtime_available("multilingual_e5_base") is True
+    assert is_embedding_model_runtime_available("qwen3_embedding_0_6b") is False
+
+    with allow_disabled_runtime_embedding_models(["qwen3_embedding_0_6b"]):
+        assert is_embedding_model_runtime_available("qwen3_embedding_0_6b") is True
+
+    assert is_embedding_model_runtime_available("qwen3_embedding_0_6b") is False
 
 
 def test_no_external_api_calls_are_made(client, monkeypatch):

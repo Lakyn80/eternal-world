@@ -6,7 +6,11 @@ from app.core.config import settings
 from app.db.models import User
 from app.modules.active_retrieval_config.service import resolve_active_retrieval_config
 from app.modules.embedding_models.exceptions import EmbeddingModelNotFoundError
-from app.modules.embedding_models.service import get_default_embedding_model, get_embedding_model
+from app.modules.embedding_models.service import (
+    get_default_embedding_model,
+    get_embedding_model,
+    is_embedding_model_runtime_available,
+)
 from app.modules.embeddings.providers import build_embedding_provider
 from app.modules.memory_profiles.service import MemoryProfileNotFoundError, get_memory_profile
 from app.modules.qdrant_indexing.client import build_qdrant_client
@@ -36,7 +40,7 @@ def _resolve_model(model_code: str | None):
     except EmbeddingModelNotFoundError as exc:
         raise RagRetrievalModelUnavailableError("Embedding model not found") from exc
 
-    if not model.enabled:
+    if not is_embedding_model_runtime_available(model.code):
         raise RagRetrievalModelUnavailableError("Embedding model not available")
 
     return model
