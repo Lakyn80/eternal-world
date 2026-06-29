@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 from app.modules.rag_quality.schemas import RagQualityEvalCase, RagQualityEvalDataset
 
 
@@ -7,6 +9,9 @@ REAL_QUESTION_EVAL_DATASET_ID = "real-question-eval-dataset"
 REAL_QUESTION_EVAL_DATASET_NAME = "Real Question Evaluation Dataset"
 EXTENDED_REAL_QUESTION_EVAL_DATASET_ID = "real-question-eval-extended-dataset-plan"
 EXTENDED_REAL_QUESTION_EVAL_DATASET_NAME = "Real Question Evaluation Extended Dataset Plan"
+EXTERNAL_EVAL_SAMPLE_DATASET_PATH = (
+    Path(__file__).resolve().parent / "datasets" / "eternal_world_eval_dataset_sample.json"
+)
 
 
 def build_core_real_question_eval_cases() -> list[RagQualityEvalCase]:
@@ -42,6 +47,20 @@ def build_core_real_question_eval_cases() -> list[RagQualityEvalCase]:
             tags=["core", "task32", "english_query", "distractor_heavy"],
         ),
     ]
+
+
+def build_default_real_question_eval_dataset() -> RagQualityEvalDataset:
+    return RagQualityEvalDataset(
+        dataset_id=REAL_QUESTION_EVAL_DATASET_ID,
+        name=REAL_QUESTION_EVAL_DATASET_NAME,
+        description="Default deterministic fictional smoke/regression dataset for real question evaluation.",
+        project_name="Eternal World / Vechniy Mir",
+        cases=build_core_real_question_eval_cases(),
+        metadata={
+            "default_smoke_dataset": True,
+            "external_dataset_supported": True,
+        },
+    )
 
 
 def build_extended_real_question_eval_dataset() -> RagQualityEvalDataset:

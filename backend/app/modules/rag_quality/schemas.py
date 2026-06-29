@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 
 RagQualityExpectedBehavior = Literal[
@@ -14,21 +14,74 @@ RagQualityExpectedBehavior = Literal[
 
 
 class RagQualityEvalCase(BaseModel):
+    class EvidenceRule(BaseModel):
+        marker: str = Field(min_length=1, max_length=500)
+        aliases: list[str] = Field(default_factory=list)
+
+        @field_validator("marker")
+        @classmethod
+        def normalize_marker(cls, value: str) -> str:
+            normalized_value = " ".join(value.split())
+            if not normalized_value:
+                raise ValueError("marker must not be empty")
+
+            return normalized_value
+
+        @field_validator("aliases")
+        @classmethod
+        def normalize_aliases(cls, value: list[str]) -> list[str]:
+            normalized_items: list[str] = []
+            seen: set[str] = set()
+            for item in value:
+                normalized_item = " ".join(item.split())
+                if not normalized_item:
+                    continue
+                normalized_key = normalized_item.lower()
+                if normalized_key in seen:
+                    continue
+                seen.add(normalized_key)
+                normalized_items.append(normalized_item)
+
+            return normalized_items
+
     case_id: str = Field(min_length=1, max_length=120)
     title: str = Field(min_length=1, max_length=200)
     query: str = Field(min_length=1, max_length=5000)
     expected_markers: list[str] = Field(default_factory=list)
     forbidden_markers: list[str] = Field(default_factory=list)
+    required_evidence: list[EvidenceRule] = Field(default_factory=list)
+    forbidden_evidence: list[EvidenceRule] = Field(default_factory=list)
     expected_source_ids: list[int] = Field(default_factory=list)
     expected_chunk_ids: list[int] = Field(default_factory=list)
     expected_behavior: RagQualityExpectedBehavior = "retrieval_only"
     minimum_relevant_results: int = Field(default=0, ge=0)
+    expected_answer_type: str | None = Field(default=None, max_length=120)
+    test_type: str | None = Field(default=None, max_length=64)
+    source_scope: dict[str, Any] = Field(default_factory=dict)
+    minimum_coverage: float | None = Field(default=None, ge=0, le=1)
+    allow_partial: bool = False
+    expected_citation_count_min: int = Field(default=0, ge=0)
+    difficulty: str | None = Field(default=None, max_length=64)
+    language: str | None = Field(default=None, max_length=32)
+    expected_long_context: bool = False
+    minimum_context_chars: int = Field(default=0, ge=0)
     tags: list[str] = Field(default_factory=list)
     metadata: dict[str, Any] = Field(default_factory=dict)
 
-    @field_validator("case_id", "title", "query")
+    @field_validator(
+        "case_id",
+        "title",
+        "query",
+        "expected_answer_type",
+        "test_type",
+        "difficulty",
+        "language",
+    )
     @classmethod
-    def normalize_required_text(cls, value: str) -> str:
+    def normalize_required_text(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+
         normalized_value = " ".join(value.split())
         if not normalized_value:
             raise ValueError("Field must not be empty")
@@ -45,6 +98,14 @@ class RagQualityEvalCase(BaseModel):
                 normalized_items.append(normalized_item)
 
         return normalized_items
+
+    @model_validator(mode="after")
+    def backfill_canonical_evidence_lists(self) -> "RagQualityEvalCase":
+        if self.required_evidence and not self.expected_markers:
+            self.expected_markers = [item.marker for item in self.required_evidence]
+        if self.forbidden_evidence and not self.forbidden_markers:
+            self.forbidden_markers = [item.marker for item in self.forbidden_evidence]
+        return self
 
 
 class RagQualityEvalDataset(BaseModel):

@@ -38,6 +38,7 @@ def _build_parser() -> argparse.ArgumentParser:
         "--artifact-dir",
         default=str(BACKEND_DIR / "artifacts" / "real_question_eval"),
     )
+    parser.add_argument("--dataset-file")
     parser.add_argument("--json", action="store_true", dest="json_output")
     parser.add_argument("--use-real-local-models", action="store_true")
     parser.add_argument("--incremental-real-providers")
@@ -371,6 +372,7 @@ def main() -> int:
         email=args.email,
         profile_name=args.profile_name,
         artifact_dir=args.artifact_dir,
+        dataset_path=args.dataset_file,
         use_real_local_models=use_real_local_models,
         candidate_model_codes=(
             batch_d_providers

@@ -71,8 +71,10 @@ from app.modules.real_question_eval.schemas import (
 from app.modules.real_question_eval.dataset_foundation import (
     REAL_QUESTION_EVAL_DATASET_ID,
     REAL_QUESTION_EVAL_DATASET_NAME,
+    build_default_real_question_eval_dataset,
     build_core_real_question_eval_cases,
 )
+from app.modules.real_question_eval.external_dataset import load_external_eval_dataset
 from app.modules.users.repository import get_user_by_email
 
 
@@ -418,6 +420,18 @@ class RealQuestionEvalRunner:
         self.db = db
         self.config = config or RealQuestionEvalConfig(artifact_dir=BACKEND_DIR / "artifacts" / "real_question_eval")
         self.rag_quality_service = RagQualityService()
+        self._resolved_dataset = None
+
+    def resolve_eval_dataset(self):
+        if self._resolved_dataset is not None:
+            return self._resolved_dataset
+
+        self._resolved_dataset = (
+            load_external_eval_dataset(self.config.dataset_path)
+            if self.config.dataset_path is not None
+            else build_default_real_question_eval_dataset()
+        )
+        return self._resolved_dataset
 
     @contextmanager
     def _embedding_runtime(self):
@@ -662,12 +676,9 @@ class RealQuestionEvalRunner:
     def build_request(self) -> MultiEmbeddingEvalRequest:
         collection_prefix = settings.qdrant_collection_name
         candidate_model_codes = list(self.config.candidate_model_codes or REAL_QUESTION_EVAL_MODELS)
+        dataset = self.resolve_eval_dataset()
         return MultiEmbeddingEvalRequest(
-            dataset={
-                "dataset_id": REAL_QUESTION_EVAL_DATASET_ID,
-                "name": REAL_QUESTION_EVAL_DATASET_NAME,
-                "cases": [case.model_dump(mode="json") for case in _build_question_cases()],
-            },
+            dataset=dataset.model_dump(mode="json"),
             candidates=[
                 {
                     "config_id": model_code,
@@ -799,7 +810,7 @@ class RealQuestionEvalRunner:
         return question_results, aggregate_results
 
     def _is_run_successful_without_artifacts(self, result: RealQuestionEvalResult) -> bool:
-        expected_question_count = len(_build_question_cases())
+        expected_question_count = len(self.resolve_eval_dataset().cases)
         expected_model_count = len(result.compared_models)
         return (
             len(result.question_results) >= expected_question_count

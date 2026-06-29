@@ -10,6 +10,7 @@ class RealQuestionEvalConfig(BaseModel):
     email: str = Field(default="demo.real.question.eval@example.test", max_length=320)
     profile_name: str = Field(default="Demo Real Question Eval Profile", max_length=120)
     artifact_dir: Path = Field(default=Path("backend/artifacts/real_question_eval"))
+    dataset_path: Path | None = None
     use_real_local_models: bool = False
     candidate_model_codes: list[str] | None = None
     write_artifacts: bool = True
@@ -30,6 +31,13 @@ class RealQuestionEvalConfig(BaseModel):
             raise ValueError("profile_name must not be empty")
 
         return normalized_value
+
+    @field_validator("dataset_path")
+    @classmethod
+    def normalize_dataset_path(cls, value: Path | None) -> Path | None:
+        if value is None:
+            return None
+        return Path(value)
 
     @field_validator("candidate_model_codes")
     @classmethod

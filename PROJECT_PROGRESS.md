@@ -3564,3 +3564,98 @@ Scope confirmation:
 - no Jina benchmark was run
 - no all-model benchmark was run
 - no unrelated Docker containers were stopped or removed
+
+## Task 51 External Configurable Eval Dataset Schema
+
+Goal:
+
+- add an external configurable evaluation dataset schema for Real Question Eval and Multi Embedding Eval
+- keep the existing 3-question fictional smoke dataset as the default regression path
+- allow future reusable eval datasets for Eternal World, AI Legal System, and other RAG projects
+
+What was added:
+
+- external JSON dataset loader:
+  - `backend/app/modules/real_question_eval/external_dataset.py`
+- sample external dataset:
+  - `backend/app/modules/real_question_eval/datasets/eternal_world_eval_dataset_sample.json`
+- default dataset builder:
+  - `build_default_real_question_eval_dataset()`
+- optional CLI/runtime dataset override through:
+  - `RealQuestionEvalConfig.dataset_path`
+  - `python scripts/run_real_question_eval.py --dataset-file <path>`
+
+New dataset schema fields:
+
+- `id`
+- `question`
+- `expected_answer_type`
+- `test_type`
+- `source_scope`
+- `required_evidence`
+- `forbidden_evidence`
+- `minimum_coverage`
+- `allow_partial`
+- `expected_citation_count_min`
+- `difficulty`
+- `language`
+- `expected_long_context`
+- `minimum_context_chars`
+
+Required evidence alias support:
+
+- each required or forbidden evidence rule now supports:
+  - canonical `marker`
+  - optional `aliases`
+- evaluation keeps canonical marker reporting while matching any configured alias
+
+Supported test types:
+
+- `short_fact`
+- `page_level`
+- `multi_document`
+- `negative`
+- `distractor`
+
+Supported source scope types:
+
+- `document`
+- `page`
+- `multi_document`
+- `collection`
+
+Backward compatibility:
+
+- the existing 3-question fictional dataset remains the default smoke/regression dataset
+- old hardcoded `expected_markers` / `forbidden_markers` flows still work unchanged
+- Task 50 active retrieval promotion and runtime fallback behavior were not changed
+
+Sample dataset coverage:
+
+- one short fact case
+- one page-level case
+- one multi-document case
+- one negative case
+- one distractor case
+
+Tests added/updated:
+
+- `backend/tests/test_real_question_eval_external_dataset.py`
+- `backend/tests/test_multi_embedding_eval.py`
+- `backend/tests/test_embedding_benchmark_foundation.py`
+- alias-aware evidence matching continues to pass through `backend/tests/test_rag_quality.py`
+- default 3-question smoke flow still passes through `backend/tests/test_real_question_eval.py`
+
+Verification commands/results:
+
+- `python -m pytest tests/test_real_question_eval_external_dataset.py tests/test_real_question_eval.py tests/test_multi_embedding_eval.py tests/test_embedding_benchmark_foundation.py tests/test_rag_quality.py -q` -> `81 passed`
+- no real benchmarks were rerun
+- no model downloads were triggered
+
+Scope confirmation:
+
+- active retrieval provider was not changed
+- production retrieval runtime behavior was not changed
+- frontend was not changed
+- billing/chat behavior was not changed
+- `latest_full_version_batch_*` artifacts were not overwritten

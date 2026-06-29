@@ -1,0 +1,156 @@
+{
+  "dataset_id": "eternal-world-external-eval-sample",
+  "name": "Eternal World External Eval Sample",
+  "description": "Small fictional external evaluation dataset sample for Task 51. Safe for local schema and loader validation.",
+  "project_name": "Eternal World",
+  "metadata": {
+    "sample": true,
+    "task": "task51"
+  },
+  "cases": [
+    {
+      "id": "short-fact-sunflower-house",
+      "question": "What flower was kept at the old village house?",
+      "expected_answer_type": "short_fact",
+      "test_type": "short_fact",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": ["village-house-archive"]
+      },
+      "required_evidence": [
+        {
+          "marker": "sunflower seeds",
+          "aliases": ["paper envelope of sunflower seeds", "sunflower seed envelope"]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "rose market poster",
+          "aliases": ["market rose poster"]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 1,
+      "difficulty": "easy",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 0
+    },
+    {
+      "id": "page-level-gate-latch",
+      "question": "What part of the entrance clicked twice every dawn at the old village house?",
+      "expected_answer_type": "page_fact",
+      "test_type": "page_level",
+      "source_scope": {
+        "scope_type": "page",
+        "document_ids": ["village-house-archive"],
+        "page_numbers": [2],
+        "section_ids": ["gate-section"]
+      },
+      "required_evidence": [
+        {
+          "marker": "blue gate latch",
+          "aliases": ["gate latch", "blue entrance latch"]
+        }
+      ],
+      "forbidden_evidence": [],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 1,
+      "difficulty": "easy",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 0
+    },
+    {
+      "id": "multi-document-winter-trip",
+      "question": "During the winter trip, what travel item was saved and what container kept everyone warm?",
+      "expected_answer_type": "multi_fact",
+      "test_type": "multi_document",
+      "source_scope": {
+        "scope_type": "multi_document",
+        "document_ids": ["winter-ticket-archive", "winter-thermos-archive"]
+      },
+      "required_evidence": [
+        {
+          "marker": "overnight train ticket",
+          "aliases": ["train ticket", "folded overnight ticket"]
+        },
+        {
+          "marker": "wooden thermos",
+          "aliases": ["thermos", "wooden travel thermos"]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "summer bus timetable",
+          "aliases": ["summer timetable"]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "medium",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 40
+    },
+    {
+      "id": "negative-missing-compass",
+      "question": "What was the exact serial number of the missing brass compass?",
+      "expected_answer_type": "no_answer",
+      "test_type": "negative",
+      "source_scope": {
+        "scope_type": "collection"
+      },
+      "required_evidence": [],
+      "forbidden_evidence": [
+        {
+          "marker": "invented serial number",
+          "aliases": ["serial number 8471", "fabricated compass serial"]
+        }
+      ],
+      "minimum_coverage": 0.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 0,
+      "difficulty": "medium",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 0
+    },
+    {
+      "id": "distractor-grandmother-soup",
+      "question": "Which ingredients and cooking setup explain why grandmother's soup tasted smoky?",
+      "expected_answer_type": "grounded_summary",
+      "test_type": "distractor",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": ["kitchen-archive"]
+      },
+      "required_evidence": [
+        {
+          "marker": "dried mushrooms",
+          "aliases": ["mushrooms in the broth"]
+        },
+        {
+          "marker": "oak stove",
+          "aliases": ["smoky oak stove", "stove smoke"]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "vanilla jam",
+          "aliases": ["jam for beach travelers"]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "medium",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 60
+    }
+  ]
+}

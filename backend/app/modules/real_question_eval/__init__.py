@@ -7,10 +7,18 @@ from app.modules.real_question_eval.schemas import (
     RealQuestionEvalRetrievedChunk,
 )
 from app.modules.real_question_eval.dataset_foundation import (
+    EXTERNAL_EVAL_SAMPLE_DATASET_PATH,
     EXTENDED_REAL_QUESTION_EVAL_DATASET_ID,
     EXTENDED_REAL_QUESTION_EVAL_DATASET_NAME,
+    build_default_real_question_eval_dataset,
     build_core_real_question_eval_cases,
     build_extended_real_question_eval_dataset,
+)
+from app.modules.real_question_eval.external_dataset import (
+    ExternalEvalDatasetError,
+    SUPPORTED_EXTERNAL_EVAL_SOURCE_SCOPE_TYPES,
+    SUPPORTED_EXTERNAL_EVAL_TEST_TYPES,
+    load_external_eval_dataset,
 )
 from app.modules.real_question_eval.service import (
     REAL_QUESTION_EVAL_DATASET_ID,
@@ -46,8 +54,10 @@ __all__ = [
     "REAL_QUESTION_EVAL_INCREMENTAL_NEW_PROVIDER_CODES",
     "REAL_QUESTION_EVAL_PROFILE_NAME",
     "REAL_QUESTION_EVAL_SOURCE_TEXT",
+    "EXTERNAL_EVAL_SAMPLE_DATASET_PATH",
     "EXTENDED_REAL_QUESTION_EVAL_DATASET_ID",
     "EXTENDED_REAL_QUESTION_EVAL_DATASET_NAME",
+    "ExternalEvalDatasetError",
     "RealQuestionEvalAggregateModelResult",
     "RealQuestionEvalConfig",
     "RealQuestionEvalModelResult",
@@ -55,8 +65,12 @@ __all__ = [
     "RealQuestionEvalResult",
     "RealQuestionEvalRetrievedChunk",
     "RealQuestionEvalRunner",
+    "SUPPORTED_EXTERNAL_EVAL_SOURCE_SCOPE_TYPES",
+    "SUPPORTED_EXTERNAL_EVAL_TEST_TYPES",
+    "build_default_real_question_eval_dataset",
     "build_core_real_question_eval_cases",
     "build_extended_real_question_eval_dataset",
+    "load_external_eval_dataset",
     "run_full_version_batch_a_question_eval",
     "run_full_version_batch_b_question_eval",
     "run_full_version_batch_c_question_eval",

@@ -20,6 +20,7 @@ from app.modules.multi_embedding_eval.service import (
     WORKFLOW_NAME,
     process_multi_embedding_eval_job,
 )
+from app.modules.real_question_eval import EXTERNAL_EVAL_SAMPLE_DATASET_PATH, load_external_eval_dataset
 from app.modules.qdrant_indexing.schemas import RagSourceIndexingSummaryRead
 from app.modules.rag_quality.schemas import (
     RagQualityCaseResultsInput,
@@ -1272,3 +1273,22 @@ def test_multi_embedding_eval_request_accepts_manual_only_benchmark_candidates_w
     assert payload.candidates[0].metadata["manual_only_real_eval"] is True
     assert payload.candidates[1].metadata["manual_local_hybrid_eval"] is True
     assert payload.candidates[3].metadata["supports_task_adapters"] is True
+
+
+def test_multi_embedding_eval_request_accepts_loaded_external_eval_dataset():
+    payload = MultiEmbeddingEvalRequest(
+        dataset=load_external_eval_dataset(EXTERNAL_EVAL_SAMPLE_DATASET_PATH),
+        candidates=[
+            {
+                "config_id": "candidate-e5-base",
+                "model_code": "multilingual_e5_base",
+                "collection_name": "eternal_world_rag_chunks__multilingual_e5_base_eval",
+                "top_k": 3,
+                "retrieval_mode": "hybrid",
+            }
+        ],
+    )
+
+    assert payload.dataset.dataset_id == "eternal-world-external-eval-sample"
+    assert len(payload.dataset.cases) == 5
+    assert payload.dataset.cases[2].test_type == "multi_document"

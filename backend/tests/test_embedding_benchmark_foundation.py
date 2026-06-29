@@ -7,6 +7,8 @@ from app.modules.embedding_models.registry import (
     BGE_M3_FUTURE_RETRIEVAL_MODES,
 )
 from app.modules.real_question_eval.dataset_foundation import (
+    EXTERNAL_EVAL_SAMPLE_DATASET_PATH,
+    build_default_real_question_eval_dataset,
     build_core_real_question_eval_cases,
     build_extended_real_question_eval_dataset,
 )
@@ -47,6 +49,18 @@ def test_extended_real_question_eval_dataset_includes_planned_categories():
     assert any("czech_query" in case.tags for case in dataset.cases)
     assert any("russian_query" in case.tags for case in dataset.cases)
     assert any(case.expected_behavior == "lack_of_evidence" for case in dataset.cases)
+
+
+def test_default_real_question_eval_dataset_keeps_three_question_smoke_dataset():
+    dataset = build_default_real_question_eval_dataset()
+
+    assert dataset.dataset_id == "real-question-eval-dataset"
+    assert len(dataset.cases) == 3
+    assert dataset.metadata["default_smoke_dataset"] is True
+
+
+def test_external_eval_sample_dataset_file_exists():
+    assert EXTERNAL_EVAL_SAMPLE_DATASET_PATH.exists()
 
 
 def test_bge_m3_future_retrieval_modes_are_registered_for_planning():

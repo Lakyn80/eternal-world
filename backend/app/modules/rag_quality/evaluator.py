@@ -10,9 +10,30 @@ from app.modules.rag_quality.schemas import (
 )
 
 
+def _required_evidence_rules(case: RagQualityEvalCase) -> list[RagQualityEvalCase.EvidenceRule]:
+    if case.required_evidence:
+        return list(case.required_evidence)
+
+    return [
+        RagQualityEvalCase.EvidenceRule(marker=marker)
+        for marker in case.expected_markers
+    ]
+
+
+def _forbidden_evidence_rules(case: RagQualityEvalCase) -> list[RagQualityEvalCase.EvidenceRule]:
+    if case.forbidden_evidence:
+        return list(case.forbidden_evidence)
+
+    return [
+        RagQualityEvalCase.EvidenceRule(marker=marker)
+        for marker in case.forbidden_markers
+    ]
+
+
 def _expected_signal_count(case: RagQualityEvalCase) -> int:
+    required_evidence_rules = _required_evidence_rules(case)
     return (
-        len(case.expected_markers)
+        len(required_evidence_rules)
         + len(case.expected_source_ids)
         + len(case.expected_chunk_ids)
     )
@@ -22,8 +43,8 @@ def _required_relevant_results(case: RagQualityEvalCase) -> int:
     if case.expected_behavior == "lack_of_evidence":
         return 0
 
-    if case.minimum_relevant_results > 0:
-        return case.minimum_relevant_results
+    if case.minimum_relevant_results > 0 or case.expected_citation_count_min > 0:
+        return max(case.minimum_relevant_results, case.expected_citation_count_min)
 
     return 1 if _expected_signal_count(case) > 0 else 0
 
@@ -56,20 +77,24 @@ def evaluate_case_results(
         return _default_missing_case_evaluation(case=case, config_id=resolved_config_id)
 
     results = sorted(case_results.results, key=lambda item: item.rank)
+    required_evidence_rules = _required_evidence_rules(case)
+    forbidden_evidence_rules = _forbidden_evidence_rules(case)
     matched_expected_markers: set[str] = set()
     matched_source_ids: set[int] = set()
     matched_chunk_ids: set[int] = set()
     forbidden_markers_found: set[str] = set()
     relevant_result_ranks: list[int] = []
+    relevant_context_chars = 0
     forbidden_result_count = 0
 
     for result in results:
         result_has_match = False
         normalized_text = result.text
 
-        for marker in case.expected_markers:
-            if marker_present(normalized_text, marker):
-                matched_expected_markers.add(marker)
+        for evidence_rule in required_evidence_rules:
+            candidate_markers = [evidence_rule.marker, *evidence_rule.aliases]
+            if any(marker_present(normalized_text, marker) for marker in candidate_markers):
+                matched_expected_markers.add(evidence_rule.marker)
                 result_has_match = True
 
         if result.source_id is not None and result.source_id in case.expected_source_ids:
@@ -82,11 +107,13 @@ def evaluate_case_results(
 
         if result_has_match:
             relevant_result_ranks.append(result.rank)
+            relevant_context_chars += len(normalized_text)
 
         forbidden_in_result = False
-        for marker in case.forbidden_markers:
-            if marker_present(normalized_text, marker):
-                forbidden_markers_found.add(marker)
+        for evidence_rule in forbidden_evidence_rules:
+            candidate_markers = [evidence_rule.marker, *evidence_rule.aliases]
+            if any(marker_present(normalized_text, marker) for marker in candidate_markers):
+                forbidden_markers_found.add(evidence_rule.marker)
                 forbidden_in_result = True
 
         if forbidden_in_result:
@@ -94,7 +121,9 @@ def evaluate_case_results(
 
     relevant_result_count = len(relevant_result_ranks)
     missing_expected_markers = [
-        marker for marker in case.expected_markers if marker not in matched_expected_markers
+        evidence_rule.marker
+        for evidence_rule in required_evidence_rules
+        if evidence_rule.marker not in matched_expected_markers
     ]
     missing_expected_source_ids = [
         source_id for source_id in case.expected_source_ids if source_id not in matched_source_ids
@@ -118,8 +147,8 @@ def evaluate_case_results(
         reciprocal_rank = 0 if first_relevant_rank is None else 1 / first_relevant_rank
 
     evidence_marker_coverage = None
-    if case.expected_markers:
-        evidence_marker_coverage = len(matched_expected_markers) / len(case.expected_markers)
+    if required_evidence_rules:
+        evidence_marker_coverage = len(matched_expected_markers) / len(required_evidence_rules)
 
     if case.expected_behavior == "lack_of_evidence":
         hit = total_results == 0
@@ -129,12 +158,26 @@ def evaluate_case_results(
         required_relevant_results = _required_relevant_results(case)
         hit = relevant_result_count >= required_relevant_results
         false_positive_count = max(0, total_results - relevant_result_count)
+        coverage_requirement = case.minimum_coverage
+        if coverage_requirement is None and required_evidence_rules:
+            coverage_requirement = 1.0
+        coverage_satisfied = (
+            coverage_requirement is None
+            or evidence_marker_coverage is None
+            or evidence_marker_coverage >= coverage_requirement
+        )
+        context_requirement_satisfied = (
+            case.minimum_context_chars <= 0
+            or relevant_context_chars >= case.minimum_context_chars
+        )
         passed = (
             hit
-            and not missing_expected_markers
+            and (case.allow_partial or not missing_expected_markers)
             and not missing_expected_source_ids
             and not missing_expected_chunk_ids
             and not forbidden_markers_found
+            and coverage_satisfied
+            and context_requirement_satisfied
         )
 
     forbidden_marker_rate = 0 if total_results == 0 else forbidden_result_count / total_results
@@ -167,6 +210,23 @@ def evaluate_case_results(
         reasons.append(
             "Missing expected chunk IDs: "
             + ", ".join(str(item) for item in missing_expected_chunk_ids)
+        )
+    if (
+        case.expected_behavior != "lack_of_evidence"
+        and case.minimum_coverage is not None
+        and evidence_marker_coverage is not None
+        and evidence_marker_coverage < case.minimum_coverage
+    ):
+        reasons.append(
+            f"Evidence coverage below requirement: {evidence_marker_coverage:.3f} < {case.minimum_coverage:.3f}."
+        )
+    if (
+        case.expected_behavior != "lack_of_evidence"
+        and case.minimum_context_chars > 0
+        and relevant_context_chars < case.minimum_context_chars
+    ):
+        reasons.append(
+            f"Relevant context below requirement: {relevant_context_chars} < {case.minimum_context_chars} characters."
         )
     if forbidden_markers_found:
         reasons.append(
