@@ -1,9 +1,13 @@
 from __future__ import annotations
 
+import logging
+from dataclasses import dataclass
 from datetime import datetime, timezone
 
 from sqlalchemy.orm import Session
 
+from app.core.config import settings
+from app.core.logging import get_logger, log_event
 from app.db.models import ActiveRetrievalConfig, User
 from app.modules.active_retrieval_config import repository
 from app.modules.active_retrieval_config.exceptions import (
@@ -13,12 +17,152 @@ from app.modules.active_retrieval_config.exceptions import (
     ActiveRetrievalConfigProfileNotFoundError,
 )
 from app.modules.active_retrieval_config.schemas import ActiveRetrievalConfigUpsertRequest
+from app.modules.embedding_models.exceptions import EmbeddingModelNotFoundError
+from app.modules.embedding_models.registry import (
+    BGE_M3_DENSE_SPARSE_MULTIVECTOR_RETRIEVAL_MODE,
+    BGE_M3_DENSE_SPARSE_RETRIEVAL_MODE,
+)
+from app.modules.embedding_models.service import is_embedding_model_runtime_available
 from app.modules.memory_profiles.service import MemoryProfileNotFoundError, get_memory_profile
 from app.modules.multi_embedding_eval.schemas import MultiEmbeddingEvalRequest
 from app.modules.rag_sources.service import RagSourceNotFoundError, get_rag_source
 
 
 MULTI_EMBEDDING_EVAL_WORKFLOW = "multi_embedding_eval"
+PRODUCTION_ACTIVE_RETRIEVAL_MODEL_CODE = "bge_m3_dense_sparse"
+PRODUCTION_ACTIVE_RETRIEVAL_MODE = BGE_M3_DENSE_SPARSE_RETRIEVAL_MODE
+PRODUCTION_FALLBACK_RETRIEVAL_MODEL_CODE = "multilingual_e5_base"
+PRODUCTION_FALLBACK_RETRIEVAL_MODE = "dense"
+PRODUCTION_DEFAULT_TOP_K = 5
+
+logger = get_logger("active_retrieval_config")
+
+
+@dataclass(frozen=True)
+class RuntimeActiveRetrievalSelection:
+    model_code: str
+    collection_name: str
+    top_k: int
+    score_threshold: float | None
+    retrieval_mode: str
+    selection_reason: str
+    source: str
+    source_eval_job_id: int | None = None
+    source_eval_dataset_id: str | None = None
+
+
+def _build_collection_name(model_code: str) -> str:
+    return f"{settings.qdrant_collection_name}__{model_code}"
+
+
+def get_production_recommended_active_retrieval_config() -> RuntimeActiveRetrievalSelection:
+    return RuntimeActiveRetrievalSelection(
+        model_code=PRODUCTION_ACTIVE_RETRIEVAL_MODEL_CODE,
+        collection_name=_build_collection_name(PRODUCTION_ACTIVE_RETRIEVAL_MODEL_CODE),
+        top_k=PRODUCTION_DEFAULT_TOP_K,
+        score_threshold=None,
+        retrieval_mode=PRODUCTION_ACTIVE_RETRIEVAL_MODE,
+        selection_reason=(
+            "Promoted from Task 49 Batch D as the current production retrieval recommendation."
+        ),
+        source="production_recommendation",
+    )
+
+
+def _build_runtime_selection_from_active_config(
+    active_config: ActiveRetrievalConfig,
+) -> RuntimeActiveRetrievalSelection:
+    return RuntimeActiveRetrievalSelection(
+        model_code=active_config.model_code,
+        collection_name=active_config.collection_name,
+        top_k=active_config.top_k,
+        score_threshold=active_config.score_threshold,
+        retrieval_mode=active_config.retrieval_mode,
+        selection_reason=active_config.selection_reason or "Profile-specific active retrieval config.",
+        source="profile_active_config",
+        source_eval_job_id=active_config.source_eval_job_id,
+        source_eval_dataset_id=active_config.source_eval_dataset_id,
+    )
+
+
+def _build_fallback_runtime_selection(
+    candidate: RuntimeActiveRetrievalSelection,
+    *,
+    reason: str,
+) -> RuntimeActiveRetrievalSelection:
+    return RuntimeActiveRetrievalSelection(
+        model_code=PRODUCTION_FALLBACK_RETRIEVAL_MODEL_CODE,
+        collection_name=_build_collection_name(PRODUCTION_FALLBACK_RETRIEVAL_MODEL_CODE),
+        top_k=candidate.top_k,
+        score_threshold=candidate.score_threshold,
+        retrieval_mode=PRODUCTION_FALLBACK_RETRIEVAL_MODE,
+        selection_reason=(
+            f"Fell back from {candidate.model_code} to {PRODUCTION_FALLBACK_RETRIEVAL_MODEL_CODE}: {reason}"
+        ),
+        source="guarded_fallback",
+        source_eval_job_id=candidate.source_eval_job_id,
+        source_eval_dataset_id=candidate.source_eval_dataset_id,
+    )
+
+
+def _get_runtime_rejection_reason(candidate: RuntimeActiveRetrievalSelection) -> str | None:
+    if candidate.model_code == PRODUCTION_ACTIVE_RETRIEVAL_MODEL_CODE:
+        return (
+            "BGE-M3 dense+sparse remains behind a guarded benchmark-only path while the "
+            "current production Qdrant runtime is still dense-only."
+        )
+    if candidate.retrieval_mode == BGE_M3_DENSE_SPARSE_MULTIVECTOR_RETRIEVAL_MODE:
+        return (
+            "BGE-M3 multivector retrieval stays benchmark-only and is not enabled as a "
+            "production runtime default."
+        )
+
+    try:
+        runtime_available = is_embedding_model_runtime_available(candidate.model_code)
+    except EmbeddingModelNotFoundError:
+        return f"Configured retrieval model `{candidate.model_code}` is not registered."
+
+    if not runtime_available:
+        return f"Configured retrieval model `{candidate.model_code}` is not available in this runtime."
+
+    return None
+
+
+def resolve_runtime_active_retrieval_config(
+    db: Session,
+    *,
+    current_user: User,
+    profile_id: int,
+) -> RuntimeActiveRetrievalSelection:
+    stored_active_config = repository.get_active_config_for_profile(
+        db,
+        owner_user_id=current_user.id,
+        profile_id=profile_id,
+    )
+    candidate = (
+        _build_runtime_selection_from_active_config(stored_active_config)
+        if stored_active_config is not None
+        else get_production_recommended_active_retrieval_config()
+    )
+    rejection_reason = _get_runtime_rejection_reason(candidate)
+    if rejection_reason is None or candidate.model_code == PRODUCTION_FALLBACK_RETRIEVAL_MODEL_CODE:
+        return candidate
+
+    fallback = _build_fallback_runtime_selection(candidate, reason=rejection_reason)
+    log_event(
+        logger,
+        logging.WARNING,
+        "active_retrieval_config_runtime_fallback",
+        owner_user_id=current_user.id,
+        profile_id=profile_id,
+        configured_model_code=candidate.model_code,
+        configured_retrieval_mode=candidate.retrieval_mode,
+        fallback_model_code=fallback.model_code,
+        fallback_retrieval_mode=fallback.retrieval_mode,
+        reason=rejection_reason,
+        source=candidate.source,
+    )
+    return fallback
 
 
 def _get_owned_profile_or_raise(

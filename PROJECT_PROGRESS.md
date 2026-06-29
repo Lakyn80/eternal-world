@@ -3468,3 +3468,99 @@ Scope confirmation:
 - no Jina benchmark was rerun
 - no all-model benchmark was run
 - no unrelated Docker containers were stopped or removed
+
+## Task 50 Promote bge_m3_dense_sparse as Active Retrieval Config
+
+Source benchmark:
+
+- Task 49 Batch D
+- benchmark status confirmed: `completed`
+- winner confirmed: `bge_m3_dense_sparse`
+- `bge_m3_dense_sparse` beat `multilingual_e5_base`
+- evidence coverage confirmed: `1.0`
+- missing markers confirmed: `0`
+- distractors confirmed: `0`
+
+Promotion summary:
+
+- old active/recommended provider: `multilingual_e5_base`
+- new active provider: `bge_m3_dense_sparse`
+- fallback provider: `multilingual_e5_base`
+- `bge_m3_dense_sparse_multivector` was not promoted because it lost Batch D overall, is slower, and remains benchmark-only
+
+Exact selection path changed:
+
+- `backend/app/modules/chat/service.py`
+  - production chat retrieval already calls `retrieve_profile_rag(...)`
+- `backend/app/modules/rag_retrieval/service.py`
+  - `retrieve_profile_rag(...)` now resolves runtime selection through `resolve_runtime_active_retrieval_config(...)`
+- `backend/app/modules/active_retrieval_config/service.py`
+  - added `get_production_recommended_active_retrieval_config()`
+  - added `resolve_runtime_active_retrieval_config(...)`
+  - runtime selection order is now:
+    - profile-specific stored active config if present
+    - otherwise promoted production recommendation `bge_m3_dense_sparse`
+    - if runtime cannot safely use that selection, explicit logged fallback to `multilingual_e5_base`
+
+Production runtime behavior:
+
+- active selection now declares `bge_m3_dense_sparse`
+- current production runtime does not fully support BGE-M3 dense+sparse Qdrant retrieval yet
+- the runtime therefore uses a guarded fallback to `multilingual_e5_base`
+- fallback is explicit and logged with event:
+  - `active_retrieval_config_runtime_fallback`
+- no runtime dependency on real-question-eval markdown/json artifacts was introduced
+
+Files changed:
+
+- `backend/app/modules/active_retrieval_config/service.py`
+- `backend/app/modules/rag_retrieval/service.py`
+- `backend/tests/test_active_retrieval_config.py`
+- `backend/tests/test_production_retrieval_runtime_smoke.py`
+- `backend/tests/test_rag_retrieval.py`
+- `PROJECT_PROGRESS.md`
+
+CPU-only verification:
+
+- command:
+  - `docker compose exec backend python -c "import torch; print(torch.__version__); print(torch.cuda.is_available())"`
+- result:
+  - `2.12.1+cpu`
+  - `False`
+
+FlagEmbedding verification:
+
+- command:
+  - `docker compose exec backend python -c "import FlagEmbedding; print('FlagEmbedding import ok')"`
+- result:
+  - `FlagEmbedding import ok`
+
+Active retrieval config service smoke:
+
+- command:
+  - `docker compose exec backend python -c "from app.modules.active_retrieval_config.service import get_production_recommended_active_retrieval_config; config = get_production_recommended_active_retrieval_config(); print(config.model_code); print(config.retrieval_mode); print(config.collection_name)"`
+- result:
+  - `bge_m3_dense_sparse`
+  - `bge_m3_dense_sparse`
+  - `eternal_world_rag_chunks__bge_m3_dense_sparse`
+
+Tests run and results:
+
+- `python -m pytest tests/test_embedding_models.py tests/test_embedding_benchmark_foundation.py -q` -> `29 passed`
+- `python -m pytest tests/test_embeddings_sentence_transformers.py tests/test_embeddings.py -q` -> `54 passed`
+- `python -m pytest tests/test_multi_embedding_eval.py tests/test_real_question_eval.py -q` -> `52 passed`
+- `python -m pytest tests/test_active_retrieval_config.py tests/test_rag_retrieval.py tests/test_production_retrieval_runtime_smoke.py -q` -> `24 passed`
+- `python -m pytest -q --durations=20` -> `passed`
+
+Runtime smoke result:
+
+- production recommendation is exposed through the app/service layer as `bge_m3_dense_sparse`
+- the guarded runtime path keeps `multilingual_e5_base` as the safe fallback until full dense+sparse production retrieval support exists
+
+Scope confirmation:
+
+- no real benchmark was rerun
+- no Qwen benchmark was run
+- no Jina benchmark was run
+- no all-model benchmark was run
+- no unrelated Docker containers were stopped or removed

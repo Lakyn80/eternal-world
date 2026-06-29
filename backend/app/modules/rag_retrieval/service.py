@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.db.models import User
-from app.modules.active_retrieval_config.service import resolve_active_retrieval_config
+from app.modules.active_retrieval_config.service import resolve_runtime_active_retrieval_config
 from app.modules.embedding_models.exceptions import EmbeddingModelNotFoundError
 from app.modules.embedding_models.service import (
     get_default_embedding_model,
@@ -124,20 +124,19 @@ def retrieve_profile_rag(
     effective_score_threshold = payload.score_threshold
     effective_model_code = payload.model_code
     payload_fields_set = set(payload.model_fields_set)
-    active_config = resolve_active_retrieval_config(
+    runtime_config = resolve_runtime_active_retrieval_config(
         db,
         current_user=current_user,
         profile_id=profile_id,
     )
-    if active_config is not None:
-        explicit_model_override = "model_code" in payload_fields_set and payload.model_code is not None
-        if not explicit_model_override:
-            effective_model_code = active_config.model_code
-            collection_name = active_config.collection_name
-        if "limit" not in payload_fields_set:
-            effective_limit = active_config.top_k
-        if "score_threshold" not in payload_fields_set:
-            effective_score_threshold = active_config.score_threshold
+    explicit_model_override = "model_code" in payload_fields_set and payload.model_code is not None
+    if not explicit_model_override:
+        effective_model_code = runtime_config.model_code
+        collection_name = runtime_config.collection_name
+    if "limit" not in payload_fields_set:
+        effective_limit = runtime_config.top_k
+    if "score_threshold" not in payload_fields_set:
+        effective_score_threshold = runtime_config.score_threshold
 
     effective_payload = payload.model_copy(
         update={

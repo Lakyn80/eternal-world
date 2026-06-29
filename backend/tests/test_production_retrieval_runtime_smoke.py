@@ -279,12 +279,12 @@ def test_production_retrieval_runtime_smoke_uses_active_config_without_eval_side
     assert "multi_embedding_eval" not in source_text
     assert "rag_quality" not in source_text
 
-    original_resolve_active_retrieval_config = rag_retrieval_service.resolve_active_retrieval_config
+    original_resolve_runtime_active_retrieval_config = rag_retrieval_service.resolve_runtime_active_retrieval_config
     resolve_calls: list[tuple[int, int]] = []
 
-    def tracking_resolve_active_retrieval_config(db, *, current_user, profile_id):
+    def tracking_resolve_runtime_active_retrieval_config(db, *, current_user, profile_id):
         resolve_calls.append((current_user.id, profile_id))
-        return original_resolve_active_retrieval_config(
+        return original_resolve_runtime_active_retrieval_config(
             db,
             current_user=current_user,
             profile_id=profile_id,
@@ -292,8 +292,8 @@ def test_production_retrieval_runtime_smoke_uses_active_config_without_eval_side
 
     monkeypatch.setattr(
         rag_retrieval_service,
-        "resolve_active_retrieval_config",
-        tracking_resolve_active_retrieval_config,
+        "resolve_runtime_active_retrieval_config",
+        tracking_resolve_runtime_active_retrieval_config,
     )
 
     email = "production-retrieval-smoke@example.com"

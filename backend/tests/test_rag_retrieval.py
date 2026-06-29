@@ -199,10 +199,12 @@ def _list_chunks(client, token: str, source_id: int):
     )
 
 
-def _embed_chunk(client, token: str, chunk_id: int):
+def _embed_chunk(client, token: str, chunk_id: int, *, model_code: str | None = None):
+    payload = {"model_code": model_code} if model_code is not None else None
     return client.post(
         f"/api/rag-chunks/{chunk_id}/embed",
         headers=_auth_headers(token),
+        json=payload,
     )
 
 
@@ -235,7 +237,12 @@ def _install_fake_sentence_transformers(monkeypatch):
 
         def encode(self, texts, **kwargs):
             materialized_texts = list(texts)
-            dimension = 384 if self.model_name == "intfloat/multilingual-e5-small" else 1024
+            if self.model_name == "intfloat/multilingual-e5-small":
+                dimension = 384
+            elif self.model_name == "intfloat/multilingual-e5-base":
+                dimension = 768
+            else:
+                dimension = 1024
             return [
                 [round((index + 1) / 1000, 6) for index in range(dimension)]
                 for _ in materialized_texts
@@ -256,6 +263,7 @@ def _create_indexed_embedding(
     profile_id: int | None = None,
     source_text: str | None = None,
     source_type: str = "manual_text",
+    model_code: str = "multilingual_e5_base",
 ) -> tuple[int, int, int, int]:
     if profile_id is None:
         profile_id = _create_profile(client, token, profile_name)
@@ -268,7 +276,7 @@ def _create_indexed_embedding(
     source_id = _create_rag_source(client, token, profile_id, **source_payload).json()["id"]
     assert _chunk_source(client, token, source_id).status_code == 200
     chunk_id = _list_chunks(client, token, source_id).json()[0]["id"]
-    embed_response = _embed_chunk(client, token, chunk_id)
+    embed_response = _embed_chunk(client, token, chunk_id, model_code=model_code)
     assert embed_response.status_code == 200
     embedding_id = embed_response.json()["id"]
     index_response = client.post(
@@ -430,7 +438,7 @@ def test_query_embedding_can_use_sentence_transformers_without_persisting_query_
             pass
 
     assert response.status_code == 200
-    assert response.json()["model_code"] == "multilingual_e5_small"
+    assert response.json()["model_code"] == "multilingual_e5_base"
     assert before_count == after_count
 
 
@@ -549,14 +557,14 @@ def test_existing_indexed_chunk_can_be_returned_as_evidence(client, monkeypatch)
 
     assert response.status_code == 200
     body = response.json()
-    assert body["model_code"] == "multilingual_e5_small"
+    assert body["model_code"] == "multilingual_e5_base"
     assert len(body["results"]) >= 1
     first_result = body["results"][0]
     assert first_result["chunk_id"] == chunk_id
     assert first_result["source_id"] == source_id
     assert first_result["embedding_id"] == embedding_id
     assert "prague family memory archive" in first_result["text"]
-    assert first_result["qdrant_collection"] == "eternal_world_rag_chunks__multilingual_e5_small"
+    assert first_result["qdrant_collection"] == "eternal_world_rag_chunks__multilingual_e5_base"
     assert first_result["payload_metadata"]["profile_id"] == profile_id
 
 

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import app.modules.active_retrieval_config.service as active_retrieval_config_service
 from app.db.models import ActiveRetrievalConfig, BackgroundJob, MemoryProfile, User
 from app.db.session import get_db
 from app.main import app
@@ -475,6 +476,24 @@ def test_retrieval_uses_active_config_when_request_does_not_override(client, mon
     assert fake_qdrant_client.search_calls[-1]["score_threshold"] == -1.0
 
 
+def test_production_recommended_active_retrieval_config_promotes_bge_m3_dense_sparse():
+    config = active_retrieval_config_service.get_production_recommended_active_retrieval_config()
+
+    assert config.model_code == "bge_m3_dense_sparse"
+    assert config.retrieval_mode == "bge_m3_dense_sparse"
+    assert config.collection_name == "eternal_world_rag_chunks__bge_m3_dense_sparse"
+
+
+def test_production_recommended_active_retrieval_config_does_not_promote_multivector_qwen_or_jina():
+    config = active_retrieval_config_service.get_production_recommended_active_retrieval_config()
+
+    assert config.model_code != "bge_m3_dense_sparse_multivector"
+    assert config.model_code != "qwen3_embedding_0_6b"
+    assert config.model_code != "qwen3_embedding_4b"
+    assert config.model_code != "qwen3_embedding_8b"
+    assert config.model_code != "jina_embeddings_v3"
+
+
 def test_retrieval_falls_back_to_default_behavior_when_no_active_config_exists(client, monkeypatch):
     fake_qdrant_client = _install_fake_qdrant_client(monkeypatch)
     token = _register_and_login(client, "active-config-fallback@example.com")
@@ -482,8 +501,8 @@ def test_retrieval_falls_back_to_default_behavior_when_no_active_config_exists(c
     source_id = _create_rag_source(client, token, profile_id).json()["id"]
 
     assert _chunk_source(client, token, source_id).status_code == 200
-    assert _embed_source(client, token, source_id).status_code == 200
-    assert _index_source(client, token, source_id).status_code == 200
+    assert _embed_source(client, token, source_id, model_code="multilingual_e5_base").status_code == 200
+    assert _index_source(client, token, source_id, model_code="multilingual_e5_base").status_code == 200
 
     response = client.post(
         f"/api/memory-profiles/{profile_id}/rag/retrieve",
@@ -493,12 +512,66 @@ def test_retrieval_falls_back_to_default_behavior_when_no_active_config_exists(c
 
     assert response.status_code == 200
     body = response.json()
-    assert body["model_code"] == "multilingual_e5_small"
+    assert body["model_code"] == "multilingual_e5_base"
     assert body["results"]
-    assert body["results"][0]["qdrant_collection"] == "eternal_world_rag_chunks__multilingual_e5_small"
-    assert fake_qdrant_client.search_calls[-1]["collection_name"] == "eternal_world_rag_chunks__multilingual_e5_small"
+    assert body["results"][0]["qdrant_collection"] == "eternal_world_rag_chunks__multilingual_e5_base"
+    assert fake_qdrant_client.search_calls[-1]["collection_name"] == "eternal_world_rag_chunks__multilingual_e5_base"
     assert fake_qdrant_client.search_calls[-1]["limit"] == 5
     assert fake_qdrant_client.search_calls[-1]["score_threshold"] is None
+
+
+def test_runtime_resolution_falls_back_from_promoted_bge_to_multilingual_e5_base_and_logs_reason(client, monkeypatch):
+    logged_events: list[dict[str, object]] = []
+
+    def fake_log_event(logger, level, event, **fields):
+        logged_events.append(
+            {
+                "level": level,
+                "event": event,
+                "fields": fields,
+            }
+        )
+
+    monkeypatch.setattr(active_retrieval_config_service, "log_event", fake_log_event)
+
+    email = "active-config-runtime-fallback@example.com"
+    token = _register_and_login(client, email)
+    profile_id = _create_profile(client, token, "Active Config Runtime Fallback Profile")
+
+    db, session_generator = _get_test_db_session()
+    try:
+        current_user = db.query(User).filter(User.email == email).one()
+        runtime_config = active_retrieval_config_service.resolve_runtime_active_retrieval_config(
+            db,
+            current_user=current_user,
+            profile_id=profile_id,
+        )
+    finally:
+        _close_test_db_session(session_generator)
+
+    assert runtime_config.model_code == "multilingual_e5_base"
+    assert runtime_config.retrieval_mode == "dense"
+    assert runtime_config.source == "guarded_fallback"
+    assert "dense-only" in runtime_config.selection_reason
+    assert logged_events == [
+        {
+            "level": 30,
+            "event": "active_retrieval_config_runtime_fallback",
+            "fields": {
+                "owner_user_id": current_user.id,
+                "profile_id": profile_id,
+                "configured_model_code": "bge_m3_dense_sparse",
+                "configured_retrieval_mode": "bge_m3_dense_sparse",
+                "fallback_model_code": "multilingual_e5_base",
+                "fallback_retrieval_mode": "dense",
+                "reason": (
+                    "BGE-M3 dense+sparse remains behind a guarded benchmark-only path while the "
+                    "current production Qdrant runtime is still dense-only."
+                ),
+                "source": "production_recommendation",
+            },
+        }
+    ]
 
 
 def test_activate_best_creates_active_config_from_successful_multi_embedding_eval(client):
