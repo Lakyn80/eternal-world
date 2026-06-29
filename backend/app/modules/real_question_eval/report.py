@@ -15,6 +15,7 @@ def build_real_question_eval_markdown(result: RealQuestionEvalResult) -> str:
         "full_version_batch_a_real_eval",
         "full_version_batch_b_real_eval",
         "full_version_batch_c_real_eval",
+        "full_version_batch_d_real_eval",
         "full_version_batch_b_attempted",
     }:
         return build_real_question_eval_benchmark_batch_markdown(result)
@@ -214,8 +215,9 @@ def build_real_question_eval_benchmark_batch_markdown(result: RealQuestionEvalRe
     client_view = build_real_question_eval_client_view(result)
     developer_view = build_real_question_eval_developer_view(result)
     batch_label = client_view["benchmark_batch_label"] or "Benchmark Batch"
-    baseline_provider = (client_view["baseline_provider_codes"] or ["none"])[0]
-    newly_evaluated_provider = (client_view["newly_evaluated_provider_codes"] or ["none"])[0]
+    baseline_providers = list(client_view["baseline_provider_codes"] or ["none"])
+    newly_evaluated_providers = list(client_view["newly_evaluated_provider_codes"] or ["none"])
+    baseline_provider = baseline_providers[0]
     lines: list[str] = [
         "# Real Question Evaluation Report",
         "",
@@ -231,7 +233,7 @@ def build_real_question_eval_benchmark_batch_markdown(result: RealQuestionEvalRe
     lines.extend(
         [
             f"- Baseline provider: `{baseline_provider}`",
-            f"- Newly evaluated provider: `{newly_evaluated_provider}`",
+            f"- Newly evaluated providers: {', '.join(f'`{model_code}`' for model_code in newly_evaluated_providers)}",
             f"- Comparison scope: {client_view['comparison_scope_note'] or 'n/a'}",
             f"- Weaker historical providers intentionally excluded: {', '.join(client_view['excluded_provider_codes']) or 'none'}",
             f"- Winner: `{client_view['overall_winner'] or 'none'}`",
@@ -245,6 +247,11 @@ def build_real_question_eval_benchmark_batch_markdown(result: RealQuestionEvalRe
             f"- Historical current winner before {batch_label}: `{client_view['historical_overall_winner'] or 'none'}`",
             f"- Any new provider beat baseline/current winner: `{str(client_view['any_new_provider_beat_historical_winner']).lower()}`",
             f"- Timestamp: {result.generated_at or 'unknown'}",
+            *(
+                [f"- Note: {note}" for note in client_view["non_compared_notes"]]
+                if client_view["non_compared_notes"]
+                else []
+            ),
             *(
                 [f"- Incomplete reason: {client_view['incomplete_reason']}"]
                 if client_view["incomplete_reason"]
@@ -261,7 +268,7 @@ def build_real_question_eval_benchmark_batch_markdown(result: RealQuestionEvalRe
     for model_code in client_view["baseline_provider_codes"]:
         lines.append(f"- `{model_code}`")
 
-    lines.extend(["", "## Newly Evaluated Provider"])
+    lines.extend(["", "## Newly Evaluated Providers"])
     for model_code in client_view["newly_evaluated_provider_codes"]:
         lines.append(f"- `{model_code}`")
 
@@ -310,13 +317,15 @@ def build_real_question_eval_benchmark_batch_markdown(result: RealQuestionEvalRe
             f"- Production recommendation: {client_view['production_recommendation']}",
             "",
             "## Safety Notes",
-            f"- Only newly run provider: `{newly_evaluated_provider}`",
+            f"- Newly run providers requested: {', '.join(f'`{model_code}`' for model_code in newly_evaluated_providers)}",
             f"- Baseline reused from existing artifact: `{baseline_provider}`",
             f"- Excluded weaker historical providers: {', '.join(client_view['excluded_provider_codes']) or 'none'}",
             f"- Latest real artifacts overwritten: `false`",
             f"- Latest fake artifacts overwritten: `false`",
             f"- Latest incremental artifacts overwritten: `false`",
             f"- Latest full-version Batch A artifacts overwritten: `false`",
+            f"- Latest full-version Batch B artifacts overwritten: `false`",
+            f"- Latest full-version Batch C artifacts overwritten: `false`",
             *[f"- {note}" for note in client_view["non_compared_notes"]],
             "",
             "## Artifact Files",
@@ -410,12 +419,21 @@ def build_real_question_eval_client_view(result: RealQuestionEvalResult) -> dict
         evidence_used = ", ".join(winner_result.matched_expected_markers) if winner_result and winner_result.matched_expected_markers else "none"
         losing_issues: list[str] = []
         if losing_result is not None:
-            if losing_result.missing_expected_markers:
-                losing_issues.append("missing " + ", ".join(losing_result.missing_expected_markers))
-            if losing_result.false_positive_markers:
-                losing_issues.append("distractors " + ", ".join(losing_result.false_positive_markers))
-            if not losing_issues:
+            combined_losing_distractors: list[str] = []
+            for losing_candidate in losing_results:
+                if losing_candidate.missing_expected_markers:
+                    losing_issues.append(
+                        f"{losing_candidate.model_code} missing " + ", ".join(losing_candidate.missing_expected_markers)
+                    )
+                if losing_candidate.false_positive_markers:
+                    losing_issues.append(
+                        f"{losing_candidate.model_code} distractors " + ", ".join(losing_candidate.false_positive_markers)
+                    )
+                    combined_losing_distractors.extend(losing_candidate.false_positive_markers)
+            if not losing_issues and losing_results:
                 losing_issues.append("lower retrieval score despite comparable evidence")
+        else:
+            combined_losing_distractors = []
         questions.append(
             {
                 "question_id": question_result.question_id,
@@ -433,8 +451,8 @@ def build_real_question_eval_client_view(result: RealQuestionEvalResult) -> dict
                 ),
                 "losing_model_issue": "; ".join(losing_issues),
                 "distractors_or_false_positives": (
-                    ", ".join(losing_result.false_positive_markers)
-                    if losing_result is not None and losing_result.false_positive_markers
+                    ", ".join(combined_losing_distractors)
+                    if combined_losing_distractors
                     else "none"
                 ),
                 "model_summaries": model_summaries,
@@ -459,12 +477,15 @@ def build_real_question_eval_client_view(result: RealQuestionEvalResult) -> dict
             "full_version_batch_a_real_eval",
             "full_version_batch_b_real_eval",
             "full_version_batch_c_real_eval",
+            "full_version_batch_d_real_eval",
         }:
             batch_label = result.benchmark_batch_label or "benchmark batch"
             baseline_provider = (result.baseline_provider_codes or ["baseline"])[0]
-            newly_evaluated_provider = (result.newly_evaluated_provider_codes or ["candidate"])[0]
+            newly_evaluated_provider_labels = ", ".join(
+                f"`{item}`" for item in (result.newly_evaluated_provider_codes or ["candidate"])
+            )
             speed_vs_accuracy_tradeoff = (
-                f"{batch_label} compares the persisted current winner `{baseline_provider}` against one newly run provider, `{newly_evaluated_provider}`. If quality is effectively tied, the lower-latency and lighter baseline remains preferred."
+                f"{batch_label} compares the persisted current winner `{baseline_provider}` against newly run provider candidates {newly_evaluated_provider_labels}. If quality is effectively tied, the lower-latency and lighter baseline remains preferred."
             )
             if result.benchmark_status == "attempted_not_completed":
                 production_recommendation = (
@@ -472,7 +493,7 @@ def build_real_question_eval_client_view(result: RealQuestionEvalResult) -> dict
                 )
             elif result.any_new_provider_beat_historical_winner:
                 production_recommendation = (
-                    f"{batch_label} indicates `{recommended_active_model}` beat the baseline `{baseline_provider}`; review `{newly_evaluated_provider}` for promotion."
+                    f"{batch_label} indicates `{recommended_active_model}` beat the baseline `{baseline_provider}`; review the successful BGE-M3 hybrid candidate for promotion."
                 )
             else:
                 production_recommendation = (
@@ -645,6 +666,8 @@ def _resolve_artifact_variant(*, result: RealQuestionEvalResult) -> str:
         return "full_version_batch_b_attempted"
     if result.run_type == "full_version_batch_c":
         return "full_version_batch_c"
+    if result.run_type == "full_version_batch_d":
+        return "full_version_batch_d"
     if result.run_type == "full_version_batch_b":
         return "full_version_batch_b"
     if result.run_type == "full_version_batch_a":

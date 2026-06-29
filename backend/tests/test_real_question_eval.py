@@ -9,12 +9,21 @@ from app.db.session import get_db
 from app.main import app
 from app.modules.real_question_eval import (
     RealQuestionEvalConfig,
+    RealQuestionEvalAggregateModelResult,
+    RealQuestionEvalModelResult,
+    RealQuestionEvalQuestionResult,
     RealQuestionEvalRunner,
     run_full_version_batch_a_question_eval,
     run_full_version_batch_b_question_eval,
     run_full_version_batch_c_question_eval,
+    run_full_version_batch_d_question_eval,
     run_incremental_real_question_eval,
     write_full_version_batch_b_attempted_artifact,
+)
+from app.modules.embeddings.providers.bge_m3_hybrid import (
+    BgeM3HybridEmbeddingProvider,
+    clear_bge_m3_hybrid_shared_model_cache,
+    enable_bge_m3_hybrid_shared_model_cache,
 )
 from app.modules.real_question_eval.service import _QuestionEvalFakeSentenceTransformer
 from app.modules.real_question_eval.service import rerender_incremental_real_artifacts_from_existing_json
@@ -23,6 +32,7 @@ from scripts.run_real_question_eval import (
     resolve_full_version_batch_a_providers,
     resolve_full_version_batch_b_providers,
     resolve_full_version_batch_c_providers,
+    resolve_full_version_batch_d_providers,
     resolve_real_question_eval_execution_mode,
 )
 
@@ -203,6 +213,62 @@ class _TrackingQuestionEvalFakeSentenceTransformer(_QuestionEvalFakeSentenceTran
             }
         )
         return super().encode(materialized_texts, **kwargs)
+
+
+class _FakeBGEM3FlagModel:
+    init_calls: list[dict[str, object]] = []
+    encode_calls: list[dict[str, object]] = []
+
+    def __init__(self, model_name: str, **kwargs):
+        self.model_name = model_name
+        self.kwargs = dict(kwargs)
+        self.__class__.init_calls.append(
+            {
+                "model_name": model_name,
+                "kwargs": dict(kwargs),
+            }
+        )
+
+    def encode(
+        self,
+        texts,
+        *,
+        batch_size: int,
+        max_length: int,
+        return_dense: bool,
+        return_sparse: bool,
+        return_colbert_vecs: bool,
+    ):
+        materialized_texts = list(texts)
+        self.__class__.encode_calls.append(
+            {
+                "texts": materialized_texts,
+                "batch_size": batch_size,
+                "max_length": max_length,
+                "return_dense": return_dense,
+                "return_sparse": return_sparse,
+                "return_colbert_vecs": return_colbert_vecs,
+            }
+        )
+        dense_vecs = [[1.0, 0.0] for _ in materialized_texts]
+        lexical_weights = [{"sunflower": 1.0} for _ in materialized_texts]
+        payload: dict[str, object] = {
+            "dense_vecs": dense_vecs,
+            "lexical_weights": lexical_weights,
+        }
+        if return_colbert_vecs:
+            payload["colbert_vecs"] = [[[1.0, 0.0]], [[1.0, 0.0]]][: len(materialized_texts)]
+        return payload
+
+
+def _install_fake_bge_m3_hybrid_model(monkeypatch, fake_class=_FakeBGEM3FlagModel) -> None:
+    clear_bge_m3_hybrid_shared_model_cache()
+    fake_class.init_calls = []
+    fake_class.encode_calls = []
+    monkeypatch.setattr(
+        "app.modules.embeddings.providers.bge_m3_hybrid._import_bge_m3_flag_model_class",
+        lambda: fake_class,
+    )
 
 
 def test_real_question_eval_compares_both_candidates_writes_report_and_verifies_runtime_retrieval(
@@ -521,6 +587,26 @@ def test_real_local_qwen_eval_reuses_single_model_instance_across_chunking_and_q
     assert len(_TrackingQuestionEvalFakeSentenceTransformer.encode_calls) >= 4
 
 
+def test_bge_m3_hybrid_shared_cache_reuses_single_model_across_provider_modes(monkeypatch):
+    _install_fake_bge_m3_hybrid_model(monkeypatch)
+
+    with enable_bge_m3_hybrid_shared_model_cache(clear_on_exit=True):
+        first_provider = BgeM3HybridEmbeddingProvider()
+        second_provider = BgeM3HybridEmbeddingProvider()
+
+        first_provider.encode_query("sunflower query", provider_code="bge_m3_dense_sparse")
+        second_provider.encode_query(
+            "sunflower query",
+            provider_code="bge_m3_dense_sparse_multivector",
+        )
+
+    assert len(_FakeBGEM3FlagModel.init_calls) == 1
+    assert _FakeBGEM3FlagModel.init_calls[0]["model_name"] == "BAAI/bge-m3"
+    assert len(_FakeBGEM3FlagModel.encode_calls) == 2
+    assert _FakeBGEM3FlagModel.encode_calls[0]["return_colbert_vecs"] is False
+    assert _FakeBGEM3FlagModel.encode_calls[1]["return_colbert_vecs"] is True
+
+
 def test_real_question_eval_execution_mode_defaults_to_fake_eval_when_no_manual_real_signals_are_present():
     execution_mode, use_real_local_models, incremental_real_providers = resolve_real_question_eval_execution_mode(
         cli_use_real_local_models=False,
@@ -705,6 +791,45 @@ def test_full_version_batch_c_rejects_any_provider_list_other_than_jina_embeddin
         raise AssertionError("Expected ValueError when Batch C provider list includes anything other than jina_embeddings_v3")
 
 
+def test_full_version_batch_d_requires_both_cli_flag_and_env_var_and_exact_bge_hybrid_provider_list():
+    provider_codes = resolve_full_version_batch_d_providers(
+        cli_use_real_local_models=True,
+        env_use_real_local_models="1",
+        full_version_batch_d_providers_raw="bge_m3_dense_sparse,bge_m3_dense_sparse_multivector",
+    )
+
+    assert provider_codes == [
+        "bge_m3_dense_sparse",
+        "bge_m3_dense_sparse_multivector",
+    ]
+
+
+def test_full_version_batch_d_fails_fast_without_both_manual_real_signals():
+    try:
+        resolve_full_version_batch_d_providers(
+            cli_use_real_local_models=False,
+            env_use_real_local_models="1",
+            full_version_batch_d_providers_raw="bge_m3_dense_sparse,bge_m3_dense_sparse_multivector",
+        )
+    except ValueError as exc:
+        assert "requires BOTH --use-real-local-models and REAL_QUESTION_EVAL_USE_REAL_LOCAL_MODELS=1" in str(exc)
+    else:
+        raise AssertionError("Expected ValueError when Batch D is requested without both manual real signals")
+
+
+def test_full_version_batch_d_rejects_any_provider_list_other_than_the_two_bge_hybrid_modes():
+    try:
+        resolve_full_version_batch_d_providers(
+            cli_use_real_local_models=True,
+            env_use_real_local_models="1",
+            full_version_batch_d_providers_raw="bge_m3_dense_sparse,qwen3_embedding_0_6b",
+        )
+    except ValueError as exc:
+        assert "requires the explicit provider list" in str(exc)
+    else:
+        raise AssertionError("Expected ValueError when Batch D provider list includes anything other than the approved BGE hybrid modes")
+
+
 def test_incremental_real_question_eval_writes_incremental_artifacts_and_preserves_exact_question_ids(
     client,
     monkeypatch,
@@ -884,7 +1009,7 @@ def test_full_version_batch_a_writes_separate_artifacts_and_compares_only_baseli
     assert "## Technical Summary" in markdown_text
     assert "## Dataset Questions Used" in markdown_text
     assert "## Baseline Provider" in markdown_text
-    assert "## Newly Evaluated Provider" in markdown_text
+    assert "## Newly Evaluated Providers" in markdown_text
     assert "## Per-Question Result Comparison" in markdown_text
     assert "## Aggregate Metrics" in markdown_text
     assert "## Winner" in markdown_text
@@ -1137,7 +1262,7 @@ def test_full_version_batch_b_rerun_writes_separate_artifacts_and_compares_only_
     assert "## Technical Summary" in markdown_text
     assert "## Dataset Questions Used" in markdown_text
     assert "## Baseline Provider" in markdown_text
-    assert "## Newly Evaluated Provider" in markdown_text
+    assert "## Newly Evaluated Providers" in markdown_text
     assert "## Per-Question Result Comparison" in markdown_text
     assert "## Aggregate Metrics" in markdown_text
     assert "## Winner" in markdown_text
@@ -1276,7 +1401,7 @@ def test_full_version_batch_c_writes_separate_artifacts_and_compares_only_baseli
     assert "## Technical Summary" in markdown_text
     assert "## Dataset Questions Used" in markdown_text
     assert "## Baseline Provider" in markdown_text
-    assert "## Newly Evaluated Provider" in markdown_text
+    assert "## Newly Evaluated Providers" in markdown_text
     assert "## Per-Question Result Comparison" in markdown_text
     assert "## Aggregate Metrics" in markdown_text
     assert "## Winner" in markdown_text
@@ -1289,6 +1414,221 @@ def test_full_version_batch_c_writes_separate_artifacts_and_compares_only_baseli
     assert "#### bge_m3" not in markdown_text
     assert "#### paraphrase_multilingual_mpnet_base_v2" not in markdown_text
     assert "#### multilingual_e5_large" not in markdown_text
+    assert "#### qwen3_embedding_0_6b" not in markdown_text
+
+
+def test_full_version_batch_d_writes_separate_artifacts_and_compares_only_baseline_and_bge_hybrid_modes(
+    client,
+    monkeypatch,
+    tmp_path,
+):
+    repo_artifact_dir = Path(__file__).resolve().parents[1] / "artifacts" / "real_question_eval"
+    source_incremental_json = (
+        repo_artifact_dir / "latest_incremental_new_providers" / "real_question_eval_result.json"
+    )
+    source_incremental_markdown = (
+        repo_artifact_dir / "latest_incremental_new_providers" / "real_question_eval_report.md"
+    )
+
+    def fake_batch_d_manual_provider_result(*, profile_id: int, provider_code: str, source_chunks):
+        del profile_id, source_chunks
+        model_results_by_provider = {
+            "bge_m3_dense_sparse": [
+                ("question-sunflower-house", ["sunflower seeds", "blue gate latch"], [], [], 1.0, 1, True),
+                ("question-winter-trip", ["overnight train ticket", "wooden thermos"], [], [], 1.0, 1, True),
+                ("question-grandmother-soup", ["dried mushrooms"], ["oak stove"], [], 0.5, 1, False),
+            ],
+            "bge_m3_dense_sparse_multivector": [
+                ("question-sunflower-house", ["sunflower seeds", "blue gate latch"], [], [], 1.0, 1, True),
+                ("question-winter-trip", ["overnight train ticket", "wooden thermos"], [], [], 1.0, 1, True),
+                ("question-grandmother-soup", ["dried mushrooms", "oak stove"], [], [], 1.0, 1, True),
+            ],
+        }
+        collection_name = f"eternal_world_rag_chunks__{provider_code}__manual_local_batch_d"
+        question_results = []
+        aggregate_model_results = []
+        for question_id, matched, missing, distractors, coverage, first_rank, passed in model_results_by_provider[provider_code]:
+            model_result = RealQuestionEvalModelResult(
+                model_code=provider_code,
+                collection_name=collection_name,
+                top_chunks=[],
+                matched_expected_markers=matched,
+                missing_expected_markers=missing,
+                false_positive_markers=distractors,
+                evidence_coverage=coverage,
+                first_relevant_rank=first_rank,
+                relevant_result_count=1,
+                false_positive_count=len(distractors),
+                answer_summary="manual batch d",
+                groundedness_verdict="grounded" if passed else "partial",
+                passed=passed,
+                hit=True,
+                reasons=[],
+            )
+            aggregate_model_results.append(model_result)
+            question_results.append(
+                RealQuestionEvalQuestionResult(
+                    question_id=question_id,
+                    question_text=question_id,
+                    expected_markers=[],
+                    forbidden_markers=[],
+                    model_results=[model_result],
+                    winner_model_code=provider_code,
+                    winner_reason="Only one model result was available.",
+                )
+            )
+
+        aggregate_result = RealQuestionEvalAggregateModelResult(
+            model_code=provider_code,
+            collection_name=collection_name,
+            question_wins=0,
+            average_evidence_coverage=round(
+                sum((item.evidence_coverage or 0.0) for item in aggregate_model_results) / len(aggregate_model_results),
+                4,
+            ),
+            average_first_relevant_rank=1.0,
+            total_matched_markers=sum(len(item.matched_expected_markers) for item in aggregate_model_results),
+            total_missing_markers=sum(len(item.missing_expected_markers) for item in aggregate_model_results),
+            total_false_positive_markers=sum(len(item.false_positive_markers) for item in aggregate_model_results),
+            passed_questions=sum(1 for item in aggregate_model_results if item.passed),
+            official_metrics={
+                "hit_rate": sum(1 for item in aggregate_model_results if item.passed) / len(aggregate_model_results),
+                "recall_at_k": round(
+                    sum((item.evidence_coverage or 0.0) for item in aggregate_model_results) / len(aggregate_model_results),
+                    4,
+                ),
+                "mrr": 1.0,
+                "forbidden_marker_rate": 0.0,
+                "average_latency_ms": 12.0 if provider_code == "bge_m3_dense_sparse_multivector" else 9.0,
+                "cost_estimate_total": None,
+                "evidence_marker_coverage": round(
+                    sum((item.evidence_coverage or 0.0) for item in aggregate_model_results) / len(aggregate_model_results),
+                    4,
+                ),
+                "missing_expected_marker_count": sum(
+                    len(item.missing_expected_markers) for item in aggregate_model_results
+                ),
+                "false_positive_count": 0,
+            },
+        )
+        return question_results, aggregate_result
+
+    monkeypatch.setattr(
+        "app.modules.real_question_eval.service._build_batch_d_manual_provider_result",
+        fake_batch_d_manual_provider_result,
+    )
+
+    artifact_dir = tmp_path / "real_question_eval_artifacts"
+    latest_incremental_dir = artifact_dir / "latest_incremental_new_providers"
+    latest_incremental_dir.mkdir(parents=True, exist_ok=True)
+    latest_incremental_json = latest_incremental_dir / "real_question_eval_result.json"
+    latest_incremental_markdown = latest_incremental_dir / "real_question_eval_report.md"
+    latest_incremental_json.write_text(source_incremental_json.read_text(encoding="utf-8"), encoding="utf-8")
+    latest_incremental_markdown.write_text(source_incremental_markdown.read_text(encoding="utf-8"), encoding="utf-8")
+    latest_incremental_json_before = latest_incremental_json.read_text(encoding="utf-8")
+    latest_incremental_markdown_before = latest_incremental_markdown.read_text(encoding="utf-8")
+
+    latest_real_dir = artifact_dir / "latest_real"
+    latest_real_dir.mkdir(parents=True, exist_ok=True)
+    latest_real_markdown = latest_real_dir / "real_question_eval_report.md"
+    latest_real_json = latest_real_dir / "real_question_eval_result.json"
+    latest_real_markdown.write_text("keep-real-batch-d\n", encoding="utf-8")
+    latest_real_json.write_text('{"run_type":"real"}\n', encoding="utf-8")
+
+    latest_fake_dir = artifact_dir / "latest_fake"
+    latest_fake_dir.mkdir(parents=True, exist_ok=True)
+    latest_fake_markdown = latest_fake_dir / "real_question_eval_report.md"
+    latest_fake_json = latest_fake_dir / "real_question_eval_result.json"
+    latest_fake_markdown.write_text("keep-fake-batch-d\n", encoding="utf-8")
+    latest_fake_json.write_text('{"run_type":"fake"}\n', encoding="utf-8")
+
+    latest_batch_b_dir = artifact_dir / "latest_full_version_batch_b"
+    latest_batch_b_dir.mkdir(parents=True, exist_ok=True)
+    latest_batch_b_markdown = latest_batch_b_dir / "real_question_eval_report.md"
+    latest_batch_b_json = latest_batch_b_dir / "real_question_eval_result.json"
+    latest_batch_b_markdown.write_text("keep-batch-b\n", encoding="utf-8")
+    latest_batch_b_json.write_text('{"run_type":"full_version_batch_b"}\n', encoding="utf-8")
+
+    latest_batch_c_dir = artifact_dir / "latest_full_version_batch_c"
+    latest_batch_c_dir.mkdir(parents=True, exist_ok=True)
+    latest_batch_c_markdown = latest_batch_c_dir / "real_question_eval_report.md"
+    latest_batch_c_json = latest_batch_c_dir / "real_question_eval_result.json"
+    latest_batch_c_markdown.write_text("keep-batch-c\n", encoding="utf-8")
+    latest_batch_c_json.write_text('{"run_type":"full_version_batch_c"}\n', encoding="utf-8")
+
+    db, session_generator = _get_test_db_session()
+    try:
+        result = run_full_version_batch_d_question_eval(
+            db,
+            RealQuestionEvalConfig(
+                artifact_dir=artifact_dir,
+                use_real_local_models=True,
+                candidate_model_codes=[
+                    "bge_m3_dense_sparse",
+                    "bge_m3_dense_sparse_multivector",
+                ],
+                run_type_override="full_version_batch_d",
+                execution_mode_override="full_version_batch_d_real_eval",
+            ),
+        )
+    finally:
+        _close_test_db_session(session_generator)
+
+    assert result.passed is True
+    assert result.used_fake_models is False
+    assert result.run_type == "full_version_batch_d"
+    assert result.execution_mode == "full_version_batch_d_real_eval"
+    assert result.benchmark_batch_label == "Batch D"
+    assert result.benchmark_status == "completed"
+    assert result.baseline_provider_codes == ["multilingual_e5_base"]
+    assert result.newly_evaluated_provider_codes == [
+        "bge_m3_dense_sparse",
+        "bge_m3_dense_sparse_multivector",
+    ]
+    assert result.compared_models == [
+        "multilingual_e5_base",
+        "bge_m3_dense_sparse",
+        "bge_m3_dense_sparse_multivector",
+    ]
+    assert "latest_full_version_batch_d" in result.artifact_paths.latest_markdown_report
+    assert "_full_version_batch_d" in result.artifact_paths.archived_markdown_report
+
+    assert latest_incremental_json.read_text(encoding="utf-8") == latest_incremental_json_before
+    assert latest_incremental_markdown.read_text(encoding="utf-8") == latest_incremental_markdown_before
+    assert latest_real_markdown.read_text(encoding="utf-8") == "keep-real-batch-d\n"
+    assert latest_real_json.read_text(encoding="utf-8") == '{"run_type":"real"}\n'
+    assert latest_fake_markdown.read_text(encoding="utf-8") == "keep-fake-batch-d\n"
+    assert latest_fake_json.read_text(encoding="utf-8") == '{"run_type":"fake"}\n'
+    assert latest_batch_b_markdown.read_text(encoding="utf-8") == "keep-batch-b\n"
+    assert latest_batch_b_json.read_text(encoding="utf-8") == '{"run_type":"full_version_batch_b"}\n'
+    assert latest_batch_c_markdown.read_text(encoding="utf-8") == "keep-batch-c\n"
+    assert latest_batch_c_json.read_text(encoding="utf-8") == '{"run_type":"full_version_batch_c"}\n'
+
+    latest_json_payload = json.loads(Path(result.artifact_paths.latest_json_result).read_text(encoding="utf-8"))
+    assert latest_json_payload["execution_mode"] == "full_version_batch_d_real_eval"
+    assert latest_json_payload["run_type"] == "full_version_batch_d"
+    assert latest_json_payload["benchmark_status"] == "completed"
+    assert latest_json_payload["baseline_provider_codes"] == ["multilingual_e5_base"]
+    assert latest_json_payload["newly_evaluated_provider_codes"] == [
+        "bge_m3_dense_sparse",
+        "bge_m3_dense_sparse_multivector",
+    ]
+    assert latest_json_payload["developer_view"]["models_compared"] == [
+        "multilingual_e5_base",
+        "bge_m3_dense_sparse",
+        "bge_m3_dense_sparse_multivector",
+    ]
+    assert latest_json_payload["client_view"]["non_compared_notes"] == [
+        "Batch D keeps production retrieval unchanged and uses a manual local hybrid reranking path.",
+    ]
+
+    markdown_text = Path(result.artifact_paths.latest_markdown_report).read_text(encoding="utf-8")
+    assert "## Technical Summary" in markdown_text
+    assert "## Newly Evaluated Providers" in markdown_text
+    assert "bge_m3_dense_sparse" in markdown_text
+    assert "bge_m3_dense_sparse_multivector" in markdown_text
+    assert "manual local hybrid reranking path" in markdown_text
+    assert "#### jina_embeddings_v3" not in markdown_text
     assert "#### qwen3_embedding_0_6b" not in markdown_text
 
 

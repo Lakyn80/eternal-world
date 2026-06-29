@@ -9,8 +9,15 @@ from dataclasses import dataclass
 from app.modules.embedding_models.service import get_embedding_model
 
 
-SUPPORTED_PREFETCH_PROVIDER_KEYS = ("jina_embeddings_v3", "qwen3_embedding_0_6b")
+SUPPORTED_PREFETCH_PROVIDER_KEYS = (
+    "bge_m3_dense_sparse",
+    "bge_m3_dense_sparse_multivector",
+    "jina_embeddings_v3",
+    "qwen3_embedding_0_6b",
+)
 PREFETCH_DEPENDENCY_REPOS_BY_PROVIDER: dict[str, tuple[str, ...]] = {
+    "bge_m3_dense_sparse": (),
+    "bge_m3_dense_sparse_multivector": (),
     "jina_embeddings_v3": ("jinaai/xlm-roberta-flash-implementation",),
     "qwen3_embedding_0_6b": (),
 }
@@ -82,6 +89,22 @@ def _prefetch_repo(
     retries: int,
     retry_delay_seconds: float,
 ) -> str:
+    try:
+        cached_snapshot_path = snapshot_download_fn(
+            repo_id=repo_id,
+            revision=None,
+            local_files_only=True,
+            max_workers=1,
+            tqdm_class=None,
+        )
+    except Exception:
+        cached_snapshot_path = None
+    else:
+        _emit_prefetch_log(
+            f"prefetch cache hit repo_id={repo_id} snapshot_path={cached_snapshot_path}"
+        )
+        return cached_snapshot_path
+
     last_error: Exception | None = None
     attempts = max(1, retries)
     for attempt in range(1, attempts + 1):

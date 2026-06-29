@@ -3306,3 +3306,165 @@ Scope confirmation:
 - Qwen3 4B and Qwen3 8B were not run
 - no all-model benchmark was run
 - no unrelated Docker containers were stopped or removed
+
+## Task 49 BGE-M3 Full Hybrid Retrieval Benchmark
+
+Why BGE-M3 hybrid is being tested:
+
+- previous dense-only `bge_m3` history was not equivalent to full BGE-M3 retrieval
+- Batch D was used to test the intended dense+sparse and dense+sparse+multivector modes against the current winner `multilingual_e5_base`
+- production retrieval was intentionally kept unchanged; Batch D used a local manual hybrid reranking path instead of modifying the normal dense-only Qdrant retrieval flow
+
+Previous winner before Batch D:
+
+- `multilingual_e5_base`
+
+CPU-only verification:
+
+- command:
+  - `docker compose exec backend python -c "import torch; print(torch.__version__); print(torch.cuda.is_available())"`
+- result:
+  - `2.12.1+cpu`
+  - `False`
+
+einops verification:
+
+- command:
+  - `docker compose exec backend python -c "import einops; print(einops.__version__)"`
+- result:
+  - `0.8.1`
+
+Dependency changes:
+
+- `backend/requirements.txt`
+  - added `FlagEmbedding==1.4.0`
+- no Dockerfile change was required
+
+Backend rebuild / dependency verification:
+
+- rebuild command:
+  - `docker compose up -d --no-deps --build backend`
+- result:
+  - backend rebuild completed successfully
+  - final environment still reports `torch==2.12.1+cpu`
+  - final environment still reports `torch.cuda.is_available() == False`
+  - final environment still reports `einops==0.8.1`
+  - build output showed no `nvidia-*`, `cuda-*`, `triton`, or `flash-attn`
+  - installed package checks showed `FlagEmbedding==1.4.0`, `torch==2.12.1+cpu`, `einops==0.8.1`, and no `nvidia-*`, `cuda-*`, `triton`, or `flash-attn`
+
+BGE-M3 prefetch commands/results:
+
+- `docker compose exec backend python scripts/prefetch_embedding_model.py --provider bge_m3_dense_sparse --retries 5 --retry-delay-seconds 5`
+- `docker compose exec backend python scripts/prefetch_embedding_model.py --provider bge_m3_dense_sparse_multivector --retries 5 --retry-delay-seconds 5`
+- result:
+  - both commands reported `prefetch cache hit`
+  - both commands resolved to the same cached snapshot:
+    - `/root/.cache/huggingface/hub/models--BAAI--bge-m3/snapshots/5617a9f61b028005a4858fdac845db406aefb181`
+- `backend/scripts/prefetch_embedding_model.py` was updated to check the local cache first so shared-model variants do not stall on redundant remote verification
+
+What was implemented for dense+sparse:
+
+- added disabled manual-only registry entry `bge_m3_dense_sparse`
+- added local CPU-only BGE-M3 hybrid runtime helper under `backend/app/modules/embeddings/providers/bge_m3_hybrid.py`
+- implemented dense vector + sparse lexical weight encoding via `FlagEmbedding`
+- implemented deterministic local score fusion for Batch D using normalized dense and sparse scores
+- kept this path manual-only and outside the normal production retrieval flow
+
+What was implemented for dense+sparse+multivector:
+
+- added disabled manual-only registry entry `bge_m3_dense_sparse_multivector`
+- reused the same BGE-M3 model object and requested ColBERT-style vectors only for the multivector mode
+- implemented candidate narrowing plus late-interaction reranking for Batch D only
+- kept this path manual-only and outside the normal production retrieval flow
+
+What was verified to avoid repeated BGE-M3 model loading:
+
+- BGE-M3 now has its own guarded shared local model cache
+- runtime probe showed:
+  - one load start
+  - one load success
+  - shared-cache hit when switching from `bge_m3_dense_sparse` to `bge_m3_dense_sparse_multivector`
+- the real Batch D run showed:
+  - one model load for BGE-M3
+  - provider-level cache hits for repeated question encodes
+  - shared-cache reuse across the two BGE hybrid provider modes
+- runtime logs were added for:
+  - model load start/success
+  - cache hits
+  - dense encode start/end
+  - sparse encode start/end
+  - multivector encode start/end
+  - multivector rerank start/end
+  - question start/end
+  - artifact path written
+  - memory snapshots
+
+Fake-safe test commands and results:
+
+- `python -m pytest tests/test_prefetch_embedding_model.py tests/test_embedding_models.py tests/test_embedding_benchmark_foundation.py -q` -> `38 passed`
+- `python -m pytest tests/test_embeddings_sentence_transformers.py tests/test_embeddings.py -q` -> `54 passed`
+- `python -m pytest tests/test_multi_embedding_eval.py tests/test_real_question_eval.py -q` -> `52 passed`
+- `python -m pytest -q --durations=20` -> `409 passed`
+
+Exact real Batch D command:
+
+- `docker compose exec -e HF_HUB_OFFLINE=1 -e TRANSFORMERS_OFFLINE=1 -e REAL_QUESTION_EVAL_USE_REAL_LOCAL_MODELS=1 backend python scripts/run_real_question_eval.py --use-real-local-models --full-version-batch-d-providers bge_m3_dense_sparse,bge_m3_dense_sparse_multivector`
+
+Real Batch D result:
+
+- Batch D completed successfully under CPU-only runtime
+- archived run id: `20260629_074726Z_full_version_batch_d`
+- both BGE hybrid modes completed successfully
+- Batch D winner: `bge_m3_dense_sparse`
+- `bge_m3_dense_sparse` beat the baseline `multilingual_e5_base`
+- `bge_m3_dense_sparse_multivector` completed successfully but lost the final tie-break to `bge_m3_dense_sparse`
+- production recommendation changed from `multilingual_e5_base` to reviewing/promoting `bge_m3_dense_sparse`
+
+Aggregate metrics:
+
+- `multilingual_e5_base`
+  - question wins: `0`
+  - passed questions: `3`
+  - evidence coverage: `1.0`
+  - average first relevant rank: `1.0`
+  - average latency ms: `7938.929`
+- `bge_m3_dense_sparse`
+  - question wins: `2`
+  - passed questions: `3`
+  - evidence coverage: `1.0`
+  - average first relevant rank: `1.0`
+  - average latency ms: `1415.362`
+- `bge_m3_dense_sparse_multivector`
+  - question wins: `1`
+  - passed questions: `3`
+  - evidence coverage: `1.0`
+  - average first relevant rank: `1.0`
+  - average latency ms: `9632.006`
+
+Per-question result summary:
+
+- `question-sunflower-house`
+  - winner: `bge_m3_dense_sparse`
+  - reason: tie broken by stronger top retrieval score and overall selector alignment
+- `question-winter-trip`
+  - winner: `bge_m3_dense_sparse_multivector`
+  - reason: tie broken by stronger top retrieval score and overall selector alignment
+- `question-grandmother-soup`
+  - winner: `bge_m3_dense_sparse`
+  - reason: tie broken by stronger top retrieval score and overall selector alignment
+
+Artifact paths:
+
+- latest:
+  - `backend/artifacts/real_question_eval/latest_full_version_batch_d/real_question_eval_report.md`
+  - `backend/artifacts/real_question_eval/latest_full_version_batch_d/real_question_eval_result.json`
+- archived:
+  - `backend/artifacts/real_question_eval/runs/20260629_074726Z_full_version_batch_d/real_question_eval_report.md`
+  - `backend/artifacts/real_question_eval/runs/20260629_074726Z_full_version_batch_d/real_question_eval_result.json`
+
+Scope confirmation:
+
+- no Qwen benchmark was rerun
+- no Jina benchmark was rerun
+- no all-model benchmark was run
+- no unrelated Docker containers were stopped or removed

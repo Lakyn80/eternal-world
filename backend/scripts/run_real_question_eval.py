@@ -12,6 +12,7 @@ from app.modules.real_question_eval import (
     REAL_QUESTION_EVAL_FULL_VERSION_BATCH_A_BASELINE_PROVIDER,
     REAL_QUESTION_EVAL_FULL_VERSION_BATCH_B_BASELINE_PROVIDER,
     REAL_QUESTION_EVAL_FULL_VERSION_BATCH_C_BASELINE_PROVIDER,
+    REAL_QUESTION_EVAL_FULL_VERSION_BATCH_D_BASELINE_PROVIDER,
     REAL_QUESTION_EVAL_HISTORICAL_PROVIDERS,
     REAL_QUESTION_EVAL_INCREMENTAL_NEW_PROVIDER_CODES,
     REAL_QUESTION_EVAL_PROFILE_NAME,
@@ -26,6 +27,7 @@ INCREMENTAL_REAL_EVAL_EXECUTION_MODE = "incremental_real_eval"
 FULL_VERSION_BATCH_A_REAL_EVAL_EXECUTION_MODE = "full_version_batch_a_real_eval"
 FULL_VERSION_BATCH_B_REAL_EVAL_EXECUTION_MODE = "full_version_batch_b_real_eval"
 FULL_VERSION_BATCH_C_REAL_EVAL_EXECUTION_MODE = "full_version_batch_c_real_eval"
+FULL_VERSION_BATCH_D_REAL_EVAL_EXECUTION_MODE = "full_version_batch_d_real_eval"
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -42,6 +44,7 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--full-version-batch-a-providers")
     parser.add_argument("--full-version-batch-b-providers")
     parser.add_argument("--full-version-batch-c-providers")
+    parser.add_argument("--full-version-batch-d-providers")
     parser.add_argument("--rerun-attempted-full-version-batch-b", action="store_true")
     return parser
 
@@ -149,6 +152,30 @@ def resolve_full_version_batch_c_providers(
     return batch_c_providers
 
 
+def resolve_full_version_batch_d_providers(
+    *,
+    cli_use_real_local_models: bool,
+    env_use_real_local_models: str | None,
+    full_version_batch_d_providers_raw: str | None,
+) -> list[str] | None:
+    batch_d_providers = _parse_incremental_real_providers(full_version_batch_d_providers_raw)
+    if batch_d_providers is None:
+        return None
+
+    if not cli_use_real_local_models or not _is_truthy_env_flag(env_use_real_local_models):
+        raise ValueError(
+            "Full-version Batch D is manual-only and requires BOTH --use-real-local-models "
+            "and REAL_QUESTION_EVAL_USE_REAL_LOCAL_MODELS=1."
+        )
+    if batch_d_providers != ["bge_m3_dense_sparse", "bge_m3_dense_sparse_multivector"]:
+        raise ValueError(
+            "Full-version Batch D requires the explicit provider list: "
+            "bge_m3_dense_sparse,bge_m3_dense_sparse_multivector."
+        )
+
+    return batch_d_providers
+
+
 def resolve_real_question_eval_execution_mode(
     *,
     cli_use_real_local_models: bool,
@@ -251,6 +278,38 @@ def _print_text_result(result) -> None:
     print(f"status: {'PASS' if result.passed else 'FAIL'}")
 
 
+def _run_with_config(*, args, config: RealQuestionEvalConfig, execution_mode: str) -> int:
+    db = SessionLocal()
+    try:
+        result = run_real_question_eval(db, config)
+    finally:
+        db.close()
+
+    result.execution_mode = execution_mode
+    if execution_mode == FULL_VERSION_BATCH_D_REAL_EVAL_EXECUTION_MODE:
+        result.baseline_provider_codes = [REAL_QUESTION_EVAL_FULL_VERSION_BATCH_D_BASELINE_PROVIDER]
+        result.newly_evaluated_provider_codes = [
+            "bge_m3_dense_sparse",
+            "bge_m3_dense_sparse_multivector",
+        ]
+    if execution_mode == FULL_VERSION_BATCH_C_REAL_EVAL_EXECUTION_MODE:
+        result.baseline_provider_codes = [REAL_QUESTION_EVAL_FULL_VERSION_BATCH_C_BASELINE_PROVIDER]
+        result.newly_evaluated_provider_codes = ["jina_embeddings_v3"]
+    if execution_mode == FULL_VERSION_BATCH_B_REAL_EVAL_EXECUTION_MODE:
+        result.baseline_provider_codes = [REAL_QUESTION_EVAL_FULL_VERSION_BATCH_B_BASELINE_PROVIDER]
+        result.newly_evaluated_provider_codes = ["qwen3_embedding_0_6b"]
+    if execution_mode == FULL_VERSION_BATCH_A_REAL_EVAL_EXECUTION_MODE:
+        result.baseline_provider_codes = [REAL_QUESTION_EVAL_FULL_VERSION_BATCH_A_BASELINE_PROVIDER]
+        result.newly_evaluated_provider_codes = ["multilingual_e5_large"]
+
+    if args.json_output:
+        print(json.dumps(result.model_dump(mode="json"), indent=2, sort_keys=True))
+    else:
+        _print_text_result(result)
+
+    return 0 if result.passed else 1
+
+
 def main() -> int:
     args = _build_parser().parse_args()
     env_use_real_local_models = os.getenv("REAL_QUESTION_EVAL_USE_REAL_LOCAL_MODELS")
@@ -271,13 +330,22 @@ def main() -> int:
             env_use_real_local_models=env_use_real_local_models,
             full_version_batch_c_providers_raw=args.full_version_batch_c_providers,
         )
+        batch_d_providers = resolve_full_version_batch_d_providers(
+            cli_use_real_local_models=args.use_real_local_models,
+            env_use_real_local_models=env_use_real_local_models,
+            full_version_batch_d_providers_raw=args.full_version_batch_d_providers,
+        )
         manual_batch_count = sum(
             provider_list is not None
-            for provider_list in (batch_a_providers, batch_b_providers, batch_c_providers)
+            for provider_list in (batch_a_providers, batch_b_providers, batch_c_providers, batch_d_providers)
         )
         if manual_batch_count > 1:
             raise ValueError("Choose exactly one manual full-version batch mode at a time.")
-        if batch_c_providers is not None:
+        if batch_d_providers is not None:
+            execution_mode = FULL_VERSION_BATCH_D_REAL_EVAL_EXECUTION_MODE
+            use_real_local_models = True
+            incremental_real_providers = None
+        elif batch_c_providers is not None:
             execution_mode = FULL_VERSION_BATCH_C_REAL_EVAL_EXECUTION_MODE
             use_real_local_models = True
             incremental_real_providers = None
@@ -305,13 +373,16 @@ def main() -> int:
         artifact_dir=args.artifact_dir,
         use_real_local_models=use_real_local_models,
         candidate_model_codes=(
-            batch_c_providers
+            batch_d_providers
+            or batch_c_providers
             or batch_b_providers
             or batch_a_providers
             or incremental_real_providers
         ),
         run_type_override=(
-            "full_version_batch_c"
+            "full_version_batch_d"
+            if execution_mode == FULL_VERSION_BATCH_D_REAL_EVAL_EXECUTION_MODE
+            else "full_version_batch_c"
             if execution_mode == FULL_VERSION_BATCH_C_REAL_EVAL_EXECUTION_MODE
             else "full_version_batch_b"
             if execution_mode == FULL_VERSION_BATCH_B_REAL_EVAL_EXECUTION_MODE
@@ -325,6 +396,7 @@ def main() -> int:
             execution_mode
             if execution_mode
             in {
+                FULL_VERSION_BATCH_D_REAL_EVAL_EXECUTION_MODE,
                 FULL_VERSION_BATCH_C_REAL_EVAL_EXECUTION_MODE,
                 FULL_VERSION_BATCH_A_REAL_EVAL_EXECUTION_MODE,
                 FULL_VERSION_BATCH_B_REAL_EVAL_EXECUTION_MODE,
@@ -334,30 +406,11 @@ def main() -> int:
         ),
         rerun_attempted_full_version_batch_b=args.rerun_attempted_full_version_batch_b,
     )
-
-    db = SessionLocal()
-    try:
-        result = run_real_question_eval(db, config)
-    finally:
-        db.close()
-
-    result.execution_mode = execution_mode
-    if execution_mode == FULL_VERSION_BATCH_C_REAL_EVAL_EXECUTION_MODE:
-        result.baseline_provider_codes = [REAL_QUESTION_EVAL_FULL_VERSION_BATCH_C_BASELINE_PROVIDER]
-        result.newly_evaluated_provider_codes = ["jina_embeddings_v3"]
-    if execution_mode == FULL_VERSION_BATCH_B_REAL_EVAL_EXECUTION_MODE:
-        result.baseline_provider_codes = [REAL_QUESTION_EVAL_FULL_VERSION_BATCH_B_BASELINE_PROVIDER]
-        result.newly_evaluated_provider_codes = ["qwen3_embedding_0_6b"]
-    if execution_mode == FULL_VERSION_BATCH_A_REAL_EVAL_EXECUTION_MODE:
-        result.baseline_provider_codes = [REAL_QUESTION_EVAL_FULL_VERSION_BATCH_A_BASELINE_PROVIDER]
-        result.newly_evaluated_provider_codes = ["multilingual_e5_large"]
-
-    if args.json_output:
-        print(json.dumps(result.model_dump(mode="json"), indent=2, sort_keys=True))
-    else:
-        _print_text_result(result)
-
-    return 0 if result.passed else 1
+    return _run_with_config(
+        args=args,
+        config=config,
+        execution_mode=execution_mode,
+    )
 
 
 if __name__ == "__main__":

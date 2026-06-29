@@ -97,6 +97,62 @@ EMBEDDING_MODEL_DEFINITIONS: tuple[EmbeddingModelDefinition, ...] = (
         notes="Reserved for higher-quality multilingual retrieval experiments once real embedding execution is enabled.",
     ),
     EmbeddingModelDefinition(
+        code="bge_m3_dense_sparse",
+        display_name="BGE M3 Dense + Sparse",
+        provider_type=LOCAL_PROVIDER_TYPE,
+        dimension=1024,
+        languages=("ru", "cs", "en", MULTILINGUAL_LANGUAGE),
+        max_input_tokens=8192,
+        normalized_vectors=True,
+        supports_batching=True,
+        enabled=False,
+        is_default=False,
+        recommended_for="manual benchmark batch for full BGE-M3 dense+sparse retrieval",
+        provider_model_name="BAAI/bge-m3",
+        runtime_adapter=PLANNED_MANUAL_ONLY_ADAPTER,
+        manual_only_real_eval=True,
+        high_resource=True,
+        real_benchmark_only=True,
+        ci_safe_real_inference=False,
+        supports_task_adapters=False,
+        supports_long_context=True,
+        planning_tags=("bge_m3", "dense_sparse", "manual_only_real_eval", "batch_d"),
+        supported_retrieval_modes=(BGE_M3_DENSE_SPARSE_RETRIEVAL_MODE,),
+        notes=(
+            "Manual-only full-hybrid benchmark target for local Batch D evaluation. "
+            "Uses dense embeddings plus sparse lexical weights in a local manual reranking path; "
+            "it is intentionally disabled outside guarded benchmark execution."
+        ),
+    ),
+    EmbeddingModelDefinition(
+        code="bge_m3_dense_sparse_multivector",
+        display_name="BGE M3 Dense + Sparse + Multivector",
+        provider_type=LOCAL_PROVIDER_TYPE,
+        dimension=1024,
+        languages=("ru", "cs", "en", MULTILINGUAL_LANGUAGE),
+        max_input_tokens=8192,
+        normalized_vectors=True,
+        supports_batching=True,
+        enabled=False,
+        is_default=False,
+        recommended_for="manual benchmark batch for full BGE-M3 dense+sparse+multivector retrieval",
+        provider_model_name="BAAI/bge-m3",
+        runtime_adapter=PLANNED_MANUAL_ONLY_ADAPTER,
+        manual_only_real_eval=True,
+        high_resource=True,
+        real_benchmark_only=True,
+        ci_safe_real_inference=False,
+        supports_task_adapters=False,
+        supports_long_context=True,
+        planning_tags=("bge_m3", "dense_sparse_multivector", "manual_only_real_eval", "batch_d"),
+        supported_retrieval_modes=(BGE_M3_DENSE_SPARSE_MULTIVECTOR_RETRIEVAL_MODE,),
+        notes=(
+            "Manual-only full-hybrid benchmark target for local Batch D evaluation. "
+            "Uses dense embeddings, sparse lexical weights, and late-interaction multivector reranking "
+            "in a local manual reranking path; it is intentionally disabled outside guarded benchmark execution."
+        ),
+    ),
+    EmbeddingModelDefinition(
         code="paraphrase_multilingual_mpnet_base_v2",
         display_name="Paraphrase Multilingual MPNet Base v2",
         provider_type=LOCAL_PROVIDER_TYPE,

@@ -30,6 +30,26 @@ def test_resolve_prefetch_target_for_qwen3_embedding_0_6b():
     )
 
 
+def test_resolve_prefetch_target_for_bge_m3_dense_sparse():
+    target = resolve_prefetch_target("bge_m3_dense_sparse")
+
+    assert target == PrefetchTarget(
+        provider_key="bge_m3_dense_sparse",
+        primary_repo_id="BAAI/bge-m3",
+        dependency_repo_ids=PREFETCH_DEPENDENCY_REPOS_BY_PROVIDER["bge_m3_dense_sparse"],
+    )
+
+
+def test_resolve_prefetch_target_for_bge_m3_dense_sparse_multivector():
+    target = resolve_prefetch_target("bge_m3_dense_sparse_multivector")
+
+    assert target == PrefetchTarget(
+        provider_key="bge_m3_dense_sparse_multivector",
+        primary_repo_id="BAAI/bge-m3",
+        dependency_repo_ids=PREFETCH_DEPENDENCY_REPOS_BY_PROVIDER["bge_m3_dense_sparse_multivector"],
+    )
+
+
 def test_resolve_prefetch_target_rejects_unsupported_provider():
     with pytest.raises(ValueError, match="Unsupported provider for prefetch"):
         resolve_prefetch_target("multilingual_e5_base")
@@ -37,10 +57,14 @@ def test_resolve_prefetch_target_rejects_unsupported_provider():
 
 def test_prefetch_provider_assets_downloads_only_expected_repos_without_real_network():
     download_calls: list[dict[str, object]] = []
+    cached_repo_ids: set[str] = set()
 
     def fake_snapshot_download(**kwargs):
         download_calls.append(dict(kwargs))
         repo_id = str(kwargs["repo_id"])
+        if kwargs["local_files_only"] is True and repo_id not in cached_repo_ids:
+            cached_repo_ids.add(repo_id)
+            raise FileNotFoundError(repo_id)
         return f"/fake-cache/{repo_id.replace('/', '--')}"
 
     prefetched_paths = prefetch_provider_assets(
@@ -56,9 +80,11 @@ def test_prefetch_provider_assets_downloads_only_expected_repos_without_real_net
     }
     assert [call["repo_id"] for call in download_calls] == [
         "jinaai/jina-embeddings-v3",
+        "jinaai/jina-embeddings-v3",
+        "jinaai/xlm-roberta-flash-implementation",
         "jinaai/xlm-roberta-flash-implementation",
     ]
-    for call in download_calls:
+    for call in download_calls[1::2]:
         assert call["local_files_only"] is False
         assert call["max_workers"] == 4
 
@@ -83,4 +109,57 @@ def test_prefetch_provider_assets_supports_qwen3_embedding_0_6b_without_unrelate
     }
     assert [call["repo_id"] for call in download_calls] == [
         "Qwen/Qwen3-Embedding-0.6B",
+    ]
+
+
+def test_prefetch_provider_assets_supports_bge_m3_dense_sparse_without_duplicate_dependency_downloads():
+    download_calls: list[dict[str, object]] = []
+
+    def fake_snapshot_download(**kwargs):
+        download_calls.append(dict(kwargs))
+        repo_id = str(kwargs["repo_id"])
+        return f"/fake-cache/{repo_id.replace('/', '--')}"
+
+    prefetched_paths = prefetch_provider_assets(
+        provider_key="bge_m3_dense_sparse",
+        retries=2,
+        retry_delay_seconds=0.0,
+        snapshot_download_fn=fake_snapshot_download,
+    )
+
+    assert prefetched_paths == {
+        "BAAI/bge-m3": "/fake-cache/BAAI--bge-m3",
+    }
+    assert [call["repo_id"] for call in download_calls] == [
+        "BAAI/bge-m3",
+    ]
+
+
+def test_prefetch_provider_assets_uses_cached_snapshot_before_attempting_remote_download():
+    download_calls: list[dict[str, object]] = []
+
+    def fake_snapshot_download(**kwargs):
+        download_calls.append(dict(kwargs))
+        if kwargs["local_files_only"] is True:
+            return "/fake-cache/BAAI--bge-m3"
+        raise AssertionError("Remote download should not run when the local cache is already populated")
+
+    prefetched_paths = prefetch_provider_assets(
+        provider_key="bge_m3_dense_sparse_multivector",
+        retries=2,
+        retry_delay_seconds=0.0,
+        snapshot_download_fn=fake_snapshot_download,
+    )
+
+    assert prefetched_paths == {
+        "BAAI/bge-m3": "/fake-cache/BAAI--bge-m3",
+    }
+    assert download_calls == [
+        {
+            "repo_id": "BAAI/bge-m3",
+            "revision": None,
+            "local_files_only": True,
+            "max_workers": 1,
+            "tqdm_class": None,
+        }
     ]

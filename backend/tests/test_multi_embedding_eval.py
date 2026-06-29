@@ -1209,6 +1209,32 @@ def test_multi_embedding_eval_request_accepts_manual_only_benchmark_candidates_w
         dataset=_build_dataset(),
         candidates=[
             {
+                "config_id": "candidate-bge-dense-sparse",
+                "model_code": "bge_m3_dense_sparse",
+                "collection_name": "eternal_world_rag_chunks__bge_m3_dense_sparse_eval",
+                "top_k": 3,
+                "retrieval_mode": "hybrid",
+                "metadata": {
+                    "manual_only_real_eval": True,
+                    "high_resource": True,
+                    "real_benchmark_only": True,
+                    "manual_local_hybrid_eval": True,
+                },
+            },
+            {
+                "config_id": "candidate-bge-dense-sparse-multivector",
+                "model_code": "bge_m3_dense_sparse_multivector",
+                "collection_name": "eternal_world_rag_chunks__bge_m3_dense_sparse_multivector_eval",
+                "top_k": 3,
+                "retrieval_mode": "hybrid",
+                "metadata": {
+                    "manual_only_real_eval": True,
+                    "high_resource": True,
+                    "real_benchmark_only": True,
+                    "manual_local_hybrid_eval": True,
+                },
+            },
+            {
                 "config_id": "candidate-qwen-0-6b",
                 "model_code": "qwen3_embedding_0_6b",
                 "collection_name": "eternal_world_rag_chunks__qwen3_embedding_0_6b_eval",
@@ -1238,8 +1264,11 @@ def test_multi_embedding_eval_request_accepts_manual_only_benchmark_candidates_w
     )
 
     assert [candidate.model_code for candidate in payload.candidates] == [
+        "bge_m3_dense_sparse",
+        "bge_m3_dense_sparse_multivector",
         "qwen3_embedding_0_6b",
         "jina_embeddings_v3",
     ]
     assert payload.candidates[0].metadata["manual_only_real_eval"] is True
-    assert payload.candidates[1].metadata["supports_task_adapters"] is True
+    assert payload.candidates[1].metadata["manual_local_hybrid_eval"] is True
+    assert payload.candidates[3].metadata["supports_task_adapters"] is True

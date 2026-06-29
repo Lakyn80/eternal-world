@@ -3,8 +3,10 @@ from __future__ import annotations
 import json
 import sys
 from contextlib import contextmanager
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
+from time import perf_counter
 from types import SimpleNamespace
 
 from sqlalchemy.orm import Session
@@ -19,6 +21,11 @@ from app.modules.auth.schemas import RegisterRequest
 from app.modules.auth.service import DuplicateEmailError, register_user
 from app.modules.embedding_models.registry import DEFAULT_EMBEDDING_MODEL_CODE
 from app.modules.embedding_models.service import allow_disabled_runtime_embedding_models
+from app.modules.embeddings.providers.bge_m3_hybrid import (
+    BgeM3HybridEmbeddingProvider,
+    BgeM3HybridProviderError,
+    enable_bge_m3_hybrid_shared_model_cache,
+)
 from app.modules.embeddings.providers.sentence_transformers import (
     BGE_M3_MODEL_NAME,
     E5_BASE_MODEL_NAME,
@@ -38,14 +45,15 @@ from app.modules.memory_profiles.schemas import MemoryProfileCreate
 from app.modules.memory_profiles.service import create_memory_profile
 from app.modules.multi_embedding_eval.schemas import MultiEmbeddingEvalRequest
 from app.modules.multi_embedding_eval.service import WORKFLOW_NAME, process_multi_embedding_eval_job
-from app.modules.rag_chunks.service import list_rag_chunks
+from app.modules.rag_chunks.service import chunk_rag_source, list_rag_chunks
 from app.modules.rag_quality.schemas import (
     RagQualityAggregateMetrics,
     RagQualityConfigEvaluation,
     RagQualityEvalCase,
+    RagQualityRetrievalConfigCandidate,
 )
 from app.modules.rag_quality.service import RagQualityService
-from app.modules.rag_retrieval.schemas import RagRetrievalRequest
+from app.modules.rag_retrieval.schemas import RagRetrievalRequest, RagRetrievalResponseRead, RagRetrievalResultRead
 from app.modules.rag_retrieval.service import retrieve_profile_rag, retrieve_profile_rag_for_collection
 from app.modules.rag_sources.repository import list_rag_sources_for_profile
 from app.modules.rag_sources.schemas import RagSourceCreate, RagSourceUpdate
@@ -108,6 +116,21 @@ REAL_QUESTION_EVAL_FULL_VERSION_BATCH_C_EXCLUDED_PROVIDERS = (
     "bge_m3",
     "paraphrase_multilingual_mpnet_base_v2",
     "multilingual_e5_large",
+    "qwen3_embedding_0_6b",
+    "qwen3_embedding_4b",
+    "qwen3_embedding_8b",
+)
+REAL_QUESTION_EVAL_FULL_VERSION_BATCH_D_BASELINE_PROVIDER = "multilingual_e5_base"
+REAL_QUESTION_EVAL_FULL_VERSION_BATCH_D_NEW_PROVIDER_CODES = (
+    "bge_m3_dense_sparse",
+    "bge_m3_dense_sparse_multivector",
+)
+REAL_QUESTION_EVAL_FULL_VERSION_BATCH_D_EXCLUDED_PROVIDERS = (
+    "multilingual_e5_small",
+    "bge_m3",
+    "paraphrase_multilingual_mpnet_base_v2",
+    "multilingual_e5_large",
+    "jina_embeddings_v3",
     "qwen3_embedding_0_6b",
     "qwen3_embedding_4b",
     "qwen3_embedding_8b",
@@ -372,6 +395,22 @@ def _detect_passage_signals(text: str) -> set[str]:
         signals.add("q3_d")
 
     return signals
+
+
+@dataclass(frozen=True)
+class _ManualHybridScoredChunk:
+    chunk_id: int
+    source_id: int
+    chunk_index: int
+    text: str
+    language: str | None
+    source_type: str
+    validation_status: str
+    text_hash: str
+    score: float
+    dense_score: float
+    sparse_score: float
+    multivector_score: float | None
 
 
 class RealQuestionEvalRunner:
@@ -1075,6 +1114,18 @@ def _validate_full_version_batch_c_provider_codes(provider_codes: list[str]) -> 
     return normalized_codes
 
 
+def _validate_full_version_batch_d_provider_codes(provider_codes: list[str]) -> list[str]:
+    normalized_codes = [item.strip().lower() for item in provider_codes if item.strip()]
+    if not normalized_codes:
+        raise ValueError("Full-version Batch D requires an explicit provider list.")
+    if normalized_codes != list(REAL_QUESTION_EVAL_FULL_VERSION_BATCH_D_NEW_PROVIDER_CODES):
+        raise ValueError(
+            "Full-version Batch D only supports the new provider list: "
+            + ", ".join(REAL_QUESTION_EVAL_FULL_VERSION_BATCH_D_NEW_PROVIDER_CODES)
+        )
+    return normalized_codes
+
+
 def _find_historical_real_json_path(*, artifact_dir: Path) -> Path:
     preferred_path = artifact_dir / "latest_real" / "real_question_eval_result.json"
     if preferred_path.exists():
@@ -1215,6 +1266,364 @@ def _build_historical_aggregate_results(payload: dict[str, object]) -> list[Real
         )
 
     return aggregate_results
+
+
+def _build_batch_d_collection_name(model_code: str) -> str:
+    return f"{settings.qdrant_collection_name}__{model_code}__manual_local_batch_d"
+
+
+def _ensure_question_eval_source_chunks(
+    db: Session,
+    *,
+    current_user: User,
+    source_id: int,
+):
+    source_chunks = list_rag_chunks(
+        db,
+        current_user=current_user,
+        source_id=source_id,
+    )
+    if source_chunks:
+        return [chunk for chunk in source_chunks if chunk.validation_status != "invalid"]
+
+    chunk_rag_source(
+        db,
+        current_user=current_user,
+        source_id=source_id,
+    )
+    return [
+        chunk
+        for chunk in list_rag_chunks(
+            db,
+            current_user=current_user,
+            source_id=source_id,
+        )
+        if chunk.validation_status != "invalid"
+    ]
+
+
+def _normalize_score_map(raw_scores: dict[int, float]) -> dict[int, float]:
+    if not raw_scores:
+        return {}
+
+    score_values = list(raw_scores.values())
+    min_score = min(score_values)
+    max_score = max(score_values)
+    if max_score == min_score:
+        return {chunk_id: 1.0 for chunk_id in raw_scores}
+
+    return {
+        chunk_id: (score - min_score) / (max_score - min_score)
+        for chunk_id, score in raw_scores.items()
+    }
+
+
+def _dot_product(left: list[float], right: list[float]) -> float:
+    return sum(left_item * right_item for left_item, right_item in zip(left, right, strict=True))
+
+
+def _l2_normalize(values: list[float]) -> list[float]:
+    squared_norm = sum(value * value for value in values)
+    if squared_norm <= 0:
+        return [0.0 for _ in values]
+
+    norm = squared_norm ** 0.5
+    return [value / norm for value in values]
+
+
+def _compute_sparse_overlap_score(
+    query_sparse_vector: dict[str, float],
+    passage_sparse_vector: dict[str, float],
+) -> float:
+    if not query_sparse_vector or not passage_sparse_vector:
+        return 0.0
+
+    return sum(
+        query_sparse_vector[token] * passage_sparse_vector[token]
+        for token in query_sparse_vector.keys() & passage_sparse_vector.keys()
+    )
+
+
+def _compute_multivector_score(
+    query_multivector: list[list[float]],
+    passage_multivector: list[list[float]],
+) -> float:
+    if not query_multivector or not passage_multivector:
+        return 0.0
+
+    normalized_query = [_l2_normalize(vector) for vector in query_multivector if vector]
+    normalized_passage = [_l2_normalize(vector) for vector in passage_multivector if vector]
+    if not normalized_query or not normalized_passage:
+        return 0.0
+
+    maxima: list[float] = []
+    for query_token_vector in normalized_query:
+        maxima.append(
+            max(_dot_product(query_token_vector, passage_token_vector) for passage_token_vector in normalized_passage)
+        )
+
+    return sum(maxima) / len(maxima)
+
+
+def _build_manual_retrieval_response(
+    *,
+    profile_id: int,
+    query: str,
+    model_code: str,
+    collection_name: str,
+    scored_chunks: list[_ManualHybridScoredChunk],
+) -> RagRetrievalResponseRead:
+    return RagRetrievalResponseRead(
+        profile_id=profile_id,
+        query=query,
+        model_code=model_code,
+        results=[
+            RagRetrievalResultRead(
+                chunk_id=scored_chunk.chunk_id,
+                source_id=scored_chunk.source_id,
+                embedding_id=scored_chunk.chunk_id,
+                score=round(scored_chunk.score, 6),
+                text=scored_chunk.text,
+                chunk_index=scored_chunk.chunk_index,
+                language=scored_chunk.language,
+                source_type=scored_chunk.source_type,
+                validation_status=scored_chunk.validation_status,
+                text_hash=scored_chunk.text_hash,
+                qdrant_collection=collection_name,
+                payload_metadata={
+                    "manual_local_hybrid_eval": True,
+                    "dense_score": round(scored_chunk.dense_score, 6),
+                    "sparse_score": round(scored_chunk.sparse_score, 6),
+                    "multivector_score": (
+                        round(scored_chunk.multivector_score, 6)
+                        if scored_chunk.multivector_score is not None
+                        else None
+                    ),
+                },
+            )
+            for scored_chunk in scored_chunks
+        ],
+    )
+
+
+def _score_manual_bge_m3_chunks(
+    *,
+    provider_code: str,
+    query_dense_vector: list[float],
+    query_sparse_vector: dict[str, float],
+    query_multivector: list[list[float]] | None,
+    passage_features,
+    source_chunks,
+    top_k: int,
+) -> list[_ManualHybridScoredChunk]:
+    dense_scores = {
+        chunk.id: _dot_product(query_dense_vector, passage_dense_vector)
+        for chunk, passage_dense_vector in zip(source_chunks, passage_features.dense_vectors, strict=True)
+    }
+    sparse_scores = {
+        chunk.id: _compute_sparse_overlap_score(query_sparse_vector, passage_sparse_vector)
+        for chunk, passage_sparse_vector in zip(source_chunks, passage_features.sparse_vectors, strict=True)
+    }
+    normalized_dense_scores = _normalize_score_map(dense_scores)
+    normalized_sparse_scores = _normalize_score_map(sparse_scores)
+    base_scores = {
+        chunk.id: (normalized_dense_scores.get(chunk.id, 0.0) + normalized_sparse_scores.get(chunk.id, 0.0)) / 2.0
+        for chunk in source_chunks
+    }
+
+    multivector_scores: dict[int, float] = {}
+    if provider_code == "bge_m3_dense_sparse_multivector":
+        if query_multivector is None or passage_features.multivectors is None:
+            raise BgeM3HybridProviderError("BGE-M3 multivector output is not available")
+
+        _emit_runtime_log(
+            f"multivector rerank start provider_code={provider_code} candidate_count={len(source_chunks)}"
+        )
+        narrowed_chunks = sorted(
+            source_chunks,
+            key=lambda chunk: (base_scores.get(chunk.id, 0.0), dense_scores.get(chunk.id, 0.0)),
+            reverse=True,
+        )[: max(top_k * 3, top_k)]
+        passage_multivectors_by_chunk_id = {
+            chunk.id: passage_multivector
+            for chunk, passage_multivector in zip(source_chunks, passage_features.multivectors, strict=True)
+        }
+        multivector_scores = {
+            chunk.id: _compute_multivector_score(
+                query_multivector,
+                passage_multivectors_by_chunk_id.get(chunk.id, []),
+            )
+            for chunk in narrowed_chunks
+        }
+        normalized_multivector_scores = _normalize_score_map(multivector_scores)
+        for chunk in narrowed_chunks:
+            base_scores[chunk.id] = (
+                base_scores.get(chunk.id, 0.0) + normalized_multivector_scores.get(chunk.id, 0.0)
+            ) / 2.0
+        _emit_runtime_log(
+            f"multivector rerank done provider_code={provider_code} candidate_count={len(narrowed_chunks)}"
+        )
+
+    ranked_chunks = sorted(
+        source_chunks,
+        key=lambda chunk: (
+            base_scores.get(chunk.id, 0.0),
+            dense_scores.get(chunk.id, 0.0),
+            sparse_scores.get(chunk.id, 0.0),
+        ),
+        reverse=True,
+    )[:top_k]
+    return [
+        _ManualHybridScoredChunk(
+            chunk_id=chunk.id,
+            source_id=chunk.source_id,
+            chunk_index=chunk.chunk_index,
+            text=chunk.chunk_text,
+            language=chunk.language,
+            source_type="manual_text",
+            validation_status=chunk.validation_status,
+            text_hash=chunk.text_hash,
+            score=base_scores.get(chunk.id, 0.0),
+            dense_score=dense_scores.get(chunk.id, 0.0),
+            sparse_score=sparse_scores.get(chunk.id, 0.0),
+            multivector_score=multivector_scores.get(chunk.id),
+        )
+        for chunk in ranked_chunks
+    ]
+
+
+def _build_batch_d_manual_provider_result(
+    *,
+    profile_id: int,
+    provider_code: str,
+    source_chunks,
+) -> tuple[list[RealQuestionEvalQuestionResult], RealQuestionEvalAggregateModelResult]:
+    rag_quality_service = RagQualityService()
+    hybrid_provider = BgeM3HybridEmbeddingProvider(
+        device=settings.sentence_transformers_device,
+        cache_dir=settings.sentence_transformers_cache_dir,
+    )
+    collection_name = _build_batch_d_collection_name(provider_code)
+    quality_candidate = RagQualityRetrievalConfigCandidate(
+        config_id=provider_code,
+        model_code=provider_code,
+        collection_name=collection_name,
+        top_k=REAL_QUESTION_EVAL_TOP_K,
+        retrieval_mode="hybrid",
+        metadata={"manual_local_hybrid_eval": True},
+    )
+    source_texts = [chunk.chunk_text for chunk in source_chunks]
+    _emit_runtime_log(
+        f"batch_d provider encode start provider_code={provider_code} chunk_count={len(source_texts)}"
+    )
+    passage_features = hybrid_provider.encode_passages(source_texts, provider_code)
+    _emit_runtime_log(
+        f"batch_d provider encode done provider_code={provider_code} chunk_count={len(source_texts)}"
+    )
+
+    question_results: list[RealQuestionEvalQuestionResult] = []
+    aggregate_trackers: list[RealQuestionEvalModelResult] = []
+    latency_ms_values: list[float] = []
+
+    for case in _build_question_cases():
+        _emit_runtime_log(f"question start question_id={case.case_id} provider_code={provider_code}")
+        _emit_runtime_memory_log(stage="before_question", question_id=case.case_id)
+        started_at = perf_counter()
+        query_features = hybrid_provider.encode_query(case.query, provider_code)
+        scored_chunks = _score_manual_bge_m3_chunks(
+            provider_code=provider_code,
+            query_dense_vector=query_features.dense_vectors[0],
+            query_sparse_vector=query_features.sparse_vectors[0],
+            query_multivector=(
+                query_features.multivectors[0]
+                if query_features.multivectors
+                else None
+            ),
+            passage_features=passage_features,
+            source_chunks=source_chunks,
+            top_k=REAL_QUESTION_EVAL_TOP_K,
+        )
+        latency_ms = round((perf_counter() - started_at) * 1000, 3)
+        latency_ms_values.append(latency_ms)
+        retrieval_response = _build_manual_retrieval_response(
+            profile_id=profile_id,
+            query=case.query,
+            model_code=provider_code,
+            collection_name=collection_name,
+            scored_chunks=scored_chunks,
+        )
+        case_results_input = rag_quality_service.adapt_rag_retrieval_response(
+            case_id=case.case_id,
+            candidate=quality_candidate,
+            retrieval_response=retrieval_response,
+            latency_ms=latency_ms,
+            cost_estimate=0.0,
+            metadata={
+                "workflow": "real_question_eval_batch_d_manual_hybrid",
+                "manual_local_hybrid_eval": True,
+                "provider_code": provider_code,
+            },
+        )
+        case_evaluation = rag_quality_service.evaluate_case_results(
+            case=case,
+            case_results=case_results_input,
+            config_id=provider_code,
+        )
+        model_result = _build_model_result(
+            model_code=provider_code,
+            collection_name=collection_name,
+            case_evaluation=case_evaluation,
+            retrieval_response=retrieval_response,
+        )
+        aggregate_trackers.append(model_result)
+        question_results.append(
+            RealQuestionEvalQuestionResult(
+                question_id=case.case_id,
+                question_text=case.query,
+                expected_markers=list(case.expected_markers),
+                forbidden_markers=list(case.forbidden_markers),
+                model_results=[model_result],
+                winner_model_code=provider_code,
+                winner_reason="Only one model result was available.",
+            )
+        )
+        _emit_runtime_log(f"question done question_id={case.case_id} provider_code={provider_code}")
+        _emit_runtime_memory_log(stage="after_question", question_id=case.case_id)
+
+    average_latency_ms = round(sum(latency_ms_values) / len(latency_ms_values), 3) if latency_ms_values else None
+    average_coverage = round(
+        sum(item.evidence_coverage or 0.0 for item in aggregate_trackers) / len(aggregate_trackers),
+        4,
+    ) if aggregate_trackers else 0.0
+    reciprocal_ranks = [
+        1.0 / item.first_relevant_rank
+        for item in aggregate_trackers
+        if item.first_relevant_rank
+    ]
+    aggregate_result = _build_aggregate_result(
+        model_code=provider_code,
+        collection_name=collection_name,
+        wins=0,
+        model_results=aggregate_trackers,
+        official_metrics={
+            "hit_rate": sum(1 for item in aggregate_trackers if item.passed) / len(aggregate_trackers),
+            "recall_at_k": average_coverage,
+            "mrr": round(sum(reciprocal_ranks) / len(aggregate_trackers), 4) if aggregate_trackers else 0.0,
+            "forbidden_marker_rate": round(
+                sum(item.false_positive_count for item in aggregate_trackers) / len(aggregate_trackers),
+                4,
+            ) if aggregate_trackers else 0.0,
+            "average_latency_ms": average_latency_ms,
+            "cost_estimate_total": None,
+            "evidence_marker_coverage": average_coverage,
+            "missing_expected_marker_count": sum(
+                len(item.missing_expected_markers) for item in aggregate_trackers
+            ),
+            "false_positive_count": sum(item.false_positive_count for item in aggregate_trackers),
+            "manual_local_hybrid_eval": True,
+        },
+    )
+    return question_results, aggregate_result
 
 
 def _filter_question_results_to_model_codes(
@@ -1498,6 +1907,10 @@ def _build_batch_b_official_best_config(selection_result) -> dict[str, object]:
 
 
 def _build_batch_c_official_best_config(selection_result) -> dict[str, object]:
+    return _build_incremental_official_best_config(selection_result)
+
+
+def _build_batch_d_official_best_config(selection_result) -> dict[str, object]:
     return _build_incremental_official_best_config(selection_result)
 
 
@@ -2157,11 +2570,301 @@ def run_full_version_batch_c_question_eval(
     return combined_result
 
 
+def run_full_version_batch_d_question_eval(
+    db: Session,
+    config: RealQuestionEvalConfig,
+) -> RealQuestionEvalResult:
+    new_provider_codes = _validate_full_version_batch_d_provider_codes(list(config.candidate_model_codes or []))
+    baseline_provider_code = REAL_QUESTION_EVAL_FULL_VERSION_BATCH_D_BASELINE_PROVIDER
+    excluded_provider_codes = list(REAL_QUESTION_EVAL_FULL_VERSION_BATCH_D_EXCLUDED_PROVIDERS)
+    incremental_payload = _load_incremental_new_provider_payload(artifact_dir=Path(config.artifact_dir))
+    incremental_question_results = _build_historical_question_results(incremental_payload)
+    incremental_aggregate_results = _build_historical_aggregate_results(incremental_payload)
+    baseline_question_results = _filter_question_results_to_model_codes(
+        incremental_question_results,
+        model_codes=[baseline_provider_code],
+    )
+    baseline_aggregate_results = _filter_aggregate_results_to_model_codes(
+        incremental_aggregate_results,
+        model_codes=[baseline_provider_code],
+    )
+    baseline_client_view = (
+        incremental_payload.get("client_view")
+        if isinstance(incremental_payload.get("client_view"), dict)
+        else {}
+    )
+    baseline_overall_winner = (
+        str(baseline_client_view.get("overall_winner"))
+        if baseline_client_view.get("overall_winner") is not None
+        else baseline_provider_code
+    )
+
+    runner = RealQuestionEvalRunner(
+        db,
+        config.model_copy(
+            update={
+                "write_artifacts": False,
+                "run_type_override": "full_version_batch_d",
+                "execution_mode_override": "full_version_batch_d_real_eval",
+            }
+        ),
+    )
+
+    try:
+        user = runner.ensure_user()
+        profile = runner.ensure_profile(user)
+        source = runner.ensure_source(user, profile)
+        source_chunks = _ensure_question_eval_source_chunks(
+            db,
+            current_user=user,
+            source_id=source.id,
+        )
+    except Exception as exc:
+        failed_result = RealQuestionEvalResult(
+            passed=False,
+            used_fake_models=False,
+            run_type="full_version_batch_d",
+            execution_mode="full_version_batch_d_real_eval",
+            benchmark_batch_label="Batch D",
+            benchmark_status="failed",
+            incomplete_reason=str(exc),
+            baseline_provider_codes=[baseline_provider_code],
+            excluded_provider_codes=excluded_provider_codes,
+            newly_evaluated_provider_codes=list(new_provider_codes),
+            comparison_scope_note=(
+                "Only multilingual_e5_base, bge_m3_dense_sparse, and "
+                "bge_m3_dense_sparse_multivector are allowed in the final Batch D comparison."
+            ),
+            non_compared_notes=[
+                "Batch D keeps production retrieval unchanged and uses a manual local hybrid reranking path.",
+            ],
+            historical_providers=[baseline_provider_code],
+            new_real_providers=list(new_provider_codes),
+            historical_overall_winner_model_code=baseline_overall_winner,
+            any_new_provider_beat_historical_winner=False,
+            dataset_id=REAL_QUESTION_EVAL_DATASET_ID,
+            dataset_name=REAL_QUESTION_EVAL_DATASET_NAME,
+            compared_models=[baseline_provider_code],
+            question_results=baseline_question_results,
+            aggregate_results=baseline_aggregate_results,
+            overall_winner_model_code=baseline_provider_code,
+            activated=False,
+            runtime_verified=False,
+            error=str(exc),
+        )
+        if config.write_artifacts:
+            artifact_paths = write_real_question_eval_artifacts(
+                artifact_dir=Path(config.artifact_dir),
+                result=failed_result,
+            )
+            failed_result.artifact_paths = artifact_paths
+            failed_result.markdown_report_path = artifact_paths.latest_markdown_report
+            failed_result.json_result_path = artifact_paths.latest_json_result
+        return failed_result
+
+    successful_new_question_results_by_provider: dict[str, list[RealQuestionEvalQuestionResult]] = {}
+    successful_new_aggregate_results: list[RealQuestionEvalAggregateModelResult] = []
+    incomplete_mode_notes: list[str] = []
+    warnings: list[str] = []
+    with enable_bge_m3_hybrid_shared_model_cache(clear_on_exit=True):
+        for provider_code in new_provider_codes:
+            try:
+                provider_question_results, provider_aggregate_result = _build_batch_d_manual_provider_result(
+                    profile_id=profile.id,
+                    provider_code=provider_code,
+                    source_chunks=source_chunks,
+                )
+            except Exception as exc:
+                reason = f"{provider_code} was not completed in local CPU-only Batch D: {exc}"
+                incomplete_mode_notes.append(reason)
+                warnings.append(reason)
+                continue
+
+            successful_new_question_results_by_provider[provider_code] = provider_question_results
+            successful_new_aggregate_results.append(provider_aggregate_result)
+
+    if not successful_new_aggregate_results:
+        failed_result = RealQuestionEvalResult(
+            passed=False,
+            used_fake_models=False,
+            run_type="full_version_batch_d",
+            execution_mode="full_version_batch_d_real_eval",
+            benchmark_batch_label="Batch D",
+            benchmark_status="failed",
+            incomplete_reason="; ".join(incomplete_mode_notes) or "No Batch D provider completed successfully.",
+            baseline_provider_codes=[baseline_provider_code],
+            excluded_provider_codes=excluded_provider_codes,
+            newly_evaluated_provider_codes=list(new_provider_codes),
+            comparison_scope_note=(
+                "Only multilingual_e5_base, bge_m3_dense_sparse, and "
+                "bge_m3_dense_sparse_multivector are allowed in the final Batch D comparison."
+            ),
+            non_compared_notes=[
+                "Batch D keeps production retrieval unchanged and uses a manual local hybrid reranking path.",
+                *incomplete_mode_notes,
+            ],
+            historical_providers=[baseline_provider_code],
+            new_real_providers=list(new_provider_codes),
+            historical_overall_winner_model_code=baseline_overall_winner,
+            any_new_provider_beat_historical_winner=False,
+            generated_at=datetime.now(timezone.utc).isoformat(),
+            profile_id=profile.id,
+            source_id=source.id,
+            dataset_id=REAL_QUESTION_EVAL_DATASET_ID,
+            dataset_name=REAL_QUESTION_EVAL_DATASET_NAME,
+            source_chunk_count=len(source_chunks),
+            compared_models=[baseline_provider_code],
+            question_results=baseline_question_results,
+            aggregate_results=baseline_aggregate_results,
+            overall_winner_model_code=baseline_provider_code,
+            activated=False,
+            runtime_verified=False,
+            warnings=warnings,
+            error="; ".join(incomplete_mode_notes) or "No Batch D provider completed successfully.",
+        )
+        if config.write_artifacts:
+            artifact_paths = write_real_question_eval_artifacts(
+                artifact_dir=Path(config.artifact_dir),
+                result=failed_result,
+            )
+            failed_result.artifact_paths = artifact_paths
+            failed_result.markdown_report_path = artifact_paths.latest_markdown_report
+            failed_result.json_result_path = artifact_paths.latest_json_result
+            _emit_runtime_log(
+                f"artifact path written latest_json={failed_result.json_result_path}"
+            )
+        return failed_result
+
+    successful_provider_codes = [aggregate_result.model_code for aggregate_result in successful_new_aggregate_results]
+    question_order = [case.case_id for case in _build_question_cases()]
+    baseline_by_question_id = {item.question_id: item for item in baseline_question_results}
+    new_results_by_provider_and_question = {
+        provider_code: {question_result.question_id: question_result for question_result in question_results}
+        for provider_code, question_results in successful_new_question_results_by_provider.items()
+    }
+    combined_question_results: list[RealQuestionEvalQuestionResult] = []
+    for question_id in question_order:
+        baseline_question = baseline_by_question_id.get(question_id)
+        if baseline_question is None:
+            raise ValueError(f"Full-version Batch D baseline is missing question result for {question_id}")
+        merged_model_results = list(baseline_question.model_results)
+        for provider_code in successful_provider_codes:
+            provider_question = new_results_by_provider_and_question[provider_code].get(question_id)
+            if provider_question is None:
+                raise ValueError(f"Full-version Batch D is missing question result for {provider_code}:{question_id}")
+            merged_model_results.extend(provider_question.model_results)
+        winner_model_code, winner_reason = _choose_question_winner(
+            model_results=merged_model_results,
+            official_best_model_code=None,
+        )
+        combined_question_results.append(
+            RealQuestionEvalQuestionResult(
+                question_id=baseline_question.question_id,
+                question_text=baseline_question.question_text,
+                expected_markers=list(baseline_question.expected_markers),
+                forbidden_markers=list(baseline_question.forbidden_markers),
+                model_results=merged_model_results,
+                winner_model_code=winner_model_code,
+                winner_reason=winner_reason,
+            )
+        )
+
+    combined_model_codes = [baseline_provider_code, *successful_provider_codes]
+    combined_aggregate_results = [*baseline_aggregate_results, *successful_new_aggregate_results]
+    selection_result = RagQualityService().select_best_config(
+        config_evaluations=[
+            _build_config_evaluation_from_aggregate_result(
+                aggregate_result,
+                total_cases=len(question_order),
+            )
+            for aggregate_result in combined_aggregate_results
+        ]
+    )
+    combined_aggregate_results = _recompute_aggregate_question_wins(
+        question_results=combined_question_results,
+        aggregate_results=combined_aggregate_results,
+    )
+    any_new_provider_beat_baseline = (
+        selection_result.best_model_code in successful_provider_codes
+        and selection_result.best_model_code != baseline_provider_code
+    )
+    benchmark_status = (
+        "completed"
+        if len(successful_provider_codes) == len(new_provider_codes)
+        else "completed_with_incomplete_modes"
+    )
+
+    combined_result = RealQuestionEvalResult(
+        passed=bool(selection_result.best_model_code),
+        used_fake_models=False,
+        run_type="full_version_batch_d",
+        execution_mode="full_version_batch_d_real_eval",
+        benchmark_batch_label="Batch D",
+        benchmark_status=benchmark_status,
+        incomplete_reason="; ".join(incomplete_mode_notes) if incomplete_mode_notes else None,
+        baseline_provider_codes=[baseline_provider_code],
+        excluded_provider_codes=excluded_provider_codes,
+        newly_evaluated_provider_codes=list(new_provider_codes),
+        comparison_scope_note=(
+            "Only multilingual_e5_base, bge_m3_dense_sparse, and "
+            "bge_m3_dense_sparse_multivector are included in the final Batch D comparison. "
+            "BGE-M3 hybrid modes use a manual local reranking path because the current production "
+            "Qdrant retrieval path is dense-only."
+        ),
+        non_compared_notes=[
+            "Batch D keeps production retrieval unchanged and uses a manual local hybrid reranking path.",
+            *incomplete_mode_notes,
+        ],
+        historical_providers=[baseline_provider_code],
+        new_real_providers=list(new_provider_codes),
+        historical_overall_winner_model_code=baseline_overall_winner,
+        any_new_provider_beat_historical_winner=any_new_provider_beat_baseline,
+        generated_at=datetime.now(timezone.utc).isoformat(),
+        profile_id=profile.id,
+        source_id=source.id,
+        dataset_id=REAL_QUESTION_EVAL_DATASET_ID,
+        dataset_name=REAL_QUESTION_EVAL_DATASET_NAME,
+        source_chunk_count=len(source_chunks),
+        compared_models=combined_model_codes,
+        question_results=combined_question_results,
+        aggregate_results=combined_aggregate_results,
+        overall_winner_model_code=selection_result.best_model_code,
+        official_best_config=_build_batch_d_official_best_config(selection_result),
+        activated=False,
+        runtime_verified=False,
+        warnings=[
+            *warnings,
+            *selection_result.warnings,
+        ],
+    )
+    if config.write_artifacts:
+        artifact_paths = write_real_question_eval_artifacts(
+            artifact_dir=Path(config.artifact_dir),
+            result=combined_result,
+        )
+        combined_result.artifact_paths = artifact_paths
+        combined_result.markdown_report_path = artifact_paths.latest_markdown_report
+        combined_result.json_result_path = artifact_paths.latest_json_result
+        _emit_runtime_log(
+            f"artifact path written latest_json={combined_result.json_result_path}"
+        )
+    combined_result.passed = (
+        combined_result.passed
+        and combined_result.markdown_report_path is not None
+        and Path(combined_result.markdown_report_path).exists()
+        and combined_result.json_result_path is not None
+        and Path(combined_result.json_result_path).exists()
+    )
+    return combined_result
+
+
 def run_real_question_eval(
     db: Session,
     config: RealQuestionEvalConfig | None = None,
 ) -> RealQuestionEvalResult:
     resolved_config = config or RealQuestionEvalConfig()
+    if resolved_config.execution_mode_override == "full_version_batch_d_real_eval":
+        return run_full_version_batch_d_question_eval(db, resolved_config)
     if resolved_config.execution_mode_override == "full_version_batch_c_real_eval":
         return run_full_version_batch_c_question_eval(db, resolved_config)
     if resolved_config.execution_mode_override == "full_version_batch_b_real_eval":
