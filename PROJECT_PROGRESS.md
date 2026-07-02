@@ -3666,6 +3666,7 @@ Goal:
 
 - create larger fictional validation datasets for Real Question Eval and Multi Embedding Eval
 - expand coverage using the external JSON dataset schema from Task 51
+- expand the original `28` fake validation cases into a production-like fake validation corpus with `500` total cases
 - keep this task focused on dataset breadth rather than model benchmarking
 
 Added dataset files:
@@ -3684,25 +3685,29 @@ Dataset inventory helper:
 Dataset coverage and case counts:
 
 - short fact dataset:
-  - `8` cases
+  - expanded from `8` cases to `120` cases
   - each case uses `1-3` precise required evidence markers with aliases
 - page-level dataset:
-  - `5` cases
+  - expanded from `5` cases to `100` cases
   - each case uses `expected_long_context: true`
   - each case uses positive `minimum_context_chars`
   - each case requires multiple evidence markers
 - multi-document dataset:
-  - `5` cases
+  - expanded from `5` cases to `100` cases
   - each case uses `source_scope.scope_type = "multi_document"`
   - each case requires evidence from multiple document IDs
 - negative dataset:
-  - `5` cases
+  - expanded from `5` cases to `80` cases
   - each case uses `test_type = "negative"`
   - each case keeps `required_evidence` empty and uses `forbidden_evidence`
 - distractor dataset:
-  - `5` cases
+  - expanded from `5` cases to `100` cases
   - each case uses distractor-heavy fictional names, dates, places, or events
   - each case uses `forbidden_evidence`
+
+Total extended validation inventory:
+
+- expanded from `28` cases to `500` cases across the five Task 52 datasets
 
 Covered supported test types:
 

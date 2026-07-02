@@ -1,13 +1,15 @@
 {
   "dataset_id": "eternal-world-page-level-v1",
   "name": "Eternal World Page Level Validation V1",
-  "description": "Fictional page-level retrieval validation dataset for Eternal World with longer context expectations.",
+  "description": "Expanded fictional page-level retrieval validation dataset for Eternal World with longer context expectations.",
   "project_name": "Eternal World",
   "metadata": {
     "version": "v1",
     "fictional": true,
     "safe_validation_only": true,
-    "test_type": "page_level"
+    "test_type": "page_level",
+    "case_count": 100,
+    "expanded_validation": true
   },
   "cases": [
     {
@@ -17,24 +19,38 @@
       "test_type": "page_level",
       "source_scope": {
         "scope_type": "page",
-        "document_ids": ["attic-manual-archive"],
-        "page_numbers": [4],
-        "section_ids": ["attic-lamps"]
+        "document_ids": [
+          "attic-manual-archive"
+        ],
+        "page_numbers": [
+          4
+        ],
+        "section_ids": [
+          "attic-lamps"
+        ]
       },
       "required_evidence": [
         {
           "marker": "linen wick",
-          "aliases": ["wick of linen", "attic linen wick"]
+          "aliases": [
+            "wick of linen",
+            "attic linen wick"
+          ]
         },
         {
           "marker": "smoke vent chain",
-          "aliases": ["chain for the smoke vent", "vent chain"]
+          "aliases": [
+            "chain for the smoke vent",
+            "vent chain"
+          ]
         }
       ],
       "forbidden_evidence": [
         {
           "marker": "cellar coal scoop",
-          "aliases": ["coal scoop from the cellar"]
+          "aliases": [
+            "coal scoop from the cellar"
+          ]
         }
       ],
       "minimum_coverage": 1.0,
@@ -52,24 +68,38 @@
       "test_type": "page_level",
       "source_scope": {
         "scope_type": "page",
-        "document_ids": ["river-meeting-minutes"],
-        "page_numbers": [7],
-        "section_ids": ["delay-notes"]
+        "document_ids": [
+          "river-meeting-minutes"
+        ],
+        "page_numbers": [
+          7
+        ],
+        "section_ids": [
+          "delay-notes"
+        ]
       },
       "required_evidence": [
         {
           "marker": "flooded footbridge",
-          "aliases": ["footbridge flooded", "washed-over footbridge"]
+          "aliases": [
+            "footbridge flooded",
+            "washed-over footbridge"
+          ]
         },
         {
           "marker": "late telegraph reply",
-          "aliases": ["telegraph reply arrived late", "delayed telegraph answer"]
+          "aliases": [
+            "telegraph reply arrived late",
+            "delayed telegraph answer"
+          ]
         }
       ],
       "forbidden_evidence": [
         {
           "marker": "harvest parade rumor",
-          "aliases": ["rumor about the harvest parade"]
+          "aliases": [
+            "rumor about the harvest parade"
+          ]
         }
       ],
       "minimum_coverage": 1.0,
@@ -87,24 +117,38 @@
       "test_type": "page_level",
       "source_scope": {
         "scope_type": "page",
-        "document_ids": ["station-caretaker-log"],
-        "page_numbers": [3],
-        "section_ids": ["night-round"]
+        "document_ids": [
+          "station-caretaker-log"
+        ],
+        "page_numbers": [
+          3
+        ],
+        "section_ids": [
+          "night-round"
+        ]
       },
       "required_evidence": [
         {
           "marker": "coal stove hiss",
-          "aliases": ["hissing coal stove", "stove hiss"]
+          "aliases": [
+            "hissing coal stove",
+            "stove hiss"
+          ]
         },
         {
           "marker": "cracked west window",
-          "aliases": ["west window crack", "window on the west side"]
+          "aliases": [
+            "west window crack",
+            "window on the west side"
+          ]
         }
       ],
       "forbidden_evidence": [
         {
           "marker": "sealed ticket drawer",
-          "aliases": ["ticket drawer was sealed"]
+          "aliases": [
+            "ticket drawer was sealed"
+          ]
         }
       ],
       "minimum_coverage": 1.0,
@@ -122,24 +166,38 @@
       "test_type": "page_level",
       "source_scope": {
         "scope_type": "page",
-        "document_ids": ["herbal-room-ledger"],
-        "page_numbers": [6],
-        "section_ids": ["winter-shelf"]
+        "document_ids": [
+          "herbal-room-ledger"
+        ],
+        "page_numbers": [
+          6
+        ],
+        "section_ids": [
+          "winter-shelf"
+        ]
       },
       "required_evidence": [
         {
           "marker": "juniper bundles",
-          "aliases": ["bundles of juniper", "juniper tied in bundles"]
+          "aliases": [
+            "bundles of juniper",
+            "juniper tied in bundles"
+          ]
         },
         {
           "marker": "blue glass jar",
-          "aliases": ["jar of blue glass", "blue herbal jar"]
+          "aliases": [
+            "jar of blue glass",
+            "blue herbal jar"
+          ]
         }
       ],
       "forbidden_evidence": [
         {
           "marker": "summer nettle basket",
-          "aliases": ["basket of summer nettles"]
+          "aliases": [
+            "basket of summer nettles"
+          ]
         }
       ],
       "minimum_coverage": 1.0,
@@ -157,24 +215,38 @@
       "test_type": "page_level",
       "source_scope": {
         "scope_type": "page",
-        "document_ids": ["watchtower-repair-book"],
-        "page_numbers": [9],
-        "section_ids": ["upper-landing"]
+        "document_ids": [
+          "watchtower-repair-book"
+        ],
+        "page_numbers": [
+          9
+        ],
+        "section_ids": [
+          "upper-landing"
+        ]
       },
       "required_evidence": [
         {
           "marker": "iron rung",
-          "aliases": ["rung of iron", "upper landing rung"]
+          "aliases": [
+            "rung of iron",
+            "upper landing rung"
+          ]
         },
         {
           "marker": "lantern hook",
-          "aliases": ["hook for the lantern", "watchtower lantern hook"]
+          "aliases": [
+            "hook for the lantern",
+            "watchtower lantern hook"
+          ]
         }
       ],
       "forbidden_evidence": [
         {
           "marker": "rope bucket pulley",
-          "aliases": ["bucket pulley"]
+          "aliases": [
+            "bucket pulley"
+          ]
         }
       ],
       "minimum_coverage": 1.0,
@@ -184,6 +256,5155 @@
       "language": "en",
       "expected_long_context": true,
       "minimum_context_chars": 135
+    },
+    {
+      "id": "page-level-006",
+      "question": "Which details on the profile page identify how Anya and the godmother prepared for the winter coach from Bell Bridge square?",
+      "expected_answer_type": "page_fact",
+      "test_type": "page_level",
+      "source_scope": {
+        "scope_type": "page",
+        "document_ids": [
+          "page-bell-bridge-square-audio-reel-006"
+        ],
+        "page_numbers": [
+          8
+        ],
+        "section_ids": [
+          "section-006"
+        ],
+        "notes": "Long-form fictional page context for Anya at Bell Bridge square."
+      },
+      "required_evidence": [
+        {
+          "marker": "godmother",
+          "aliases": [
+            "the godmother of Anya",
+            "Anya's godmother"
+          ]
+        },
+        {
+          "marker": "violet ribbon",
+          "aliases": [
+            "preparation item violet ribbon",
+            "violet ribbon before the winter coach"
+          ]
+        },
+        {
+          "marker": "willow basket",
+          "aliases": [
+            "second preparation detail willow basket",
+            "willow basket on the travel page"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "weathered camera strap",
+          "aliases": [
+            "wrong page detail weathered camera strap"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 3,
+      "difficulty": "easy",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 240
+    },
+    {
+      "id": "page-level-007",
+      "question": "Which longer-page details in the family note describe the family memory scene at River Lantern inn?",
+      "expected_answer_type": "page_fact",
+      "test_type": "page_level",
+      "source_scope": {
+        "scope_type": "page",
+        "document_ids": [
+          "page-river-lantern-inn-family-note-007"
+        ],
+        "page_numbers": [
+          9
+        ],
+        "section_ids": [
+          "section-007"
+        ],
+        "notes": "Long-form fictional page context for Daria at River Lantern inn."
+      },
+      "required_evidence": [
+        {
+          "marker": "green apron",
+          "aliases": [
+            "family scene green apron",
+            "green apron on the family page"
+          ]
+        },
+        {
+          "marker": "birch tea flask",
+          "aliases": [
+            "family scene birch tea flask",
+            "birch tea flask beside River Lantern inn"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "canal route map",
+          "aliases": [
+            "wrong page detail canal route map"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "medium",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 260
+    },
+    {
+      "id": "page-level-008",
+      "question": "Which profile-page details explain what Yara kept for the Signal Lantern Morning after returning to Birch Ferry shed?",
+      "expected_answer_type": "page_fact",
+      "test_type": "page_level",
+      "source_scope": {
+        "scope_type": "page",
+        "document_ids": [
+          "page-birch-ferry-shed-audio-reel-008"
+        ],
+        "page_numbers": [
+          10
+        ],
+        "section_ids": [
+          "section-008"
+        ],
+        "notes": "Long-form fictional page context for Yara at Birch Ferry shed."
+      },
+      "required_evidence": [
+        {
+          "marker": "paper moon mask",
+          "aliases": [
+            "kept detail paper moon mask",
+            "Signal Lantern Morning item paper moon mask"
+          ]
+        },
+        {
+          "marker": "weathered camera strap",
+          "aliases": [
+            "return detail weathered camera strap",
+            "weathered camera strap after returning to Birch Ferry shed"
+          ]
+        },
+        {
+          "marker": "Signal Lantern Morning",
+          "aliases": [
+            "festival Signal Lantern Morning",
+            "the Signal Lantern Morning memory"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "brass compass",
+          "aliases": [
+            "wrong page detail brass compass"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 3,
+      "difficulty": "hard",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 120
+    },
+    {
+      "id": "page-level-009",
+      "question": "Which page-level notes from the family note show why Milena's photo memory at Driftwood cove mattered later?",
+      "expected_answer_type": "page_fact",
+      "test_type": "page_level",
+      "source_scope": {
+        "scope_type": "page",
+        "document_ids": [
+          "page-driftwood-cove-family-note-009"
+        ],
+        "page_numbers": [
+          11
+        ],
+        "section_ids": [
+          "section-009"
+        ],
+        "notes": "Long-form fictional page context for Milena at Driftwood cove."
+      },
+      "required_evidence": [
+        {
+          "marker": "saffron scarf",
+          "aliases": [
+            "photo note saffron scarf",
+            "saffron scarf from the photo page"
+          ]
+        },
+        {
+          "marker": "canal route map",
+          "aliases": [
+            "later consequence canal route map",
+            "canal route map noted later on the page"
+          ]
+        },
+        {
+          "marker": "brass compass",
+          "aliases": [
+            "supporting page detail brass compass",
+            "brass compass elsewhere on the page"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "tuning fork",
+          "aliases": [
+            "wrong page detail tuning fork"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 3,
+      "difficulty": "easy",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 140
+    },
+    {
+      "id": "page-level-010",
+      "question": "Which page-level details on Ada's audio reel explain why the Lantern Tide visit to Star Basin gallery was delayed?",
+      "expected_answer_type": "page_fact",
+      "test_type": "page_level",
+      "source_scope": {
+        "scope_type": "page",
+        "document_ids": [
+          "page-star-basin-gallery-audio-reel-010"
+        ],
+        "page_numbers": [
+          12
+        ],
+        "section_ids": [
+          "section-010"
+        ],
+        "notes": "Long-form fictional page context for Ada at Star Basin gallery."
+      },
+      "required_evidence": [
+        {
+          "marker": "wax thread",
+          "aliases": [
+            "delay detail wax thread",
+            "wax thread on the audio reel"
+          ]
+        },
+        {
+          "marker": "brass compass",
+          "aliases": [
+            "brass compass noted on the page",
+            "page detail brass compass"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "silver booth token",
+          "aliases": [
+            "wrong page detail silver booth token"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "medium",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 160
+    },
+    {
+      "id": "page-level-011",
+      "question": "Which details on the profile page identify how Raisa and the younger brother prepared for the winter coach from Harbor Glass corridor?",
+      "expected_answer_type": "page_fact",
+      "test_type": "page_level",
+      "source_scope": {
+        "scope_type": "page",
+        "document_ids": [
+          "page-harbor-glass-corridor-family-note-011"
+        ],
+        "page_numbers": [
+          13
+        ],
+        "section_ids": [
+          "section-011"
+        ],
+        "notes": "Long-form fictional page context for Raisa at Harbor Glass corridor."
+      },
+      "required_evidence": [
+        {
+          "marker": "younger brother",
+          "aliases": [
+            "the younger brother of Raisa",
+            "Raisa's younger brother"
+          ]
+        },
+        {
+          "marker": "cedar shovel",
+          "aliases": [
+            "preparation item cedar shovel",
+            "cedar shovel before the winter coach"
+          ]
+        },
+        {
+          "marker": "tuning fork",
+          "aliases": [
+            "second preparation detail tuning fork",
+            "tuning fork on the travel page"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "glass ink bottle",
+          "aliases": [
+            "wrong page detail glass ink bottle"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 3,
+      "difficulty": "hard",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 180
+    },
+    {
+      "id": "page-level-012",
+      "question": "Which longer-page details in the audio reel describe the family memory scene at Bell Bridge square?",
+      "expected_answer_type": "page_fact",
+      "test_type": "page_level",
+      "source_scope": {
+        "scope_type": "page",
+        "document_ids": [
+          "page-bell-bridge-square-audio-reel-012"
+        ],
+        "page_numbers": [
+          14
+        ],
+        "section_ids": [
+          "section-012"
+        ],
+        "notes": "Long-form fictional page context for Sonya at Bell Bridge square."
+      },
+      "required_evidence": [
+        {
+          "marker": "linen wick",
+          "aliases": [
+            "family scene linen wick",
+            "linen wick on the family page"
+          ]
+        },
+        {
+          "marker": "silver booth token",
+          "aliases": [
+            "family scene silver booth token",
+            "silver booth token beside Bell Bridge square"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "carved shell comb",
+          "aliases": [
+            "wrong page detail carved shell comb"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "easy",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 200
+    },
+    {
+      "id": "page-level-013",
+      "question": "Which profile-page details explain what Talia kept for the Canal Night after returning to River Lantern inn?",
+      "expected_answer_type": "page_fact",
+      "test_type": "page_level",
+      "source_scope": {
+        "scope_type": "page",
+        "document_ids": [
+          "page-river-lantern-inn-family-note-013"
+        ],
+        "page_numbers": [
+          15
+        ],
+        "section_ids": [
+          "section-013"
+        ],
+        "notes": "Long-form fictional page context for Talia at River Lantern inn."
+      },
+      "required_evidence": [
+        {
+          "marker": "rope bridge permit",
+          "aliases": [
+            "kept detail rope bridge permit",
+            "Canal Night item rope bridge permit"
+          ]
+        },
+        {
+          "marker": "glass ink bottle",
+          "aliases": [
+            "return detail glass ink bottle",
+            "glass ink bottle after returning to River Lantern inn"
+          ]
+        },
+        {
+          "marker": "Canal Night",
+          "aliases": [
+            "festival Canal Night",
+            "the Canal Night memory"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "tin key",
+          "aliases": [
+            "wrong page detail tin key"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 3,
+      "difficulty": "medium",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 220
+    },
+    {
+      "id": "page-level-014",
+      "question": "Which page-level notes from the audio reel show why Runa's photo memory at Birch Ferry shed mattered later?",
+      "expected_answer_type": "page_fact",
+      "test_type": "page_level",
+      "source_scope": {
+        "scope_type": "page",
+        "document_ids": [
+          "page-birch-ferry-shed-audio-reel-014"
+        ],
+        "page_numbers": [
+          16
+        ],
+        "section_ids": [
+          "section-014"
+        ],
+        "notes": "Long-form fictional page context for Runa at Birch Ferry shed."
+      },
+      "required_evidence": [
+        {
+          "marker": "clay watering cup",
+          "aliases": [
+            "photo note clay watering cup",
+            "clay watering cup from the photo page"
+          ]
+        },
+        {
+          "marker": "carved shell comb",
+          "aliases": [
+            "later consequence carved shell comb",
+            "carved shell comb noted later on the page"
+          ]
+        },
+        {
+          "marker": "tin key",
+          "aliases": [
+            "supporting page detail tin key",
+            "tin key elsewhere on the page"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "copper token",
+          "aliases": [
+            "wrong page detail copper token"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 3,
+      "difficulty": "hard",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 240
+    },
+    {
+      "id": "page-level-015",
+      "question": "Which page-level details on Selma's family note explain why the Glass Harbor Day visit to Driftwood cove was delayed?",
+      "expected_answer_type": "page_fact",
+      "test_type": "page_level",
+      "source_scope": {
+        "scope_type": "page",
+        "document_ids": [
+          "page-driftwood-cove-family-note-015"
+        ],
+        "page_numbers": [
+          17
+        ],
+        "section_ids": [
+          "section-015"
+        ],
+        "notes": "Long-form fictional page context for Selma at Driftwood cove."
+      },
+      "required_evidence": [
+        {
+          "marker": "copper wind vane pin",
+          "aliases": [
+            "delay detail copper wind vane pin",
+            "copper wind vane pin on the family note"
+          ]
+        },
+        {
+          "marker": "tin key",
+          "aliases": [
+            "tin key noted on the page",
+            "page detail tin key"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "star ledger page",
+          "aliases": [
+            "wrong page detail star ledger page"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "easy",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 260
+    },
+    {
+      "id": "page-level-016",
+      "question": "Which details on the profile page identify how Iveta and the older sister prepared for the winter coach from Star Basin gallery?",
+      "expected_answer_type": "page_fact",
+      "test_type": "page_level",
+      "source_scope": {
+        "scope_type": "page",
+        "document_ids": [
+          "page-star-basin-gallery-audio-reel-016"
+        ],
+        "page_numbers": [
+          18
+        ],
+        "section_ids": [
+          "section-016"
+        ],
+        "notes": "Long-form fictional page context for Iveta at Star Basin gallery."
+      },
+      "required_evidence": [
+        {
+          "marker": "older sister",
+          "aliases": [
+            "the older sister of Iveta",
+            "Iveta's older sister"
+          ]
+        },
+        {
+          "marker": "amber lantern",
+          "aliases": [
+            "preparation item amber lantern",
+            "amber lantern before the winter coach"
+          ]
+        },
+        {
+          "marker": "copper token",
+          "aliases": [
+            "second preparation detail copper token",
+            "copper token on the travel page"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "oak barrel hoops",
+          "aliases": [
+            "wrong page detail oak barrel hoops"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 3,
+      "difficulty": "medium",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 120
+    },
+    {
+      "id": "page-level-017",
+      "question": "Which longer-page details in the family note describe the family memory scene at Harbor Glass corridor?",
+      "expected_answer_type": "page_fact",
+      "test_type": "page_level",
+      "source_scope": {
+        "scope_type": "page",
+        "document_ids": [
+          "page-harbor-glass-corridor-family-note-017"
+        ],
+        "page_numbers": [
+          2
+        ],
+        "section_ids": [
+          "section-017"
+        ],
+        "notes": "Long-form fictional page context for Nessa at Harbor Glass corridor."
+      },
+      "required_evidence": [
+        {
+          "marker": "blue oar",
+          "aliases": [
+            "family scene blue oar",
+            "blue oar on the family page"
+          ]
+        },
+        {
+          "marker": "star ledger page",
+          "aliases": [
+            "family scene star ledger page",
+            "star ledger page beside Harbor Glass corridor"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "juniper bundles",
+          "aliases": [
+            "wrong page detail juniper bundles"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "hard",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 140
+    },
+    {
+      "id": "page-level-018",
+      "question": "Which profile-page details explain what Zora kept for the Signal Lantern Morning after returning to Bell Bridge square?",
+      "expected_answer_type": "page_fact",
+      "test_type": "page_level",
+      "source_scope": {
+        "scope_type": "page",
+        "document_ids": [
+          "page-bell-bridge-square-audio-reel-018"
+        ],
+        "page_numbers": [
+          3
+        ],
+        "section_ids": [
+          "section-018"
+        ],
+        "notes": "Long-form fictional page context for Zora at Bell Bridge square."
+      },
+      "required_evidence": [
+        {
+          "marker": "moonflower cutting",
+          "aliases": [
+            "kept detail moonflower cutting",
+            "Signal Lantern Morning item moonflower cutting"
+          ]
+        },
+        {
+          "marker": "oak barrel hoops",
+          "aliases": [
+            "return detail oak barrel hoops",
+            "oak barrel hoops after returning to Bell Bridge square"
+          ]
+        },
+        {
+          "marker": "Signal Lantern Morning",
+          "aliases": [
+            "festival Signal Lantern Morning",
+            "the Signal Lantern Morning memory"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "coal stove hiss",
+          "aliases": [
+            "wrong page detail coal stove hiss"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 3,
+      "difficulty": "easy",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 160
+    },
+    {
+      "id": "page-level-019",
+      "question": "Which page-level notes from the family note show why Ilia's photo memory at River Lantern inn mattered later?",
+      "expected_answer_type": "page_fact",
+      "test_type": "page_level",
+      "source_scope": {
+        "scope_type": "page",
+        "document_ids": [
+          "page-river-lantern-inn-family-note-019"
+        ],
+        "page_numbers": [
+          4
+        ],
+        "section_ids": [
+          "section-019"
+        ],
+        "notes": "Long-form fictional page context for Ilia at River Lantern inn."
+      },
+      "required_evidence": [
+        {
+          "marker": "lantern hook",
+          "aliases": [
+            "photo note lantern hook",
+            "lantern hook from the photo page"
+          ]
+        },
+        {
+          "marker": "juniper bundles",
+          "aliases": [
+            "later consequence juniper bundles",
+            "juniper bundles noted later on the page"
+          ]
+        },
+        {
+          "marker": "coal stove hiss",
+          "aliases": [
+            "supporting page detail coal stove hiss",
+            "coal stove hiss elsewhere on the page"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "basalt sketch",
+          "aliases": [
+            "wrong page detail basalt sketch"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 3,
+      "difficulty": "medium",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 180
+    },
+    {
+      "id": "page-level-020",
+      "question": "Which page-level details on Mira's audio reel explain why the Lantern Tide visit to Birch Ferry shed was delayed?",
+      "expected_answer_type": "page_fact",
+      "test_type": "page_level",
+      "source_scope": {
+        "scope_type": "page",
+        "document_ids": [
+          "page-birch-ferry-shed-audio-reel-020"
+        ],
+        "page_numbers": [
+          5
+        ],
+        "section_ids": [
+          "section-020"
+        ],
+        "notes": "Long-form fictional page context for Mira at Birch Ferry shed."
+      },
+      "required_evidence": [
+        {
+          "marker": "blue glass jar",
+          "aliases": [
+            "delay detail blue glass jar",
+            "blue glass jar on the audio reel"
+          ]
+        },
+        {
+          "marker": "coal stove hiss",
+          "aliases": [
+            "coal stove hiss noted on the page",
+            "page detail coal stove hiss"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "willow basket",
+          "aliases": [
+            "wrong page detail willow basket"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "hard",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 200
+    },
+    {
+      "id": "page-level-021",
+      "question": "Which details on the profile page identify how Elena and the school friend prepared for the winter coach from Driftwood cove?",
+      "expected_answer_type": "page_fact",
+      "test_type": "page_level",
+      "source_scope": {
+        "scope_type": "page",
+        "document_ids": [
+          "page-driftwood-cove-family-note-021"
+        ],
+        "page_numbers": [
+          6
+        ],
+        "section_ids": [
+          "section-021"
+        ],
+        "notes": "Long-form fictional page context for Elena at Driftwood cove."
+      },
+      "required_evidence": [
+        {
+          "marker": "school friend",
+          "aliases": [
+            "the school friend of Elena",
+            "Elena's school friend"
+          ]
+        },
+        {
+          "marker": "smoke vent chain",
+          "aliases": [
+            "preparation item smoke vent chain",
+            "smoke vent chain before the winter coach"
+          ]
+        },
+        {
+          "marker": "basalt sketch",
+          "aliases": [
+            "second preparation detail basalt sketch",
+            "basalt sketch on the travel page"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "birch tea flask",
+          "aliases": [
+            "wrong page detail birch tea flask"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 3,
+      "difficulty": "easy",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 220
+    },
+    {
+      "id": "page-level-022",
+      "question": "Which longer-page details in the audio reel describe the family memory scene at Star Basin gallery?",
+      "expected_answer_type": "page_fact",
+      "test_type": "page_level",
+      "source_scope": {
+        "scope_type": "page",
+        "document_ids": [
+          "page-star-basin-gallery-audio-reel-022"
+        ],
+        "page_numbers": [
+          7
+        ],
+        "section_ids": [
+          "section-022"
+        ],
+        "notes": "Long-form fictional page context for Vera at Star Basin gallery."
+      },
+      "required_evidence": [
+        {
+          "marker": "violet ribbon",
+          "aliases": [
+            "family scene violet ribbon",
+            "violet ribbon on the family page"
+          ]
+        },
+        {
+          "marker": "willow basket",
+          "aliases": [
+            "family scene willow basket",
+            "willow basket beside Star Basin gallery"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "weathered camera strap",
+          "aliases": [
+            "wrong page detail weathered camera strap"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "medium",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 240
+    },
+    {
+      "id": "page-level-023",
+      "question": "Which profile-page details explain what Kira kept for the Canal Night after returning to Harbor Glass corridor?",
+      "expected_answer_type": "page_fact",
+      "test_type": "page_level",
+      "source_scope": {
+        "scope_type": "page",
+        "document_ids": [
+          "page-harbor-glass-corridor-family-note-023"
+        ],
+        "page_numbers": [
+          8
+        ],
+        "section_ids": [
+          "section-023"
+        ],
+        "notes": "Long-form fictional page context for Kira at Harbor Glass corridor."
+      },
+      "required_evidence": [
+        {
+          "marker": "green apron",
+          "aliases": [
+            "kept detail green apron",
+            "Canal Night item green apron"
+          ]
+        },
+        {
+          "marker": "birch tea flask",
+          "aliases": [
+            "return detail birch tea flask",
+            "birch tea flask after returning to Harbor Glass corridor"
+          ]
+        },
+        {
+          "marker": "Canal Night",
+          "aliases": [
+            "festival Canal Night",
+            "the Canal Night memory"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "canal route map",
+          "aliases": [
+            "wrong page detail canal route map"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 3,
+      "difficulty": "hard",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 260
+    },
+    {
+      "id": "page-level-024",
+      "question": "Which page-level notes from the audio reel show why Nadia's photo memory at Bell Bridge square mattered later?",
+      "expected_answer_type": "page_fact",
+      "test_type": "page_level",
+      "source_scope": {
+        "scope_type": "page",
+        "document_ids": [
+          "page-bell-bridge-square-audio-reel-024"
+        ],
+        "page_numbers": [
+          9
+        ],
+        "section_ids": [
+          "section-024"
+        ],
+        "notes": "Long-form fictional page context for Nadia at Bell Bridge square."
+      },
+      "required_evidence": [
+        {
+          "marker": "paper moon mask",
+          "aliases": [
+            "photo note paper moon mask",
+            "paper moon mask from the photo page"
+          ]
+        },
+        {
+          "marker": "weathered camera strap",
+          "aliases": [
+            "later consequence weathered camera strap",
+            "weathered camera strap noted later on the page"
+          ]
+        },
+        {
+          "marker": "canal route map",
+          "aliases": [
+            "supporting page detail canal route map",
+            "canal route map elsewhere on the page"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "brass compass",
+          "aliases": [
+            "wrong page detail brass compass"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 3,
+      "difficulty": "easy",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 120
+    },
+    {
+      "id": "page-level-025",
+      "question": "Which page-level details on Lina's family note explain why the Glass Harbor Day visit to River Lantern inn was delayed?",
+      "expected_answer_type": "page_fact",
+      "test_type": "page_level",
+      "source_scope": {
+        "scope_type": "page",
+        "document_ids": [
+          "page-river-lantern-inn-family-note-025"
+        ],
+        "page_numbers": [
+          10
+        ],
+        "section_ids": [
+          "section-025"
+        ],
+        "notes": "Long-form fictional page context for Lina at River Lantern inn."
+      },
+      "required_evidence": [
+        {
+          "marker": "saffron scarf",
+          "aliases": [
+            "delay detail saffron scarf",
+            "saffron scarf on the family note"
+          ]
+        },
+        {
+          "marker": "canal route map",
+          "aliases": [
+            "canal route map noted on the page",
+            "page detail canal route map"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "tuning fork",
+          "aliases": [
+            "wrong page detail tuning fork"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "medium",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 140
+    },
+    {
+      "id": "page-level-026",
+      "question": "Which details on the profile page identify how Anya and the widowed aunt prepared for the winter coach from Birch Ferry shed?",
+      "expected_answer_type": "page_fact",
+      "test_type": "page_level",
+      "source_scope": {
+        "scope_type": "page",
+        "document_ids": [
+          "page-birch-ferry-shed-audio-reel-026"
+        ],
+        "page_numbers": [
+          11
+        ],
+        "section_ids": [
+          "section-026"
+        ],
+        "notes": "Long-form fictional page context for Anya at Birch Ferry shed."
+      },
+      "required_evidence": [
+        {
+          "marker": "widowed aunt",
+          "aliases": [
+            "the widowed aunt of Anya",
+            "Anya's widowed aunt"
+          ]
+        },
+        {
+          "marker": "wax thread",
+          "aliases": [
+            "preparation item wax thread",
+            "wax thread before the winter coach"
+          ]
+        },
+        {
+          "marker": "brass compass",
+          "aliases": [
+            "second preparation detail brass compass",
+            "brass compass on the travel page"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "silver booth token",
+          "aliases": [
+            "wrong page detail silver booth token"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 3,
+      "difficulty": "hard",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 160
+    },
+    {
+      "id": "page-level-027",
+      "question": "Which longer-page details in the family note describe the family memory scene at Driftwood cove?",
+      "expected_answer_type": "page_fact",
+      "test_type": "page_level",
+      "source_scope": {
+        "scope_type": "page",
+        "document_ids": [
+          "page-driftwood-cove-family-note-027"
+        ],
+        "page_numbers": [
+          12
+        ],
+        "section_ids": [
+          "section-027"
+        ],
+        "notes": "Long-form fictional page context for Daria at Driftwood cove."
+      },
+      "required_evidence": [
+        {
+          "marker": "cedar shovel",
+          "aliases": [
+            "family scene cedar shovel",
+            "cedar shovel on the family page"
+          ]
+        },
+        {
+          "marker": "tuning fork",
+          "aliases": [
+            "family scene tuning fork",
+            "tuning fork beside Driftwood cove"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "glass ink bottle",
+          "aliases": [
+            "wrong page detail glass ink bottle"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "easy",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 180
+    },
+    {
+      "id": "page-level-028",
+      "question": "Which profile-page details explain what Yara kept for the Signal Lantern Morning after returning to Star Basin gallery?",
+      "expected_answer_type": "page_fact",
+      "test_type": "page_level",
+      "source_scope": {
+        "scope_type": "page",
+        "document_ids": [
+          "page-star-basin-gallery-audio-reel-028"
+        ],
+        "page_numbers": [
+          13
+        ],
+        "section_ids": [
+          "section-028"
+        ],
+        "notes": "Long-form fictional page context for Yara at Star Basin gallery."
+      },
+      "required_evidence": [
+        {
+          "marker": "linen wick",
+          "aliases": [
+            "kept detail linen wick",
+            "Signal Lantern Morning item linen wick"
+          ]
+        },
+        {
+          "marker": "silver booth token",
+          "aliases": [
+            "return detail silver booth token",
+            "silver booth token after returning to Star Basin gallery"
+          ]
+        },
+        {
+          "marker": "Signal Lantern Morning",
+          "aliases": [
+            "festival Signal Lantern Morning",
+            "the Signal Lantern Morning memory"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "carved shell comb",
+          "aliases": [
+            "wrong page detail carved shell comb"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 3,
+      "difficulty": "medium",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 200
+    },
+    {
+      "id": "page-level-029",
+      "question": "Which page-level notes from the family note show why Milena's photo memory at Harbor Glass corridor mattered later?",
+      "expected_answer_type": "page_fact",
+      "test_type": "page_level",
+      "source_scope": {
+        "scope_type": "page",
+        "document_ids": [
+          "page-harbor-glass-corridor-family-note-029"
+        ],
+        "page_numbers": [
+          14
+        ],
+        "section_ids": [
+          "section-029"
+        ],
+        "notes": "Long-form fictional page context for Milena at Harbor Glass corridor."
+      },
+      "required_evidence": [
+        {
+          "marker": "rope bridge permit",
+          "aliases": [
+            "photo note rope bridge permit",
+            "rope bridge permit from the photo page"
+          ]
+        },
+        {
+          "marker": "glass ink bottle",
+          "aliases": [
+            "later consequence glass ink bottle",
+            "glass ink bottle noted later on the page"
+          ]
+        },
+        {
+          "marker": "carved shell comb",
+          "aliases": [
+            "supporting page detail carved shell comb",
+            "carved shell comb elsewhere on the page"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "tin key",
+          "aliases": [
+            "wrong page detail tin key"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 3,
+      "difficulty": "hard",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 220
+    },
+    {
+      "id": "page-level-030",
+      "question": "Which page-level details on Ada's audio reel explain why the Lantern Tide visit to Bell Bridge square was delayed?",
+      "expected_answer_type": "page_fact",
+      "test_type": "page_level",
+      "source_scope": {
+        "scope_type": "page",
+        "document_ids": [
+          "page-bell-bridge-square-audio-reel-030"
+        ],
+        "page_numbers": [
+          15
+        ],
+        "section_ids": [
+          "section-030"
+        ],
+        "notes": "Long-form fictional page context for Ada at Bell Bridge square."
+      },
+      "required_evidence": [
+        {
+          "marker": "clay watering cup",
+          "aliases": [
+            "delay detail clay watering cup",
+            "clay watering cup on the audio reel"
+          ]
+        },
+        {
+          "marker": "carved shell comb",
+          "aliases": [
+            "carved shell comb noted on the page",
+            "page detail carved shell comb"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "copper token",
+          "aliases": [
+            "wrong page detail copper token"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "easy",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 240
+    },
+    {
+      "id": "page-level-031",
+      "question": "Which details on the profile page identify how Raisa and the foster son prepared for the winter coach from River Lantern inn?",
+      "expected_answer_type": "page_fact",
+      "test_type": "page_level",
+      "source_scope": {
+        "scope_type": "page",
+        "document_ids": [
+          "page-river-lantern-inn-family-note-031"
+        ],
+        "page_numbers": [
+          16
+        ],
+        "section_ids": [
+          "section-031"
+        ],
+        "notes": "Long-form fictional page context for Raisa at River Lantern inn."
+      },
+      "required_evidence": [
+        {
+          "marker": "foster son",
+          "aliases": [
+            "the foster son of Raisa",
+            "Raisa's foster son"
+          ]
+        },
+        {
+          "marker": "copper wind vane pin",
+          "aliases": [
+            "preparation item copper wind vane pin",
+            "copper wind vane pin before the winter coach"
+          ]
+        },
+        {
+          "marker": "tin key",
+          "aliases": [
+            "second preparation detail tin key",
+            "tin key on the travel page"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "star ledger page",
+          "aliases": [
+            "wrong page detail star ledger page"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 3,
+      "difficulty": "medium",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 260
+    },
+    {
+      "id": "page-level-032",
+      "question": "Which longer-page details in the audio reel describe the family memory scene at Birch Ferry shed?",
+      "expected_answer_type": "page_fact",
+      "test_type": "page_level",
+      "source_scope": {
+        "scope_type": "page",
+        "document_ids": [
+          "page-birch-ferry-shed-audio-reel-032"
+        ],
+        "page_numbers": [
+          17
+        ],
+        "section_ids": [
+          "section-032"
+        ],
+        "notes": "Long-form fictional page context for Sonya at Birch Ferry shed."
+      },
+      "required_evidence": [
+        {
+          "marker": "amber lantern",
+          "aliases": [
+            "family scene amber lantern",
+            "amber lantern on the family page"
+          ]
+        },
+        {
+          "marker": "copper token",
+          "aliases": [
+            "family scene copper token",
+            "copper token beside Birch Ferry shed"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "oak barrel hoops",
+          "aliases": [
+            "wrong page detail oak barrel hoops"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "hard",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 120
+    },
+    {
+      "id": "page-level-033",
+      "question": "Which profile-page details explain what Talia kept for the Canal Night after returning to Driftwood cove?",
+      "expected_answer_type": "page_fact",
+      "test_type": "page_level",
+      "source_scope": {
+        "scope_type": "page",
+        "document_ids": [
+          "page-driftwood-cove-family-note-033"
+        ],
+        "page_numbers": [
+          18
+        ],
+        "section_ids": [
+          "section-033"
+        ],
+        "notes": "Long-form fictional page context for Talia at Driftwood cove."
+      },
+      "required_evidence": [
+        {
+          "marker": "blue oar",
+          "aliases": [
+            "kept detail blue oar",
+            "Canal Night item blue oar"
+          ]
+        },
+        {
+          "marker": "star ledger page",
+          "aliases": [
+            "return detail star ledger page",
+            "star ledger page after returning to Driftwood cove"
+          ]
+        },
+        {
+          "marker": "Canal Night",
+          "aliases": [
+            "festival Canal Night",
+            "the Canal Night memory"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "juniper bundles",
+          "aliases": [
+            "wrong page detail juniper bundles"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 3,
+      "difficulty": "easy",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 140
+    },
+    {
+      "id": "page-level-034",
+      "question": "Which page-level notes from the audio reel show why Runa's photo memory at Star Basin gallery mattered later?",
+      "expected_answer_type": "page_fact",
+      "test_type": "page_level",
+      "source_scope": {
+        "scope_type": "page",
+        "document_ids": [
+          "page-star-basin-gallery-audio-reel-034"
+        ],
+        "page_numbers": [
+          2
+        ],
+        "section_ids": [
+          "section-034"
+        ],
+        "notes": "Long-form fictional page context for Runa at Star Basin gallery."
+      },
+      "required_evidence": [
+        {
+          "marker": "moonflower cutting",
+          "aliases": [
+            "photo note moonflower cutting",
+            "moonflower cutting from the photo page"
+          ]
+        },
+        {
+          "marker": "oak barrel hoops",
+          "aliases": [
+            "later consequence oak barrel hoops",
+            "oak barrel hoops noted later on the page"
+          ]
+        },
+        {
+          "marker": "juniper bundles",
+          "aliases": [
+            "supporting page detail juniper bundles",
+            "juniper bundles elsewhere on the page"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "coal stove hiss",
+          "aliases": [
+            "wrong page detail coal stove hiss"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 3,
+      "difficulty": "medium",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 160
+    },
+    {
+      "id": "page-level-035",
+      "question": "Which page-level details on Selma's family note explain why the Glass Harbor Day visit to Harbor Glass corridor was delayed?",
+      "expected_answer_type": "page_fact",
+      "test_type": "page_level",
+      "source_scope": {
+        "scope_type": "page",
+        "document_ids": [
+          "page-harbor-glass-corridor-family-note-035"
+        ],
+        "page_numbers": [
+          3
+        ],
+        "section_ids": [
+          "section-035"
+        ],
+        "notes": "Long-form fictional page context for Selma at Harbor Glass corridor."
+      },
+      "required_evidence": [
+        {
+          "marker": "lantern hook",
+          "aliases": [
+            "delay detail lantern hook",
+            "lantern hook on the family note"
+          ]
+        },
+        {
+          "marker": "juniper bundles",
+          "aliases": [
+            "juniper bundles noted on the page",
+            "page detail juniper bundles"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "basalt sketch",
+          "aliases": [
+            "wrong page detail basalt sketch"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "hard",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 180
+    },
+    {
+      "id": "page-level-036",
+      "question": "Which details on the profile page identify how Iveta and the twin sister prepared for the winter coach from Bell Bridge square?",
+      "expected_answer_type": "page_fact",
+      "test_type": "page_level",
+      "source_scope": {
+        "scope_type": "page",
+        "document_ids": [
+          "page-bell-bridge-square-audio-reel-036"
+        ],
+        "page_numbers": [
+          4
+        ],
+        "section_ids": [
+          "section-036"
+        ],
+        "notes": "Long-form fictional page context for Iveta at Bell Bridge square."
+      },
+      "required_evidence": [
+        {
+          "marker": "twin sister",
+          "aliases": [
+            "the twin sister of Iveta",
+            "Iveta's twin sister"
+          ]
+        },
+        {
+          "marker": "blue glass jar",
+          "aliases": [
+            "preparation item blue glass jar",
+            "blue glass jar before the winter coach"
+          ]
+        },
+        {
+          "marker": "coal stove hiss",
+          "aliases": [
+            "second preparation detail coal stove hiss",
+            "coal stove hiss on the travel page"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "willow basket",
+          "aliases": [
+            "wrong page detail willow basket"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 3,
+      "difficulty": "easy",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 200
+    },
+    {
+      "id": "page-level-037",
+      "question": "Which longer-page details in the family note describe the family memory scene at River Lantern inn?",
+      "expected_answer_type": "page_fact",
+      "test_type": "page_level",
+      "source_scope": {
+        "scope_type": "page",
+        "document_ids": [
+          "page-river-lantern-inn-family-note-037"
+        ],
+        "page_numbers": [
+          5
+        ],
+        "section_ids": [
+          "section-037"
+        ],
+        "notes": "Long-form fictional page context for Nessa at River Lantern inn."
+      },
+      "required_evidence": [
+        {
+          "marker": "smoke vent chain",
+          "aliases": [
+            "family scene smoke vent chain",
+            "smoke vent chain on the family page"
+          ]
+        },
+        {
+          "marker": "basalt sketch",
+          "aliases": [
+            "family scene basalt sketch",
+            "basalt sketch beside River Lantern inn"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "birch tea flask",
+          "aliases": [
+            "wrong page detail birch tea flask"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "medium",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 220
+    },
+    {
+      "id": "page-level-038",
+      "question": "Which profile-page details explain what Zora kept for the Signal Lantern Morning after returning to Birch Ferry shed?",
+      "expected_answer_type": "page_fact",
+      "test_type": "page_level",
+      "source_scope": {
+        "scope_type": "page",
+        "document_ids": [
+          "page-birch-ferry-shed-audio-reel-038"
+        ],
+        "page_numbers": [
+          6
+        ],
+        "section_ids": [
+          "section-038"
+        ],
+        "notes": "Long-form fictional page context for Zora at Birch Ferry shed."
+      },
+      "required_evidence": [
+        {
+          "marker": "violet ribbon",
+          "aliases": [
+            "kept detail violet ribbon",
+            "Signal Lantern Morning item violet ribbon"
+          ]
+        },
+        {
+          "marker": "willow basket",
+          "aliases": [
+            "return detail willow basket",
+            "willow basket after returning to Birch Ferry shed"
+          ]
+        },
+        {
+          "marker": "Signal Lantern Morning",
+          "aliases": [
+            "festival Signal Lantern Morning",
+            "the Signal Lantern Morning memory"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "weathered camera strap",
+          "aliases": [
+            "wrong page detail weathered camera strap"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 3,
+      "difficulty": "hard",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 240
+    },
+    {
+      "id": "page-level-039",
+      "question": "Which page-level notes from the family note show why Ilia's photo memory at Driftwood cove mattered later?",
+      "expected_answer_type": "page_fact",
+      "test_type": "page_level",
+      "source_scope": {
+        "scope_type": "page",
+        "document_ids": [
+          "page-driftwood-cove-family-note-039"
+        ],
+        "page_numbers": [
+          7
+        ],
+        "section_ids": [
+          "section-039"
+        ],
+        "notes": "Long-form fictional page context for Ilia at Driftwood cove."
+      },
+      "required_evidence": [
+        {
+          "marker": "green apron",
+          "aliases": [
+            "photo note green apron",
+            "green apron from the photo page"
+          ]
+        },
+        {
+          "marker": "birch tea flask",
+          "aliases": [
+            "later consequence birch tea flask",
+            "birch tea flask noted later on the page"
+          ]
+        },
+        {
+          "marker": "weathered camera strap",
+          "aliases": [
+            "supporting page detail weathered camera strap",
+            "weathered camera strap elsewhere on the page"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "canal route map",
+          "aliases": [
+            "wrong page detail canal route map"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 3,
+      "difficulty": "easy",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 260
+    },
+    {
+      "id": "page-level-040",
+      "question": "Which page-level details on Mira's audio reel explain why the Lantern Tide visit to Star Basin gallery was delayed?",
+      "expected_answer_type": "page_fact",
+      "test_type": "page_level",
+      "source_scope": {
+        "scope_type": "page",
+        "document_ids": [
+          "page-star-basin-gallery-audio-reel-040"
+        ],
+        "page_numbers": [
+          8
+        ],
+        "section_ids": [
+          "section-040"
+        ],
+        "notes": "Long-form fictional page context for Mira at Star Basin gallery."
+      },
+      "required_evidence": [
+        {
+          "marker": "paper moon mask",
+          "aliases": [
+            "delay detail paper moon mask",
+            "paper moon mask on the audio reel"
+          ]
+        },
+        {
+          "marker": "weathered camera strap",
+          "aliases": [
+            "weathered camera strap noted on the page",
+            "page detail weathered camera strap"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "brass compass",
+          "aliases": [
+            "wrong page detail brass compass"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "medium",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 120
+    },
+    {
+      "id": "page-level-041",
+      "question": "Which details on the profile page identify how Elena and the nephew prepared for the winter coach from Harbor Glass corridor?",
+      "expected_answer_type": "page_fact",
+      "test_type": "page_level",
+      "source_scope": {
+        "scope_type": "page",
+        "document_ids": [
+          "page-harbor-glass-corridor-family-note-041"
+        ],
+        "page_numbers": [
+          9
+        ],
+        "section_ids": [
+          "section-041"
+        ],
+        "notes": "Long-form fictional page context for Elena at Harbor Glass corridor."
+      },
+      "required_evidence": [
+        {
+          "marker": "nephew",
+          "aliases": [
+            "the nephew of Elena",
+            "Elena's nephew"
+          ]
+        },
+        {
+          "marker": "saffron scarf",
+          "aliases": [
+            "preparation item saffron scarf",
+            "saffron scarf before the winter coach"
+          ]
+        },
+        {
+          "marker": "canal route map",
+          "aliases": [
+            "second preparation detail canal route map",
+            "canal route map on the travel page"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "tuning fork",
+          "aliases": [
+            "wrong page detail tuning fork"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 3,
+      "difficulty": "hard",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 140
+    },
+    {
+      "id": "page-level-042",
+      "question": "Which longer-page details in the audio reel describe the family memory scene at Bell Bridge square?",
+      "expected_answer_type": "page_fact",
+      "test_type": "page_level",
+      "source_scope": {
+        "scope_type": "page",
+        "document_ids": [
+          "page-bell-bridge-square-audio-reel-042"
+        ],
+        "page_numbers": [
+          10
+        ],
+        "section_ids": [
+          "section-042"
+        ],
+        "notes": "Long-form fictional page context for Vera at Bell Bridge square."
+      },
+      "required_evidence": [
+        {
+          "marker": "wax thread",
+          "aliases": [
+            "family scene wax thread",
+            "wax thread on the family page"
+          ]
+        },
+        {
+          "marker": "brass compass",
+          "aliases": [
+            "family scene brass compass",
+            "brass compass beside Bell Bridge square"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "silver booth token",
+          "aliases": [
+            "wrong page detail silver booth token"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "easy",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 160
+    },
+    {
+      "id": "page-level-043",
+      "question": "Which profile-page details explain what Kira kept for the Canal Night after returning to River Lantern inn?",
+      "expected_answer_type": "page_fact",
+      "test_type": "page_level",
+      "source_scope": {
+        "scope_type": "page",
+        "document_ids": [
+          "page-river-lantern-inn-family-note-043"
+        ],
+        "page_numbers": [
+          11
+        ],
+        "section_ids": [
+          "section-043"
+        ],
+        "notes": "Long-form fictional page context for Kira at River Lantern inn."
+      },
+      "required_evidence": [
+        {
+          "marker": "cedar shovel",
+          "aliases": [
+            "kept detail cedar shovel",
+            "Canal Night item cedar shovel"
+          ]
+        },
+        {
+          "marker": "tuning fork",
+          "aliases": [
+            "return detail tuning fork",
+            "tuning fork after returning to River Lantern inn"
+          ]
+        },
+        {
+          "marker": "Canal Night",
+          "aliases": [
+            "festival Canal Night",
+            "the Canal Night memory"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "glass ink bottle",
+          "aliases": [
+            "wrong page detail glass ink bottle"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 3,
+      "difficulty": "medium",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 180
+    },
+    {
+      "id": "page-level-044",
+      "question": "Which page-level notes from the audio reel show why Nadia's photo memory at Birch Ferry shed mattered later?",
+      "expected_answer_type": "page_fact",
+      "test_type": "page_level",
+      "source_scope": {
+        "scope_type": "page",
+        "document_ids": [
+          "page-birch-ferry-shed-audio-reel-044"
+        ],
+        "page_numbers": [
+          12
+        ],
+        "section_ids": [
+          "section-044"
+        ],
+        "notes": "Long-form fictional page context for Nadia at Birch Ferry shed."
+      },
+      "required_evidence": [
+        {
+          "marker": "linen wick",
+          "aliases": [
+            "photo note linen wick",
+            "linen wick from the photo page"
+          ]
+        },
+        {
+          "marker": "silver booth token",
+          "aliases": [
+            "later consequence silver booth token",
+            "silver booth token noted later on the page"
+          ]
+        },
+        {
+          "marker": "glass ink bottle",
+          "aliases": [
+            "supporting page detail glass ink bottle",
+            "glass ink bottle elsewhere on the page"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "carved shell comb",
+          "aliases": [
+            "wrong page detail carved shell comb"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 3,
+      "difficulty": "hard",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 200
+    },
+    {
+      "id": "page-level-045",
+      "question": "Which page-level details on Lina's family note explain why the Glass Harbor Day visit to Driftwood cove was delayed?",
+      "expected_answer_type": "page_fact",
+      "test_type": "page_level",
+      "source_scope": {
+        "scope_type": "page",
+        "document_ids": [
+          "page-driftwood-cove-family-note-045"
+        ],
+        "page_numbers": [
+          13
+        ],
+        "section_ids": [
+          "section-045"
+        ],
+        "notes": "Long-form fictional page context for Lina at Driftwood cove."
+      },
+      "required_evidence": [
+        {
+          "marker": "rope bridge permit",
+          "aliases": [
+            "delay detail rope bridge permit",
+            "rope bridge permit on the family note"
+          ]
+        },
+        {
+          "marker": "glass ink bottle",
+          "aliases": [
+            "glass ink bottle noted on the page",
+            "page detail glass ink bottle"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "tin key",
+          "aliases": [
+            "wrong page detail tin key"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "easy",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 220
+    },
+    {
+      "id": "page-level-046",
+      "question": "Which details on the profile page identify how Anya and the niece prepared for the winter coach from Star Basin gallery?",
+      "expected_answer_type": "page_fact",
+      "test_type": "page_level",
+      "source_scope": {
+        "scope_type": "page",
+        "document_ids": [
+          "page-star-basin-gallery-audio-reel-046"
+        ],
+        "page_numbers": [
+          14
+        ],
+        "section_ids": [
+          "section-046"
+        ],
+        "notes": "Long-form fictional page context for Anya at Star Basin gallery."
+      },
+      "required_evidence": [
+        {
+          "marker": "niece",
+          "aliases": [
+            "the niece of Anya",
+            "Anya's niece"
+          ]
+        },
+        {
+          "marker": "clay watering cup",
+          "aliases": [
+            "preparation item clay watering cup",
+            "clay watering cup before the winter coach"
+          ]
+        },
+        {
+          "marker": "carved shell comb",
+          "aliases": [
+            "second preparation detail carved shell comb",
+            "carved shell comb on the travel page"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "copper token",
+          "aliases": [
+            "wrong page detail copper token"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 3,
+      "difficulty": "medium",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 240
+    },
+    {
+      "id": "page-level-047",
+      "question": "Which longer-page details in the family note describe the family memory scene at Harbor Glass corridor?",
+      "expected_answer_type": "page_fact",
+      "test_type": "page_level",
+      "source_scope": {
+        "scope_type": "page",
+        "document_ids": [
+          "page-harbor-glass-corridor-family-note-047"
+        ],
+        "page_numbers": [
+          15
+        ],
+        "section_ids": [
+          "section-047"
+        ],
+        "notes": "Long-form fictional page context for Daria at Harbor Glass corridor."
+      },
+      "required_evidence": [
+        {
+          "marker": "copper wind vane pin",
+          "aliases": [
+            "family scene copper wind vane pin",
+            "copper wind vane pin on the family page"
+          ]
+        },
+        {
+          "marker": "tin key",
+          "aliases": [
+            "family scene tin key",
+            "tin key beside Harbor Glass corridor"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "star ledger page",
+          "aliases": [
+            "wrong page detail star ledger page"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "hard",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 260
+    },
+    {
+      "id": "page-level-048",
+      "question": "Which profile-page details explain what Yara kept for the Signal Lantern Morning after returning to Bell Bridge square?",
+      "expected_answer_type": "page_fact",
+      "test_type": "page_level",
+      "source_scope": {
+        "scope_type": "page",
+        "document_ids": [
+          "page-bell-bridge-square-audio-reel-048"
+        ],
+        "page_numbers": [
+          16
+        ],
+        "section_ids": [
+          "section-048"
+        ],
+        "notes": "Long-form fictional page context for Yara at Bell Bridge square."
+      },
+      "required_evidence": [
+        {
+          "marker": "amber lantern",
+          "aliases": [
+            "kept detail amber lantern",
+            "Signal Lantern Morning item amber lantern"
+          ]
+        },
+        {
+          "marker": "copper token",
+          "aliases": [
+            "return detail copper token",
+            "copper token after returning to Bell Bridge square"
+          ]
+        },
+        {
+          "marker": "Signal Lantern Morning",
+          "aliases": [
+            "festival Signal Lantern Morning",
+            "the Signal Lantern Morning memory"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "oak barrel hoops",
+          "aliases": [
+            "wrong page detail oak barrel hoops"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 3,
+      "difficulty": "easy",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 120
+    },
+    {
+      "id": "page-level-049",
+      "question": "Which page-level notes from the family note show why Milena's photo memory at River Lantern inn mattered later?",
+      "expected_answer_type": "page_fact",
+      "test_type": "page_level",
+      "source_scope": {
+        "scope_type": "page",
+        "document_ids": [
+          "page-river-lantern-inn-family-note-049"
+        ],
+        "page_numbers": [
+          17
+        ],
+        "section_ids": [
+          "section-049"
+        ],
+        "notes": "Long-form fictional page context for Milena at River Lantern inn."
+      },
+      "required_evidence": [
+        {
+          "marker": "blue oar",
+          "aliases": [
+            "photo note blue oar",
+            "blue oar from the photo page"
+          ]
+        },
+        {
+          "marker": "star ledger page",
+          "aliases": [
+            "later consequence star ledger page",
+            "star ledger page noted later on the page"
+          ]
+        },
+        {
+          "marker": "oak barrel hoops",
+          "aliases": [
+            "supporting page detail oak barrel hoops",
+            "oak barrel hoops elsewhere on the page"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "juniper bundles",
+          "aliases": [
+            "wrong page detail juniper bundles"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 3,
+      "difficulty": "medium",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 140
+    },
+    {
+      "id": "page-level-050",
+      "question": "Which page-level details on Ada's audio reel explain why the Lantern Tide visit to Birch Ferry shed was delayed?",
+      "expected_answer_type": "page_fact",
+      "test_type": "page_level",
+      "source_scope": {
+        "scope_type": "page",
+        "document_ids": [
+          "page-birch-ferry-shed-audio-reel-050"
+        ],
+        "page_numbers": [
+          18
+        ],
+        "section_ids": [
+          "section-050"
+        ],
+        "notes": "Long-form fictional page context for Ada at Birch Ferry shed."
+      },
+      "required_evidence": [
+        {
+          "marker": "moonflower cutting",
+          "aliases": [
+            "delay detail moonflower cutting",
+            "moonflower cutting on the audio reel"
+          ]
+        },
+        {
+          "marker": "oak barrel hoops",
+          "aliases": [
+            "oak barrel hoops noted on the page",
+            "page detail oak barrel hoops"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "coal stove hiss",
+          "aliases": [
+            "wrong page detail coal stove hiss"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "hard",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 160
+    },
+    {
+      "id": "page-level-051",
+      "question": "Which details on the profile page identify how Raisa and the godson prepared for the winter coach from Driftwood cove?",
+      "expected_answer_type": "page_fact",
+      "test_type": "page_level",
+      "source_scope": {
+        "scope_type": "page",
+        "document_ids": [
+          "page-driftwood-cove-family-note-051"
+        ],
+        "page_numbers": [
+          2
+        ],
+        "section_ids": [
+          "section-051"
+        ],
+        "notes": "Long-form fictional page context for Raisa at Driftwood cove."
+      },
+      "required_evidence": [
+        {
+          "marker": "godson",
+          "aliases": [
+            "the godson of Raisa",
+            "Raisa's godson"
+          ]
+        },
+        {
+          "marker": "lantern hook",
+          "aliases": [
+            "preparation item lantern hook",
+            "lantern hook before the winter coach"
+          ]
+        },
+        {
+          "marker": "juniper bundles",
+          "aliases": [
+            "second preparation detail juniper bundles",
+            "juniper bundles on the travel page"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "basalt sketch",
+          "aliases": [
+            "wrong page detail basalt sketch"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 3,
+      "difficulty": "easy",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 180
+    },
+    {
+      "id": "page-level-052",
+      "question": "Which longer-page details in the audio reel describe the family memory scene at Star Basin gallery?",
+      "expected_answer_type": "page_fact",
+      "test_type": "page_level",
+      "source_scope": {
+        "scope_type": "page",
+        "document_ids": [
+          "page-star-basin-gallery-audio-reel-052"
+        ],
+        "page_numbers": [
+          3
+        ],
+        "section_ids": [
+          "section-052"
+        ],
+        "notes": "Long-form fictional page context for Sonya at Star Basin gallery."
+      },
+      "required_evidence": [
+        {
+          "marker": "blue glass jar",
+          "aliases": [
+            "family scene blue glass jar",
+            "blue glass jar on the family page"
+          ]
+        },
+        {
+          "marker": "coal stove hiss",
+          "aliases": [
+            "family scene coal stove hiss",
+            "coal stove hiss beside Star Basin gallery"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "willow basket",
+          "aliases": [
+            "wrong page detail willow basket"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "medium",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 200
+    },
+    {
+      "id": "page-level-053",
+      "question": "Which profile-page details explain what Talia kept for the Canal Night after returning to Harbor Glass corridor?",
+      "expected_answer_type": "page_fact",
+      "test_type": "page_level",
+      "source_scope": {
+        "scope_type": "page",
+        "document_ids": [
+          "page-harbor-glass-corridor-family-note-053"
+        ],
+        "page_numbers": [
+          4
+        ],
+        "section_ids": [
+          "section-053"
+        ],
+        "notes": "Long-form fictional page context for Talia at Harbor Glass corridor."
+      },
+      "required_evidence": [
+        {
+          "marker": "smoke vent chain",
+          "aliases": [
+            "kept detail smoke vent chain",
+            "Canal Night item smoke vent chain"
+          ]
+        },
+        {
+          "marker": "basalt sketch",
+          "aliases": [
+            "return detail basalt sketch",
+            "basalt sketch after returning to Harbor Glass corridor"
+          ]
+        },
+        {
+          "marker": "Canal Night",
+          "aliases": [
+            "festival Canal Night",
+            "the Canal Night memory"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "birch tea flask",
+          "aliases": [
+            "wrong page detail birch tea flask"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 3,
+      "difficulty": "hard",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 220
+    },
+    {
+      "id": "page-level-054",
+      "question": "Which page-level notes from the audio reel show why Runa's photo memory at Bell Bridge square mattered later?",
+      "expected_answer_type": "page_fact",
+      "test_type": "page_level",
+      "source_scope": {
+        "scope_type": "page",
+        "document_ids": [
+          "page-bell-bridge-square-audio-reel-054"
+        ],
+        "page_numbers": [
+          5
+        ],
+        "section_ids": [
+          "section-054"
+        ],
+        "notes": "Long-form fictional page context for Runa at Bell Bridge square."
+      },
+      "required_evidence": [
+        {
+          "marker": "violet ribbon",
+          "aliases": [
+            "photo note violet ribbon",
+            "violet ribbon from the photo page"
+          ]
+        },
+        {
+          "marker": "willow basket",
+          "aliases": [
+            "later consequence willow basket",
+            "willow basket noted later on the page"
+          ]
+        },
+        {
+          "marker": "birch tea flask",
+          "aliases": [
+            "supporting page detail birch tea flask",
+            "birch tea flask elsewhere on the page"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "weathered camera strap",
+          "aliases": [
+            "wrong page detail weathered camera strap"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 3,
+      "difficulty": "easy",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 240
+    },
+    {
+      "id": "page-level-055",
+      "question": "Which page-level details on Selma's family note explain why the Glass Harbor Day visit to River Lantern inn was delayed?",
+      "expected_answer_type": "page_fact",
+      "test_type": "page_level",
+      "source_scope": {
+        "scope_type": "page",
+        "document_ids": [
+          "page-river-lantern-inn-family-note-055"
+        ],
+        "page_numbers": [
+          6
+        ],
+        "section_ids": [
+          "section-055"
+        ],
+        "notes": "Long-form fictional page context for Selma at River Lantern inn."
+      },
+      "required_evidence": [
+        {
+          "marker": "green apron",
+          "aliases": [
+            "delay detail green apron",
+            "green apron on the family note"
+          ]
+        },
+        {
+          "marker": "birch tea flask",
+          "aliases": [
+            "birch tea flask noted on the page",
+            "page detail birch tea flask"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "canal route map",
+          "aliases": [
+            "wrong page detail canal route map"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "medium",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 260
+    },
+    {
+      "id": "page-level-056",
+      "question": "Which details on the profile page identify how Iveta and the stepfather prepared for the winter coach from Birch Ferry shed?",
+      "expected_answer_type": "page_fact",
+      "test_type": "page_level",
+      "source_scope": {
+        "scope_type": "page",
+        "document_ids": [
+          "page-birch-ferry-shed-audio-reel-056"
+        ],
+        "page_numbers": [
+          7
+        ],
+        "section_ids": [
+          "section-056"
+        ],
+        "notes": "Long-form fictional page context for Iveta at Birch Ferry shed."
+      },
+      "required_evidence": [
+        {
+          "marker": "stepfather",
+          "aliases": [
+            "the stepfather of Iveta",
+            "Iveta's stepfather"
+          ]
+        },
+        {
+          "marker": "paper moon mask",
+          "aliases": [
+            "preparation item paper moon mask",
+            "paper moon mask before the winter coach"
+          ]
+        },
+        {
+          "marker": "weathered camera strap",
+          "aliases": [
+            "second preparation detail weathered camera strap",
+            "weathered camera strap on the travel page"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "brass compass",
+          "aliases": [
+            "wrong page detail brass compass"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 3,
+      "difficulty": "hard",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 120
+    },
+    {
+      "id": "page-level-057",
+      "question": "Which longer-page details in the family note describe the family memory scene at Driftwood cove?",
+      "expected_answer_type": "page_fact",
+      "test_type": "page_level",
+      "source_scope": {
+        "scope_type": "page",
+        "document_ids": [
+          "page-driftwood-cove-family-note-057"
+        ],
+        "page_numbers": [
+          8
+        ],
+        "section_ids": [
+          "section-057"
+        ],
+        "notes": "Long-form fictional page context for Nessa at Driftwood cove."
+      },
+      "required_evidence": [
+        {
+          "marker": "saffron scarf",
+          "aliases": [
+            "family scene saffron scarf",
+            "saffron scarf on the family page"
+          ]
+        },
+        {
+          "marker": "canal route map",
+          "aliases": [
+            "family scene canal route map",
+            "canal route map beside Driftwood cove"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "tuning fork",
+          "aliases": [
+            "wrong page detail tuning fork"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "easy",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 140
+    },
+    {
+      "id": "page-level-058",
+      "question": "Which profile-page details explain what Zora kept for the Signal Lantern Morning after returning to Star Basin gallery?",
+      "expected_answer_type": "page_fact",
+      "test_type": "page_level",
+      "source_scope": {
+        "scope_type": "page",
+        "document_ids": [
+          "page-star-basin-gallery-audio-reel-058"
+        ],
+        "page_numbers": [
+          9
+        ],
+        "section_ids": [
+          "section-058"
+        ],
+        "notes": "Long-form fictional page context for Zora at Star Basin gallery."
+      },
+      "required_evidence": [
+        {
+          "marker": "wax thread",
+          "aliases": [
+            "kept detail wax thread",
+            "Signal Lantern Morning item wax thread"
+          ]
+        },
+        {
+          "marker": "brass compass",
+          "aliases": [
+            "return detail brass compass",
+            "brass compass after returning to Star Basin gallery"
+          ]
+        },
+        {
+          "marker": "Signal Lantern Morning",
+          "aliases": [
+            "festival Signal Lantern Morning",
+            "the Signal Lantern Morning memory"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "silver booth token",
+          "aliases": [
+            "wrong page detail silver booth token"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 3,
+      "difficulty": "medium",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 160
+    },
+    {
+      "id": "page-level-059",
+      "question": "Which page-level notes from the family note show why Ilia's photo memory at Harbor Glass corridor mattered later?",
+      "expected_answer_type": "page_fact",
+      "test_type": "page_level",
+      "source_scope": {
+        "scope_type": "page",
+        "document_ids": [
+          "page-harbor-glass-corridor-family-note-059"
+        ],
+        "page_numbers": [
+          10
+        ],
+        "section_ids": [
+          "section-059"
+        ],
+        "notes": "Long-form fictional page context for Ilia at Harbor Glass corridor."
+      },
+      "required_evidence": [
+        {
+          "marker": "cedar shovel",
+          "aliases": [
+            "photo note cedar shovel",
+            "cedar shovel from the photo page"
+          ]
+        },
+        {
+          "marker": "tuning fork",
+          "aliases": [
+            "later consequence tuning fork",
+            "tuning fork noted later on the page"
+          ]
+        },
+        {
+          "marker": "silver booth token",
+          "aliases": [
+            "supporting page detail silver booth token",
+            "silver booth token elsewhere on the page"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "glass ink bottle",
+          "aliases": [
+            "wrong page detail glass ink bottle"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 3,
+      "difficulty": "hard",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 180
+    },
+    {
+      "id": "page-level-060",
+      "question": "Which page-level details on Mira's audio reel explain why the Lantern Tide visit to Bell Bridge square was delayed?",
+      "expected_answer_type": "page_fact",
+      "test_type": "page_level",
+      "source_scope": {
+        "scope_type": "page",
+        "document_ids": [
+          "page-bell-bridge-square-audio-reel-060"
+        ],
+        "page_numbers": [
+          11
+        ],
+        "section_ids": [
+          "section-060"
+        ],
+        "notes": "Long-form fictional page context for Mira at Bell Bridge square."
+      },
+      "required_evidence": [
+        {
+          "marker": "linen wick",
+          "aliases": [
+            "delay detail linen wick",
+            "linen wick on the audio reel"
+          ]
+        },
+        {
+          "marker": "silver booth token",
+          "aliases": [
+            "silver booth token noted on the page",
+            "page detail silver booth token"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "carved shell comb",
+          "aliases": [
+            "wrong page detail carved shell comb"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "easy",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 200
+    },
+    {
+      "id": "page-level-061",
+      "question": "Which details on the profile page identify how Elena and the aunt prepared for the winter coach from River Lantern inn?",
+      "expected_answer_type": "page_fact",
+      "test_type": "page_level",
+      "source_scope": {
+        "scope_type": "page",
+        "document_ids": [
+          "page-river-lantern-inn-family-note-061"
+        ],
+        "page_numbers": [
+          12
+        ],
+        "section_ids": [
+          "section-061"
+        ],
+        "notes": "Long-form fictional page context for Elena at River Lantern inn."
+      },
+      "required_evidence": [
+        {
+          "marker": "aunt",
+          "aliases": [
+            "the aunt of Elena",
+            "Elena's aunt"
+          ]
+        },
+        {
+          "marker": "rope bridge permit",
+          "aliases": [
+            "preparation item rope bridge permit",
+            "rope bridge permit before the winter coach"
+          ]
+        },
+        {
+          "marker": "glass ink bottle",
+          "aliases": [
+            "second preparation detail glass ink bottle",
+            "glass ink bottle on the travel page"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "tin key",
+          "aliases": [
+            "wrong page detail tin key"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 3,
+      "difficulty": "medium",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 220
+    },
+    {
+      "id": "page-level-062",
+      "question": "Which longer-page details in the audio reel describe the family memory scene at Birch Ferry shed?",
+      "expected_answer_type": "page_fact",
+      "test_type": "page_level",
+      "source_scope": {
+        "scope_type": "page",
+        "document_ids": [
+          "page-birch-ferry-shed-audio-reel-062"
+        ],
+        "page_numbers": [
+          13
+        ],
+        "section_ids": [
+          "section-062"
+        ],
+        "notes": "Long-form fictional page context for Vera at Birch Ferry shed."
+      },
+      "required_evidence": [
+        {
+          "marker": "clay watering cup",
+          "aliases": [
+            "family scene clay watering cup",
+            "clay watering cup on the family page"
+          ]
+        },
+        {
+          "marker": "carved shell comb",
+          "aliases": [
+            "family scene carved shell comb",
+            "carved shell comb beside Birch Ferry shed"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "copper token",
+          "aliases": [
+            "wrong page detail copper token"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "hard",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 240
+    },
+    {
+      "id": "page-level-063",
+      "question": "Which profile-page details explain what Kira kept for the Canal Night after returning to Driftwood cove?",
+      "expected_answer_type": "page_fact",
+      "test_type": "page_level",
+      "source_scope": {
+        "scope_type": "page",
+        "document_ids": [
+          "page-driftwood-cove-family-note-063"
+        ],
+        "page_numbers": [
+          14
+        ],
+        "section_ids": [
+          "section-063"
+        ],
+        "notes": "Long-form fictional page context for Kira at Driftwood cove."
+      },
+      "required_evidence": [
+        {
+          "marker": "copper wind vane pin",
+          "aliases": [
+            "kept detail copper wind vane pin",
+            "Canal Night item copper wind vane pin"
+          ]
+        },
+        {
+          "marker": "tin key",
+          "aliases": [
+            "return detail tin key",
+            "tin key after returning to Driftwood cove"
+          ]
+        },
+        {
+          "marker": "Canal Night",
+          "aliases": [
+            "festival Canal Night",
+            "the Canal Night memory"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "star ledger page",
+          "aliases": [
+            "wrong page detail star ledger page"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 3,
+      "difficulty": "easy",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 260
+    },
+    {
+      "id": "page-level-064",
+      "question": "Which page-level notes from the audio reel show why Nadia's photo memory at Star Basin gallery mattered later?",
+      "expected_answer_type": "page_fact",
+      "test_type": "page_level",
+      "source_scope": {
+        "scope_type": "page",
+        "document_ids": [
+          "page-star-basin-gallery-audio-reel-064"
+        ],
+        "page_numbers": [
+          15
+        ],
+        "section_ids": [
+          "section-064"
+        ],
+        "notes": "Long-form fictional page context for Nadia at Star Basin gallery."
+      },
+      "required_evidence": [
+        {
+          "marker": "amber lantern",
+          "aliases": [
+            "photo note amber lantern",
+            "amber lantern from the photo page"
+          ]
+        },
+        {
+          "marker": "copper token",
+          "aliases": [
+            "later consequence copper token",
+            "copper token noted later on the page"
+          ]
+        },
+        {
+          "marker": "star ledger page",
+          "aliases": [
+            "supporting page detail star ledger page",
+            "star ledger page elsewhere on the page"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "oak barrel hoops",
+          "aliases": [
+            "wrong page detail oak barrel hoops"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 3,
+      "difficulty": "medium",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 120
+    },
+    {
+      "id": "page-level-065",
+      "question": "Which page-level details on Lina's family note explain why the Glass Harbor Day visit to Harbor Glass corridor was delayed?",
+      "expected_answer_type": "page_fact",
+      "test_type": "page_level",
+      "source_scope": {
+        "scope_type": "page",
+        "document_ids": [
+          "page-harbor-glass-corridor-family-note-065"
+        ],
+        "page_numbers": [
+          16
+        ],
+        "section_ids": [
+          "section-065"
+        ],
+        "notes": "Long-form fictional page context for Lina at Harbor Glass corridor."
+      },
+      "required_evidence": [
+        {
+          "marker": "blue oar",
+          "aliases": [
+            "delay detail blue oar",
+            "blue oar on the family note"
+          ]
+        },
+        {
+          "marker": "star ledger page",
+          "aliases": [
+            "star ledger page noted on the page",
+            "page detail star ledger page"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "juniper bundles",
+          "aliases": [
+            "wrong page detail juniper bundles"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "hard",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 140
+    },
+    {
+      "id": "page-level-066",
+      "question": "Which details on the profile page identify how Anya and the grandfather prepared for the winter coach from Bell Bridge square?",
+      "expected_answer_type": "page_fact",
+      "test_type": "page_level",
+      "source_scope": {
+        "scope_type": "page",
+        "document_ids": [
+          "page-bell-bridge-square-audio-reel-066"
+        ],
+        "page_numbers": [
+          17
+        ],
+        "section_ids": [
+          "section-066"
+        ],
+        "notes": "Long-form fictional page context for Anya at Bell Bridge square."
+      },
+      "required_evidence": [
+        {
+          "marker": "grandfather",
+          "aliases": [
+            "the grandfather of Anya",
+            "Anya's grandfather"
+          ]
+        },
+        {
+          "marker": "moonflower cutting",
+          "aliases": [
+            "preparation item moonflower cutting",
+            "moonflower cutting before the winter coach"
+          ]
+        },
+        {
+          "marker": "oak barrel hoops",
+          "aliases": [
+            "second preparation detail oak barrel hoops",
+            "oak barrel hoops on the travel page"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "coal stove hiss",
+          "aliases": [
+            "wrong page detail coal stove hiss"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 3,
+      "difficulty": "easy",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 160
+    },
+    {
+      "id": "page-level-067",
+      "question": "Which longer-page details in the family note describe the family memory scene at River Lantern inn?",
+      "expected_answer_type": "page_fact",
+      "test_type": "page_level",
+      "source_scope": {
+        "scope_type": "page",
+        "document_ids": [
+          "page-river-lantern-inn-family-note-067"
+        ],
+        "page_numbers": [
+          18
+        ],
+        "section_ids": [
+          "section-067"
+        ],
+        "notes": "Long-form fictional page context for Daria at River Lantern inn."
+      },
+      "required_evidence": [
+        {
+          "marker": "lantern hook",
+          "aliases": [
+            "family scene lantern hook",
+            "lantern hook on the family page"
+          ]
+        },
+        {
+          "marker": "juniper bundles",
+          "aliases": [
+            "family scene juniper bundles",
+            "juniper bundles beside River Lantern inn"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "basalt sketch",
+          "aliases": [
+            "wrong page detail basalt sketch"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "medium",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 180
+    },
+    {
+      "id": "page-level-068",
+      "question": "Which profile-page details explain what Yara kept for the Signal Lantern Morning after returning to Birch Ferry shed?",
+      "expected_answer_type": "page_fact",
+      "test_type": "page_level",
+      "source_scope": {
+        "scope_type": "page",
+        "document_ids": [
+          "page-birch-ferry-shed-audio-reel-068"
+        ],
+        "page_numbers": [
+          2
+        ],
+        "section_ids": [
+          "section-068"
+        ],
+        "notes": "Long-form fictional page context for Yara at Birch Ferry shed."
+      },
+      "required_evidence": [
+        {
+          "marker": "blue glass jar",
+          "aliases": [
+            "kept detail blue glass jar",
+            "Signal Lantern Morning item blue glass jar"
+          ]
+        },
+        {
+          "marker": "coal stove hiss",
+          "aliases": [
+            "return detail coal stove hiss",
+            "coal stove hiss after returning to Birch Ferry shed"
+          ]
+        },
+        {
+          "marker": "Signal Lantern Morning",
+          "aliases": [
+            "festival Signal Lantern Morning",
+            "the Signal Lantern Morning memory"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "willow basket",
+          "aliases": [
+            "wrong page detail willow basket"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 3,
+      "difficulty": "hard",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 200
+    },
+    {
+      "id": "page-level-069",
+      "question": "Which page-level notes from the family note show why Milena's photo memory at Driftwood cove mattered later?",
+      "expected_answer_type": "page_fact",
+      "test_type": "page_level",
+      "source_scope": {
+        "scope_type": "page",
+        "document_ids": [
+          "page-driftwood-cove-family-note-069"
+        ],
+        "page_numbers": [
+          3
+        ],
+        "section_ids": [
+          "section-069"
+        ],
+        "notes": "Long-form fictional page context for Milena at Driftwood cove."
+      },
+      "required_evidence": [
+        {
+          "marker": "smoke vent chain",
+          "aliases": [
+            "photo note smoke vent chain",
+            "smoke vent chain from the photo page"
+          ]
+        },
+        {
+          "marker": "basalt sketch",
+          "aliases": [
+            "later consequence basalt sketch",
+            "basalt sketch noted later on the page"
+          ]
+        },
+        {
+          "marker": "willow basket",
+          "aliases": [
+            "supporting page detail willow basket",
+            "willow basket elsewhere on the page"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "birch tea flask",
+          "aliases": [
+            "wrong page detail birch tea flask"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 3,
+      "difficulty": "easy",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 220
+    },
+    {
+      "id": "page-level-070",
+      "question": "Which page-level details on Ada's audio reel explain why the Lantern Tide visit to Star Basin gallery was delayed?",
+      "expected_answer_type": "page_fact",
+      "test_type": "page_level",
+      "source_scope": {
+        "scope_type": "page",
+        "document_ids": [
+          "page-star-basin-gallery-audio-reel-070"
+        ],
+        "page_numbers": [
+          4
+        ],
+        "section_ids": [
+          "section-070"
+        ],
+        "notes": "Long-form fictional page context for Ada at Star Basin gallery."
+      },
+      "required_evidence": [
+        {
+          "marker": "violet ribbon",
+          "aliases": [
+            "delay detail violet ribbon",
+            "violet ribbon on the audio reel"
+          ]
+        },
+        {
+          "marker": "willow basket",
+          "aliases": [
+            "willow basket noted on the page",
+            "page detail willow basket"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "weathered camera strap",
+          "aliases": [
+            "wrong page detail weathered camera strap"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "medium",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 240
+    },
+    {
+      "id": "page-level-071",
+      "question": "Which details on the profile page identify how Raisa and the grandmother prepared for the winter coach from Harbor Glass corridor?",
+      "expected_answer_type": "page_fact",
+      "test_type": "page_level",
+      "source_scope": {
+        "scope_type": "page",
+        "document_ids": [
+          "page-harbor-glass-corridor-family-note-071"
+        ],
+        "page_numbers": [
+          5
+        ],
+        "section_ids": [
+          "section-071"
+        ],
+        "notes": "Long-form fictional page context for Raisa at Harbor Glass corridor."
+      },
+      "required_evidence": [
+        {
+          "marker": "grandmother",
+          "aliases": [
+            "the grandmother of Raisa",
+            "Raisa's grandmother"
+          ]
+        },
+        {
+          "marker": "green apron",
+          "aliases": [
+            "preparation item green apron",
+            "green apron before the winter coach"
+          ]
+        },
+        {
+          "marker": "birch tea flask",
+          "aliases": [
+            "second preparation detail birch tea flask",
+            "birch tea flask on the travel page"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "canal route map",
+          "aliases": [
+            "wrong page detail canal route map"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 3,
+      "difficulty": "hard",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 260
+    },
+    {
+      "id": "page-level-072",
+      "question": "Which longer-page details in the audio reel describe the family memory scene at Bell Bridge square?",
+      "expected_answer_type": "page_fact",
+      "test_type": "page_level",
+      "source_scope": {
+        "scope_type": "page",
+        "document_ids": [
+          "page-bell-bridge-square-audio-reel-072"
+        ],
+        "page_numbers": [
+          6
+        ],
+        "section_ids": [
+          "section-072"
+        ],
+        "notes": "Long-form fictional page context for Sonya at Bell Bridge square."
+      },
+      "required_evidence": [
+        {
+          "marker": "paper moon mask",
+          "aliases": [
+            "family scene paper moon mask",
+            "paper moon mask on the family page"
+          ]
+        },
+        {
+          "marker": "weathered camera strap",
+          "aliases": [
+            "family scene weathered camera strap",
+            "weathered camera strap beside Bell Bridge square"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "brass compass",
+          "aliases": [
+            "wrong page detail brass compass"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "easy",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 120
+    },
+    {
+      "id": "page-level-073",
+      "question": "Which profile-page details explain what Talia kept for the Canal Night after returning to River Lantern inn?",
+      "expected_answer_type": "page_fact",
+      "test_type": "page_level",
+      "source_scope": {
+        "scope_type": "page",
+        "document_ids": [
+          "page-river-lantern-inn-family-note-073"
+        ],
+        "page_numbers": [
+          7
+        ],
+        "section_ids": [
+          "section-073"
+        ],
+        "notes": "Long-form fictional page context for Talia at River Lantern inn."
+      },
+      "required_evidence": [
+        {
+          "marker": "saffron scarf",
+          "aliases": [
+            "kept detail saffron scarf",
+            "Canal Night item saffron scarf"
+          ]
+        },
+        {
+          "marker": "canal route map",
+          "aliases": [
+            "return detail canal route map",
+            "canal route map after returning to River Lantern inn"
+          ]
+        },
+        {
+          "marker": "Canal Night",
+          "aliases": [
+            "festival Canal Night",
+            "the Canal Night memory"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "tuning fork",
+          "aliases": [
+            "wrong page detail tuning fork"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 3,
+      "difficulty": "medium",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 140
+    },
+    {
+      "id": "page-level-074",
+      "question": "Which page-level notes from the audio reel show why Runa's photo memory at Birch Ferry shed mattered later?",
+      "expected_answer_type": "page_fact",
+      "test_type": "page_level",
+      "source_scope": {
+        "scope_type": "page",
+        "document_ids": [
+          "page-birch-ferry-shed-audio-reel-074"
+        ],
+        "page_numbers": [
+          8
+        ],
+        "section_ids": [
+          "section-074"
+        ],
+        "notes": "Long-form fictional page context for Runa at Birch Ferry shed."
+      },
+      "required_evidence": [
+        {
+          "marker": "wax thread",
+          "aliases": [
+            "photo note wax thread",
+            "wax thread from the photo page"
+          ]
+        },
+        {
+          "marker": "brass compass",
+          "aliases": [
+            "later consequence brass compass",
+            "brass compass noted later on the page"
+          ]
+        },
+        {
+          "marker": "tuning fork",
+          "aliases": [
+            "supporting page detail tuning fork",
+            "tuning fork elsewhere on the page"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "silver booth token",
+          "aliases": [
+            "wrong page detail silver booth token"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 3,
+      "difficulty": "hard",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 160
+    },
+    {
+      "id": "page-level-075",
+      "question": "Which page-level details on Selma's family note explain why the Glass Harbor Day visit to Driftwood cove was delayed?",
+      "expected_answer_type": "page_fact",
+      "test_type": "page_level",
+      "source_scope": {
+        "scope_type": "page",
+        "document_ids": [
+          "page-driftwood-cove-family-note-075"
+        ],
+        "page_numbers": [
+          9
+        ],
+        "section_ids": [
+          "section-075"
+        ],
+        "notes": "Long-form fictional page context for Selma at Driftwood cove."
+      },
+      "required_evidence": [
+        {
+          "marker": "cedar shovel",
+          "aliases": [
+            "delay detail cedar shovel",
+            "cedar shovel on the family note"
+          ]
+        },
+        {
+          "marker": "tuning fork",
+          "aliases": [
+            "tuning fork noted on the page",
+            "page detail tuning fork"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "glass ink bottle",
+          "aliases": [
+            "wrong page detail glass ink bottle"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "easy",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 180
+    },
+    {
+      "id": "page-level-076",
+      "question": "Which details on the profile page identify how Iveta and the cousin prepared for the winter coach from Star Basin gallery?",
+      "expected_answer_type": "page_fact",
+      "test_type": "page_level",
+      "source_scope": {
+        "scope_type": "page",
+        "document_ids": [
+          "page-star-basin-gallery-audio-reel-076"
+        ],
+        "page_numbers": [
+          10
+        ],
+        "section_ids": [
+          "section-076"
+        ],
+        "notes": "Long-form fictional page context for Iveta at Star Basin gallery."
+      },
+      "required_evidence": [
+        {
+          "marker": "cousin",
+          "aliases": [
+            "the cousin of Iveta",
+            "Iveta's cousin"
+          ]
+        },
+        {
+          "marker": "linen wick",
+          "aliases": [
+            "preparation item linen wick",
+            "linen wick before the winter coach"
+          ]
+        },
+        {
+          "marker": "silver booth token",
+          "aliases": [
+            "second preparation detail silver booth token",
+            "silver booth token on the travel page"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "carved shell comb",
+          "aliases": [
+            "wrong page detail carved shell comb"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 3,
+      "difficulty": "medium",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 200
+    },
+    {
+      "id": "page-level-077",
+      "question": "Which longer-page details in the family note describe the family memory scene at Harbor Glass corridor?",
+      "expected_answer_type": "page_fact",
+      "test_type": "page_level",
+      "source_scope": {
+        "scope_type": "page",
+        "document_ids": [
+          "page-harbor-glass-corridor-family-note-077"
+        ],
+        "page_numbers": [
+          11
+        ],
+        "section_ids": [
+          "section-077"
+        ],
+        "notes": "Long-form fictional page context for Nessa at Harbor Glass corridor."
+      },
+      "required_evidence": [
+        {
+          "marker": "rope bridge permit",
+          "aliases": [
+            "family scene rope bridge permit",
+            "rope bridge permit on the family page"
+          ]
+        },
+        {
+          "marker": "glass ink bottle",
+          "aliases": [
+            "family scene glass ink bottle",
+            "glass ink bottle beside Harbor Glass corridor"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "tin key",
+          "aliases": [
+            "wrong page detail tin key"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "hard",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 220
+    },
+    {
+      "id": "page-level-078",
+      "question": "Which profile-page details explain what Zora kept for the Signal Lantern Morning after returning to Bell Bridge square?",
+      "expected_answer_type": "page_fact",
+      "test_type": "page_level",
+      "source_scope": {
+        "scope_type": "page",
+        "document_ids": [
+          "page-bell-bridge-square-audio-reel-078"
+        ],
+        "page_numbers": [
+          12
+        ],
+        "section_ids": [
+          "section-078"
+        ],
+        "notes": "Long-form fictional page context for Zora at Bell Bridge square."
+      },
+      "required_evidence": [
+        {
+          "marker": "clay watering cup",
+          "aliases": [
+            "kept detail clay watering cup",
+            "Signal Lantern Morning item clay watering cup"
+          ]
+        },
+        {
+          "marker": "carved shell comb",
+          "aliases": [
+            "return detail carved shell comb",
+            "carved shell comb after returning to Bell Bridge square"
+          ]
+        },
+        {
+          "marker": "Signal Lantern Morning",
+          "aliases": [
+            "festival Signal Lantern Morning",
+            "the Signal Lantern Morning memory"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "copper token",
+          "aliases": [
+            "wrong page detail copper token"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 3,
+      "difficulty": "easy",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 240
+    },
+    {
+      "id": "page-level-079",
+      "question": "Which page-level notes from the family note show why Ilia's photo memory at River Lantern inn mattered later?",
+      "expected_answer_type": "page_fact",
+      "test_type": "page_level",
+      "source_scope": {
+        "scope_type": "page",
+        "document_ids": [
+          "page-river-lantern-inn-family-note-079"
+        ],
+        "page_numbers": [
+          13
+        ],
+        "section_ids": [
+          "section-079"
+        ],
+        "notes": "Long-form fictional page context for Ilia at River Lantern inn."
+      },
+      "required_evidence": [
+        {
+          "marker": "copper wind vane pin",
+          "aliases": [
+            "photo note copper wind vane pin",
+            "copper wind vane pin from the photo page"
+          ]
+        },
+        {
+          "marker": "tin key",
+          "aliases": [
+            "later consequence tin key",
+            "tin key noted later on the page"
+          ]
+        },
+        {
+          "marker": "copper token",
+          "aliases": [
+            "supporting page detail copper token",
+            "copper token elsewhere on the page"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "star ledger page",
+          "aliases": [
+            "wrong page detail star ledger page"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 3,
+      "difficulty": "medium",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 260
+    },
+    {
+      "id": "page-level-080",
+      "question": "Which page-level details on Mira's audio reel explain why the Lantern Tide visit to Birch Ferry shed was delayed?",
+      "expected_answer_type": "page_fact",
+      "test_type": "page_level",
+      "source_scope": {
+        "scope_type": "page",
+        "document_ids": [
+          "page-birch-ferry-shed-audio-reel-080"
+        ],
+        "page_numbers": [
+          14
+        ],
+        "section_ids": [
+          "section-080"
+        ],
+        "notes": "Long-form fictional page context for Mira at Birch Ferry shed."
+      },
+      "required_evidence": [
+        {
+          "marker": "amber lantern",
+          "aliases": [
+            "delay detail amber lantern",
+            "amber lantern on the audio reel"
+          ]
+        },
+        {
+          "marker": "copper token",
+          "aliases": [
+            "copper token noted on the page",
+            "page detail copper token"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "oak barrel hoops",
+          "aliases": [
+            "wrong page detail oak barrel hoops"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "hard",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 120
+    },
+    {
+      "id": "page-level-081",
+      "question": "Which details on the profile page identify how Elena and the uncle prepared for the winter coach from Driftwood cove?",
+      "expected_answer_type": "page_fact",
+      "test_type": "page_level",
+      "source_scope": {
+        "scope_type": "page",
+        "document_ids": [
+          "page-driftwood-cove-family-note-081"
+        ],
+        "page_numbers": [
+          15
+        ],
+        "section_ids": [
+          "section-081"
+        ],
+        "notes": "Long-form fictional page context for Elena at Driftwood cove."
+      },
+      "required_evidence": [
+        {
+          "marker": "uncle",
+          "aliases": [
+            "the uncle of Elena",
+            "Elena's uncle"
+          ]
+        },
+        {
+          "marker": "blue oar",
+          "aliases": [
+            "preparation item blue oar",
+            "blue oar before the winter coach"
+          ]
+        },
+        {
+          "marker": "star ledger page",
+          "aliases": [
+            "second preparation detail star ledger page",
+            "star ledger page on the travel page"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "juniper bundles",
+          "aliases": [
+            "wrong page detail juniper bundles"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 3,
+      "difficulty": "easy",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 140
+    },
+    {
+      "id": "page-level-082",
+      "question": "Which longer-page details in the audio reel describe the family memory scene at Star Basin gallery?",
+      "expected_answer_type": "page_fact",
+      "test_type": "page_level",
+      "source_scope": {
+        "scope_type": "page",
+        "document_ids": [
+          "page-star-basin-gallery-audio-reel-082"
+        ],
+        "page_numbers": [
+          16
+        ],
+        "section_ids": [
+          "section-082"
+        ],
+        "notes": "Long-form fictional page context for Vera at Star Basin gallery."
+      },
+      "required_evidence": [
+        {
+          "marker": "moonflower cutting",
+          "aliases": [
+            "family scene moonflower cutting",
+            "moonflower cutting on the family page"
+          ]
+        },
+        {
+          "marker": "oak barrel hoops",
+          "aliases": [
+            "family scene oak barrel hoops",
+            "oak barrel hoops beside Star Basin gallery"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "coal stove hiss",
+          "aliases": [
+            "wrong page detail coal stove hiss"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "medium",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 160
+    },
+    {
+      "id": "page-level-083",
+      "question": "Which profile-page details explain what Kira kept for the Canal Night after returning to Harbor Glass corridor?",
+      "expected_answer_type": "page_fact",
+      "test_type": "page_level",
+      "source_scope": {
+        "scope_type": "page",
+        "document_ids": [
+          "page-harbor-glass-corridor-family-note-083"
+        ],
+        "page_numbers": [
+          17
+        ],
+        "section_ids": [
+          "section-083"
+        ],
+        "notes": "Long-form fictional page context for Kira at Harbor Glass corridor."
+      },
+      "required_evidence": [
+        {
+          "marker": "lantern hook",
+          "aliases": [
+            "kept detail lantern hook",
+            "Canal Night item lantern hook"
+          ]
+        },
+        {
+          "marker": "juniper bundles",
+          "aliases": [
+            "return detail juniper bundles",
+            "juniper bundles after returning to Harbor Glass corridor"
+          ]
+        },
+        {
+          "marker": "Canal Night",
+          "aliases": [
+            "festival Canal Night",
+            "the Canal Night memory"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "basalt sketch",
+          "aliases": [
+            "wrong page detail basalt sketch"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 3,
+      "difficulty": "hard",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 180
+    },
+    {
+      "id": "page-level-084",
+      "question": "Which page-level notes from the audio reel show why Nadia's photo memory at Bell Bridge square mattered later?",
+      "expected_answer_type": "page_fact",
+      "test_type": "page_level",
+      "source_scope": {
+        "scope_type": "page",
+        "document_ids": [
+          "page-bell-bridge-square-audio-reel-084"
+        ],
+        "page_numbers": [
+          18
+        ],
+        "section_ids": [
+          "section-084"
+        ],
+        "notes": "Long-form fictional page context for Nadia at Bell Bridge square."
+      },
+      "required_evidence": [
+        {
+          "marker": "blue glass jar",
+          "aliases": [
+            "photo note blue glass jar",
+            "blue glass jar from the photo page"
+          ]
+        },
+        {
+          "marker": "coal stove hiss",
+          "aliases": [
+            "later consequence coal stove hiss",
+            "coal stove hiss noted later on the page"
+          ]
+        },
+        {
+          "marker": "basalt sketch",
+          "aliases": [
+            "supporting page detail basalt sketch",
+            "basalt sketch elsewhere on the page"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "willow basket",
+          "aliases": [
+            "wrong page detail willow basket"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 3,
+      "difficulty": "easy",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 200
+    },
+    {
+      "id": "page-level-085",
+      "question": "Which page-level details on Lina's family note explain why the Glass Harbor Day visit to River Lantern inn was delayed?",
+      "expected_answer_type": "page_fact",
+      "test_type": "page_level",
+      "source_scope": {
+        "scope_type": "page",
+        "document_ids": [
+          "page-river-lantern-inn-family-note-085"
+        ],
+        "page_numbers": [
+          2
+        ],
+        "section_ids": [
+          "section-085"
+        ],
+        "notes": "Long-form fictional page context for Lina at River Lantern inn."
+      },
+      "required_evidence": [
+        {
+          "marker": "smoke vent chain",
+          "aliases": [
+            "delay detail smoke vent chain",
+            "smoke vent chain on the family note"
+          ]
+        },
+        {
+          "marker": "basalt sketch",
+          "aliases": [
+            "basalt sketch noted on the page",
+            "page detail basalt sketch"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "birch tea flask",
+          "aliases": [
+            "wrong page detail birch tea flask"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "medium",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 220
+    },
+    {
+      "id": "page-level-086",
+      "question": "Which details on the profile page identify how Anya and the godmother prepared for the winter coach from Birch Ferry shed?",
+      "expected_answer_type": "page_fact",
+      "test_type": "page_level",
+      "source_scope": {
+        "scope_type": "page",
+        "document_ids": [
+          "page-birch-ferry-shed-audio-reel-086"
+        ],
+        "page_numbers": [
+          3
+        ],
+        "section_ids": [
+          "section-086"
+        ],
+        "notes": "Long-form fictional page context for Anya at Birch Ferry shed."
+      },
+      "required_evidence": [
+        {
+          "marker": "godmother",
+          "aliases": [
+            "the godmother of Anya",
+            "Anya's godmother"
+          ]
+        },
+        {
+          "marker": "violet ribbon",
+          "aliases": [
+            "preparation item violet ribbon",
+            "violet ribbon before the winter coach"
+          ]
+        },
+        {
+          "marker": "willow basket",
+          "aliases": [
+            "second preparation detail willow basket",
+            "willow basket on the travel page"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "weathered camera strap",
+          "aliases": [
+            "wrong page detail weathered camera strap"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 3,
+      "difficulty": "hard",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 240
+    },
+    {
+      "id": "page-level-087",
+      "question": "Which longer-page details in the family note describe the family memory scene at Driftwood cove?",
+      "expected_answer_type": "page_fact",
+      "test_type": "page_level",
+      "source_scope": {
+        "scope_type": "page",
+        "document_ids": [
+          "page-driftwood-cove-family-note-087"
+        ],
+        "page_numbers": [
+          4
+        ],
+        "section_ids": [
+          "section-087"
+        ],
+        "notes": "Long-form fictional page context for Daria at Driftwood cove."
+      },
+      "required_evidence": [
+        {
+          "marker": "green apron",
+          "aliases": [
+            "family scene green apron",
+            "green apron on the family page"
+          ]
+        },
+        {
+          "marker": "birch tea flask",
+          "aliases": [
+            "family scene birch tea flask",
+            "birch tea flask beside Driftwood cove"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "canal route map",
+          "aliases": [
+            "wrong page detail canal route map"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "easy",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 260
+    },
+    {
+      "id": "page-level-088",
+      "question": "Which profile-page details explain what Yara kept for the Signal Lantern Morning after returning to Star Basin gallery?",
+      "expected_answer_type": "page_fact",
+      "test_type": "page_level",
+      "source_scope": {
+        "scope_type": "page",
+        "document_ids": [
+          "page-star-basin-gallery-audio-reel-088"
+        ],
+        "page_numbers": [
+          5
+        ],
+        "section_ids": [
+          "section-088"
+        ],
+        "notes": "Long-form fictional page context for Yara at Star Basin gallery."
+      },
+      "required_evidence": [
+        {
+          "marker": "paper moon mask",
+          "aliases": [
+            "kept detail paper moon mask",
+            "Signal Lantern Morning item paper moon mask"
+          ]
+        },
+        {
+          "marker": "weathered camera strap",
+          "aliases": [
+            "return detail weathered camera strap",
+            "weathered camera strap after returning to Star Basin gallery"
+          ]
+        },
+        {
+          "marker": "Signal Lantern Morning",
+          "aliases": [
+            "festival Signal Lantern Morning",
+            "the Signal Lantern Morning memory"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "brass compass",
+          "aliases": [
+            "wrong page detail brass compass"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 3,
+      "difficulty": "medium",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 120
+    },
+    {
+      "id": "page-level-089",
+      "question": "Which page-level notes from the family note show why Milena's photo memory at Harbor Glass corridor mattered later?",
+      "expected_answer_type": "page_fact",
+      "test_type": "page_level",
+      "source_scope": {
+        "scope_type": "page",
+        "document_ids": [
+          "page-harbor-glass-corridor-family-note-089"
+        ],
+        "page_numbers": [
+          6
+        ],
+        "section_ids": [
+          "section-089"
+        ],
+        "notes": "Long-form fictional page context for Milena at Harbor Glass corridor."
+      },
+      "required_evidence": [
+        {
+          "marker": "saffron scarf",
+          "aliases": [
+            "photo note saffron scarf",
+            "saffron scarf from the photo page"
+          ]
+        },
+        {
+          "marker": "canal route map",
+          "aliases": [
+            "later consequence canal route map",
+            "canal route map noted later on the page"
+          ]
+        },
+        {
+          "marker": "brass compass",
+          "aliases": [
+            "supporting page detail brass compass",
+            "brass compass elsewhere on the page"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "tuning fork",
+          "aliases": [
+            "wrong page detail tuning fork"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 3,
+      "difficulty": "hard",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 140
+    },
+    {
+      "id": "page-level-090",
+      "question": "Which page-level details on Ada's audio reel explain why the Lantern Tide visit to Bell Bridge square was delayed?",
+      "expected_answer_type": "page_fact",
+      "test_type": "page_level",
+      "source_scope": {
+        "scope_type": "page",
+        "document_ids": [
+          "page-bell-bridge-square-audio-reel-090"
+        ],
+        "page_numbers": [
+          7
+        ],
+        "section_ids": [
+          "section-090"
+        ],
+        "notes": "Long-form fictional page context for Ada at Bell Bridge square."
+      },
+      "required_evidence": [
+        {
+          "marker": "wax thread",
+          "aliases": [
+            "delay detail wax thread",
+            "wax thread on the audio reel"
+          ]
+        },
+        {
+          "marker": "brass compass",
+          "aliases": [
+            "brass compass noted on the page",
+            "page detail brass compass"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "silver booth token",
+          "aliases": [
+            "wrong page detail silver booth token"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "easy",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 160
+    },
+    {
+      "id": "page-level-091",
+      "question": "Which details on the profile page identify how Raisa and the younger brother prepared for the winter coach from River Lantern inn?",
+      "expected_answer_type": "page_fact",
+      "test_type": "page_level",
+      "source_scope": {
+        "scope_type": "page",
+        "document_ids": [
+          "page-river-lantern-inn-family-note-091"
+        ],
+        "page_numbers": [
+          8
+        ],
+        "section_ids": [
+          "section-091"
+        ],
+        "notes": "Long-form fictional page context for Raisa at River Lantern inn."
+      },
+      "required_evidence": [
+        {
+          "marker": "younger brother",
+          "aliases": [
+            "the younger brother of Raisa",
+            "Raisa's younger brother"
+          ]
+        },
+        {
+          "marker": "cedar shovel",
+          "aliases": [
+            "preparation item cedar shovel",
+            "cedar shovel before the winter coach"
+          ]
+        },
+        {
+          "marker": "tuning fork",
+          "aliases": [
+            "second preparation detail tuning fork",
+            "tuning fork on the travel page"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "glass ink bottle",
+          "aliases": [
+            "wrong page detail glass ink bottle"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 3,
+      "difficulty": "medium",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 180
+    },
+    {
+      "id": "page-level-092",
+      "question": "Which longer-page details in the audio reel describe the family memory scene at Birch Ferry shed?",
+      "expected_answer_type": "page_fact",
+      "test_type": "page_level",
+      "source_scope": {
+        "scope_type": "page",
+        "document_ids": [
+          "page-birch-ferry-shed-audio-reel-092"
+        ],
+        "page_numbers": [
+          9
+        ],
+        "section_ids": [
+          "section-092"
+        ],
+        "notes": "Long-form fictional page context for Sonya at Birch Ferry shed."
+      },
+      "required_evidence": [
+        {
+          "marker": "linen wick",
+          "aliases": [
+            "family scene linen wick",
+            "linen wick on the family page"
+          ]
+        },
+        {
+          "marker": "silver booth token",
+          "aliases": [
+            "family scene silver booth token",
+            "silver booth token beside Birch Ferry shed"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "carved shell comb",
+          "aliases": [
+            "wrong page detail carved shell comb"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "hard",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 200
+    },
+    {
+      "id": "page-level-093",
+      "question": "Which profile-page details explain what Talia kept for the Canal Night after returning to Driftwood cove?",
+      "expected_answer_type": "page_fact",
+      "test_type": "page_level",
+      "source_scope": {
+        "scope_type": "page",
+        "document_ids": [
+          "page-driftwood-cove-family-note-093"
+        ],
+        "page_numbers": [
+          10
+        ],
+        "section_ids": [
+          "section-093"
+        ],
+        "notes": "Long-form fictional page context for Talia at Driftwood cove."
+      },
+      "required_evidence": [
+        {
+          "marker": "rope bridge permit",
+          "aliases": [
+            "kept detail rope bridge permit",
+            "Canal Night item rope bridge permit"
+          ]
+        },
+        {
+          "marker": "glass ink bottle",
+          "aliases": [
+            "return detail glass ink bottle",
+            "glass ink bottle after returning to Driftwood cove"
+          ]
+        },
+        {
+          "marker": "Canal Night",
+          "aliases": [
+            "festival Canal Night",
+            "the Canal Night memory"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "tin key",
+          "aliases": [
+            "wrong page detail tin key"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 3,
+      "difficulty": "easy",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 220
+    },
+    {
+      "id": "page-level-094",
+      "question": "Which page-level notes from the audio reel show why Runa's photo memory at Star Basin gallery mattered later?",
+      "expected_answer_type": "page_fact",
+      "test_type": "page_level",
+      "source_scope": {
+        "scope_type": "page",
+        "document_ids": [
+          "page-star-basin-gallery-audio-reel-094"
+        ],
+        "page_numbers": [
+          11
+        ],
+        "section_ids": [
+          "section-094"
+        ],
+        "notes": "Long-form fictional page context for Runa at Star Basin gallery."
+      },
+      "required_evidence": [
+        {
+          "marker": "clay watering cup",
+          "aliases": [
+            "photo note clay watering cup",
+            "clay watering cup from the photo page"
+          ]
+        },
+        {
+          "marker": "carved shell comb",
+          "aliases": [
+            "later consequence carved shell comb",
+            "carved shell comb noted later on the page"
+          ]
+        },
+        {
+          "marker": "tin key",
+          "aliases": [
+            "supporting page detail tin key",
+            "tin key elsewhere on the page"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "copper token",
+          "aliases": [
+            "wrong page detail copper token"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 3,
+      "difficulty": "medium",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 240
+    },
+    {
+      "id": "page-level-095",
+      "question": "Which page-level details on Selma's family note explain why the Glass Harbor Day visit to Harbor Glass corridor was delayed?",
+      "expected_answer_type": "page_fact",
+      "test_type": "page_level",
+      "source_scope": {
+        "scope_type": "page",
+        "document_ids": [
+          "page-harbor-glass-corridor-family-note-095"
+        ],
+        "page_numbers": [
+          12
+        ],
+        "section_ids": [
+          "section-095"
+        ],
+        "notes": "Long-form fictional page context for Selma at Harbor Glass corridor."
+      },
+      "required_evidence": [
+        {
+          "marker": "copper wind vane pin",
+          "aliases": [
+            "delay detail copper wind vane pin",
+            "copper wind vane pin on the family note"
+          ]
+        },
+        {
+          "marker": "tin key",
+          "aliases": [
+            "tin key noted on the page",
+            "page detail tin key"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "star ledger page",
+          "aliases": [
+            "wrong page detail star ledger page"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "hard",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 260
+    },
+    {
+      "id": "page-level-096",
+      "question": "Which details on the profile page identify how Iveta and the older sister prepared for the winter coach from Bell Bridge square?",
+      "expected_answer_type": "page_fact",
+      "test_type": "page_level",
+      "source_scope": {
+        "scope_type": "page",
+        "document_ids": [
+          "page-bell-bridge-square-audio-reel-096"
+        ],
+        "page_numbers": [
+          13
+        ],
+        "section_ids": [
+          "section-096"
+        ],
+        "notes": "Long-form fictional page context for Iveta at Bell Bridge square."
+      },
+      "required_evidence": [
+        {
+          "marker": "older sister",
+          "aliases": [
+            "the older sister of Iveta",
+            "Iveta's older sister"
+          ]
+        },
+        {
+          "marker": "amber lantern",
+          "aliases": [
+            "preparation item amber lantern",
+            "amber lantern before the winter coach"
+          ]
+        },
+        {
+          "marker": "copper token",
+          "aliases": [
+            "second preparation detail copper token",
+            "copper token on the travel page"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "oak barrel hoops",
+          "aliases": [
+            "wrong page detail oak barrel hoops"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 3,
+      "difficulty": "easy",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 120
+    },
+    {
+      "id": "page-level-097",
+      "question": "Which longer-page details in the family note describe the family memory scene at River Lantern inn?",
+      "expected_answer_type": "page_fact",
+      "test_type": "page_level",
+      "source_scope": {
+        "scope_type": "page",
+        "document_ids": [
+          "page-river-lantern-inn-family-note-097"
+        ],
+        "page_numbers": [
+          14
+        ],
+        "section_ids": [
+          "section-097"
+        ],
+        "notes": "Long-form fictional page context for Nessa at River Lantern inn."
+      },
+      "required_evidence": [
+        {
+          "marker": "blue oar",
+          "aliases": [
+            "family scene blue oar",
+            "blue oar on the family page"
+          ]
+        },
+        {
+          "marker": "star ledger page",
+          "aliases": [
+            "family scene star ledger page",
+            "star ledger page beside River Lantern inn"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "juniper bundles",
+          "aliases": [
+            "wrong page detail juniper bundles"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "medium",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 140
+    },
+    {
+      "id": "page-level-098",
+      "question": "Which profile-page details explain what Zora kept for the Signal Lantern Morning after returning to Birch Ferry shed?",
+      "expected_answer_type": "page_fact",
+      "test_type": "page_level",
+      "source_scope": {
+        "scope_type": "page",
+        "document_ids": [
+          "page-birch-ferry-shed-audio-reel-098"
+        ],
+        "page_numbers": [
+          15
+        ],
+        "section_ids": [
+          "section-098"
+        ],
+        "notes": "Long-form fictional page context for Zora at Birch Ferry shed."
+      },
+      "required_evidence": [
+        {
+          "marker": "moonflower cutting",
+          "aliases": [
+            "kept detail moonflower cutting",
+            "Signal Lantern Morning item moonflower cutting"
+          ]
+        },
+        {
+          "marker": "oak barrel hoops",
+          "aliases": [
+            "return detail oak barrel hoops",
+            "oak barrel hoops after returning to Birch Ferry shed"
+          ]
+        },
+        {
+          "marker": "Signal Lantern Morning",
+          "aliases": [
+            "festival Signal Lantern Morning",
+            "the Signal Lantern Morning memory"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "coal stove hiss",
+          "aliases": [
+            "wrong page detail coal stove hiss"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 3,
+      "difficulty": "hard",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 160
+    },
+    {
+      "id": "page-level-099",
+      "question": "Which page-level notes from the family note show why Ilia's photo memory at Driftwood cove mattered later?",
+      "expected_answer_type": "page_fact",
+      "test_type": "page_level",
+      "source_scope": {
+        "scope_type": "page",
+        "document_ids": [
+          "page-driftwood-cove-family-note-099"
+        ],
+        "page_numbers": [
+          16
+        ],
+        "section_ids": [
+          "section-099"
+        ],
+        "notes": "Long-form fictional page context for Ilia at Driftwood cove."
+      },
+      "required_evidence": [
+        {
+          "marker": "lantern hook",
+          "aliases": [
+            "photo note lantern hook",
+            "lantern hook from the photo page"
+          ]
+        },
+        {
+          "marker": "juniper bundles",
+          "aliases": [
+            "later consequence juniper bundles",
+            "juniper bundles noted later on the page"
+          ]
+        },
+        {
+          "marker": "coal stove hiss",
+          "aliases": [
+            "supporting page detail coal stove hiss",
+            "coal stove hiss elsewhere on the page"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "basalt sketch",
+          "aliases": [
+            "wrong page detail basalt sketch"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 3,
+      "difficulty": "easy",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 180
+    },
+    {
+      "id": "page-level-100",
+      "question": "Which page-level details on Mira's audio reel explain why the Lantern Tide visit to Star Basin gallery was delayed?",
+      "expected_answer_type": "page_fact",
+      "test_type": "page_level",
+      "source_scope": {
+        "scope_type": "page",
+        "document_ids": [
+          "page-star-basin-gallery-audio-reel-100"
+        ],
+        "page_numbers": [
+          17
+        ],
+        "section_ids": [
+          "section-100"
+        ],
+        "notes": "Long-form fictional page context for Mira at Star Basin gallery."
+      },
+      "required_evidence": [
+        {
+          "marker": "blue glass jar",
+          "aliases": [
+            "delay detail blue glass jar",
+            "blue glass jar on the audio reel"
+          ]
+        },
+        {
+          "marker": "coal stove hiss",
+          "aliases": [
+            "coal stove hiss noted on the page",
+            "page detail coal stove hiss"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "willow basket",
+          "aliases": [
+            "wrong page detail willow basket"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "medium",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 200
     }
   ]
 }

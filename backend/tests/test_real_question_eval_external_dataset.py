@@ -17,6 +17,14 @@ from app.modules.real_question_eval import (
     load_external_eval_dataset,
 )
 
+EXPECTED_EXTENDED_CASE_COUNTS = {
+    "short_fact_v1": 120,
+    "page_level_v1": 100,
+    "multi_document_v1": 100,
+    "negative_v1": 80,
+    "distractor_v1": 100,
+}
+
 
 def test_sample_external_eval_dataset_exists_and_loads():
     assert EXTERNAL_EVAL_SAMPLE_DATASET_PATH.exists()
@@ -32,24 +40,29 @@ def test_sample_external_eval_dataset_exists_and_loads():
 
 
 def test_extended_external_eval_dataset_inventory_loads_successfully():
-    expected_case_counts = {
-        "short_fact_v1": 8,
-        "page_level_v1": 5,
-        "multi_document_v1": 5,
-        "negative_v1": 5,
-        "distractor_v1": 5,
-    }
-
     inventory = get_extended_external_eval_dataset_inventory()
 
-    assert set(inventory) == set(expected_case_counts)
+    assert set(inventory) == set(EXPECTED_EXTENDED_CASE_COUNTS)
 
     for dataset_key, dataset_path in inventory.items():
         assert dataset_path.exists(), f"Missing dataset file: {dataset_path}"
         dataset = load_external_eval_dataset(dataset_path)
-        assert len(dataset.cases) == expected_case_counts[dataset_key]
+        assert len(dataset.cases) == EXPECTED_EXTENDED_CASE_COUNTS[dataset_key]
         assert dataset.metadata["external_dataset"] is True
         assert dataset.metadata["external_dataset_path"] == str(dataset_path.resolve())
+
+
+def test_extended_external_eval_datasets_total_exactly_500_cases_with_unique_ids():
+    all_case_ids: list[str] = []
+    total_case_count = 0
+
+    for dataset_path in get_extended_external_eval_dataset_inventory().values():
+        dataset = load_external_eval_dataset(dataset_path)
+        total_case_count += len(dataset.cases)
+        all_case_ids.extend(case.case_id for case in dataset.cases)
+
+    assert total_case_count == 500
+    assert len(all_case_ids) == len(set(all_case_ids))
 
 
 def test_extended_external_eval_datasets_cover_all_supported_test_types():
@@ -232,4 +245,4 @@ def test_real_question_eval_runner_build_request_can_use_extended_dataset_path()
     request = runner.build_request()
 
     assert request.dataset.dataset_id == "eternal-world-short-fact-v1"
-    assert len(request.dataset.cases) == 8
+    assert len(request.dataset.cases) == 120

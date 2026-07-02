@@ -1,13 +1,15 @@
 {
   "dataset_id": "eternal-world-multi-document-v1",
   "name": "Eternal World Multi Document Validation V1",
-  "description": "Fictional multi-document retrieval validation dataset for Eternal World requiring grounded evidence across multiple archives.",
+  "description": "Expanded fictional multi-document retrieval validation dataset for Eternal World requiring grounded evidence across multiple archives.",
   "project_name": "Eternal World",
   "metadata": {
     "version": "v1",
     "fictional": true,
     "safe_validation_only": true,
-    "test_type": "multi_document"
+    "test_type": "multi_document",
+    "case_count": 100,
+    "expanded_validation": true
   },
   "cases": [
     {
@@ -17,22 +19,33 @@
       "test_type": "multi_document",
       "source_scope": {
         "scope_type": "multi_document",
-        "document_ids": ["convoy-route-roll", "convoy-supply-note"]
+        "document_ids": [
+          "convoy-route-roll",
+          "convoy-supply-note"
+        ]
       },
       "required_evidence": [
         {
           "marker": "canvas route map",
-          "aliases": ["route map on canvas", "convoy canvas map"]
+          "aliases": [
+            "route map on canvas",
+            "convoy canvas map"
+          ]
         },
         {
           "marker": "birch tea flask",
-          "aliases": ["tea flask of birch", "birchwood flask"]
+          "aliases": [
+            "tea flask of birch",
+            "birchwood flask"
+          ]
         }
       ],
       "forbidden_evidence": [
         {
           "marker": "summer parade ribbon",
-          "aliases": ["ribbon from the summer parade"]
+          "aliases": [
+            "ribbon from the summer parade"
+          ]
         }
       ],
       "minimum_coverage": 1.0,
@@ -50,22 +63,33 @@
       "test_type": "multi_document",
       "source_scope": {
         "scope_type": "multi_document",
-        "document_ids": ["harbor-fair-ledger", "banner-mender-note"]
+        "document_ids": [
+          "harbor-fair-ledger",
+          "banner-mender-note"
+        ]
       },
       "required_evidence": [
         {
           "marker": "silver booth token",
-          "aliases": ["booth token of silver", "silver token for the booth"]
+          "aliases": [
+            "booth token of silver",
+            "silver token for the booth"
+          ]
         },
         {
           "marker": "violet banner patch",
-          "aliases": ["patch on the violet banner", "violet cloth patch"]
+          "aliases": [
+            "patch on the violet banner",
+            "violet cloth patch"
+          ]
         }
       ],
       "forbidden_evidence": [
         {
           "marker": "midday bell ticket",
-          "aliases": ["ticket for the midday bell"]
+          "aliases": [
+            "ticket for the midday bell"
+          ]
         }
       ],
       "minimum_coverage": 1.0,
@@ -83,22 +107,33 @@
       "test_type": "multi_document",
       "source_scope": {
         "scope_type": "multi_document",
-        "document_ids": ["school-stage-list", "music-room-note"]
+        "document_ids": [
+          "school-stage-list",
+          "music-room-note"
+        ]
       },
       "required_evidence": [
         {
           "marker": "paper moon mask",
-          "aliases": ["moon mask of paper", "stage moon mask"]
+          "aliases": [
+            "moon mask of paper",
+            "stage moon mask"
+          ]
         },
         {
           "marker": "tuning fork",
-          "aliases": ["brass tuning fork", "fork for tuning"]
+          "aliases": [
+            "brass tuning fork",
+            "fork for tuning"
+          ]
         }
       ],
       "forbidden_evidence": [
         {
           "marker": "chalk race pennant",
-          "aliases": ["school race pennant"]
+          "aliases": [
+            "school race pennant"
+          ]
         }
       ],
       "minimum_coverage": 1.0,
@@ -116,26 +151,41 @@
       "test_type": "multi_document",
       "source_scope": {
         "scope_type": "multi_document",
-        "document_ids": ["valley-sketchbook", "bridge-permit-roll", "trail-warden-log"]
+        "document_ids": [
+          "valley-sketchbook",
+          "bridge-permit-roll",
+          "trail-warden-log"
+        ]
       },
       "required_evidence": [
         {
           "marker": "basalt sketch",
-          "aliases": ["sketch of the basalt ridge", "basalt ridge sketch"]
+          "aliases": [
+            "sketch of the basalt ridge",
+            "basalt ridge sketch"
+          ]
         },
         {
           "marker": "rope bridge permit",
-          "aliases": ["permit for the rope bridge", "bridge crossing permit"]
+          "aliases": [
+            "permit for the rope bridge",
+            "bridge crossing permit"
+          ]
         },
         {
           "marker": "chalk trail mark",
-          "aliases": ["trail mark in chalk", "chalk mark on the trail"]
+          "aliases": [
+            "trail mark in chalk",
+            "chalk mark on the trail"
+          ]
         }
       ],
       "forbidden_evidence": [
         {
           "marker": "orchard picnic note",
-          "aliases": ["picnic note from the orchard"]
+          "aliases": [
+            "picnic note from the orchard"
+          ]
         }
       ],
       "minimum_coverage": 1.0,
@@ -153,22 +203,33 @@
       "test_type": "multi_document",
       "source_scope": {
         "scope_type": "multi_document",
-        "document_ids": ["observatory-ledger", "roof-repair-slip"]
+        "document_ids": [
+          "observatory-ledger",
+          "roof-repair-slip"
+        ]
       },
       "required_evidence": [
         {
           "marker": "star ledger page",
-          "aliases": ["page from the star ledger", "observatory ledger page"]
+          "aliases": [
+            "page from the star ledger",
+            "observatory ledger page"
+          ]
         },
         {
           "marker": "copper wind vane pin",
-          "aliases": ["wind vane pin of copper", "copper pin for the vane"]
+          "aliases": [
+            "wind vane pin of copper",
+            "copper pin for the vane"
+          ]
         }
       ],
       "forbidden_evidence": [
         {
           "marker": "garden feast ticket",
-          "aliases": ["ticket from the garden feast"]
+          "aliases": [
+            "ticket from the garden feast"
+          ]
         }
       ],
       "minimum_coverage": 1.0,
@@ -178,6 +239,4657 @@
       "language": "en",
       "expected_long_context": true,
       "minimum_context_chars": 70
+    },
+    {
+      "id": "multi-document-006",
+      "question": "Which archive pieces from more than one document explain the family profile event at Winter Chapel porch?",
+      "expected_answer_type": "multi_fact",
+      "test_type": "multi_document",
+      "source_scope": {
+        "scope_type": "multi_document",
+        "document_ids": [
+          "multi-winter-chapel-porch-photo-index-006",
+          "multi-sonya-repair-book-006"
+        ],
+        "notes": "Requires cross-document retrieval for Sonya at Winter Chapel porch."
+      },
+      "required_evidence": [
+        {
+          "marker": "moonflower cutting",
+          "aliases": [
+            "archive piece moonflower cutting",
+            "moonflower cutting in the first archive piece"
+          ]
+        },
+        {
+          "marker": "glass ink bottle",
+          "aliases": [
+            "second archive piece glass ink bottle",
+            "glass ink bottle in the second archive piece"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "brass compass",
+          "aliases": [
+            "irrelevant document detail brass compass"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "easy",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 60
+    },
+    {
+      "id": "multi-document-007",
+      "question": "Which documents must be combined to understand Runa's family note note about Fox Hollow bridge?",
+      "expected_answer_type": "multi_fact",
+      "test_type": "multi_document",
+      "source_scope": {
+        "scope_type": "multi_document",
+        "document_ids": [
+          "multi-fox-hollow-bridge-audio-transcript-007",
+          "multi-runa-inventory-sheet-007",
+          "multi-harvest-glow-ledger-007"
+        ],
+        "notes": "Requires cross-document retrieval for Runa at Fox Hollow bridge."
+      },
+      "required_evidence": [
+        {
+          "marker": "rope bridge permit",
+          "aliases": [
+            "combined note rope bridge permit",
+            "rope bridge permit in one required document"
+          ]
+        },
+        {
+          "marker": "weathered camera strap",
+          "aliases": [
+            "combined note weathered camera strap",
+            "weathered camera strap in another required document"
+          ]
+        },
+        {
+          "marker": "coal stove hiss",
+          "aliases": [
+            "combined note coal stove hiss",
+            "coal stove hiss only visible after combining documents"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "basalt sketch",
+          "aliases": [
+            "irrelevant document detail basalt sketch"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 3,
+      "difficulty": "medium",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 80
+    },
+    {
+      "id": "multi-document-008",
+      "question": "Which records together show how Iveta prepared the winter coach stop near Willow Courtyard well?",
+      "expected_answer_type": "multi_fact",
+      "test_type": "multi_document",
+      "source_scope": {
+        "scope_type": "multi_document",
+        "document_ids": [
+          "multi-willow-courtyard-well-letter-roll-008",
+          "multi-iveta-family-register-008"
+        ],
+        "notes": "Requires cross-document retrieval for Iveta at Willow Courtyard well."
+      },
+      "required_evidence": [
+        {
+          "marker": "paper moon mask",
+          "aliases": [
+            "travel record paper moon mask",
+            "paper moon mask in one document"
+          ]
+        },
+        {
+          "marker": "juniper bundles",
+          "aliases": [
+            "supporting record juniper bundles",
+            "juniper bundles in another document"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "copper token",
+          "aliases": [
+            "irrelevant document detail copper token"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "hard",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 100
+    },
+    {
+      "id": "multi-document-009",
+      "question": "Which documents together identify the Signal Lantern Morning memory that Zora preserved after leaving Glass Harbor quay?",
+      "expected_answer_type": "multi_fact",
+      "test_type": "multi_document",
+      "source_scope": {
+        "scope_type": "multi_document",
+        "document_ids": [
+          "multi-glass-harbor-quay-repair-book-009",
+          "multi-zora-archive-009",
+          "multi-signal-lantern-morning-profile-page-009"
+        ],
+        "notes": "Requires cross-document retrieval for Zora at Glass Harbor quay."
+      },
+      "required_evidence": [
+        {
+          "marker": "Signal Lantern Morning",
+          "aliases": [
+            "festival Signal Lantern Morning",
+            "the Signal Lantern Morning record"
+          ]
+        },
+        {
+          "marker": "lantern hook",
+          "aliases": [
+            "preserved item lantern hook",
+            "lantern hook in the preserved record"
+          ]
+        },
+        {
+          "marker": "carved shell comb",
+          "aliases": [
+            "corroborating item carved shell comb",
+            "carved shell comb in the second document"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "tuning fork",
+          "aliases": [
+            "irrelevant document detail tuning fork"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 3,
+      "difficulty": "easy",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 120
+    },
+    {
+      "id": "multi-document-010",
+      "question": "Which archive pieces from more than one document explain the family profile event at Birch Ferry shed?",
+      "expected_answer_type": "multi_fact",
+      "test_type": "multi_document",
+      "source_scope": {
+        "scope_type": "multi_document",
+        "document_ids": [
+          "multi-birch-ferry-shed-inventory-sheet-010",
+          "multi-mira-ledger-010"
+        ],
+        "notes": "Requires cross-document retrieval for Mira at Birch Ferry shed."
+      },
+      "required_evidence": [
+        {
+          "marker": "clay watering cup",
+          "aliases": [
+            "archive piece clay watering cup",
+            "clay watering cup in the first archive piece"
+          ]
+        },
+        {
+          "marker": "canal route map",
+          "aliases": [
+            "second archive piece canal route map",
+            "canal route map in the second archive piece"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "willow basket",
+          "aliases": [
+            "irrelevant document detail willow basket"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "medium",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 140
+    },
+    {
+      "id": "multi-document-011",
+      "question": "Which documents must be combined to understand Vera's archive card note about Pine Gate yard?",
+      "expected_answer_type": "multi_fact",
+      "test_type": "multi_document",
+      "source_scope": {
+        "scope_type": "multi_document",
+        "document_ids": [
+          "multi-pine-gate-yard-family-register-011",
+          "multi-vera-minute-book-011",
+          "multi-bellwater-fair-travel-note-011"
+        ],
+        "notes": "Requires cross-document retrieval for Vera at Pine Gate yard."
+      },
+      "required_evidence": [
+        {
+          "marker": "saffron scarf",
+          "aliases": [
+            "combined note saffron scarf",
+            "saffron scarf in one required document"
+          ]
+        },
+        {
+          "marker": "coal stove hiss",
+          "aliases": [
+            "combined note coal stove hiss",
+            "coal stove hiss in another required document"
+          ]
+        },
+        {
+          "marker": "copper token",
+          "aliases": [
+            "combined note copper token",
+            "copper token only visible after combining documents"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "star ledger page",
+          "aliases": [
+            "irrelevant document detail star ledger page"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 3,
+      "difficulty": "hard",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 160
+    },
+    {
+      "id": "multi-document-012",
+      "question": "Which records together show how Nadia prepared the river skiff stop near North Bell workshop?",
+      "expected_answer_type": "multi_fact",
+      "test_type": "multi_document",
+      "source_scope": {
+        "scope_type": "multi_document",
+        "document_ids": [
+          "multi-north-bell-workshop-archive-012",
+          "multi-nadia-profile-page-012"
+        ],
+        "notes": "Requires cross-document retrieval for Nadia at North Bell workshop."
+      },
+      "required_evidence": [
+        {
+          "marker": "blue glass jar",
+          "aliases": [
+            "travel record blue glass jar",
+            "blue glass jar in one document"
+          ]
+        },
+        {
+          "marker": "tin key",
+          "aliases": [
+            "supporting record tin key",
+            "tin key in another document"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "silver booth token",
+          "aliases": [
+            "irrelevant document detail silver booth token"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "easy",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 60
+    },
+    {
+      "id": "multi-document-013",
+      "question": "Which documents together identify the Moon Orchard Rest memory that Anya preserved after leaving Fog Island pier?",
+      "expected_answer_type": "multi_fact",
+      "test_type": "multi_document",
+      "source_scope": {
+        "scope_type": "multi_document",
+        "document_ids": [
+          "multi-fog-island-pier-ledger-013",
+          "multi-anya-memory-log-013",
+          "multi-moon-orchard-rest-audio-transcript-013"
+        ],
+        "notes": "Requires cross-document retrieval for Anya at Fog Island pier."
+      },
+      "required_evidence": [
+        {
+          "marker": "Moon Orchard Rest",
+          "aliases": [
+            "festival Moon Orchard Rest",
+            "the Moon Orchard Rest record"
+          ]
+        },
+        {
+          "marker": "copper wind vane pin",
+          "aliases": [
+            "preserved item copper wind vane pin",
+            "copper wind vane pin in the preserved record"
+          ]
+        },
+        {
+          "marker": "brass compass",
+          "aliases": [
+            "corroborating item brass compass",
+            "brass compass in the second document"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "birch tea flask",
+          "aliases": [
+            "irrelevant document detail birch tea flask"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 3,
+      "difficulty": "medium",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 80
+    },
+    {
+      "id": "multi-document-014",
+      "question": "Which archive pieces from more than one document explain the family profile event at Moon Mill yard?",
+      "expected_answer_type": "multi_fact",
+      "test_type": "multi_document",
+      "source_scope": {
+        "scope_type": "multi_document",
+        "document_ids": [
+          "multi-moon-mill-yard-minute-book-014",
+          "multi-yara-travel-note-014"
+        ],
+        "notes": "Requires cross-document retrieval for Yara at Moon Mill yard."
+      },
+      "required_evidence": [
+        {
+          "marker": "wax thread",
+          "aliases": [
+            "archive piece wax thread",
+            "wax thread in the first archive piece"
+          ]
+        },
+        {
+          "marker": "basalt sketch",
+          "aliases": [
+            "second archive piece basalt sketch",
+            "basalt sketch in the second archive piece"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "oak barrel hoops",
+          "aliases": [
+            "irrelevant document detail oak barrel hoops"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "hard",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 100
+    },
+    {
+      "id": "multi-document-015",
+      "question": "Which documents must be combined to understand Ada's holiday card note about Driftwood cove?",
+      "expected_answer_type": "multi_fact",
+      "test_type": "multi_document",
+      "source_scope": {
+        "scope_type": "multi_document",
+        "document_ids": [
+          "multi-driftwood-cove-profile-page-015",
+          "multi-ada-photo-index-015",
+          "multi-lantern-tide-repair-book-015"
+        ],
+        "notes": "Requires cross-document retrieval for Ada at Driftwood cove."
+      },
+      "required_evidence": [
+        {
+          "marker": "smoke vent chain",
+          "aliases": [
+            "combined note smoke vent chain",
+            "smoke vent chain in one required document"
+          ]
+        },
+        {
+          "marker": "copper token",
+          "aliases": [
+            "combined note copper token",
+            "copper token in another required document"
+          ]
+        },
+        {
+          "marker": "silver booth token",
+          "aliases": [
+            "combined note silver booth token",
+            "silver booth token only visible after combining documents"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "glass ink bottle",
+          "aliases": [
+            "irrelevant document detail glass ink bottle"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 3,
+      "difficulty": "easy",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 120
+    },
+    {
+      "id": "multi-document-016",
+      "question": "Which records together show how Sonya prepared the quarry lift stop near Ridge Post loft?",
+      "expected_answer_type": "multi_fact",
+      "test_type": "multi_document",
+      "source_scope": {
+        "scope_type": "multi_document",
+        "document_ids": [
+          "multi-ridge-post-loft-memory-log-016",
+          "multi-sonya-audio-transcript-016"
+        ],
+        "notes": "Requires cross-document retrieval for Sonya at Ridge Post loft."
+      },
+      "required_evidence": [
+        {
+          "marker": "amber lantern",
+          "aliases": [
+            "travel record amber lantern",
+            "amber lantern in one document"
+          ]
+        },
+        {
+          "marker": "tuning fork",
+          "aliases": [
+            "supporting record tuning fork",
+            "tuning fork in another document"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "weathered camera strap",
+          "aliases": [
+            "irrelevant document detail weathered camera strap"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "medium",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 140
+    },
+    {
+      "id": "multi-document-017",
+      "question": "Which documents together identify the Harvest Glow memory that Runa preserved after leaving East Signal room?",
+      "expected_answer_type": "multi_fact",
+      "test_type": "multi_document",
+      "source_scope": {
+        "scope_type": "multi_document",
+        "document_ids": [
+          "multi-east-signal-room-travel-note-017",
+          "multi-runa-letter-roll-017",
+          "multi-harvest-glow-family-register-017"
+        ],
+        "notes": "Requires cross-document retrieval for Runa at East Signal room."
+      },
+      "required_evidence": [
+        {
+          "marker": "Harvest Glow",
+          "aliases": [
+            "festival Harvest Glow",
+            "the Harvest Glow record"
+          ]
+        },
+        {
+          "marker": "cedar shovel",
+          "aliases": [
+            "preserved item cedar shovel",
+            "cedar shovel in the preserved record"
+          ]
+        },
+        {
+          "marker": "willow basket",
+          "aliases": [
+            "corroborating item willow basket",
+            "willow basket in the second document"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "juniper bundles",
+          "aliases": [
+            "irrelevant document detail juniper bundles"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 3,
+      "difficulty": "hard",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 160
+    },
+    {
+      "id": "multi-document-018",
+      "question": "Which archive pieces from more than one document explain the family profile event at South Meadow arch?",
+      "expected_answer_type": "multi_fact",
+      "test_type": "multi_document",
+      "source_scope": {
+        "scope_type": "multi_document",
+        "document_ids": [
+          "multi-south-meadow-arch-photo-index-018",
+          "multi-iveta-repair-book-018"
+        ],
+        "notes": "Requires cross-document retrieval for Iveta at South Meadow arch."
+      },
+      "required_evidence": [
+        {
+          "marker": "violet ribbon",
+          "aliases": [
+            "archive piece violet ribbon",
+            "violet ribbon in the first archive piece"
+          ]
+        },
+        {
+          "marker": "star ledger page",
+          "aliases": [
+            "second archive piece star ledger page",
+            "star ledger page in the second archive piece"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "carved shell comb",
+          "aliases": [
+            "irrelevant document detail carved shell comb"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "easy",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 60
+    },
+    {
+      "id": "multi-document-019",
+      "question": "Which documents must be combined to understand Zora's boat manifest note about Maple Court attic?",
+      "expected_answer_type": "multi_fact",
+      "test_type": "multi_document",
+      "source_scope": {
+        "scope_type": "multi_document",
+        "document_ids": [
+          "multi-maple-court-attic-audio-transcript-019",
+          "multi-zora-inventory-sheet-019",
+          "multi-signal-lantern-morning-ledger-019"
+        ],
+        "notes": "Requires cross-document retrieval for Zora at Maple Court attic."
+      },
+      "required_evidence": [
+        {
+          "marker": "blue oar",
+          "aliases": [
+            "combined note blue oar",
+            "blue oar in one required document"
+          ]
+        },
+        {
+          "marker": "silver booth token",
+          "aliases": [
+            "combined note silver booth token",
+            "silver booth token in another required document"
+          ]
+        },
+        {
+          "marker": "weathered camera strap",
+          "aliases": [
+            "combined note weathered camera strap",
+            "weathered camera strap only visible after combining documents"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "canal route map",
+          "aliases": [
+            "irrelevant document detail canal route map"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 3,
+      "difficulty": "medium",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 80
+    },
+    {
+      "id": "multi-document-020",
+      "question": "Which records together show how Mira prepared the overnight ferry stop near Star Basin gallery?",
+      "expected_answer_type": "multi_fact",
+      "test_type": "multi_document",
+      "source_scope": {
+        "scope_type": "multi_document",
+        "document_ids": [
+          "multi-star-basin-gallery-letter-roll-020",
+          "multi-mira-family-register-020"
+        ],
+        "notes": "Requires cross-document retrieval for Mira at Star Basin gallery."
+      },
+      "required_evidence": [
+        {
+          "marker": "linen wick",
+          "aliases": [
+            "travel record linen wick",
+            "linen wick in one document"
+          ]
+        },
+        {
+          "marker": "birch tea flask",
+          "aliases": [
+            "supporting record birch tea flask",
+            "birch tea flask in another document"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "coal stove hiss",
+          "aliases": [
+            "irrelevant document detail coal stove hiss"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "hard",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 100
+    },
+    {
+      "id": "multi-document-021",
+      "question": "Which documents together identify the Bellwater Fair memory that Vera preserved after leaving Snow Orchard storehouse?",
+      "expected_answer_type": "multi_fact",
+      "test_type": "multi_document",
+      "source_scope": {
+        "scope_type": "multi_document",
+        "document_ids": [
+          "multi-snow-orchard-storehouse-repair-book-021",
+          "multi-vera-archive-021",
+          "multi-bellwater-fair-profile-page-021"
+        ],
+        "notes": "Requires cross-document retrieval for Vera at Snow Orchard storehouse."
+      },
+      "required_evidence": [
+        {
+          "marker": "Bellwater Fair",
+          "aliases": [
+            "festival Bellwater Fair",
+            "the Bellwater Fair record"
+          ]
+        },
+        {
+          "marker": "green apron",
+          "aliases": [
+            "preserved item green apron",
+            "green apron in the preserved record"
+          ]
+        },
+        {
+          "marker": "oak barrel hoops",
+          "aliases": [
+            "corroborating item oak barrel hoops",
+            "oak barrel hoops in the second document"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "tin key",
+          "aliases": [
+            "irrelevant document detail tin key"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 3,
+      "difficulty": "easy",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 120
+    },
+    {
+      "id": "multi-document-022",
+      "question": "Which archive pieces from more than one document explain the family profile event at Cedar Hill station?",
+      "expected_answer_type": "multi_fact",
+      "test_type": "multi_document",
+      "source_scope": {
+        "scope_type": "multi_document",
+        "document_ids": [
+          "multi-cedar-hill-station-inventory-sheet-022",
+          "multi-nadia-ledger-022"
+        ],
+        "notes": "Requires cross-document retrieval for Nadia at Cedar Hill station."
+      },
+      "required_evidence": [
+        {
+          "marker": "moonflower cutting",
+          "aliases": [
+            "archive piece moonflower cutting",
+            "moonflower cutting in the first archive piece"
+          ]
+        },
+        {
+          "marker": "glass ink bottle",
+          "aliases": [
+            "second archive piece glass ink bottle",
+            "glass ink bottle in the second archive piece"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "brass compass",
+          "aliases": [
+            "irrelevant document detail brass compass"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "medium",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 140
+    },
+    {
+      "id": "multi-document-023",
+      "question": "Which documents must be combined to understand Anya's travel ledger note about Old Quarry path?",
+      "expected_answer_type": "multi_fact",
+      "test_type": "multi_document",
+      "source_scope": {
+        "scope_type": "multi_document",
+        "document_ids": [
+          "multi-old-quarry-path-family-register-023",
+          "multi-anya-minute-book-023",
+          "multi-moon-orchard-rest-travel-note-023"
+        ],
+        "notes": "Requires cross-document retrieval for Anya at Old Quarry path."
+      },
+      "required_evidence": [
+        {
+          "marker": "rope bridge permit",
+          "aliases": [
+            "combined note rope bridge permit",
+            "rope bridge permit in one required document"
+          ]
+        },
+        {
+          "marker": "weathered camera strap",
+          "aliases": [
+            "combined note weathered camera strap",
+            "weathered camera strap in another required document"
+          ]
+        },
+        {
+          "marker": "coal stove hiss",
+          "aliases": [
+            "combined note coal stove hiss",
+            "coal stove hiss only visible after combining documents"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "basalt sketch",
+          "aliases": [
+            "irrelevant document detail basalt sketch"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 3,
+      "difficulty": "hard",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 160
+    },
+    {
+      "id": "multi-document-024",
+      "question": "Which records together show how Yara prepared the canal barge stop near Cloud Wharf office?",
+      "expected_answer_type": "multi_fact",
+      "test_type": "multi_document",
+      "source_scope": {
+        "scope_type": "multi_document",
+        "document_ids": [
+          "multi-cloud-wharf-office-archive-024",
+          "multi-yara-profile-page-024"
+        ],
+        "notes": "Requires cross-document retrieval for Yara at Cloud Wharf office."
+      },
+      "required_evidence": [
+        {
+          "marker": "paper moon mask",
+          "aliases": [
+            "travel record paper moon mask",
+            "paper moon mask in one document"
+          ]
+        },
+        {
+          "marker": "juniper bundles",
+          "aliases": [
+            "supporting record juniper bundles",
+            "juniper bundles in another document"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "copper token",
+          "aliases": [
+            "irrelevant document detail copper token"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "easy",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 60
+    },
+    {
+      "id": "multi-document-025",
+      "question": "Which documents together identify the Lantern Tide memory that Ada preserved after leaving Harbor Glass corridor?",
+      "expected_answer_type": "multi_fact",
+      "test_type": "multi_document",
+      "source_scope": {
+        "scope_type": "multi_document",
+        "document_ids": [
+          "multi-harbor-glass-corridor-ledger-025",
+          "multi-ada-memory-log-025",
+          "multi-lantern-tide-audio-transcript-025"
+        ],
+        "notes": "Requires cross-document retrieval for Ada at Harbor Glass corridor."
+      },
+      "required_evidence": [
+        {
+          "marker": "Lantern Tide",
+          "aliases": [
+            "festival Lantern Tide",
+            "the Lantern Tide record"
+          ]
+        },
+        {
+          "marker": "lantern hook",
+          "aliases": [
+            "preserved item lantern hook",
+            "lantern hook in the preserved record"
+          ]
+        },
+        {
+          "marker": "carved shell comb",
+          "aliases": [
+            "corroborating item carved shell comb",
+            "carved shell comb in the second document"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "tuning fork",
+          "aliases": [
+            "irrelevant document detail tuning fork"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 3,
+      "difficulty": "medium",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 80
+    },
+    {
+      "id": "multi-document-026",
+      "question": "Which archive pieces from more than one document explain the family profile event at North Orchard lane?",
+      "expected_answer_type": "multi_fact",
+      "test_type": "multi_document",
+      "source_scope": {
+        "scope_type": "multi_document",
+        "document_ids": [
+          "multi-north-orchard-lane-minute-book-026",
+          "multi-sonya-travel-note-026"
+        ],
+        "notes": "Requires cross-document retrieval for Sonya at North Orchard lane."
+      },
+      "required_evidence": [
+        {
+          "marker": "clay watering cup",
+          "aliases": [
+            "archive piece clay watering cup",
+            "clay watering cup in the first archive piece"
+          ]
+        },
+        {
+          "marker": "canal route map",
+          "aliases": [
+            "second archive piece canal route map",
+            "canal route map in the second archive piece"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "willow basket",
+          "aliases": [
+            "irrelevant document detail willow basket"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "hard",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 100
+    },
+    {
+      "id": "multi-document-027",
+      "question": "Which documents must be combined to understand Runa's memory sketchbook note about Hollow Market arcade?",
+      "expected_answer_type": "multi_fact",
+      "test_type": "multi_document",
+      "source_scope": {
+        "scope_type": "multi_document",
+        "document_ids": [
+          "multi-hollow-market-arcade-profile-page-027",
+          "multi-runa-photo-index-027",
+          "multi-harvest-glow-repair-book-027"
+        ],
+        "notes": "Requires cross-document retrieval for Runa at Hollow Market arcade."
+      },
+      "required_evidence": [
+        {
+          "marker": "saffron scarf",
+          "aliases": [
+            "combined note saffron scarf",
+            "saffron scarf in one required document"
+          ]
+        },
+        {
+          "marker": "coal stove hiss",
+          "aliases": [
+            "combined note coal stove hiss",
+            "coal stove hiss in another required document"
+          ]
+        },
+        {
+          "marker": "copper token",
+          "aliases": [
+            "combined note copper token",
+            "copper token only visible after combining documents"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "star ledger page",
+          "aliases": [
+            "irrelevant document detail star ledger page"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 3,
+      "difficulty": "easy",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 120
+    },
+    {
+      "id": "multi-document-028",
+      "question": "Which records together show how Iveta prepared the winter coach stop near Marble stair hall?",
+      "expected_answer_type": "multi_fact",
+      "test_type": "multi_document",
+      "source_scope": {
+        "scope_type": "multi_document",
+        "document_ids": [
+          "multi-marble-stair-hall-memory-log-028",
+          "multi-iveta-audio-transcript-028"
+        ],
+        "notes": "Requires cross-document retrieval for Iveta at Marble stair hall."
+      },
+      "required_evidence": [
+        {
+          "marker": "blue glass jar",
+          "aliases": [
+            "travel record blue glass jar",
+            "blue glass jar in one document"
+          ]
+        },
+        {
+          "marker": "tin key",
+          "aliases": [
+            "supporting record tin key",
+            "tin key in another document"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "silver booth token",
+          "aliases": [
+            "irrelevant document detail silver booth token"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "medium",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 140
+    },
+    {
+      "id": "multi-document-029",
+      "question": "Which documents together identify the Signal Lantern Morning memory that Zora preserved after leaving Amber Canal lock?",
+      "expected_answer_type": "multi_fact",
+      "test_type": "multi_document",
+      "source_scope": {
+        "scope_type": "multi_document",
+        "document_ids": [
+          "multi-amber-canal-lock-travel-note-029",
+          "multi-zora-letter-roll-029",
+          "multi-signal-lantern-morning-family-register-029"
+        ],
+        "notes": "Requires cross-document retrieval for Zora at Amber Canal lock."
+      },
+      "required_evidence": [
+        {
+          "marker": "Signal Lantern Morning",
+          "aliases": [
+            "festival Signal Lantern Morning",
+            "the Signal Lantern Morning record"
+          ]
+        },
+        {
+          "marker": "copper wind vane pin",
+          "aliases": [
+            "preserved item copper wind vane pin",
+            "copper wind vane pin in the preserved record"
+          ]
+        },
+        {
+          "marker": "brass compass",
+          "aliases": [
+            "corroborating item brass compass",
+            "brass compass in the second document"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "birch tea flask",
+          "aliases": [
+            "irrelevant document detail birch tea flask"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 3,
+      "difficulty": "hard",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 160
+    },
+    {
+      "id": "multi-document-030",
+      "question": "Which archive pieces from more than one document explain the family profile event at Bell Bridge square?",
+      "expected_answer_type": "multi_fact",
+      "test_type": "multi_document",
+      "source_scope": {
+        "scope_type": "multi_document",
+        "document_ids": [
+          "multi-bell-bridge-square-photo-index-030",
+          "multi-mira-repair-book-030"
+        ],
+        "notes": "Requires cross-document retrieval for Mira at Bell Bridge square."
+      },
+      "required_evidence": [
+        {
+          "marker": "wax thread",
+          "aliases": [
+            "archive piece wax thread",
+            "wax thread in the first archive piece"
+          ]
+        },
+        {
+          "marker": "basalt sketch",
+          "aliases": [
+            "second archive piece basalt sketch",
+            "basalt sketch in the second archive piece"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "oak barrel hoops",
+          "aliases": [
+            "irrelevant document detail oak barrel hoops"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "easy",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 60
+    },
+    {
+      "id": "multi-document-031",
+      "question": "Which documents must be combined to understand Vera's photo album page note about Watchtower landing?",
+      "expected_answer_type": "multi_fact",
+      "test_type": "multi_document",
+      "source_scope": {
+        "scope_type": "multi_document",
+        "document_ids": [
+          "multi-watchtower-landing-audio-transcript-031",
+          "multi-vera-inventory-sheet-031",
+          "multi-bellwater-fair-ledger-031"
+        ],
+        "notes": "Requires cross-document retrieval for Vera at Watchtower landing."
+      },
+      "required_evidence": [
+        {
+          "marker": "smoke vent chain",
+          "aliases": [
+            "combined note smoke vent chain",
+            "smoke vent chain in one required document"
+          ]
+        },
+        {
+          "marker": "copper token",
+          "aliases": [
+            "combined note copper token",
+            "copper token in another required document"
+          ]
+        },
+        {
+          "marker": "silver booth token",
+          "aliases": [
+            "combined note silver booth token",
+            "silver booth token only visible after combining documents"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "glass ink bottle",
+          "aliases": [
+            "irrelevant document detail glass ink bottle"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 3,
+      "difficulty": "medium",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 80
+    },
+    {
+      "id": "multi-document-032",
+      "question": "Which records together show how Nadia prepared the river skiff stop near Lantern Row kiosk?",
+      "expected_answer_type": "multi_fact",
+      "test_type": "multi_document",
+      "source_scope": {
+        "scope_type": "multi_document",
+        "document_ids": [
+          "multi-lantern-row-kiosk-letter-roll-032",
+          "multi-nadia-family-register-032"
+        ],
+        "notes": "Requires cross-document retrieval for Nadia at Lantern Row kiosk."
+      },
+      "required_evidence": [
+        {
+          "marker": "amber lantern",
+          "aliases": [
+            "travel record amber lantern",
+            "amber lantern in one document"
+          ]
+        },
+        {
+          "marker": "tuning fork",
+          "aliases": [
+            "supporting record tuning fork",
+            "tuning fork in another document"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "weathered camera strap",
+          "aliases": [
+            "irrelevant document detail weathered camera strap"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "hard",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 100
+    },
+    {
+      "id": "multi-document-033",
+      "question": "Which documents together identify the Moon Orchard Rest memory that Anya preserved after leaving Moss Archive room?",
+      "expected_answer_type": "multi_fact",
+      "test_type": "multi_document",
+      "source_scope": {
+        "scope_type": "multi_document",
+        "document_ids": [
+          "multi-moss-archive-room-repair-book-033",
+          "multi-anya-archive-033",
+          "multi-moon-orchard-rest-profile-page-033"
+        ],
+        "notes": "Requires cross-document retrieval for Anya at Moss Archive room."
+      },
+      "required_evidence": [
+        {
+          "marker": "Moon Orchard Rest",
+          "aliases": [
+            "festival Moon Orchard Rest",
+            "the Moon Orchard Rest record"
+          ]
+        },
+        {
+          "marker": "cedar shovel",
+          "aliases": [
+            "preserved item cedar shovel",
+            "cedar shovel in the preserved record"
+          ]
+        },
+        {
+          "marker": "willow basket",
+          "aliases": [
+            "corroborating item willow basket",
+            "willow basket in the second document"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "juniper bundles",
+          "aliases": [
+            "irrelevant document detail juniper bundles"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 3,
+      "difficulty": "easy",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 120
+    },
+    {
+      "id": "multi-document-034",
+      "question": "Which archive pieces from more than one document explain the family profile event at Blue Trunk cabin?",
+      "expected_answer_type": "multi_fact",
+      "test_type": "multi_document",
+      "source_scope": {
+        "scope_type": "multi_document",
+        "document_ids": [
+          "multi-blue-trunk-cabin-inventory-sheet-034",
+          "multi-yara-ledger-034"
+        ],
+        "notes": "Requires cross-document retrieval for Yara at Blue Trunk cabin."
+      },
+      "required_evidence": [
+        {
+          "marker": "violet ribbon",
+          "aliases": [
+            "archive piece violet ribbon",
+            "violet ribbon in the first archive piece"
+          ]
+        },
+        {
+          "marker": "star ledger page",
+          "aliases": [
+            "second archive piece star ledger page",
+            "star ledger page in the second archive piece"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "carved shell comb",
+          "aliases": [
+            "irrelevant document detail carved shell comb"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "medium",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 140
+    },
+    {
+      "id": "multi-document-035",
+      "question": "Which documents must be combined to understand Ada's family note note about River Lantern inn?",
+      "expected_answer_type": "multi_fact",
+      "test_type": "multi_document",
+      "source_scope": {
+        "scope_type": "multi_document",
+        "document_ids": [
+          "multi-river-lantern-inn-family-register-035",
+          "multi-ada-minute-book-035",
+          "multi-lantern-tide-travel-note-035"
+        ],
+        "notes": "Requires cross-document retrieval for Ada at River Lantern inn."
+      },
+      "required_evidence": [
+        {
+          "marker": "blue oar",
+          "aliases": [
+            "combined note blue oar",
+            "blue oar in one required document"
+          ]
+        },
+        {
+          "marker": "silver booth token",
+          "aliases": [
+            "combined note silver booth token",
+            "silver booth token in another required document"
+          ]
+        },
+        {
+          "marker": "weathered camera strap",
+          "aliases": [
+            "combined note weathered camera strap",
+            "weathered camera strap only visible after combining documents"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "canal route map",
+          "aliases": [
+            "irrelevant document detail canal route map"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 3,
+      "difficulty": "hard",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 160
+    },
+    {
+      "id": "multi-document-036",
+      "question": "Which records together show how Sonya prepared the quarry lift stop near Winter Chapel porch?",
+      "expected_answer_type": "multi_fact",
+      "test_type": "multi_document",
+      "source_scope": {
+        "scope_type": "multi_document",
+        "document_ids": [
+          "multi-winter-chapel-porch-archive-036",
+          "multi-sonya-profile-page-036"
+        ],
+        "notes": "Requires cross-document retrieval for Sonya at Winter Chapel porch."
+      },
+      "required_evidence": [
+        {
+          "marker": "linen wick",
+          "aliases": [
+            "travel record linen wick",
+            "linen wick in one document"
+          ]
+        },
+        {
+          "marker": "birch tea flask",
+          "aliases": [
+            "supporting record birch tea flask",
+            "birch tea flask in another document"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "coal stove hiss",
+          "aliases": [
+            "irrelevant document detail coal stove hiss"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "easy",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 60
+    },
+    {
+      "id": "multi-document-037",
+      "question": "Which documents together identify the Harvest Glow memory that Runa preserved after leaving Fox Hollow bridge?",
+      "expected_answer_type": "multi_fact",
+      "test_type": "multi_document",
+      "source_scope": {
+        "scope_type": "multi_document",
+        "document_ids": [
+          "multi-fox-hollow-bridge-ledger-037",
+          "multi-runa-memory-log-037",
+          "multi-harvest-glow-audio-transcript-037"
+        ],
+        "notes": "Requires cross-document retrieval for Runa at Fox Hollow bridge."
+      },
+      "required_evidence": [
+        {
+          "marker": "Harvest Glow",
+          "aliases": [
+            "festival Harvest Glow",
+            "the Harvest Glow record"
+          ]
+        },
+        {
+          "marker": "green apron",
+          "aliases": [
+            "preserved item green apron",
+            "green apron in the preserved record"
+          ]
+        },
+        {
+          "marker": "oak barrel hoops",
+          "aliases": [
+            "corroborating item oak barrel hoops",
+            "oak barrel hoops in the second document"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "tin key",
+          "aliases": [
+            "irrelevant document detail tin key"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 3,
+      "difficulty": "medium",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 80
+    },
+    {
+      "id": "multi-document-038",
+      "question": "Which archive pieces from more than one document explain the family profile event at Willow Courtyard well?",
+      "expected_answer_type": "multi_fact",
+      "test_type": "multi_document",
+      "source_scope": {
+        "scope_type": "multi_document",
+        "document_ids": [
+          "multi-willow-courtyard-well-minute-book-038",
+          "multi-iveta-travel-note-038"
+        ],
+        "notes": "Requires cross-document retrieval for Iveta at Willow Courtyard well."
+      },
+      "required_evidence": [
+        {
+          "marker": "moonflower cutting",
+          "aliases": [
+            "archive piece moonflower cutting",
+            "moonflower cutting in the first archive piece"
+          ]
+        },
+        {
+          "marker": "glass ink bottle",
+          "aliases": [
+            "second archive piece glass ink bottle",
+            "glass ink bottle in the second archive piece"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "brass compass",
+          "aliases": [
+            "irrelevant document detail brass compass"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "hard",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 100
+    },
+    {
+      "id": "multi-document-039",
+      "question": "Which documents must be combined to understand Zora's archive card note about Glass Harbor quay?",
+      "expected_answer_type": "multi_fact",
+      "test_type": "multi_document",
+      "source_scope": {
+        "scope_type": "multi_document",
+        "document_ids": [
+          "multi-glass-harbor-quay-profile-page-039",
+          "multi-zora-photo-index-039",
+          "multi-signal-lantern-morning-repair-book-039"
+        ],
+        "notes": "Requires cross-document retrieval for Zora at Glass Harbor quay."
+      },
+      "required_evidence": [
+        {
+          "marker": "rope bridge permit",
+          "aliases": [
+            "combined note rope bridge permit",
+            "rope bridge permit in one required document"
+          ]
+        },
+        {
+          "marker": "weathered camera strap",
+          "aliases": [
+            "combined note weathered camera strap",
+            "weathered camera strap in another required document"
+          ]
+        },
+        {
+          "marker": "coal stove hiss",
+          "aliases": [
+            "combined note coal stove hiss",
+            "coal stove hiss only visible after combining documents"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "basalt sketch",
+          "aliases": [
+            "irrelevant document detail basalt sketch"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 3,
+      "difficulty": "easy",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 120
+    },
+    {
+      "id": "multi-document-040",
+      "question": "Which records together show how Mira prepared the overnight ferry stop near Birch Ferry shed?",
+      "expected_answer_type": "multi_fact",
+      "test_type": "multi_document",
+      "source_scope": {
+        "scope_type": "multi_document",
+        "document_ids": [
+          "multi-birch-ferry-shed-memory-log-040",
+          "multi-mira-audio-transcript-040"
+        ],
+        "notes": "Requires cross-document retrieval for Mira at Birch Ferry shed."
+      },
+      "required_evidence": [
+        {
+          "marker": "paper moon mask",
+          "aliases": [
+            "travel record paper moon mask",
+            "paper moon mask in one document"
+          ]
+        },
+        {
+          "marker": "juniper bundles",
+          "aliases": [
+            "supporting record juniper bundles",
+            "juniper bundles in another document"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "copper token",
+          "aliases": [
+            "irrelevant document detail copper token"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "medium",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 140
+    },
+    {
+      "id": "multi-document-041",
+      "question": "Which documents together identify the Bellwater Fair memory that Vera preserved after leaving Pine Gate yard?",
+      "expected_answer_type": "multi_fact",
+      "test_type": "multi_document",
+      "source_scope": {
+        "scope_type": "multi_document",
+        "document_ids": [
+          "multi-pine-gate-yard-travel-note-041",
+          "multi-vera-letter-roll-041",
+          "multi-bellwater-fair-family-register-041"
+        ],
+        "notes": "Requires cross-document retrieval for Vera at Pine Gate yard."
+      },
+      "required_evidence": [
+        {
+          "marker": "Bellwater Fair",
+          "aliases": [
+            "festival Bellwater Fair",
+            "the Bellwater Fair record"
+          ]
+        },
+        {
+          "marker": "lantern hook",
+          "aliases": [
+            "preserved item lantern hook",
+            "lantern hook in the preserved record"
+          ]
+        },
+        {
+          "marker": "carved shell comb",
+          "aliases": [
+            "corroborating item carved shell comb",
+            "carved shell comb in the second document"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "tuning fork",
+          "aliases": [
+            "irrelevant document detail tuning fork"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 3,
+      "difficulty": "hard",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 160
+    },
+    {
+      "id": "multi-document-042",
+      "question": "Which archive pieces from more than one document explain the family profile event at North Bell workshop?",
+      "expected_answer_type": "multi_fact",
+      "test_type": "multi_document",
+      "source_scope": {
+        "scope_type": "multi_document",
+        "document_ids": [
+          "multi-north-bell-workshop-photo-index-042",
+          "multi-nadia-repair-book-042"
+        ],
+        "notes": "Requires cross-document retrieval for Nadia at North Bell workshop."
+      },
+      "required_evidence": [
+        {
+          "marker": "clay watering cup",
+          "aliases": [
+            "archive piece clay watering cup",
+            "clay watering cup in the first archive piece"
+          ]
+        },
+        {
+          "marker": "canal route map",
+          "aliases": [
+            "second archive piece canal route map",
+            "canal route map in the second archive piece"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "willow basket",
+          "aliases": [
+            "irrelevant document detail willow basket"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "easy",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 60
+    },
+    {
+      "id": "multi-document-043",
+      "question": "Which documents must be combined to understand Anya's holiday card note about Fog Island pier?",
+      "expected_answer_type": "multi_fact",
+      "test_type": "multi_document",
+      "source_scope": {
+        "scope_type": "multi_document",
+        "document_ids": [
+          "multi-fog-island-pier-audio-transcript-043",
+          "multi-anya-inventory-sheet-043",
+          "multi-moon-orchard-rest-ledger-043"
+        ],
+        "notes": "Requires cross-document retrieval for Anya at Fog Island pier."
+      },
+      "required_evidence": [
+        {
+          "marker": "saffron scarf",
+          "aliases": [
+            "combined note saffron scarf",
+            "saffron scarf in one required document"
+          ]
+        },
+        {
+          "marker": "coal stove hiss",
+          "aliases": [
+            "combined note coal stove hiss",
+            "coal stove hiss in another required document"
+          ]
+        },
+        {
+          "marker": "copper token",
+          "aliases": [
+            "combined note copper token",
+            "copper token only visible after combining documents"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "star ledger page",
+          "aliases": [
+            "irrelevant document detail star ledger page"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 3,
+      "difficulty": "medium",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 80
+    },
+    {
+      "id": "multi-document-044",
+      "question": "Which records together show how Yara prepared the canal barge stop near Moon Mill yard?",
+      "expected_answer_type": "multi_fact",
+      "test_type": "multi_document",
+      "source_scope": {
+        "scope_type": "multi_document",
+        "document_ids": [
+          "multi-moon-mill-yard-letter-roll-044",
+          "multi-yara-family-register-044"
+        ],
+        "notes": "Requires cross-document retrieval for Yara at Moon Mill yard."
+      },
+      "required_evidence": [
+        {
+          "marker": "blue glass jar",
+          "aliases": [
+            "travel record blue glass jar",
+            "blue glass jar in one document"
+          ]
+        },
+        {
+          "marker": "tin key",
+          "aliases": [
+            "supporting record tin key",
+            "tin key in another document"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "silver booth token",
+          "aliases": [
+            "irrelevant document detail silver booth token"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "hard",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 100
+    },
+    {
+      "id": "multi-document-045",
+      "question": "Which documents together identify the Lantern Tide memory that Ada preserved after leaving Driftwood cove?",
+      "expected_answer_type": "multi_fact",
+      "test_type": "multi_document",
+      "source_scope": {
+        "scope_type": "multi_document",
+        "document_ids": [
+          "multi-driftwood-cove-repair-book-045",
+          "multi-ada-archive-045",
+          "multi-lantern-tide-profile-page-045"
+        ],
+        "notes": "Requires cross-document retrieval for Ada at Driftwood cove."
+      },
+      "required_evidence": [
+        {
+          "marker": "Lantern Tide",
+          "aliases": [
+            "festival Lantern Tide",
+            "the Lantern Tide record"
+          ]
+        },
+        {
+          "marker": "copper wind vane pin",
+          "aliases": [
+            "preserved item copper wind vane pin",
+            "copper wind vane pin in the preserved record"
+          ]
+        },
+        {
+          "marker": "brass compass",
+          "aliases": [
+            "corroborating item brass compass",
+            "brass compass in the second document"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "birch tea flask",
+          "aliases": [
+            "irrelevant document detail birch tea flask"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 3,
+      "difficulty": "easy",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 120
+    },
+    {
+      "id": "multi-document-046",
+      "question": "Which archive pieces from more than one document explain the family profile event at Ridge Post loft?",
+      "expected_answer_type": "multi_fact",
+      "test_type": "multi_document",
+      "source_scope": {
+        "scope_type": "multi_document",
+        "document_ids": [
+          "multi-ridge-post-loft-inventory-sheet-046",
+          "multi-sonya-ledger-046"
+        ],
+        "notes": "Requires cross-document retrieval for Sonya at Ridge Post loft."
+      },
+      "required_evidence": [
+        {
+          "marker": "wax thread",
+          "aliases": [
+            "archive piece wax thread",
+            "wax thread in the first archive piece"
+          ]
+        },
+        {
+          "marker": "basalt sketch",
+          "aliases": [
+            "second archive piece basalt sketch",
+            "basalt sketch in the second archive piece"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "oak barrel hoops",
+          "aliases": [
+            "irrelevant document detail oak barrel hoops"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "medium",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 140
+    },
+    {
+      "id": "multi-document-047",
+      "question": "Which documents must be combined to understand Runa's boat manifest note about East Signal room?",
+      "expected_answer_type": "multi_fact",
+      "test_type": "multi_document",
+      "source_scope": {
+        "scope_type": "multi_document",
+        "document_ids": [
+          "multi-east-signal-room-family-register-047",
+          "multi-runa-minute-book-047",
+          "multi-harvest-glow-travel-note-047"
+        ],
+        "notes": "Requires cross-document retrieval for Runa at East Signal room."
+      },
+      "required_evidence": [
+        {
+          "marker": "smoke vent chain",
+          "aliases": [
+            "combined note smoke vent chain",
+            "smoke vent chain in one required document"
+          ]
+        },
+        {
+          "marker": "copper token",
+          "aliases": [
+            "combined note copper token",
+            "copper token in another required document"
+          ]
+        },
+        {
+          "marker": "silver booth token",
+          "aliases": [
+            "combined note silver booth token",
+            "silver booth token only visible after combining documents"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "glass ink bottle",
+          "aliases": [
+            "irrelevant document detail glass ink bottle"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 3,
+      "difficulty": "hard",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 160
+    },
+    {
+      "id": "multi-document-048",
+      "question": "Which records together show how Iveta prepared the winter coach stop near South Meadow arch?",
+      "expected_answer_type": "multi_fact",
+      "test_type": "multi_document",
+      "source_scope": {
+        "scope_type": "multi_document",
+        "document_ids": [
+          "multi-south-meadow-arch-archive-048",
+          "multi-iveta-profile-page-048"
+        ],
+        "notes": "Requires cross-document retrieval for Iveta at South Meadow arch."
+      },
+      "required_evidence": [
+        {
+          "marker": "amber lantern",
+          "aliases": [
+            "travel record amber lantern",
+            "amber lantern in one document"
+          ]
+        },
+        {
+          "marker": "tuning fork",
+          "aliases": [
+            "supporting record tuning fork",
+            "tuning fork in another document"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "weathered camera strap",
+          "aliases": [
+            "irrelevant document detail weathered camera strap"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "easy",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 60
+    },
+    {
+      "id": "multi-document-049",
+      "question": "Which documents together identify the Signal Lantern Morning memory that Zora preserved after leaving Maple Court attic?",
+      "expected_answer_type": "multi_fact",
+      "test_type": "multi_document",
+      "source_scope": {
+        "scope_type": "multi_document",
+        "document_ids": [
+          "multi-maple-court-attic-ledger-049",
+          "multi-zora-memory-log-049",
+          "multi-signal-lantern-morning-audio-transcript-049"
+        ],
+        "notes": "Requires cross-document retrieval for Zora at Maple Court attic."
+      },
+      "required_evidence": [
+        {
+          "marker": "Signal Lantern Morning",
+          "aliases": [
+            "festival Signal Lantern Morning",
+            "the Signal Lantern Morning record"
+          ]
+        },
+        {
+          "marker": "cedar shovel",
+          "aliases": [
+            "preserved item cedar shovel",
+            "cedar shovel in the preserved record"
+          ]
+        },
+        {
+          "marker": "willow basket",
+          "aliases": [
+            "corroborating item willow basket",
+            "willow basket in the second document"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "juniper bundles",
+          "aliases": [
+            "irrelevant document detail juniper bundles"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 3,
+      "difficulty": "medium",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 80
+    },
+    {
+      "id": "multi-document-050",
+      "question": "Which archive pieces from more than one document explain the family profile event at Star Basin gallery?",
+      "expected_answer_type": "multi_fact",
+      "test_type": "multi_document",
+      "source_scope": {
+        "scope_type": "multi_document",
+        "document_ids": [
+          "multi-star-basin-gallery-minute-book-050",
+          "multi-mira-travel-note-050"
+        ],
+        "notes": "Requires cross-document retrieval for Mira at Star Basin gallery."
+      },
+      "required_evidence": [
+        {
+          "marker": "violet ribbon",
+          "aliases": [
+            "archive piece violet ribbon",
+            "violet ribbon in the first archive piece"
+          ]
+        },
+        {
+          "marker": "star ledger page",
+          "aliases": [
+            "second archive piece star ledger page",
+            "star ledger page in the second archive piece"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "carved shell comb",
+          "aliases": [
+            "irrelevant document detail carved shell comb"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "hard",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 100
+    },
+    {
+      "id": "multi-document-051",
+      "question": "Which documents must be combined to understand Vera's travel ledger note about Snow Orchard storehouse?",
+      "expected_answer_type": "multi_fact",
+      "test_type": "multi_document",
+      "source_scope": {
+        "scope_type": "multi_document",
+        "document_ids": [
+          "multi-snow-orchard-storehouse-profile-page-051",
+          "multi-vera-photo-index-051",
+          "multi-bellwater-fair-repair-book-051"
+        ],
+        "notes": "Requires cross-document retrieval for Vera at Snow Orchard storehouse."
+      },
+      "required_evidence": [
+        {
+          "marker": "blue oar",
+          "aliases": [
+            "combined note blue oar",
+            "blue oar in one required document"
+          ]
+        },
+        {
+          "marker": "silver booth token",
+          "aliases": [
+            "combined note silver booth token",
+            "silver booth token in another required document"
+          ]
+        },
+        {
+          "marker": "weathered camera strap",
+          "aliases": [
+            "combined note weathered camera strap",
+            "weathered camera strap only visible after combining documents"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "canal route map",
+          "aliases": [
+            "irrelevant document detail canal route map"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 3,
+      "difficulty": "easy",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 120
+    },
+    {
+      "id": "multi-document-052",
+      "question": "Which records together show how Nadia prepared the river skiff stop near Cedar Hill station?",
+      "expected_answer_type": "multi_fact",
+      "test_type": "multi_document",
+      "source_scope": {
+        "scope_type": "multi_document",
+        "document_ids": [
+          "multi-cedar-hill-station-memory-log-052",
+          "multi-nadia-audio-transcript-052"
+        ],
+        "notes": "Requires cross-document retrieval for Nadia at Cedar Hill station."
+      },
+      "required_evidence": [
+        {
+          "marker": "linen wick",
+          "aliases": [
+            "travel record linen wick",
+            "linen wick in one document"
+          ]
+        },
+        {
+          "marker": "birch tea flask",
+          "aliases": [
+            "supporting record birch tea flask",
+            "birch tea flask in another document"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "coal stove hiss",
+          "aliases": [
+            "irrelevant document detail coal stove hiss"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "medium",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 140
+    },
+    {
+      "id": "multi-document-053",
+      "question": "Which documents together identify the Moon Orchard Rest memory that Anya preserved after leaving Old Quarry path?",
+      "expected_answer_type": "multi_fact",
+      "test_type": "multi_document",
+      "source_scope": {
+        "scope_type": "multi_document",
+        "document_ids": [
+          "multi-old-quarry-path-travel-note-053",
+          "multi-anya-letter-roll-053",
+          "multi-moon-orchard-rest-family-register-053"
+        ],
+        "notes": "Requires cross-document retrieval for Anya at Old Quarry path."
+      },
+      "required_evidence": [
+        {
+          "marker": "Moon Orchard Rest",
+          "aliases": [
+            "festival Moon Orchard Rest",
+            "the Moon Orchard Rest record"
+          ]
+        },
+        {
+          "marker": "green apron",
+          "aliases": [
+            "preserved item green apron",
+            "green apron in the preserved record"
+          ]
+        },
+        {
+          "marker": "oak barrel hoops",
+          "aliases": [
+            "corroborating item oak barrel hoops",
+            "oak barrel hoops in the second document"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "tin key",
+          "aliases": [
+            "irrelevant document detail tin key"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 3,
+      "difficulty": "hard",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 160
+    },
+    {
+      "id": "multi-document-054",
+      "question": "Which archive pieces from more than one document explain the family profile event at Cloud Wharf office?",
+      "expected_answer_type": "multi_fact",
+      "test_type": "multi_document",
+      "source_scope": {
+        "scope_type": "multi_document",
+        "document_ids": [
+          "multi-cloud-wharf-office-photo-index-054",
+          "multi-yara-repair-book-054"
+        ],
+        "notes": "Requires cross-document retrieval for Yara at Cloud Wharf office."
+      },
+      "required_evidence": [
+        {
+          "marker": "moonflower cutting",
+          "aliases": [
+            "archive piece moonflower cutting",
+            "moonflower cutting in the first archive piece"
+          ]
+        },
+        {
+          "marker": "glass ink bottle",
+          "aliases": [
+            "second archive piece glass ink bottle",
+            "glass ink bottle in the second archive piece"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "brass compass",
+          "aliases": [
+            "irrelevant document detail brass compass"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "easy",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 60
+    },
+    {
+      "id": "multi-document-055",
+      "question": "Which documents must be combined to understand Ada's memory sketchbook note about Harbor Glass corridor?",
+      "expected_answer_type": "multi_fact",
+      "test_type": "multi_document",
+      "source_scope": {
+        "scope_type": "multi_document",
+        "document_ids": [
+          "multi-harbor-glass-corridor-audio-transcript-055",
+          "multi-ada-inventory-sheet-055",
+          "multi-lantern-tide-ledger-055"
+        ],
+        "notes": "Requires cross-document retrieval for Ada at Harbor Glass corridor."
+      },
+      "required_evidence": [
+        {
+          "marker": "rope bridge permit",
+          "aliases": [
+            "combined note rope bridge permit",
+            "rope bridge permit in one required document"
+          ]
+        },
+        {
+          "marker": "weathered camera strap",
+          "aliases": [
+            "combined note weathered camera strap",
+            "weathered camera strap in another required document"
+          ]
+        },
+        {
+          "marker": "coal stove hiss",
+          "aliases": [
+            "combined note coal stove hiss",
+            "coal stove hiss only visible after combining documents"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "basalt sketch",
+          "aliases": [
+            "irrelevant document detail basalt sketch"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 3,
+      "difficulty": "medium",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 80
+    },
+    {
+      "id": "multi-document-056",
+      "question": "Which records together show how Sonya prepared the quarry lift stop near North Orchard lane?",
+      "expected_answer_type": "multi_fact",
+      "test_type": "multi_document",
+      "source_scope": {
+        "scope_type": "multi_document",
+        "document_ids": [
+          "multi-north-orchard-lane-letter-roll-056",
+          "multi-sonya-family-register-056"
+        ],
+        "notes": "Requires cross-document retrieval for Sonya at North Orchard lane."
+      },
+      "required_evidence": [
+        {
+          "marker": "paper moon mask",
+          "aliases": [
+            "travel record paper moon mask",
+            "paper moon mask in one document"
+          ]
+        },
+        {
+          "marker": "juniper bundles",
+          "aliases": [
+            "supporting record juniper bundles",
+            "juniper bundles in another document"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "copper token",
+          "aliases": [
+            "irrelevant document detail copper token"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "hard",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 100
+    },
+    {
+      "id": "multi-document-057",
+      "question": "Which documents together identify the Harvest Glow memory that Runa preserved after leaving Hollow Market arcade?",
+      "expected_answer_type": "multi_fact",
+      "test_type": "multi_document",
+      "source_scope": {
+        "scope_type": "multi_document",
+        "document_ids": [
+          "multi-hollow-market-arcade-repair-book-057",
+          "multi-runa-archive-057",
+          "multi-harvest-glow-profile-page-057"
+        ],
+        "notes": "Requires cross-document retrieval for Runa at Hollow Market arcade."
+      },
+      "required_evidence": [
+        {
+          "marker": "Harvest Glow",
+          "aliases": [
+            "festival Harvest Glow",
+            "the Harvest Glow record"
+          ]
+        },
+        {
+          "marker": "lantern hook",
+          "aliases": [
+            "preserved item lantern hook",
+            "lantern hook in the preserved record"
+          ]
+        },
+        {
+          "marker": "carved shell comb",
+          "aliases": [
+            "corroborating item carved shell comb",
+            "carved shell comb in the second document"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "tuning fork",
+          "aliases": [
+            "irrelevant document detail tuning fork"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 3,
+      "difficulty": "easy",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 120
+    },
+    {
+      "id": "multi-document-058",
+      "question": "Which archive pieces from more than one document explain the family profile event at Marble stair hall?",
+      "expected_answer_type": "multi_fact",
+      "test_type": "multi_document",
+      "source_scope": {
+        "scope_type": "multi_document",
+        "document_ids": [
+          "multi-marble-stair-hall-inventory-sheet-058",
+          "multi-iveta-ledger-058"
+        ],
+        "notes": "Requires cross-document retrieval for Iveta at Marble stair hall."
+      },
+      "required_evidence": [
+        {
+          "marker": "clay watering cup",
+          "aliases": [
+            "archive piece clay watering cup",
+            "clay watering cup in the first archive piece"
+          ]
+        },
+        {
+          "marker": "canal route map",
+          "aliases": [
+            "second archive piece canal route map",
+            "canal route map in the second archive piece"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "willow basket",
+          "aliases": [
+            "irrelevant document detail willow basket"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "medium",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 140
+    },
+    {
+      "id": "multi-document-059",
+      "question": "Which documents must be combined to understand Zora's photo album page note about Amber Canal lock?",
+      "expected_answer_type": "multi_fact",
+      "test_type": "multi_document",
+      "source_scope": {
+        "scope_type": "multi_document",
+        "document_ids": [
+          "multi-amber-canal-lock-family-register-059",
+          "multi-zora-minute-book-059",
+          "multi-signal-lantern-morning-travel-note-059"
+        ],
+        "notes": "Requires cross-document retrieval for Zora at Amber Canal lock."
+      },
+      "required_evidence": [
+        {
+          "marker": "saffron scarf",
+          "aliases": [
+            "combined note saffron scarf",
+            "saffron scarf in one required document"
+          ]
+        },
+        {
+          "marker": "coal stove hiss",
+          "aliases": [
+            "combined note coal stove hiss",
+            "coal stove hiss in another required document"
+          ]
+        },
+        {
+          "marker": "copper token",
+          "aliases": [
+            "combined note copper token",
+            "copper token only visible after combining documents"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "star ledger page",
+          "aliases": [
+            "irrelevant document detail star ledger page"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 3,
+      "difficulty": "hard",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 160
+    },
+    {
+      "id": "multi-document-060",
+      "question": "Which records together show how Mira prepared the overnight ferry stop near Bell Bridge square?",
+      "expected_answer_type": "multi_fact",
+      "test_type": "multi_document",
+      "source_scope": {
+        "scope_type": "multi_document",
+        "document_ids": [
+          "multi-bell-bridge-square-archive-060",
+          "multi-mira-profile-page-060"
+        ],
+        "notes": "Requires cross-document retrieval for Mira at Bell Bridge square."
+      },
+      "required_evidence": [
+        {
+          "marker": "blue glass jar",
+          "aliases": [
+            "travel record blue glass jar",
+            "blue glass jar in one document"
+          ]
+        },
+        {
+          "marker": "tin key",
+          "aliases": [
+            "supporting record tin key",
+            "tin key in another document"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "silver booth token",
+          "aliases": [
+            "irrelevant document detail silver booth token"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "easy",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 60
+    },
+    {
+      "id": "multi-document-061",
+      "question": "Which documents together identify the Bellwater Fair memory that Vera preserved after leaving Watchtower landing?",
+      "expected_answer_type": "multi_fact",
+      "test_type": "multi_document",
+      "source_scope": {
+        "scope_type": "multi_document",
+        "document_ids": [
+          "multi-watchtower-landing-ledger-061",
+          "multi-vera-memory-log-061",
+          "multi-bellwater-fair-audio-transcript-061"
+        ],
+        "notes": "Requires cross-document retrieval for Vera at Watchtower landing."
+      },
+      "required_evidence": [
+        {
+          "marker": "Bellwater Fair",
+          "aliases": [
+            "festival Bellwater Fair",
+            "the Bellwater Fair record"
+          ]
+        },
+        {
+          "marker": "copper wind vane pin",
+          "aliases": [
+            "preserved item copper wind vane pin",
+            "copper wind vane pin in the preserved record"
+          ]
+        },
+        {
+          "marker": "brass compass",
+          "aliases": [
+            "corroborating item brass compass",
+            "brass compass in the second document"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "birch tea flask",
+          "aliases": [
+            "irrelevant document detail birch tea flask"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 3,
+      "difficulty": "medium",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 80
+    },
+    {
+      "id": "multi-document-062",
+      "question": "Which archive pieces from more than one document explain the family profile event at Lantern Row kiosk?",
+      "expected_answer_type": "multi_fact",
+      "test_type": "multi_document",
+      "source_scope": {
+        "scope_type": "multi_document",
+        "document_ids": [
+          "multi-lantern-row-kiosk-minute-book-062",
+          "multi-nadia-travel-note-062"
+        ],
+        "notes": "Requires cross-document retrieval for Nadia at Lantern Row kiosk."
+      },
+      "required_evidence": [
+        {
+          "marker": "wax thread",
+          "aliases": [
+            "archive piece wax thread",
+            "wax thread in the first archive piece"
+          ]
+        },
+        {
+          "marker": "basalt sketch",
+          "aliases": [
+            "second archive piece basalt sketch",
+            "basalt sketch in the second archive piece"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "oak barrel hoops",
+          "aliases": [
+            "irrelevant document detail oak barrel hoops"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "hard",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 100
+    },
+    {
+      "id": "multi-document-063",
+      "question": "Which documents must be combined to understand Anya's family note note about Moss Archive room?",
+      "expected_answer_type": "multi_fact",
+      "test_type": "multi_document",
+      "source_scope": {
+        "scope_type": "multi_document",
+        "document_ids": [
+          "multi-moss-archive-room-profile-page-063",
+          "multi-anya-photo-index-063",
+          "multi-moon-orchard-rest-repair-book-063"
+        ],
+        "notes": "Requires cross-document retrieval for Anya at Moss Archive room."
+      },
+      "required_evidence": [
+        {
+          "marker": "smoke vent chain",
+          "aliases": [
+            "combined note smoke vent chain",
+            "smoke vent chain in one required document"
+          ]
+        },
+        {
+          "marker": "copper token",
+          "aliases": [
+            "combined note copper token",
+            "copper token in another required document"
+          ]
+        },
+        {
+          "marker": "silver booth token",
+          "aliases": [
+            "combined note silver booth token",
+            "silver booth token only visible after combining documents"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "glass ink bottle",
+          "aliases": [
+            "irrelevant document detail glass ink bottle"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 3,
+      "difficulty": "easy",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 120
+    },
+    {
+      "id": "multi-document-064",
+      "question": "Which records together show how Yara prepared the canal barge stop near Blue Trunk cabin?",
+      "expected_answer_type": "multi_fact",
+      "test_type": "multi_document",
+      "source_scope": {
+        "scope_type": "multi_document",
+        "document_ids": [
+          "multi-blue-trunk-cabin-memory-log-064",
+          "multi-yara-audio-transcript-064"
+        ],
+        "notes": "Requires cross-document retrieval for Yara at Blue Trunk cabin."
+      },
+      "required_evidence": [
+        {
+          "marker": "amber lantern",
+          "aliases": [
+            "travel record amber lantern",
+            "amber lantern in one document"
+          ]
+        },
+        {
+          "marker": "tuning fork",
+          "aliases": [
+            "supporting record tuning fork",
+            "tuning fork in another document"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "weathered camera strap",
+          "aliases": [
+            "irrelevant document detail weathered camera strap"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "medium",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 140
+    },
+    {
+      "id": "multi-document-065",
+      "question": "Which documents together identify the Lantern Tide memory that Ada preserved after leaving River Lantern inn?",
+      "expected_answer_type": "multi_fact",
+      "test_type": "multi_document",
+      "source_scope": {
+        "scope_type": "multi_document",
+        "document_ids": [
+          "multi-river-lantern-inn-travel-note-065",
+          "multi-ada-letter-roll-065",
+          "multi-lantern-tide-family-register-065"
+        ],
+        "notes": "Requires cross-document retrieval for Ada at River Lantern inn."
+      },
+      "required_evidence": [
+        {
+          "marker": "Lantern Tide",
+          "aliases": [
+            "festival Lantern Tide",
+            "the Lantern Tide record"
+          ]
+        },
+        {
+          "marker": "cedar shovel",
+          "aliases": [
+            "preserved item cedar shovel",
+            "cedar shovel in the preserved record"
+          ]
+        },
+        {
+          "marker": "willow basket",
+          "aliases": [
+            "corroborating item willow basket",
+            "willow basket in the second document"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "juniper bundles",
+          "aliases": [
+            "irrelevant document detail juniper bundles"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 3,
+      "difficulty": "hard",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 160
+    },
+    {
+      "id": "multi-document-066",
+      "question": "Which archive pieces from more than one document explain the family profile event at Winter Chapel porch?",
+      "expected_answer_type": "multi_fact",
+      "test_type": "multi_document",
+      "source_scope": {
+        "scope_type": "multi_document",
+        "document_ids": [
+          "multi-winter-chapel-porch-photo-index-066",
+          "multi-sonya-repair-book-066"
+        ],
+        "notes": "Requires cross-document retrieval for Sonya at Winter Chapel porch."
+      },
+      "required_evidence": [
+        {
+          "marker": "violet ribbon",
+          "aliases": [
+            "archive piece violet ribbon",
+            "violet ribbon in the first archive piece"
+          ]
+        },
+        {
+          "marker": "star ledger page",
+          "aliases": [
+            "second archive piece star ledger page",
+            "star ledger page in the second archive piece"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "carved shell comb",
+          "aliases": [
+            "irrelevant document detail carved shell comb"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "easy",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 60
+    },
+    {
+      "id": "multi-document-067",
+      "question": "Which documents must be combined to understand Runa's archive card note about Fox Hollow bridge?",
+      "expected_answer_type": "multi_fact",
+      "test_type": "multi_document",
+      "source_scope": {
+        "scope_type": "multi_document",
+        "document_ids": [
+          "multi-fox-hollow-bridge-audio-transcript-067",
+          "multi-runa-inventory-sheet-067",
+          "multi-harvest-glow-ledger-067"
+        ],
+        "notes": "Requires cross-document retrieval for Runa at Fox Hollow bridge."
+      },
+      "required_evidence": [
+        {
+          "marker": "blue oar",
+          "aliases": [
+            "combined note blue oar",
+            "blue oar in one required document"
+          ]
+        },
+        {
+          "marker": "silver booth token",
+          "aliases": [
+            "combined note silver booth token",
+            "silver booth token in another required document"
+          ]
+        },
+        {
+          "marker": "weathered camera strap",
+          "aliases": [
+            "combined note weathered camera strap",
+            "weathered camera strap only visible after combining documents"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "canal route map",
+          "aliases": [
+            "irrelevant document detail canal route map"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 3,
+      "difficulty": "medium",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 80
+    },
+    {
+      "id": "multi-document-068",
+      "question": "Which records together show how Iveta prepared the winter coach stop near Willow Courtyard well?",
+      "expected_answer_type": "multi_fact",
+      "test_type": "multi_document",
+      "source_scope": {
+        "scope_type": "multi_document",
+        "document_ids": [
+          "multi-willow-courtyard-well-letter-roll-068",
+          "multi-iveta-family-register-068"
+        ],
+        "notes": "Requires cross-document retrieval for Iveta at Willow Courtyard well."
+      },
+      "required_evidence": [
+        {
+          "marker": "linen wick",
+          "aliases": [
+            "travel record linen wick",
+            "linen wick in one document"
+          ]
+        },
+        {
+          "marker": "birch tea flask",
+          "aliases": [
+            "supporting record birch tea flask",
+            "birch tea flask in another document"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "coal stove hiss",
+          "aliases": [
+            "irrelevant document detail coal stove hiss"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "hard",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 100
+    },
+    {
+      "id": "multi-document-069",
+      "question": "Which documents together identify the Signal Lantern Morning memory that Zora preserved after leaving Glass Harbor quay?",
+      "expected_answer_type": "multi_fact",
+      "test_type": "multi_document",
+      "source_scope": {
+        "scope_type": "multi_document",
+        "document_ids": [
+          "multi-glass-harbor-quay-repair-book-069",
+          "multi-zora-archive-069",
+          "multi-signal-lantern-morning-profile-page-069"
+        ],
+        "notes": "Requires cross-document retrieval for Zora at Glass Harbor quay."
+      },
+      "required_evidence": [
+        {
+          "marker": "Signal Lantern Morning",
+          "aliases": [
+            "festival Signal Lantern Morning",
+            "the Signal Lantern Morning record"
+          ]
+        },
+        {
+          "marker": "green apron",
+          "aliases": [
+            "preserved item green apron",
+            "green apron in the preserved record"
+          ]
+        },
+        {
+          "marker": "oak barrel hoops",
+          "aliases": [
+            "corroborating item oak barrel hoops",
+            "oak barrel hoops in the second document"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "tin key",
+          "aliases": [
+            "irrelevant document detail tin key"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 3,
+      "difficulty": "easy",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 120
+    },
+    {
+      "id": "multi-document-070",
+      "question": "Which archive pieces from more than one document explain the family profile event at Birch Ferry shed?",
+      "expected_answer_type": "multi_fact",
+      "test_type": "multi_document",
+      "source_scope": {
+        "scope_type": "multi_document",
+        "document_ids": [
+          "multi-birch-ferry-shed-inventory-sheet-070",
+          "multi-mira-ledger-070"
+        ],
+        "notes": "Requires cross-document retrieval for Mira at Birch Ferry shed."
+      },
+      "required_evidence": [
+        {
+          "marker": "moonflower cutting",
+          "aliases": [
+            "archive piece moonflower cutting",
+            "moonflower cutting in the first archive piece"
+          ]
+        },
+        {
+          "marker": "glass ink bottle",
+          "aliases": [
+            "second archive piece glass ink bottle",
+            "glass ink bottle in the second archive piece"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "brass compass",
+          "aliases": [
+            "irrelevant document detail brass compass"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "medium",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 140
+    },
+    {
+      "id": "multi-document-071",
+      "question": "Which documents must be combined to understand Vera's holiday card note about Pine Gate yard?",
+      "expected_answer_type": "multi_fact",
+      "test_type": "multi_document",
+      "source_scope": {
+        "scope_type": "multi_document",
+        "document_ids": [
+          "multi-pine-gate-yard-family-register-071",
+          "multi-vera-minute-book-071",
+          "multi-bellwater-fair-travel-note-071"
+        ],
+        "notes": "Requires cross-document retrieval for Vera at Pine Gate yard."
+      },
+      "required_evidence": [
+        {
+          "marker": "rope bridge permit",
+          "aliases": [
+            "combined note rope bridge permit",
+            "rope bridge permit in one required document"
+          ]
+        },
+        {
+          "marker": "weathered camera strap",
+          "aliases": [
+            "combined note weathered camera strap",
+            "weathered camera strap in another required document"
+          ]
+        },
+        {
+          "marker": "coal stove hiss",
+          "aliases": [
+            "combined note coal stove hiss",
+            "coal stove hiss only visible after combining documents"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "basalt sketch",
+          "aliases": [
+            "irrelevant document detail basalt sketch"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 3,
+      "difficulty": "hard",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 160
+    },
+    {
+      "id": "multi-document-072",
+      "question": "Which records together show how Nadia prepared the river skiff stop near North Bell workshop?",
+      "expected_answer_type": "multi_fact",
+      "test_type": "multi_document",
+      "source_scope": {
+        "scope_type": "multi_document",
+        "document_ids": [
+          "multi-north-bell-workshop-archive-072",
+          "multi-nadia-profile-page-072"
+        ],
+        "notes": "Requires cross-document retrieval for Nadia at North Bell workshop."
+      },
+      "required_evidence": [
+        {
+          "marker": "paper moon mask",
+          "aliases": [
+            "travel record paper moon mask",
+            "paper moon mask in one document"
+          ]
+        },
+        {
+          "marker": "juniper bundles",
+          "aliases": [
+            "supporting record juniper bundles",
+            "juniper bundles in another document"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "copper token",
+          "aliases": [
+            "irrelevant document detail copper token"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "easy",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 60
+    },
+    {
+      "id": "multi-document-073",
+      "question": "Which documents together identify the Moon Orchard Rest memory that Anya preserved after leaving Fog Island pier?",
+      "expected_answer_type": "multi_fact",
+      "test_type": "multi_document",
+      "source_scope": {
+        "scope_type": "multi_document",
+        "document_ids": [
+          "multi-fog-island-pier-ledger-073",
+          "multi-anya-memory-log-073",
+          "multi-moon-orchard-rest-audio-transcript-073"
+        ],
+        "notes": "Requires cross-document retrieval for Anya at Fog Island pier."
+      },
+      "required_evidence": [
+        {
+          "marker": "Moon Orchard Rest",
+          "aliases": [
+            "festival Moon Orchard Rest",
+            "the Moon Orchard Rest record"
+          ]
+        },
+        {
+          "marker": "lantern hook",
+          "aliases": [
+            "preserved item lantern hook",
+            "lantern hook in the preserved record"
+          ]
+        },
+        {
+          "marker": "carved shell comb",
+          "aliases": [
+            "corroborating item carved shell comb",
+            "carved shell comb in the second document"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "tuning fork",
+          "aliases": [
+            "irrelevant document detail tuning fork"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 3,
+      "difficulty": "medium",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 80
+    },
+    {
+      "id": "multi-document-074",
+      "question": "Which archive pieces from more than one document explain the family profile event at Moon Mill yard?",
+      "expected_answer_type": "multi_fact",
+      "test_type": "multi_document",
+      "source_scope": {
+        "scope_type": "multi_document",
+        "document_ids": [
+          "multi-moon-mill-yard-minute-book-074",
+          "multi-yara-travel-note-074"
+        ],
+        "notes": "Requires cross-document retrieval for Yara at Moon Mill yard."
+      },
+      "required_evidence": [
+        {
+          "marker": "clay watering cup",
+          "aliases": [
+            "archive piece clay watering cup",
+            "clay watering cup in the first archive piece"
+          ]
+        },
+        {
+          "marker": "canal route map",
+          "aliases": [
+            "second archive piece canal route map",
+            "canal route map in the second archive piece"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "willow basket",
+          "aliases": [
+            "irrelevant document detail willow basket"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "hard",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 100
+    },
+    {
+      "id": "multi-document-075",
+      "question": "Which documents must be combined to understand Ada's boat manifest note about Driftwood cove?",
+      "expected_answer_type": "multi_fact",
+      "test_type": "multi_document",
+      "source_scope": {
+        "scope_type": "multi_document",
+        "document_ids": [
+          "multi-driftwood-cove-profile-page-075",
+          "multi-ada-photo-index-075",
+          "multi-lantern-tide-repair-book-075"
+        ],
+        "notes": "Requires cross-document retrieval for Ada at Driftwood cove."
+      },
+      "required_evidence": [
+        {
+          "marker": "saffron scarf",
+          "aliases": [
+            "combined note saffron scarf",
+            "saffron scarf in one required document"
+          ]
+        },
+        {
+          "marker": "coal stove hiss",
+          "aliases": [
+            "combined note coal stove hiss",
+            "coal stove hiss in another required document"
+          ]
+        },
+        {
+          "marker": "copper token",
+          "aliases": [
+            "combined note copper token",
+            "copper token only visible after combining documents"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "star ledger page",
+          "aliases": [
+            "irrelevant document detail star ledger page"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 3,
+      "difficulty": "easy",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 120
+    },
+    {
+      "id": "multi-document-076",
+      "question": "Which records together show how Sonya prepared the quarry lift stop near Ridge Post loft?",
+      "expected_answer_type": "multi_fact",
+      "test_type": "multi_document",
+      "source_scope": {
+        "scope_type": "multi_document",
+        "document_ids": [
+          "multi-ridge-post-loft-memory-log-076",
+          "multi-sonya-audio-transcript-076"
+        ],
+        "notes": "Requires cross-document retrieval for Sonya at Ridge Post loft."
+      },
+      "required_evidence": [
+        {
+          "marker": "blue glass jar",
+          "aliases": [
+            "travel record blue glass jar",
+            "blue glass jar in one document"
+          ]
+        },
+        {
+          "marker": "tin key",
+          "aliases": [
+            "supporting record tin key",
+            "tin key in another document"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "silver booth token",
+          "aliases": [
+            "irrelevant document detail silver booth token"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "medium",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 140
+    },
+    {
+      "id": "multi-document-077",
+      "question": "Which documents together identify the Harvest Glow memory that Runa preserved after leaving East Signal room?",
+      "expected_answer_type": "multi_fact",
+      "test_type": "multi_document",
+      "source_scope": {
+        "scope_type": "multi_document",
+        "document_ids": [
+          "multi-east-signal-room-travel-note-077",
+          "multi-runa-letter-roll-077",
+          "multi-harvest-glow-family-register-077"
+        ],
+        "notes": "Requires cross-document retrieval for Runa at East Signal room."
+      },
+      "required_evidence": [
+        {
+          "marker": "Harvest Glow",
+          "aliases": [
+            "festival Harvest Glow",
+            "the Harvest Glow record"
+          ]
+        },
+        {
+          "marker": "copper wind vane pin",
+          "aliases": [
+            "preserved item copper wind vane pin",
+            "copper wind vane pin in the preserved record"
+          ]
+        },
+        {
+          "marker": "brass compass",
+          "aliases": [
+            "corroborating item brass compass",
+            "brass compass in the second document"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "birch tea flask",
+          "aliases": [
+            "irrelevant document detail birch tea flask"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 3,
+      "difficulty": "hard",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 160
+    },
+    {
+      "id": "multi-document-078",
+      "question": "Which archive pieces from more than one document explain the family profile event at South Meadow arch?",
+      "expected_answer_type": "multi_fact",
+      "test_type": "multi_document",
+      "source_scope": {
+        "scope_type": "multi_document",
+        "document_ids": [
+          "multi-south-meadow-arch-photo-index-078",
+          "multi-iveta-repair-book-078"
+        ],
+        "notes": "Requires cross-document retrieval for Iveta at South Meadow arch."
+      },
+      "required_evidence": [
+        {
+          "marker": "wax thread",
+          "aliases": [
+            "archive piece wax thread",
+            "wax thread in the first archive piece"
+          ]
+        },
+        {
+          "marker": "basalt sketch",
+          "aliases": [
+            "second archive piece basalt sketch",
+            "basalt sketch in the second archive piece"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "oak barrel hoops",
+          "aliases": [
+            "irrelevant document detail oak barrel hoops"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "easy",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 60
+    },
+    {
+      "id": "multi-document-079",
+      "question": "Which documents must be combined to understand Zora's travel ledger note about Maple Court attic?",
+      "expected_answer_type": "multi_fact",
+      "test_type": "multi_document",
+      "source_scope": {
+        "scope_type": "multi_document",
+        "document_ids": [
+          "multi-maple-court-attic-audio-transcript-079",
+          "multi-zora-inventory-sheet-079",
+          "multi-signal-lantern-morning-ledger-079"
+        ],
+        "notes": "Requires cross-document retrieval for Zora at Maple Court attic."
+      },
+      "required_evidence": [
+        {
+          "marker": "smoke vent chain",
+          "aliases": [
+            "combined note smoke vent chain",
+            "smoke vent chain in one required document"
+          ]
+        },
+        {
+          "marker": "copper token",
+          "aliases": [
+            "combined note copper token",
+            "copper token in another required document"
+          ]
+        },
+        {
+          "marker": "silver booth token",
+          "aliases": [
+            "combined note silver booth token",
+            "silver booth token only visible after combining documents"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "glass ink bottle",
+          "aliases": [
+            "irrelevant document detail glass ink bottle"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 3,
+      "difficulty": "medium",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 80
+    },
+    {
+      "id": "multi-document-080",
+      "question": "Which records together show how Mira prepared the overnight ferry stop near Star Basin gallery?",
+      "expected_answer_type": "multi_fact",
+      "test_type": "multi_document",
+      "source_scope": {
+        "scope_type": "multi_document",
+        "document_ids": [
+          "multi-star-basin-gallery-letter-roll-080",
+          "multi-mira-family-register-080"
+        ],
+        "notes": "Requires cross-document retrieval for Mira at Star Basin gallery."
+      },
+      "required_evidence": [
+        {
+          "marker": "amber lantern",
+          "aliases": [
+            "travel record amber lantern",
+            "amber lantern in one document"
+          ]
+        },
+        {
+          "marker": "tuning fork",
+          "aliases": [
+            "supporting record tuning fork",
+            "tuning fork in another document"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "weathered camera strap",
+          "aliases": [
+            "irrelevant document detail weathered camera strap"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "hard",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 100
+    },
+    {
+      "id": "multi-document-081",
+      "question": "Which documents together identify the Bellwater Fair memory that Vera preserved after leaving Snow Orchard storehouse?",
+      "expected_answer_type": "multi_fact",
+      "test_type": "multi_document",
+      "source_scope": {
+        "scope_type": "multi_document",
+        "document_ids": [
+          "multi-snow-orchard-storehouse-repair-book-081",
+          "multi-vera-archive-081",
+          "multi-bellwater-fair-profile-page-081"
+        ],
+        "notes": "Requires cross-document retrieval for Vera at Snow Orchard storehouse."
+      },
+      "required_evidence": [
+        {
+          "marker": "Bellwater Fair",
+          "aliases": [
+            "festival Bellwater Fair",
+            "the Bellwater Fair record"
+          ]
+        },
+        {
+          "marker": "cedar shovel",
+          "aliases": [
+            "preserved item cedar shovel",
+            "cedar shovel in the preserved record"
+          ]
+        },
+        {
+          "marker": "willow basket",
+          "aliases": [
+            "corroborating item willow basket",
+            "willow basket in the second document"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "juniper bundles",
+          "aliases": [
+            "irrelevant document detail juniper bundles"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 3,
+      "difficulty": "easy",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 120
+    },
+    {
+      "id": "multi-document-082",
+      "question": "Which archive pieces from more than one document explain the family profile event at Cedar Hill station?",
+      "expected_answer_type": "multi_fact",
+      "test_type": "multi_document",
+      "source_scope": {
+        "scope_type": "multi_document",
+        "document_ids": [
+          "multi-cedar-hill-station-inventory-sheet-082",
+          "multi-nadia-ledger-082"
+        ],
+        "notes": "Requires cross-document retrieval for Nadia at Cedar Hill station."
+      },
+      "required_evidence": [
+        {
+          "marker": "violet ribbon",
+          "aliases": [
+            "archive piece violet ribbon",
+            "violet ribbon in the first archive piece"
+          ]
+        },
+        {
+          "marker": "star ledger page",
+          "aliases": [
+            "second archive piece star ledger page",
+            "star ledger page in the second archive piece"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "carved shell comb",
+          "aliases": [
+            "irrelevant document detail carved shell comb"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "medium",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 140
+    },
+    {
+      "id": "multi-document-083",
+      "question": "Which documents must be combined to understand Anya's memory sketchbook note about Old Quarry path?",
+      "expected_answer_type": "multi_fact",
+      "test_type": "multi_document",
+      "source_scope": {
+        "scope_type": "multi_document",
+        "document_ids": [
+          "multi-old-quarry-path-family-register-083",
+          "multi-anya-minute-book-083",
+          "multi-moon-orchard-rest-travel-note-083"
+        ],
+        "notes": "Requires cross-document retrieval for Anya at Old Quarry path."
+      },
+      "required_evidence": [
+        {
+          "marker": "blue oar",
+          "aliases": [
+            "combined note blue oar",
+            "blue oar in one required document"
+          ]
+        },
+        {
+          "marker": "silver booth token",
+          "aliases": [
+            "combined note silver booth token",
+            "silver booth token in another required document"
+          ]
+        },
+        {
+          "marker": "weathered camera strap",
+          "aliases": [
+            "combined note weathered camera strap",
+            "weathered camera strap only visible after combining documents"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "canal route map",
+          "aliases": [
+            "irrelevant document detail canal route map"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 3,
+      "difficulty": "hard",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 160
+    },
+    {
+      "id": "multi-document-084",
+      "question": "Which records together show how Yara prepared the canal barge stop near Cloud Wharf office?",
+      "expected_answer_type": "multi_fact",
+      "test_type": "multi_document",
+      "source_scope": {
+        "scope_type": "multi_document",
+        "document_ids": [
+          "multi-cloud-wharf-office-archive-084",
+          "multi-yara-profile-page-084"
+        ],
+        "notes": "Requires cross-document retrieval for Yara at Cloud Wharf office."
+      },
+      "required_evidence": [
+        {
+          "marker": "linen wick",
+          "aliases": [
+            "travel record linen wick",
+            "linen wick in one document"
+          ]
+        },
+        {
+          "marker": "birch tea flask",
+          "aliases": [
+            "supporting record birch tea flask",
+            "birch tea flask in another document"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "coal stove hiss",
+          "aliases": [
+            "irrelevant document detail coal stove hiss"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "easy",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 60
+    },
+    {
+      "id": "multi-document-085",
+      "question": "Which documents together identify the Lantern Tide memory that Ada preserved after leaving Harbor Glass corridor?",
+      "expected_answer_type": "multi_fact",
+      "test_type": "multi_document",
+      "source_scope": {
+        "scope_type": "multi_document",
+        "document_ids": [
+          "multi-harbor-glass-corridor-ledger-085",
+          "multi-ada-memory-log-085",
+          "multi-lantern-tide-audio-transcript-085"
+        ],
+        "notes": "Requires cross-document retrieval for Ada at Harbor Glass corridor."
+      },
+      "required_evidence": [
+        {
+          "marker": "Lantern Tide",
+          "aliases": [
+            "festival Lantern Tide",
+            "the Lantern Tide record"
+          ]
+        },
+        {
+          "marker": "green apron",
+          "aliases": [
+            "preserved item green apron",
+            "green apron in the preserved record"
+          ]
+        },
+        {
+          "marker": "oak barrel hoops",
+          "aliases": [
+            "corroborating item oak barrel hoops",
+            "oak barrel hoops in the second document"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "tin key",
+          "aliases": [
+            "irrelevant document detail tin key"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 3,
+      "difficulty": "medium",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 80
+    },
+    {
+      "id": "multi-document-086",
+      "question": "Which archive pieces from more than one document explain the family profile event at North Orchard lane?",
+      "expected_answer_type": "multi_fact",
+      "test_type": "multi_document",
+      "source_scope": {
+        "scope_type": "multi_document",
+        "document_ids": [
+          "multi-north-orchard-lane-minute-book-086",
+          "multi-sonya-travel-note-086"
+        ],
+        "notes": "Requires cross-document retrieval for Sonya at North Orchard lane."
+      },
+      "required_evidence": [
+        {
+          "marker": "moonflower cutting",
+          "aliases": [
+            "archive piece moonflower cutting",
+            "moonflower cutting in the first archive piece"
+          ]
+        },
+        {
+          "marker": "glass ink bottle",
+          "aliases": [
+            "second archive piece glass ink bottle",
+            "glass ink bottle in the second archive piece"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "brass compass",
+          "aliases": [
+            "irrelevant document detail brass compass"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "hard",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 100
+    },
+    {
+      "id": "multi-document-087",
+      "question": "Which documents must be combined to understand Runa's photo album page note about Hollow Market arcade?",
+      "expected_answer_type": "multi_fact",
+      "test_type": "multi_document",
+      "source_scope": {
+        "scope_type": "multi_document",
+        "document_ids": [
+          "multi-hollow-market-arcade-profile-page-087",
+          "multi-runa-photo-index-087",
+          "multi-harvest-glow-repair-book-087"
+        ],
+        "notes": "Requires cross-document retrieval for Runa at Hollow Market arcade."
+      },
+      "required_evidence": [
+        {
+          "marker": "rope bridge permit",
+          "aliases": [
+            "combined note rope bridge permit",
+            "rope bridge permit in one required document"
+          ]
+        },
+        {
+          "marker": "weathered camera strap",
+          "aliases": [
+            "combined note weathered camera strap",
+            "weathered camera strap in another required document"
+          ]
+        },
+        {
+          "marker": "coal stove hiss",
+          "aliases": [
+            "combined note coal stove hiss",
+            "coal stove hiss only visible after combining documents"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "basalt sketch",
+          "aliases": [
+            "irrelevant document detail basalt sketch"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 3,
+      "difficulty": "easy",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 120
+    },
+    {
+      "id": "multi-document-088",
+      "question": "Which records together show how Iveta prepared the winter coach stop near Marble stair hall?",
+      "expected_answer_type": "multi_fact",
+      "test_type": "multi_document",
+      "source_scope": {
+        "scope_type": "multi_document",
+        "document_ids": [
+          "multi-marble-stair-hall-memory-log-088",
+          "multi-iveta-audio-transcript-088"
+        ],
+        "notes": "Requires cross-document retrieval for Iveta at Marble stair hall."
+      },
+      "required_evidence": [
+        {
+          "marker": "paper moon mask",
+          "aliases": [
+            "travel record paper moon mask",
+            "paper moon mask in one document"
+          ]
+        },
+        {
+          "marker": "juniper bundles",
+          "aliases": [
+            "supporting record juniper bundles",
+            "juniper bundles in another document"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "copper token",
+          "aliases": [
+            "irrelevant document detail copper token"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "medium",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 140
+    },
+    {
+      "id": "multi-document-089",
+      "question": "Which documents together identify the Signal Lantern Morning memory that Zora preserved after leaving Amber Canal lock?",
+      "expected_answer_type": "multi_fact",
+      "test_type": "multi_document",
+      "source_scope": {
+        "scope_type": "multi_document",
+        "document_ids": [
+          "multi-amber-canal-lock-travel-note-089",
+          "multi-zora-letter-roll-089",
+          "multi-signal-lantern-morning-family-register-089"
+        ],
+        "notes": "Requires cross-document retrieval for Zora at Amber Canal lock."
+      },
+      "required_evidence": [
+        {
+          "marker": "Signal Lantern Morning",
+          "aliases": [
+            "festival Signal Lantern Morning",
+            "the Signal Lantern Morning record"
+          ]
+        },
+        {
+          "marker": "lantern hook",
+          "aliases": [
+            "preserved item lantern hook",
+            "lantern hook in the preserved record"
+          ]
+        },
+        {
+          "marker": "carved shell comb",
+          "aliases": [
+            "corroborating item carved shell comb",
+            "carved shell comb in the second document"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "tuning fork",
+          "aliases": [
+            "irrelevant document detail tuning fork"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 3,
+      "difficulty": "hard",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 160
+    },
+    {
+      "id": "multi-document-090",
+      "question": "Which archive pieces from more than one document explain the family profile event at Bell Bridge square?",
+      "expected_answer_type": "multi_fact",
+      "test_type": "multi_document",
+      "source_scope": {
+        "scope_type": "multi_document",
+        "document_ids": [
+          "multi-bell-bridge-square-photo-index-090",
+          "multi-mira-repair-book-090"
+        ],
+        "notes": "Requires cross-document retrieval for Mira at Bell Bridge square."
+      },
+      "required_evidence": [
+        {
+          "marker": "clay watering cup",
+          "aliases": [
+            "archive piece clay watering cup",
+            "clay watering cup in the first archive piece"
+          ]
+        },
+        {
+          "marker": "canal route map",
+          "aliases": [
+            "second archive piece canal route map",
+            "canal route map in the second archive piece"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "willow basket",
+          "aliases": [
+            "irrelevant document detail willow basket"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "easy",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 60
+    },
+    {
+      "id": "multi-document-091",
+      "question": "Which documents must be combined to understand Vera's family note note about Watchtower landing?",
+      "expected_answer_type": "multi_fact",
+      "test_type": "multi_document",
+      "source_scope": {
+        "scope_type": "multi_document",
+        "document_ids": [
+          "multi-watchtower-landing-audio-transcript-091",
+          "multi-vera-inventory-sheet-091",
+          "multi-bellwater-fair-ledger-091"
+        ],
+        "notes": "Requires cross-document retrieval for Vera at Watchtower landing."
+      },
+      "required_evidence": [
+        {
+          "marker": "saffron scarf",
+          "aliases": [
+            "combined note saffron scarf",
+            "saffron scarf in one required document"
+          ]
+        },
+        {
+          "marker": "coal stove hiss",
+          "aliases": [
+            "combined note coal stove hiss",
+            "coal stove hiss in another required document"
+          ]
+        },
+        {
+          "marker": "copper token",
+          "aliases": [
+            "combined note copper token",
+            "copper token only visible after combining documents"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "star ledger page",
+          "aliases": [
+            "irrelevant document detail star ledger page"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 3,
+      "difficulty": "medium",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 80
+    },
+    {
+      "id": "multi-document-092",
+      "question": "Which records together show how Nadia prepared the river skiff stop near Lantern Row kiosk?",
+      "expected_answer_type": "multi_fact",
+      "test_type": "multi_document",
+      "source_scope": {
+        "scope_type": "multi_document",
+        "document_ids": [
+          "multi-lantern-row-kiosk-letter-roll-092",
+          "multi-nadia-family-register-092"
+        ],
+        "notes": "Requires cross-document retrieval for Nadia at Lantern Row kiosk."
+      },
+      "required_evidence": [
+        {
+          "marker": "blue glass jar",
+          "aliases": [
+            "travel record blue glass jar",
+            "blue glass jar in one document"
+          ]
+        },
+        {
+          "marker": "tin key",
+          "aliases": [
+            "supporting record tin key",
+            "tin key in another document"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "silver booth token",
+          "aliases": [
+            "irrelevant document detail silver booth token"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "hard",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 100
+    },
+    {
+      "id": "multi-document-093",
+      "question": "Which documents together identify the Moon Orchard Rest memory that Anya preserved after leaving Moss Archive room?",
+      "expected_answer_type": "multi_fact",
+      "test_type": "multi_document",
+      "source_scope": {
+        "scope_type": "multi_document",
+        "document_ids": [
+          "multi-moss-archive-room-repair-book-093",
+          "multi-anya-archive-093",
+          "multi-moon-orchard-rest-profile-page-093"
+        ],
+        "notes": "Requires cross-document retrieval for Anya at Moss Archive room."
+      },
+      "required_evidence": [
+        {
+          "marker": "Moon Orchard Rest",
+          "aliases": [
+            "festival Moon Orchard Rest",
+            "the Moon Orchard Rest record"
+          ]
+        },
+        {
+          "marker": "copper wind vane pin",
+          "aliases": [
+            "preserved item copper wind vane pin",
+            "copper wind vane pin in the preserved record"
+          ]
+        },
+        {
+          "marker": "brass compass",
+          "aliases": [
+            "corroborating item brass compass",
+            "brass compass in the second document"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "birch tea flask",
+          "aliases": [
+            "irrelevant document detail birch tea flask"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 3,
+      "difficulty": "easy",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 120
+    },
+    {
+      "id": "multi-document-094",
+      "question": "Which archive pieces from more than one document explain the family profile event at Blue Trunk cabin?",
+      "expected_answer_type": "multi_fact",
+      "test_type": "multi_document",
+      "source_scope": {
+        "scope_type": "multi_document",
+        "document_ids": [
+          "multi-blue-trunk-cabin-inventory-sheet-094",
+          "multi-yara-ledger-094"
+        ],
+        "notes": "Requires cross-document retrieval for Yara at Blue Trunk cabin."
+      },
+      "required_evidence": [
+        {
+          "marker": "wax thread",
+          "aliases": [
+            "archive piece wax thread",
+            "wax thread in the first archive piece"
+          ]
+        },
+        {
+          "marker": "basalt sketch",
+          "aliases": [
+            "second archive piece basalt sketch",
+            "basalt sketch in the second archive piece"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "oak barrel hoops",
+          "aliases": [
+            "irrelevant document detail oak barrel hoops"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "medium",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 140
+    },
+    {
+      "id": "multi-document-095",
+      "question": "Which documents must be combined to understand Ada's archive card note about River Lantern inn?",
+      "expected_answer_type": "multi_fact",
+      "test_type": "multi_document",
+      "source_scope": {
+        "scope_type": "multi_document",
+        "document_ids": [
+          "multi-river-lantern-inn-family-register-095",
+          "multi-ada-minute-book-095",
+          "multi-lantern-tide-travel-note-095"
+        ],
+        "notes": "Requires cross-document retrieval for Ada at River Lantern inn."
+      },
+      "required_evidence": [
+        {
+          "marker": "smoke vent chain",
+          "aliases": [
+            "combined note smoke vent chain",
+            "smoke vent chain in one required document"
+          ]
+        },
+        {
+          "marker": "copper token",
+          "aliases": [
+            "combined note copper token",
+            "copper token in another required document"
+          ]
+        },
+        {
+          "marker": "silver booth token",
+          "aliases": [
+            "combined note silver booth token",
+            "silver booth token only visible after combining documents"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "glass ink bottle",
+          "aliases": [
+            "irrelevant document detail glass ink bottle"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 3,
+      "difficulty": "hard",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 160
+    },
+    {
+      "id": "multi-document-096",
+      "question": "Which records together show how Sonya prepared the quarry lift stop near Winter Chapel porch?",
+      "expected_answer_type": "multi_fact",
+      "test_type": "multi_document",
+      "source_scope": {
+        "scope_type": "multi_document",
+        "document_ids": [
+          "multi-winter-chapel-porch-archive-096",
+          "multi-sonya-profile-page-096"
+        ],
+        "notes": "Requires cross-document retrieval for Sonya at Winter Chapel porch."
+      },
+      "required_evidence": [
+        {
+          "marker": "amber lantern",
+          "aliases": [
+            "travel record amber lantern",
+            "amber lantern in one document"
+          ]
+        },
+        {
+          "marker": "tuning fork",
+          "aliases": [
+            "supporting record tuning fork",
+            "tuning fork in another document"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "weathered camera strap",
+          "aliases": [
+            "irrelevant document detail weathered camera strap"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "easy",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 60
+    },
+    {
+      "id": "multi-document-097",
+      "question": "Which documents together identify the Harvest Glow memory that Runa preserved after leaving Fox Hollow bridge?",
+      "expected_answer_type": "multi_fact",
+      "test_type": "multi_document",
+      "source_scope": {
+        "scope_type": "multi_document",
+        "document_ids": [
+          "multi-fox-hollow-bridge-ledger-097",
+          "multi-runa-memory-log-097",
+          "multi-harvest-glow-audio-transcript-097"
+        ],
+        "notes": "Requires cross-document retrieval for Runa at Fox Hollow bridge."
+      },
+      "required_evidence": [
+        {
+          "marker": "Harvest Glow",
+          "aliases": [
+            "festival Harvest Glow",
+            "the Harvest Glow record"
+          ]
+        },
+        {
+          "marker": "cedar shovel",
+          "aliases": [
+            "preserved item cedar shovel",
+            "cedar shovel in the preserved record"
+          ]
+        },
+        {
+          "marker": "willow basket",
+          "aliases": [
+            "corroborating item willow basket",
+            "willow basket in the second document"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "juniper bundles",
+          "aliases": [
+            "irrelevant document detail juniper bundles"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 3,
+      "difficulty": "medium",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 80
+    },
+    {
+      "id": "multi-document-098",
+      "question": "Which archive pieces from more than one document explain the family profile event at Willow Courtyard well?",
+      "expected_answer_type": "multi_fact",
+      "test_type": "multi_document",
+      "source_scope": {
+        "scope_type": "multi_document",
+        "document_ids": [
+          "multi-willow-courtyard-well-minute-book-098",
+          "multi-iveta-travel-note-098"
+        ],
+        "notes": "Requires cross-document retrieval for Iveta at Willow Courtyard well."
+      },
+      "required_evidence": [
+        {
+          "marker": "violet ribbon",
+          "aliases": [
+            "archive piece violet ribbon",
+            "violet ribbon in the first archive piece"
+          ]
+        },
+        {
+          "marker": "star ledger page",
+          "aliases": [
+            "second archive piece star ledger page",
+            "star ledger page in the second archive piece"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "carved shell comb",
+          "aliases": [
+            "irrelevant document detail carved shell comb"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "hard",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 100
+    },
+    {
+      "id": "multi-document-099",
+      "question": "Which documents must be combined to understand Zora's holiday card note about Glass Harbor quay?",
+      "expected_answer_type": "multi_fact",
+      "test_type": "multi_document",
+      "source_scope": {
+        "scope_type": "multi_document",
+        "document_ids": [
+          "multi-glass-harbor-quay-profile-page-099",
+          "multi-zora-photo-index-099",
+          "multi-signal-lantern-morning-repair-book-099"
+        ],
+        "notes": "Requires cross-document retrieval for Zora at Glass Harbor quay."
+      },
+      "required_evidence": [
+        {
+          "marker": "blue oar",
+          "aliases": [
+            "combined note blue oar",
+            "blue oar in one required document"
+          ]
+        },
+        {
+          "marker": "silver booth token",
+          "aliases": [
+            "combined note silver booth token",
+            "silver booth token in another required document"
+          ]
+        },
+        {
+          "marker": "weathered camera strap",
+          "aliases": [
+            "combined note weathered camera strap",
+            "weathered camera strap only visible after combining documents"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "canal route map",
+          "aliases": [
+            "irrelevant document detail canal route map"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 3,
+      "difficulty": "easy",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 120
+    },
+    {
+      "id": "multi-document-100",
+      "question": "Which records together show how Mira prepared the overnight ferry stop near Birch Ferry shed?",
+      "expected_answer_type": "multi_fact",
+      "test_type": "multi_document",
+      "source_scope": {
+        "scope_type": "multi_document",
+        "document_ids": [
+          "multi-birch-ferry-shed-memory-log-100",
+          "multi-mira-audio-transcript-100"
+        ],
+        "notes": "Requires cross-document retrieval for Mira at Birch Ferry shed."
+      },
+      "required_evidence": [
+        {
+          "marker": "linen wick",
+          "aliases": [
+            "travel record linen wick",
+            "linen wick in one document"
+          ]
+        },
+        {
+          "marker": "birch tea flask",
+          "aliases": [
+            "supporting record birch tea flask",
+            "birch tea flask in another document"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "coal stove hiss",
+          "aliases": [
+            "irrelevant document detail coal stove hiss"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "medium",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 140
     }
   ]
 }

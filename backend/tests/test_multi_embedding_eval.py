@@ -1313,5 +1313,5 @@ def test_multi_embedding_eval_request_accepts_extended_multi_document_dataset():
     )
 
     assert payload.dataset.dataset_id == "eternal-world-multi-document-v1"
-    assert len(payload.dataset.cases) == 5
+    assert len(payload.dataset.cases) == 100
     assert all(case.test_type == "multi_document" for case in payload.dataset.cases)

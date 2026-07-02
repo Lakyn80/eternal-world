@@ -1,13 +1,15 @@
 {
   "dataset_id": "eternal-world-negative-v1",
   "name": "Eternal World Negative Validation V1",
-  "description": "Fictional negative retrieval validation dataset for Eternal World. Questions intentionally ask for unsupported details and should not induce hallucinated evidence.",
+  "description": "Expanded fictional negative retrieval validation dataset for Eternal World. Questions intentionally ask for unsupported details and should not induce hallucinated evidence.",
   "project_name": "Eternal World",
   "metadata": {
     "version": "v1",
     "fictional": true,
     "safe_validation_only": true,
-    "test_type": "negative"
+    "test_type": "negative",
+    "case_count": 80,
+    "expanded_validation": true
   },
   "cases": [
     {
@@ -22,7 +24,10 @@
       "forbidden_evidence": [
         {
           "marker": "invented serial number",
-          "aliases": ["serial number 8471", "fabricated compass serial"]
+          "aliases": [
+            "serial number 8471",
+            "fabricated compass serial"
+          ]
         }
       ],
       "minimum_coverage": 0.0,
@@ -40,13 +45,18 @@
       "test_type": "negative",
       "source_scope": {
         "scope_type": "document",
-        "document_ids": ["mill-foundation-notes"]
+        "document_ids": [
+          "mill-foundation-notes"
+        ]
       },
       "required_evidence": [],
       "forbidden_evidence": [
         {
           "marker": "moon password",
-          "aliases": ["password moon-salt", "secret moon password"]
+          "aliases": [
+            "password moon-salt",
+            "secret moon password"
+          ]
         }
       ],
       "minimum_coverage": 0.0,
@@ -69,7 +79,10 @@
       "forbidden_evidence": [
         {
           "marker": "Ilona Vey",
-          "aliases": ["hidden daughter Ilona", "Ilona Vey of the mayor"]
+          "aliases": [
+            "hidden daughter Ilona",
+            "Ilona Vey of the mayor"
+          ]
         }
       ],
       "minimum_coverage": 0.0,
@@ -87,13 +100,18 @@
       "test_type": "negative",
       "source_scope": {
         "scope_type": "document",
-        "document_ids": ["parcel-watch-log"]
+        "document_ids": [
+          "parcel-watch-log"
+        ]
       },
       "required_evidence": [],
       "forbidden_evidence": [
         {
           "marker": "twelve-gram sapphire",
-          "aliases": ["12 gram sapphire parcel", "parcel weighed twelve grams"]
+          "aliases": [
+            "12 gram sapphire parcel",
+            "parcel weighed twelve grams"
+          ]
         }
       ],
       "minimum_coverage": 0.0,
@@ -116,13 +134,2116 @@
       "forbidden_evidence": [
         {
           "marker": "lost sixth bell verse",
-          "aliases": ["sixth verse of the bell song", "invented river bell lyric"]
+          "aliases": [
+            "sixth verse of the bell song",
+            "invented river bell lyric"
+          ]
         }
       ],
       "minimum_coverage": 0.0,
       "allow_partial": false,
       "expected_citation_count_min": 0,
       "difficulty": "easy",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 0
+    },
+    {
+      "id": "negative-006",
+      "question": "What was the burned letter line that Selma supposedly mentioned at Winter Chapel porch, even though no archive records it?",
+      "expected_answer_type": "no_answer",
+      "test_type": "negative",
+      "source_scope": {
+        "scope_type": "collection"
+      },
+      "required_evidence": [],
+      "forbidden_evidence": [
+        {
+          "marker": "charcoal letter line",
+          "aliases": [
+            "fabricated burned letter line",
+            "invented answer charcoal letter line"
+          ]
+        }
+      ],
+      "minimum_coverage": 0.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 0,
+      "difficulty": "easy",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 0
+    },
+    {
+      "id": "negative-007",
+      "question": "Which exact unwritten wedding vow belonged to Anton's twin sister in the family note, despite never being written down?",
+      "expected_answer_type": "no_answer",
+      "test_type": "negative",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "negative-lantern-row-kiosk-family-note-007"
+        ]
+      },
+      "required_evidence": [],
+      "forbidden_evidence": [
+        {
+          "marker": "winter vow text",
+          "aliases": [
+            "fabricated unwritten wedding vow",
+            "invented answer winter vow text"
+          ]
+        }
+      ],
+      "minimum_coverage": 0.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 0,
+      "difficulty": "medium",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 0
+    },
+    {
+      "id": "negative-008",
+      "question": "What is the missing hidden station code from the field recording connected to Marble stair hall?",
+      "expected_answer_type": "no_answer",
+      "test_type": "negative",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "negative-marble-stair-hall-field-recording-008"
+        ]
+      },
+      "required_evidence": [],
+      "forbidden_evidence": [
+        {
+          "marker": "signal code 44",
+          "aliases": [
+            "fabricated hidden station code",
+            "invented answer signal code 44"
+          ]
+        }
+      ],
+      "minimum_coverage": 0.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 0,
+      "difficulty": "hard",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 0
+    },
+    {
+      "id": "negative-009",
+      "question": "What was the lost attic tally that Ilya supposedly mentioned at Cloud Wharf office, even though no archive records it?",
+      "expected_answer_type": "no_answer",
+      "test_type": "negative",
+      "source_scope": {
+        "scope_type": "collection"
+      },
+      "required_evidence": [],
+      "forbidden_evidence": [
+        {
+          "marker": "attic tally 19",
+          "aliases": [
+            "fabricated lost attic tally",
+            "invented answer attic tally 19"
+          ]
+        }
+      ],
+      "minimum_coverage": 0.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 0,
+      "difficulty": "easy",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 0
+    },
+    {
+      "id": "negative-010",
+      "question": "Which exact serial number belonged to Lina's stepfather in the winter letter, despite never being written down?",
+      "expected_answer_type": "no_answer",
+      "test_type": "negative",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "negative-star-basin-gallery-winter-letter-010"
+        ]
+      },
+      "required_evidence": [],
+      "forbidden_evidence": [
+        {
+          "marker": "invented serial 8471",
+          "aliases": [
+            "fabricated serial number",
+            "invented answer invented serial 8471"
+          ]
+        }
+      ],
+      "minimum_coverage": 0.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 0,
+      "difficulty": "medium",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 0
+    },
+    {
+      "id": "negative-011",
+      "question": "What is the missing secret password from the holiday card connected to Ridge Post loft?",
+      "expected_answer_type": "no_answer",
+      "test_type": "negative",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "negative-ridge-post-loft-holiday-card-011"
+        ]
+      },
+      "required_evidence": [],
+      "forbidden_evidence": [
+        {
+          "marker": "moon-salt password",
+          "aliases": [
+            "fabricated secret password",
+            "invented answer moon-salt password"
+          ]
+        }
+      ],
+      "minimum_coverage": 0.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 0,
+      "difficulty": "hard",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 0
+    },
+    {
+      "id": "negative-012",
+      "question": "What was the unrecorded middle name that Ada supposedly mentioned at North Bell workshop, even though no archive records it?",
+      "expected_answer_type": "no_answer",
+      "test_type": "negative",
+      "source_scope": {
+        "scope_type": "collection"
+      },
+      "required_evidence": [],
+      "forbidden_evidence": [
+        {
+          "marker": "Ilena Harbor name",
+          "aliases": [
+            "fabricated unrecorded middle name",
+            "invented answer Ilena Harbor name"
+          ]
+        }
+      ],
+      "minimum_coverage": 0.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 0,
+      "difficulty": "easy",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 0
+    },
+    {
+      "id": "negative-013",
+      "question": "Which exact missing sixth verse belonged to Pavel's cousin in the boat manifest, despite never being written down?",
+      "expected_answer_type": "no_answer",
+      "test_type": "negative",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "negative-willow-courtyard-well-boat-manifest-013"
+        ]
+      },
+      "required_evidence": [],
+      "forbidden_evidence": [
+        {
+          "marker": "lost bell verse",
+          "aliases": [
+            "fabricated missing sixth verse",
+            "invented answer lost bell verse"
+          ]
+        }
+      ],
+      "minimum_coverage": 0.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 0,
+      "difficulty": "medium",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 0
+    },
+    {
+      "id": "negative-014",
+      "question": "What is the missing exact parcel weight from the audio reel connected to Blue Trunk cabin?",
+      "expected_answer_type": "no_answer",
+      "test_type": "negative",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "negative-blue-trunk-cabin-audio-reel-014"
+        ]
+      },
+      "required_evidence": [],
+      "forbidden_evidence": [
+        {
+          "marker": "twelve-gram parcel",
+          "aliases": [
+            "fabricated exact parcel weight",
+            "invented answer twelve-gram parcel"
+          ]
+        }
+      ],
+      "minimum_coverage": 0.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 0,
+      "difficulty": "hard",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 0
+    },
+    {
+      "id": "negative-015",
+      "question": "What was the private lock code that Anton supposedly mentioned at Bell Bridge square, even though no archive records it?",
+      "expected_answer_type": "no_answer",
+      "test_type": "negative",
+      "source_scope": {
+        "scope_type": "collection"
+      },
+      "required_evidence": [],
+      "forbidden_evidence": [
+        {
+          "marker": "glass-lock code",
+          "aliases": [
+            "fabricated private lock code",
+            "invented answer glass-lock code"
+          ]
+        }
+      ],
+      "minimum_coverage": 0.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 0,
+      "difficulty": "easy",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 0
+    },
+    {
+      "id": "negative-016",
+      "question": "Which exact burned letter line belonged to Mira's older sister in the station transcript, despite never being written down?",
+      "expected_answer_type": "no_answer",
+      "test_type": "negative",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "negative-north-orchard-lane-station-transcript-016"
+        ]
+      },
+      "required_evidence": [],
+      "forbidden_evidence": [
+        {
+          "marker": "charcoal letter line",
+          "aliases": [
+            "fabricated burned letter line",
+            "invented answer charcoal letter line"
+          ]
+        }
+      ],
+      "minimum_coverage": 0.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 0,
+      "difficulty": "medium",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 0
+    },
+    {
+      "id": "negative-017",
+      "question": "What is the missing unwritten wedding vow from the memory sketchbook connected to Cedar Hill station?",
+      "expected_answer_type": "no_answer",
+      "test_type": "negative",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "negative-cedar-hill-station-memory-sketchbook-017"
+        ]
+      },
+      "required_evidence": [],
+      "forbidden_evidence": [
+        {
+          "marker": "winter vow text",
+          "aliases": [
+            "fabricated unwritten wedding vow",
+            "invented answer winter vow text"
+          ]
+        }
+      ],
+      "minimum_coverage": 0.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 0,
+      "difficulty": "hard",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 0
+    },
+    {
+      "id": "negative-018",
+      "question": "What was the hidden station code that Lina supposedly mentioned at South Meadow arch, even though no archive records it?",
+      "expected_answer_type": "no_answer",
+      "test_type": "negative",
+      "source_scope": {
+        "scope_type": "collection"
+      },
+      "required_evidence": [],
+      "forbidden_evidence": [
+        {
+          "marker": "signal code 44",
+          "aliases": [
+            "fabricated hidden station code",
+            "invented answer signal code 44"
+          ]
+        }
+      ],
+      "minimum_coverage": 0.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 0,
+      "difficulty": "easy",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 0
+    },
+    {
+      "id": "negative-019",
+      "question": "Which exact lost attic tally belonged to Stefan's twin sister in the photo album page, despite never being written down?",
+      "expected_answer_type": "no_answer",
+      "test_type": "negative",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "negative-moon-mill-yard-photo-album-page-019"
+        ]
+      },
+      "required_evidence": [],
+      "forbidden_evidence": [
+        {
+          "marker": "attic tally 19",
+          "aliases": [
+            "fabricated lost attic tally",
+            "invented answer attic tally 19"
+          ]
+        }
+      ],
+      "minimum_coverage": 0.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 0,
+      "difficulty": "medium",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 0
+    },
+    {
+      "id": "negative-020",
+      "question": "What is the missing serial number from the profile page connected to Birch Ferry shed?",
+      "expected_answer_type": "no_answer",
+      "test_type": "negative",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "negative-birch-ferry-shed-profile-page-020"
+        ]
+      },
+      "required_evidence": [],
+      "forbidden_evidence": [
+        {
+          "marker": "invented serial 8471",
+          "aliases": [
+            "fabricated serial number",
+            "invented answer invented serial 8471"
+          ]
+        }
+      ],
+      "minimum_coverage": 0.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 0,
+      "difficulty": "hard",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 0
+    },
+    {
+      "id": "negative-021",
+      "question": "What was the secret password that Pavel supposedly mentioned at Winter Chapel porch, even though no archive records it?",
+      "expected_answer_type": "no_answer",
+      "test_type": "negative",
+      "source_scope": {
+        "scope_type": "collection"
+      },
+      "required_evidence": [],
+      "forbidden_evidence": [
+        {
+          "marker": "moon-salt password",
+          "aliases": [
+            "fabricated secret password",
+            "invented answer moon-salt password"
+          ]
+        }
+      ],
+      "minimum_coverage": 0.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 0,
+      "difficulty": "easy",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 0
+    },
+    {
+      "id": "negative-022",
+      "question": "Which exact unrecorded middle name belonged to Selma's stepfather in the field recording, despite never being written down?",
+      "expected_answer_type": "no_answer",
+      "test_type": "negative",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "negative-lantern-row-kiosk-field-recording-022"
+        ]
+      },
+      "required_evidence": [],
+      "forbidden_evidence": [
+        {
+          "marker": "Ilena Harbor name",
+          "aliases": [
+            "fabricated unrecorded middle name",
+            "invented answer Ilena Harbor name"
+          ]
+        }
+      ],
+      "minimum_coverage": 0.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 0,
+      "difficulty": "medium",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 0
+    },
+    {
+      "id": "negative-023",
+      "question": "What is the missing missing sixth verse from the archive card connected to Marble stair hall?",
+      "expected_answer_type": "no_answer",
+      "test_type": "negative",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "negative-marble-stair-hall-archive-card-023"
+        ]
+      },
+      "required_evidence": [],
+      "forbidden_evidence": [
+        {
+          "marker": "lost bell verse",
+          "aliases": [
+            "fabricated missing sixth verse",
+            "invented answer lost bell verse"
+          ]
+        }
+      ],
+      "minimum_coverage": 0.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 0,
+      "difficulty": "hard",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 0
+    },
+    {
+      "id": "negative-024",
+      "question": "What was the exact parcel weight that Mira supposedly mentioned at Cloud Wharf office, even though no archive records it?",
+      "expected_answer_type": "no_answer",
+      "test_type": "negative",
+      "source_scope": {
+        "scope_type": "collection"
+      },
+      "required_evidence": [],
+      "forbidden_evidence": [
+        {
+          "marker": "twelve-gram parcel",
+          "aliases": [
+            "fabricated exact parcel weight",
+            "invented answer twelve-gram parcel"
+          ]
+        }
+      ],
+      "minimum_coverage": 0.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 0,
+      "difficulty": "easy",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 0
+    },
+    {
+      "id": "negative-025",
+      "question": "Which exact private lock code belonged to Ilya's cousin in the holiday card, despite never being written down?",
+      "expected_answer_type": "no_answer",
+      "test_type": "negative",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "negative-star-basin-gallery-holiday-card-025"
+        ]
+      },
+      "required_evidence": [],
+      "forbidden_evidence": [
+        {
+          "marker": "glass-lock code",
+          "aliases": [
+            "fabricated private lock code",
+            "invented answer glass-lock code"
+          ]
+        }
+      ],
+      "minimum_coverage": 0.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 0,
+      "difficulty": "medium",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 0
+    },
+    {
+      "id": "negative-026",
+      "question": "What is the missing burned letter line from the river diary page connected to Ridge Post loft?",
+      "expected_answer_type": "no_answer",
+      "test_type": "negative",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "negative-ridge-post-loft-river-diary-page-026"
+        ]
+      },
+      "required_evidence": [],
+      "forbidden_evidence": [
+        {
+          "marker": "charcoal letter line",
+          "aliases": [
+            "fabricated burned letter line",
+            "invented answer charcoal letter line"
+          ]
+        }
+      ],
+      "minimum_coverage": 0.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 0,
+      "difficulty": "hard",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 0
+    },
+    {
+      "id": "negative-027",
+      "question": "What was the unwritten wedding vow that Stefan supposedly mentioned at North Bell workshop, even though no archive records it?",
+      "expected_answer_type": "no_answer",
+      "test_type": "negative",
+      "source_scope": {
+        "scope_type": "collection"
+      },
+      "required_evidence": [],
+      "forbidden_evidence": [
+        {
+          "marker": "winter vow text",
+          "aliases": [
+            "fabricated unwritten wedding vow",
+            "invented answer winter vow text"
+          ]
+        }
+      ],
+      "minimum_coverage": 0.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 0,
+      "difficulty": "easy",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 0
+    },
+    {
+      "id": "negative-028",
+      "question": "Which exact hidden station code belonged to Ada's older sister in the audio reel, despite never being written down?",
+      "expected_answer_type": "no_answer",
+      "test_type": "negative",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "negative-willow-courtyard-well-audio-reel-028"
+        ]
+      },
+      "required_evidence": [],
+      "forbidden_evidence": [
+        {
+          "marker": "signal code 44",
+          "aliases": [
+            "fabricated hidden station code",
+            "invented answer signal code 44"
+          ]
+        }
+      ],
+      "minimum_coverage": 0.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 0,
+      "difficulty": "medium",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 0
+    },
+    {
+      "id": "negative-029",
+      "question": "What is the missing lost attic tally from the travel ledger connected to Blue Trunk cabin?",
+      "expected_answer_type": "no_answer",
+      "test_type": "negative",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "negative-blue-trunk-cabin-travel-ledger-029"
+        ]
+      },
+      "required_evidence": [],
+      "forbidden_evidence": [
+        {
+          "marker": "attic tally 19",
+          "aliases": [
+            "fabricated lost attic tally",
+            "invented answer attic tally 19"
+          ]
+        }
+      ],
+      "minimum_coverage": 0.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 0,
+      "difficulty": "hard",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 0
+    },
+    {
+      "id": "negative-030",
+      "question": "What was the serial number that Selma supposedly mentioned at Bell Bridge square, even though no archive records it?",
+      "expected_answer_type": "no_answer",
+      "test_type": "negative",
+      "source_scope": {
+        "scope_type": "collection"
+      },
+      "required_evidence": [],
+      "forbidden_evidence": [
+        {
+          "marker": "invented serial 8471",
+          "aliases": [
+            "fabricated serial number",
+            "invented answer invented serial 8471"
+          ]
+        }
+      ],
+      "minimum_coverage": 0.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 0,
+      "difficulty": "easy",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 0
+    },
+    {
+      "id": "negative-031",
+      "question": "Which exact secret password belonged to Anton's twin sister in the memory sketchbook, despite never being written down?",
+      "expected_answer_type": "no_answer",
+      "test_type": "negative",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "negative-north-orchard-lane-memory-sketchbook-031"
+        ]
+      },
+      "required_evidence": [],
+      "forbidden_evidence": [
+        {
+          "marker": "moon-salt password",
+          "aliases": [
+            "fabricated secret password",
+            "invented answer moon-salt password"
+          ]
+        }
+      ],
+      "minimum_coverage": 0.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 0,
+      "difficulty": "medium",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 0
+    },
+    {
+      "id": "negative-032",
+      "question": "What is the missing unrecorded middle name from the festival minutes connected to Cedar Hill station?",
+      "expected_answer_type": "no_answer",
+      "test_type": "negative",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "negative-cedar-hill-station-festival-minutes-032"
+        ]
+      },
+      "required_evidence": [],
+      "forbidden_evidence": [
+        {
+          "marker": "Ilena Harbor name",
+          "aliases": [
+            "fabricated unrecorded middle name",
+            "invented answer Ilena Harbor name"
+          ]
+        }
+      ],
+      "minimum_coverage": 0.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 0,
+      "difficulty": "hard",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 0
+    },
+    {
+      "id": "negative-033",
+      "question": "What was the missing sixth verse that Ilya supposedly mentioned at South Meadow arch, even though no archive records it?",
+      "expected_answer_type": "no_answer",
+      "test_type": "negative",
+      "source_scope": {
+        "scope_type": "collection"
+      },
+      "required_evidence": [],
+      "forbidden_evidence": [
+        {
+          "marker": "lost bell verse",
+          "aliases": [
+            "fabricated missing sixth verse",
+            "invented answer lost bell verse"
+          ]
+        }
+      ],
+      "minimum_coverage": 0.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 0,
+      "difficulty": "easy",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 0
+    },
+    {
+      "id": "negative-034",
+      "question": "Which exact exact parcel weight belonged to Lina's stepfather in the profile page, despite never being written down?",
+      "expected_answer_type": "no_answer",
+      "test_type": "negative",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "negative-moon-mill-yard-profile-page-034"
+        ]
+      },
+      "required_evidence": [],
+      "forbidden_evidence": [
+        {
+          "marker": "twelve-gram parcel",
+          "aliases": [
+            "fabricated exact parcel weight",
+            "invented answer twelve-gram parcel"
+          ]
+        }
+      ],
+      "minimum_coverage": 0.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 0,
+      "difficulty": "medium",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 0
+    },
+    {
+      "id": "negative-035",
+      "question": "What is the missing private lock code from the family note connected to Birch Ferry shed?",
+      "expected_answer_type": "no_answer",
+      "test_type": "negative",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "negative-birch-ferry-shed-family-note-035"
+        ]
+      },
+      "required_evidence": [],
+      "forbidden_evidence": [
+        {
+          "marker": "glass-lock code",
+          "aliases": [
+            "fabricated private lock code",
+            "invented answer glass-lock code"
+          ]
+        }
+      ],
+      "minimum_coverage": 0.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 0,
+      "difficulty": "hard",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 0
+    },
+    {
+      "id": "negative-036",
+      "question": "What was the burned letter line that Ada supposedly mentioned at Winter Chapel porch, even though no archive records it?",
+      "expected_answer_type": "no_answer",
+      "test_type": "negative",
+      "source_scope": {
+        "scope_type": "collection"
+      },
+      "required_evidence": [],
+      "forbidden_evidence": [
+        {
+          "marker": "charcoal letter line",
+          "aliases": [
+            "fabricated burned letter line",
+            "invented answer charcoal letter line"
+          ]
+        }
+      ],
+      "minimum_coverage": 0.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 0,
+      "difficulty": "easy",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 0
+    },
+    {
+      "id": "negative-037",
+      "question": "Which exact unwritten wedding vow belonged to Pavel's cousin in the archive card, despite never being written down?",
+      "expected_answer_type": "no_answer",
+      "test_type": "negative",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "negative-lantern-row-kiosk-archive-card-037"
+        ]
+      },
+      "required_evidence": [],
+      "forbidden_evidence": [
+        {
+          "marker": "winter vow text",
+          "aliases": [
+            "fabricated unwritten wedding vow",
+            "invented answer winter vow text"
+          ]
+        }
+      ],
+      "minimum_coverage": 0.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 0,
+      "difficulty": "medium",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 0
+    },
+    {
+      "id": "negative-038",
+      "question": "What is the missing hidden station code from the winter letter connected to Marble stair hall?",
+      "expected_answer_type": "no_answer",
+      "test_type": "negative",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "negative-marble-stair-hall-winter-letter-038"
+        ]
+      },
+      "required_evidence": [],
+      "forbidden_evidence": [
+        {
+          "marker": "signal code 44",
+          "aliases": [
+            "fabricated hidden station code",
+            "invented answer signal code 44"
+          ]
+        }
+      ],
+      "minimum_coverage": 0.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 0,
+      "difficulty": "hard",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 0
+    },
+    {
+      "id": "negative-039",
+      "question": "What was the lost attic tally that Anton supposedly mentioned at Cloud Wharf office, even though no archive records it?",
+      "expected_answer_type": "no_answer",
+      "test_type": "negative",
+      "source_scope": {
+        "scope_type": "collection"
+      },
+      "required_evidence": [],
+      "forbidden_evidence": [
+        {
+          "marker": "attic tally 19",
+          "aliases": [
+            "fabricated lost attic tally",
+            "invented answer attic tally 19"
+          ]
+        }
+      ],
+      "minimum_coverage": 0.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 0,
+      "difficulty": "easy",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 0
+    },
+    {
+      "id": "negative-040",
+      "question": "Which exact serial number belonged to Mira's older sister in the river diary page, despite never being written down?",
+      "expected_answer_type": "no_answer",
+      "test_type": "negative",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "negative-star-basin-gallery-river-diary-page-040"
+        ]
+      },
+      "required_evidence": [],
+      "forbidden_evidence": [
+        {
+          "marker": "invented serial 8471",
+          "aliases": [
+            "fabricated serial number",
+            "invented answer invented serial 8471"
+          ]
+        }
+      ],
+      "minimum_coverage": 0.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 0,
+      "difficulty": "medium",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 0
+    },
+    {
+      "id": "negative-041",
+      "question": "What is the missing secret password from the boat manifest connected to Ridge Post loft?",
+      "expected_answer_type": "no_answer",
+      "test_type": "negative",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "negative-ridge-post-loft-boat-manifest-041"
+        ]
+      },
+      "required_evidence": [],
+      "forbidden_evidence": [
+        {
+          "marker": "moon-salt password",
+          "aliases": [
+            "fabricated secret password",
+            "invented answer moon-salt password"
+          ]
+        }
+      ],
+      "minimum_coverage": 0.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 0,
+      "difficulty": "hard",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 0
+    },
+    {
+      "id": "negative-042",
+      "question": "What was the unrecorded middle name that Lina supposedly mentioned at North Bell workshop, even though no archive records it?",
+      "expected_answer_type": "no_answer",
+      "test_type": "negative",
+      "source_scope": {
+        "scope_type": "collection"
+      },
+      "required_evidence": [],
+      "forbidden_evidence": [
+        {
+          "marker": "Ilena Harbor name",
+          "aliases": [
+            "fabricated unrecorded middle name",
+            "invented answer Ilena Harbor name"
+          ]
+        }
+      ],
+      "minimum_coverage": 0.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 0,
+      "difficulty": "easy",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 0
+    },
+    {
+      "id": "negative-043",
+      "question": "Which exact missing sixth verse belonged to Stefan's twin sister in the travel ledger, despite never being written down?",
+      "expected_answer_type": "no_answer",
+      "test_type": "negative",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "negative-willow-courtyard-well-travel-ledger-043"
+        ]
+      },
+      "required_evidence": [],
+      "forbidden_evidence": [
+        {
+          "marker": "lost bell verse",
+          "aliases": [
+            "fabricated missing sixth verse",
+            "invented answer lost bell verse"
+          ]
+        }
+      ],
+      "minimum_coverage": 0.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 0,
+      "difficulty": "medium",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 0
+    },
+    {
+      "id": "negative-044",
+      "question": "What is the missing exact parcel weight from the station transcript connected to Blue Trunk cabin?",
+      "expected_answer_type": "no_answer",
+      "test_type": "negative",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "negative-blue-trunk-cabin-station-transcript-044"
+        ]
+      },
+      "required_evidence": [],
+      "forbidden_evidence": [
+        {
+          "marker": "twelve-gram parcel",
+          "aliases": [
+            "fabricated exact parcel weight",
+            "invented answer twelve-gram parcel"
+          ]
+        }
+      ],
+      "minimum_coverage": 0.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 0,
+      "difficulty": "hard",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 0
+    },
+    {
+      "id": "negative-045",
+      "question": "What was the private lock code that Pavel supposedly mentioned at Bell Bridge square, even though no archive records it?",
+      "expected_answer_type": "no_answer",
+      "test_type": "negative",
+      "source_scope": {
+        "scope_type": "collection"
+      },
+      "required_evidence": [],
+      "forbidden_evidence": [
+        {
+          "marker": "glass-lock code",
+          "aliases": [
+            "fabricated private lock code",
+            "invented answer glass-lock code"
+          ]
+        }
+      ],
+      "minimum_coverage": 0.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 0,
+      "difficulty": "easy",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 0
+    },
+    {
+      "id": "negative-046",
+      "question": "Which exact burned letter line belonged to Selma's stepfather in the festival minutes, despite never being written down?",
+      "expected_answer_type": "no_answer",
+      "test_type": "negative",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "negative-north-orchard-lane-festival-minutes-046"
+        ]
+      },
+      "required_evidence": [],
+      "forbidden_evidence": [
+        {
+          "marker": "charcoal letter line",
+          "aliases": [
+            "fabricated burned letter line",
+            "invented answer charcoal letter line"
+          ]
+        }
+      ],
+      "minimum_coverage": 0.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 0,
+      "difficulty": "medium",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 0
+    },
+    {
+      "id": "negative-047",
+      "question": "What is the missing unwritten wedding vow from the photo album page connected to Cedar Hill station?",
+      "expected_answer_type": "no_answer",
+      "test_type": "negative",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "negative-cedar-hill-station-photo-album-page-047"
+        ]
+      },
+      "required_evidence": [],
+      "forbidden_evidence": [
+        {
+          "marker": "winter vow text",
+          "aliases": [
+            "fabricated unwritten wedding vow",
+            "invented answer winter vow text"
+          ]
+        }
+      ],
+      "minimum_coverage": 0.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 0,
+      "difficulty": "hard",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 0
+    },
+    {
+      "id": "negative-048",
+      "question": "What was the hidden station code that Mira supposedly mentioned at South Meadow arch, even though no archive records it?",
+      "expected_answer_type": "no_answer",
+      "test_type": "negative",
+      "source_scope": {
+        "scope_type": "collection"
+      },
+      "required_evidence": [],
+      "forbidden_evidence": [
+        {
+          "marker": "signal code 44",
+          "aliases": [
+            "fabricated hidden station code",
+            "invented answer signal code 44"
+          ]
+        }
+      ],
+      "minimum_coverage": 0.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 0,
+      "difficulty": "easy",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 0
+    },
+    {
+      "id": "negative-049",
+      "question": "Which exact lost attic tally belonged to Ilya's cousin in the family note, despite never being written down?",
+      "expected_answer_type": "no_answer",
+      "test_type": "negative",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "negative-moon-mill-yard-family-note-049"
+        ]
+      },
+      "required_evidence": [],
+      "forbidden_evidence": [
+        {
+          "marker": "attic tally 19",
+          "aliases": [
+            "fabricated lost attic tally",
+            "invented answer attic tally 19"
+          ]
+        }
+      ],
+      "minimum_coverage": 0.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 0,
+      "difficulty": "medium",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 0
+    },
+    {
+      "id": "negative-050",
+      "question": "What is the missing serial number from the field recording connected to Birch Ferry shed?",
+      "expected_answer_type": "no_answer",
+      "test_type": "negative",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "negative-birch-ferry-shed-field-recording-050"
+        ]
+      },
+      "required_evidence": [],
+      "forbidden_evidence": [
+        {
+          "marker": "invented serial 8471",
+          "aliases": [
+            "fabricated serial number",
+            "invented answer invented serial 8471"
+          ]
+        }
+      ],
+      "minimum_coverage": 0.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 0,
+      "difficulty": "hard",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 0
+    },
+    {
+      "id": "negative-051",
+      "question": "What was the secret password that Stefan supposedly mentioned at Winter Chapel porch, even though no archive records it?",
+      "expected_answer_type": "no_answer",
+      "test_type": "negative",
+      "source_scope": {
+        "scope_type": "collection"
+      },
+      "required_evidence": [],
+      "forbidden_evidence": [
+        {
+          "marker": "moon-salt password",
+          "aliases": [
+            "fabricated secret password",
+            "invented answer moon-salt password"
+          ]
+        }
+      ],
+      "minimum_coverage": 0.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 0,
+      "difficulty": "easy",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 0
+    },
+    {
+      "id": "negative-052",
+      "question": "Which exact unrecorded middle name belonged to Ada's older sister in the winter letter, despite never being written down?",
+      "expected_answer_type": "no_answer",
+      "test_type": "negative",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "negative-lantern-row-kiosk-winter-letter-052"
+        ]
+      },
+      "required_evidence": [],
+      "forbidden_evidence": [
+        {
+          "marker": "Ilena Harbor name",
+          "aliases": [
+            "fabricated unrecorded middle name",
+            "invented answer Ilena Harbor name"
+          ]
+        }
+      ],
+      "minimum_coverage": 0.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 0,
+      "difficulty": "medium",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 0
+    },
+    {
+      "id": "negative-053",
+      "question": "What is the missing missing sixth verse from the holiday card connected to Marble stair hall?",
+      "expected_answer_type": "no_answer",
+      "test_type": "negative",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "negative-marble-stair-hall-holiday-card-053"
+        ]
+      },
+      "required_evidence": [],
+      "forbidden_evidence": [
+        {
+          "marker": "lost bell verse",
+          "aliases": [
+            "fabricated missing sixth verse",
+            "invented answer lost bell verse"
+          ]
+        }
+      ],
+      "minimum_coverage": 0.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 0,
+      "difficulty": "hard",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 0
+    },
+    {
+      "id": "negative-054",
+      "question": "What was the exact parcel weight that Selma supposedly mentioned at Cloud Wharf office, even though no archive records it?",
+      "expected_answer_type": "no_answer",
+      "test_type": "negative",
+      "source_scope": {
+        "scope_type": "collection"
+      },
+      "required_evidence": [],
+      "forbidden_evidence": [
+        {
+          "marker": "twelve-gram parcel",
+          "aliases": [
+            "fabricated exact parcel weight",
+            "invented answer twelve-gram parcel"
+          ]
+        }
+      ],
+      "minimum_coverage": 0.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 0,
+      "difficulty": "easy",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 0
+    },
+    {
+      "id": "negative-055",
+      "question": "Which exact private lock code belonged to Anton's twin sister in the boat manifest, despite never being written down?",
+      "expected_answer_type": "no_answer",
+      "test_type": "negative",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "negative-star-basin-gallery-boat-manifest-055"
+        ]
+      },
+      "required_evidence": [],
+      "forbidden_evidence": [
+        {
+          "marker": "glass-lock code",
+          "aliases": [
+            "fabricated private lock code",
+            "invented answer glass-lock code"
+          ]
+        }
+      ],
+      "minimum_coverage": 0.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 0,
+      "difficulty": "medium",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 0
+    },
+    {
+      "id": "negative-056",
+      "question": "What is the missing burned letter line from the audio reel connected to Ridge Post loft?",
+      "expected_answer_type": "no_answer",
+      "test_type": "negative",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "negative-ridge-post-loft-audio-reel-056"
+        ]
+      },
+      "required_evidence": [],
+      "forbidden_evidence": [
+        {
+          "marker": "charcoal letter line",
+          "aliases": [
+            "fabricated burned letter line",
+            "invented answer charcoal letter line"
+          ]
+        }
+      ],
+      "minimum_coverage": 0.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 0,
+      "difficulty": "hard",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 0
+    },
+    {
+      "id": "negative-057",
+      "question": "What was the unwritten wedding vow that Ilya supposedly mentioned at North Bell workshop, even though no archive records it?",
+      "expected_answer_type": "no_answer",
+      "test_type": "negative",
+      "source_scope": {
+        "scope_type": "collection"
+      },
+      "required_evidence": [],
+      "forbidden_evidence": [
+        {
+          "marker": "winter vow text",
+          "aliases": [
+            "fabricated unwritten wedding vow",
+            "invented answer winter vow text"
+          ]
+        }
+      ],
+      "minimum_coverage": 0.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 0,
+      "difficulty": "easy",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 0
+    },
+    {
+      "id": "negative-058",
+      "question": "Which exact hidden station code belonged to Lina's stepfather in the station transcript, despite never being written down?",
+      "expected_answer_type": "no_answer",
+      "test_type": "negative",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "negative-willow-courtyard-well-station-transcript-058"
+        ]
+      },
+      "required_evidence": [],
+      "forbidden_evidence": [
+        {
+          "marker": "signal code 44",
+          "aliases": [
+            "fabricated hidden station code",
+            "invented answer signal code 44"
+          ]
+        }
+      ],
+      "minimum_coverage": 0.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 0,
+      "difficulty": "medium",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 0
+    },
+    {
+      "id": "negative-059",
+      "question": "What is the missing lost attic tally from the memory sketchbook connected to Blue Trunk cabin?",
+      "expected_answer_type": "no_answer",
+      "test_type": "negative",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "negative-blue-trunk-cabin-memory-sketchbook-059"
+        ]
+      },
+      "required_evidence": [],
+      "forbidden_evidence": [
+        {
+          "marker": "attic tally 19",
+          "aliases": [
+            "fabricated lost attic tally",
+            "invented answer attic tally 19"
+          ]
+        }
+      ],
+      "minimum_coverage": 0.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 0,
+      "difficulty": "hard",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 0
+    },
+    {
+      "id": "negative-060",
+      "question": "What was the serial number that Ada supposedly mentioned at Bell Bridge square, even though no archive records it?",
+      "expected_answer_type": "no_answer",
+      "test_type": "negative",
+      "source_scope": {
+        "scope_type": "collection"
+      },
+      "required_evidence": [],
+      "forbidden_evidence": [
+        {
+          "marker": "invented serial 8471",
+          "aliases": [
+            "fabricated serial number",
+            "invented answer invented serial 8471"
+          ]
+        }
+      ],
+      "minimum_coverage": 0.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 0,
+      "difficulty": "easy",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 0
+    },
+    {
+      "id": "negative-061",
+      "question": "Which exact secret password belonged to Pavel's cousin in the photo album page, despite never being written down?",
+      "expected_answer_type": "no_answer",
+      "test_type": "negative",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "negative-north-orchard-lane-photo-album-page-061"
+        ]
+      },
+      "required_evidence": [],
+      "forbidden_evidence": [
+        {
+          "marker": "moon-salt password",
+          "aliases": [
+            "fabricated secret password",
+            "invented answer moon-salt password"
+          ]
+        }
+      ],
+      "minimum_coverage": 0.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 0,
+      "difficulty": "medium",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 0
+    },
+    {
+      "id": "negative-062",
+      "question": "What is the missing unrecorded middle name from the profile page connected to Cedar Hill station?",
+      "expected_answer_type": "no_answer",
+      "test_type": "negative",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "negative-cedar-hill-station-profile-page-062"
+        ]
+      },
+      "required_evidence": [],
+      "forbidden_evidence": [
+        {
+          "marker": "Ilena Harbor name",
+          "aliases": [
+            "fabricated unrecorded middle name",
+            "invented answer Ilena Harbor name"
+          ]
+        }
+      ],
+      "minimum_coverage": 0.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 0,
+      "difficulty": "hard",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 0
+    },
+    {
+      "id": "negative-063",
+      "question": "What was the missing sixth verse that Anton supposedly mentioned at South Meadow arch, even though no archive records it?",
+      "expected_answer_type": "no_answer",
+      "test_type": "negative",
+      "source_scope": {
+        "scope_type": "collection"
+      },
+      "required_evidence": [],
+      "forbidden_evidence": [
+        {
+          "marker": "lost bell verse",
+          "aliases": [
+            "fabricated missing sixth verse",
+            "invented answer lost bell verse"
+          ]
+        }
+      ],
+      "minimum_coverage": 0.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 0,
+      "difficulty": "easy",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 0
+    },
+    {
+      "id": "negative-064",
+      "question": "Which exact exact parcel weight belonged to Mira's older sister in the field recording, despite never being written down?",
+      "expected_answer_type": "no_answer",
+      "test_type": "negative",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "negative-moon-mill-yard-field-recording-064"
+        ]
+      },
+      "required_evidence": [],
+      "forbidden_evidence": [
+        {
+          "marker": "twelve-gram parcel",
+          "aliases": [
+            "fabricated exact parcel weight",
+            "invented answer twelve-gram parcel"
+          ]
+        }
+      ],
+      "minimum_coverage": 0.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 0,
+      "difficulty": "medium",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 0
+    },
+    {
+      "id": "negative-065",
+      "question": "What is the missing private lock code from the archive card connected to Birch Ferry shed?",
+      "expected_answer_type": "no_answer",
+      "test_type": "negative",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "negative-birch-ferry-shed-archive-card-065"
+        ]
+      },
+      "required_evidence": [],
+      "forbidden_evidence": [
+        {
+          "marker": "glass-lock code",
+          "aliases": [
+            "fabricated private lock code",
+            "invented answer glass-lock code"
+          ]
+        }
+      ],
+      "minimum_coverage": 0.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 0,
+      "difficulty": "hard",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 0
+    },
+    {
+      "id": "negative-066",
+      "question": "What was the burned letter line that Lina supposedly mentioned at Winter Chapel porch, even though no archive records it?",
+      "expected_answer_type": "no_answer",
+      "test_type": "negative",
+      "source_scope": {
+        "scope_type": "collection"
+      },
+      "required_evidence": [],
+      "forbidden_evidence": [
+        {
+          "marker": "charcoal letter line",
+          "aliases": [
+            "fabricated burned letter line",
+            "invented answer charcoal letter line"
+          ]
+        }
+      ],
+      "minimum_coverage": 0.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 0,
+      "difficulty": "easy",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 0
+    },
+    {
+      "id": "negative-067",
+      "question": "Which exact unwritten wedding vow belonged to Stefan's twin sister in the holiday card, despite never being written down?",
+      "expected_answer_type": "no_answer",
+      "test_type": "negative",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "negative-lantern-row-kiosk-holiday-card-067"
+        ]
+      },
+      "required_evidence": [],
+      "forbidden_evidence": [
+        {
+          "marker": "winter vow text",
+          "aliases": [
+            "fabricated unwritten wedding vow",
+            "invented answer winter vow text"
+          ]
+        }
+      ],
+      "minimum_coverage": 0.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 0,
+      "difficulty": "medium",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 0
+    },
+    {
+      "id": "negative-068",
+      "question": "What is the missing hidden station code from the river diary page connected to Marble stair hall?",
+      "expected_answer_type": "no_answer",
+      "test_type": "negative",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "negative-marble-stair-hall-river-diary-page-068"
+        ]
+      },
+      "required_evidence": [],
+      "forbidden_evidence": [
+        {
+          "marker": "signal code 44",
+          "aliases": [
+            "fabricated hidden station code",
+            "invented answer signal code 44"
+          ]
+        }
+      ],
+      "minimum_coverage": 0.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 0,
+      "difficulty": "hard",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 0
+    },
+    {
+      "id": "negative-069",
+      "question": "What was the lost attic tally that Pavel supposedly mentioned at Cloud Wharf office, even though no archive records it?",
+      "expected_answer_type": "no_answer",
+      "test_type": "negative",
+      "source_scope": {
+        "scope_type": "collection"
+      },
+      "required_evidence": [],
+      "forbidden_evidence": [
+        {
+          "marker": "attic tally 19",
+          "aliases": [
+            "fabricated lost attic tally",
+            "invented answer attic tally 19"
+          ]
+        }
+      ],
+      "minimum_coverage": 0.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 0,
+      "difficulty": "easy",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 0
+    },
+    {
+      "id": "negative-070",
+      "question": "Which exact serial number belonged to Selma's stepfather in the audio reel, despite never being written down?",
+      "expected_answer_type": "no_answer",
+      "test_type": "negative",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "negative-star-basin-gallery-audio-reel-070"
+        ]
+      },
+      "required_evidence": [],
+      "forbidden_evidence": [
+        {
+          "marker": "invented serial 8471",
+          "aliases": [
+            "fabricated serial number",
+            "invented answer invented serial 8471"
+          ]
+        }
+      ],
+      "minimum_coverage": 0.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 0,
+      "difficulty": "medium",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 0
+    },
+    {
+      "id": "negative-071",
+      "question": "What is the missing secret password from the travel ledger connected to Ridge Post loft?",
+      "expected_answer_type": "no_answer",
+      "test_type": "negative",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "negative-ridge-post-loft-travel-ledger-071"
+        ]
+      },
+      "required_evidence": [],
+      "forbidden_evidence": [
+        {
+          "marker": "moon-salt password",
+          "aliases": [
+            "fabricated secret password",
+            "invented answer moon-salt password"
+          ]
+        }
+      ],
+      "minimum_coverage": 0.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 0,
+      "difficulty": "hard",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 0
+    },
+    {
+      "id": "negative-072",
+      "question": "What was the unrecorded middle name that Mira supposedly mentioned at North Bell workshop, even though no archive records it?",
+      "expected_answer_type": "no_answer",
+      "test_type": "negative",
+      "source_scope": {
+        "scope_type": "collection"
+      },
+      "required_evidence": [],
+      "forbidden_evidence": [
+        {
+          "marker": "Ilena Harbor name",
+          "aliases": [
+            "fabricated unrecorded middle name",
+            "invented answer Ilena Harbor name"
+          ]
+        }
+      ],
+      "minimum_coverage": 0.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 0,
+      "difficulty": "easy",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 0
+    },
+    {
+      "id": "negative-073",
+      "question": "Which exact missing sixth verse belonged to Ilya's cousin in the memory sketchbook, despite never being written down?",
+      "expected_answer_type": "no_answer",
+      "test_type": "negative",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "negative-willow-courtyard-well-memory-sketchbook-073"
+        ]
+      },
+      "required_evidence": [],
+      "forbidden_evidence": [
+        {
+          "marker": "lost bell verse",
+          "aliases": [
+            "fabricated missing sixth verse",
+            "invented answer lost bell verse"
+          ]
+        }
+      ],
+      "minimum_coverage": 0.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 0,
+      "difficulty": "medium",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 0
+    },
+    {
+      "id": "negative-074",
+      "question": "What is the missing exact parcel weight from the festival minutes connected to Blue Trunk cabin?",
+      "expected_answer_type": "no_answer",
+      "test_type": "negative",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "negative-blue-trunk-cabin-festival-minutes-074"
+        ]
+      },
+      "required_evidence": [],
+      "forbidden_evidence": [
+        {
+          "marker": "twelve-gram parcel",
+          "aliases": [
+            "fabricated exact parcel weight",
+            "invented answer twelve-gram parcel"
+          ]
+        }
+      ],
+      "minimum_coverage": 0.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 0,
+      "difficulty": "hard",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 0
+    },
+    {
+      "id": "negative-075",
+      "question": "What was the private lock code that Stefan supposedly mentioned at Bell Bridge square, even though no archive records it?",
+      "expected_answer_type": "no_answer",
+      "test_type": "negative",
+      "source_scope": {
+        "scope_type": "collection"
+      },
+      "required_evidence": [],
+      "forbidden_evidence": [
+        {
+          "marker": "glass-lock code",
+          "aliases": [
+            "fabricated private lock code",
+            "invented answer glass-lock code"
+          ]
+        }
+      ],
+      "minimum_coverage": 0.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 0,
+      "difficulty": "easy",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 0
+    },
+    {
+      "id": "negative-076",
+      "question": "Which exact burned letter line belonged to Ada's older sister in the profile page, despite never being written down?",
+      "expected_answer_type": "no_answer",
+      "test_type": "negative",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "negative-north-orchard-lane-profile-page-076"
+        ]
+      },
+      "required_evidence": [],
+      "forbidden_evidence": [
+        {
+          "marker": "charcoal letter line",
+          "aliases": [
+            "fabricated burned letter line",
+            "invented answer charcoal letter line"
+          ]
+        }
+      ],
+      "minimum_coverage": 0.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 0,
+      "difficulty": "medium",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 0
+    },
+    {
+      "id": "negative-077",
+      "question": "What is the missing unwritten wedding vow from the family note connected to Cedar Hill station?",
+      "expected_answer_type": "no_answer",
+      "test_type": "negative",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "negative-cedar-hill-station-family-note-077"
+        ]
+      },
+      "required_evidence": [],
+      "forbidden_evidence": [
+        {
+          "marker": "winter vow text",
+          "aliases": [
+            "fabricated unwritten wedding vow",
+            "invented answer winter vow text"
+          ]
+        }
+      ],
+      "minimum_coverage": 0.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 0,
+      "difficulty": "hard",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 0
+    },
+    {
+      "id": "negative-078",
+      "question": "What was the hidden station code that Selma supposedly mentioned at South Meadow arch, even though no archive records it?",
+      "expected_answer_type": "no_answer",
+      "test_type": "negative",
+      "source_scope": {
+        "scope_type": "collection"
+      },
+      "required_evidence": [],
+      "forbidden_evidence": [
+        {
+          "marker": "signal code 44",
+          "aliases": [
+            "fabricated hidden station code",
+            "invented answer signal code 44"
+          ]
+        }
+      ],
+      "minimum_coverage": 0.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 0,
+      "difficulty": "easy",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 0
+    },
+    {
+      "id": "negative-079",
+      "question": "Which exact lost attic tally belonged to Anton's twin sister in the archive card, despite never being written down?",
+      "expected_answer_type": "no_answer",
+      "test_type": "negative",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "negative-moon-mill-yard-archive-card-079"
+        ]
+      },
+      "required_evidence": [],
+      "forbidden_evidence": [
+        {
+          "marker": "attic tally 19",
+          "aliases": [
+            "fabricated lost attic tally",
+            "invented answer attic tally 19"
+          ]
+        }
+      ],
+      "minimum_coverage": 0.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 0,
+      "difficulty": "medium",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 0
+    },
+    {
+      "id": "negative-080",
+      "question": "What is the missing serial number from the winter letter connected to Birch Ferry shed?",
+      "expected_answer_type": "no_answer",
+      "test_type": "negative",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "negative-birch-ferry-shed-winter-letter-080"
+        ]
+      },
+      "required_evidence": [],
+      "forbidden_evidence": [
+        {
+          "marker": "invented serial 8471",
+          "aliases": [
+            "fabricated serial number",
+            "invented answer invented serial 8471"
+          ]
+        }
+      ],
+      "minimum_coverage": 0.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 0,
+      "difficulty": "hard",
       "language": "en",
       "expected_long_context": false,
       "minimum_context_chars": 0

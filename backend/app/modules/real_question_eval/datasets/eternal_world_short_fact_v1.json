@@ -1,13 +1,15 @@
 {
   "dataset_id": "eternal-world-short-fact-v1",
   "name": "Eternal World Short Fact Validation V1",
-  "description": "Fictional short fact retrieval validation dataset for Eternal World. Safe for local schema and retrieval-quality validation.",
+  "description": "Expanded fictional short fact retrieval validation dataset for Eternal World. Safe for local schema and retrieval-quality validation only.",
   "project_name": "Eternal World",
   "metadata": {
     "version": "v1",
     "fictional": true,
     "safe_validation_only": true,
-    "test_type": "short_fact"
+    "test_type": "short_fact",
+    "case_count": 120,
+    "expanded_validation": true
   },
   "cases": [
     {
@@ -17,18 +19,26 @@
       "test_type": "short_fact",
       "source_scope": {
         "scope_type": "document",
-        "document_ids": ["ferry-workshop-notes"]
+        "document_ids": [
+          "ferry-workshop-notes"
+        ]
       },
       "required_evidence": [
         {
           "marker": "amber lantern",
-          "aliases": ["warm amber lantern", "lantern over the ferry bench"]
+          "aliases": [
+            "warm amber lantern",
+            "lantern over the ferry bench"
+          ]
         }
       ],
       "forbidden_evidence": [
         {
           "marker": "silver quay flag",
-          "aliases": ["flag from the quay", "silver dock flag"]
+          "aliases": [
+            "flag from the quay",
+            "silver dock flag"
+          ]
         }
       ],
       "minimum_coverage": 1.0,
@@ -46,22 +56,32 @@
       "test_type": "short_fact",
       "source_scope": {
         "scope_type": "document",
-        "document_ids": ["orchard-ledger-fragment"]
+        "document_ids": [
+          "orchard-ledger-fragment"
+        ]
       },
       "required_evidence": [
         {
           "marker": "tin key",
-          "aliases": ["small tin key", "orchard key"]
+          "aliases": [
+            "small tin key",
+            "orchard key"
+          ]
         },
         {
           "marker": "cherry ribbon",
-          "aliases": ["red cherry ribbon", "ribbon with cherry dye"]
+          "aliases": [
+            "red cherry ribbon",
+            "ribbon with cherry dye"
+          ]
         }
       ],
       "forbidden_evidence": [
         {
           "marker": "plum ribbon",
-          "aliases": ["purple plum ribbon"]
+          "aliases": [
+            "purple plum ribbon"
+          ]
         }
       ],
       "minimum_coverage": 1.0,
@@ -79,22 +99,32 @@
       "test_type": "short_fact",
       "source_scope": {
         "scope_type": "document",
-        "document_ids": ["postmaster-map-roll"]
+        "document_ids": [
+          "postmaster-map-roll"
+        ]
       },
       "required_evidence": [
         {
           "marker": "folded canal map",
-          "aliases": ["canal route map", "map of the canal locks"]
+          "aliases": [
+            "canal route map",
+            "map of the canal locks"
+          ]
         },
         {
           "marker": "brass corner clasp",
-          "aliases": ["corner clasp", "brass clasp on the map"]
+          "aliases": [
+            "corner clasp",
+            "brass clasp on the map"
+          ]
         }
       ],
       "forbidden_evidence": [
         {
           "marker": "hill road sketch",
-          "aliases": ["sketch of the hill road"]
+          "aliases": [
+            "sketch of the hill road"
+          ]
         }
       ],
       "minimum_coverage": 1.0,
@@ -112,22 +142,32 @@
       "test_type": "short_fact",
       "source_scope": {
         "scope_type": "document",
-        "document_ids": ["clocktower-repair-note"]
+        "document_ids": [
+          "clocktower-repair-note"
+        ]
       },
       "required_evidence": [
         {
           "marker": "green bell rope",
-          "aliases": ["green rope", "rope for the bell"]
+          "aliases": [
+            "green rope",
+            "rope for the bell"
+          ]
         },
         {
           "marker": "brass hook",
-          "aliases": ["hook of brass", "bell hook"]
+          "aliases": [
+            "hook of brass",
+            "bell hook"
+          ]
         }
       ],
       "forbidden_evidence": [
         {
           "marker": "iron bucket handle",
-          "aliases": ["bucket handle"]
+          "aliases": [
+            "bucket handle"
+          ]
         }
       ],
       "minimum_coverage": 1.0,
@@ -145,22 +185,32 @@
       "test_type": "short_fact",
       "source_scope": {
         "scope_type": "document",
-        "document_ids": ["river-mill-inventory"]
+        "document_ids": [
+          "river-mill-inventory"
+        ]
       },
       "required_evidence": [
         {
           "marker": "willow basket",
-          "aliases": ["woven willow basket", "basket by the mill stones"]
+          "aliases": [
+            "woven willow basket",
+            "basket by the mill stones"
+          ]
         },
         {
           "marker": "flour chalk mark",
-          "aliases": ["chalk flour mark", "white flour chalk line"]
+          "aliases": [
+            "chalk flour mark",
+            "white flour chalk line"
+          ]
         }
       ],
       "forbidden_evidence": [
         {
           "marker": "pine crate",
-          "aliases": ["pine storage crate"]
+          "aliases": [
+            "pine storage crate"
+          ]
         }
       ],
       "minimum_coverage": 1.0,
@@ -178,22 +228,32 @@
       "test_type": "short_fact",
       "source_scope": {
         "scope_type": "document",
-        "document_ids": ["market-token-tally"]
+        "document_ids": [
+          "market-token-tally"
+        ]
       },
       "required_evidence": [
         {
           "marker": "copper rain token",
-          "aliases": ["rain token", "copper weather token"]
+          "aliases": [
+            "rain token",
+            "copper weather token"
+          ]
         },
         {
           "marker": "east gate token",
-          "aliases": ["token from the east gate", "east-gate tally token"]
+          "aliases": [
+            "token from the east gate",
+            "east-gate tally token"
+          ]
         }
       ],
       "forbidden_evidence": [
         {
           "marker": "harvest ribbon token",
-          "aliases": ["ribbon harvest token"]
+          "aliases": [
+            "ribbon harvest token"
+          ]
         }
       ],
       "minimum_coverage": 1.0,
@@ -211,22 +271,32 @@
       "test_type": "short_fact",
       "source_scope": {
         "scope_type": "document",
-        "document_ids": ["garden-journal-leaf"]
+        "document_ids": [
+          "garden-journal-leaf"
+        ]
       },
       "required_evidence": [
         {
           "marker": "moonflower cutting",
-          "aliases": ["cutting of moonflower", "pressed moonflower stem"]
+          "aliases": [
+            "cutting of moonflower",
+            "pressed moonflower stem"
+          ]
         },
         {
           "marker": "clay watering cup",
-          "aliases": ["small clay cup", "watering cup of clay"]
+          "aliases": [
+            "small clay cup",
+            "watering cup of clay"
+          ]
         }
       ],
       "forbidden_evidence": [
         {
           "marker": "mint bundle",
-          "aliases": ["garden mint bundle"]
+          "aliases": [
+            "garden mint bundle"
+          ]
         }
       ],
       "minimum_coverage": 1.0,
@@ -244,22 +314,4834 @@
       "test_type": "short_fact",
       "source_scope": {
         "scope_type": "document",
-        "document_ids": ["snow-shed-log"]
+        "document_ids": [
+          "snow-shed-log"
+        ]
       },
       "required_evidence": [
         {
           "marker": "cedar shovel",
-          "aliases": ["shovel of cedar", "cedar-handled shovel"]
+          "aliases": [
+            "shovel of cedar",
+            "cedar-handled shovel"
+          ]
         },
         {
           "marker": "rope handle",
-          "aliases": ["wrapped rope handle", "handle with rope binding"]
+          "aliases": [
+            "wrapped rope handle",
+            "handle with rope binding"
+          ]
         }
       ],
       "forbidden_evidence": [
         {
           "marker": "iron rake",
-          "aliases": ["winter iron rake"]
+          "aliases": [
+            "winter iron rake"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "easy",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 0
+    },
+    {
+      "id": "short-fact-009",
+      "question": "What exact keepsake was listed beside Snow Orchard storehouse in Petar's river diary page?",
+      "expected_answer_type": "short_fact",
+      "test_type": "short_fact",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "short-snow-orchard-storehouse-river-diary-page-009"
+        ]
+      },
+      "required_evidence": [
+        {
+          "marker": "star ledger page",
+          "aliases": [
+            "keepsake star ledger page",
+            "star ledger page listed beside Snow Orchard storehouse"
+          ]
+        },
+        {
+          "marker": "Snow Orchard storehouse",
+          "aliases": [
+            "site Snow Orchard storehouse",
+            "the location Snow Orchard storehouse"
+          ]
+        },
+        {
+          "marker": "river diary page",
+          "aliases": [
+            "the river diary page",
+            "Petar's river diary page"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "wrong blue glass jar",
+          "aliases": [
+            "incorrect blue glass jar",
+            "mistaken keepsake blue glass jar"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 3,
+      "difficulty": "easy",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 0
+    },
+    {
+      "id": "short-fact-010",
+      "question": "Which small object in the cedar tube proved that Lina stopped at Bell Bridge square?",
+      "expected_answer_type": "short_fact",
+      "test_type": "short_fact",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "short-bell-bridge-square-festival-minutes-010"
+        ]
+      },
+      "required_evidence": [
+        {
+          "marker": "lantern hook",
+          "aliases": [
+            "small lantern hook",
+            "lantern hook from the cedar tube"
+          ]
+        },
+        {
+          "marker": "Bell Bridge square",
+          "aliases": [
+            "stop at Bell Bridge square",
+            "visit to Bell Bridge square"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "wrong canal route map",
+          "aliases": [
+            "incorrect canal route map",
+            "mistaken keepsake canal route map"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "medium",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 0
+    },
+    {
+      "id": "short-fact-011",
+      "question": "Which direct fact from the winter letter identifies the item recorded for Boris at Glass Harbor quay?",
+      "expected_answer_type": "short_fact",
+      "test_type": "short_fact",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "short-glass-harbor-quay-winter-letter-011"
+        ]
+      },
+      "required_evidence": [
+        {
+          "marker": "weathered camera strap",
+          "aliases": [
+            "item recorded as weathered camera strap",
+            "Boris's recorded weathered camera strap"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "wrong cedar shovel",
+          "aliases": [
+            "incorrect cedar shovel",
+            "mistaken keepsake cedar shovel"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 1,
+      "difficulty": "hard",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 0
+    },
+    {
+      "id": "short-fact-012",
+      "question": "Which item did Anya tuck inside the cedar tube mentioned in the station transcript?",
+      "expected_answer_type": "short_fact",
+      "test_type": "short_fact",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "short-south-meadow-arch-station-transcript-012"
+        ]
+      },
+      "required_evidence": [
+        {
+          "marker": "wax thread",
+          "aliases": [
+            "wax thread in the cedar tube",
+            "Anya's wax thread"
+          ]
+        },
+        {
+          "marker": "cedar tube",
+          "aliases": [
+            "the cedar tube",
+            "South Meadow arch cedar tube"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "wrong copper token",
+          "aliases": [
+            "incorrect copper token",
+            "mistaken keepsake copper token"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "easy",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 0
+    },
+    {
+      "id": "short-fact-013",
+      "question": "What object and color detail identified Marek's keepsake at Hollow Market arcade?",
+      "expected_answer_type": "short_fact",
+      "test_type": "short_fact",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "short-hollow-market-arcade-field-recording-013"
+        ]
+      },
+      "required_evidence": [
+        {
+          "marker": "saffron tin key",
+          "aliases": [
+            "tin key colored saffron",
+            "saffron keepsake tin key"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "wrong moonflower cutting",
+          "aliases": [
+            "incorrect moonflower cutting",
+            "mistaken keepsake moonflower cutting"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 1,
+      "difficulty": "medium",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 0
+    },
+    {
+      "id": "short-fact-014",
+      "question": "Which fact in the audio reel shows what Daria's twin sister left near Winter Chapel porch?",
+      "expected_answer_type": "short_fact",
+      "test_type": "short_fact",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "short-winter-chapel-porch-audio-reel-014"
+        ]
+      },
+      "required_evidence": [
+        {
+          "marker": "blue oar",
+          "aliases": [
+            "twin sister's blue oar",
+            "blue oar left near Winter Chapel porch"
+          ]
+        },
+        {
+          "marker": "twin sister",
+          "aliases": [
+            "Daria's twin sister",
+            "the twin sister of Daria"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "wrong birch tea flask",
+          "aliases": [
+            "incorrect birch tea flask",
+            "mistaken keepsake birch tea flask"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "hard",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 0
+    },
+    {
+      "id": "short-fact-015",
+      "question": "What exact keepsake was listed beside Driftwood cove in Stefan's profile page?",
+      "expected_answer_type": "short_fact",
+      "test_type": "short_fact",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "short-driftwood-cove-profile-page-015"
+        ]
+      },
+      "required_evidence": [
+        {
+          "marker": "willow basket",
+          "aliases": [
+            "keepsake willow basket",
+            "willow basket listed beside Driftwood cove"
+          ]
+        },
+        {
+          "marker": "Driftwood cove",
+          "aliases": [
+            "site Driftwood cove",
+            "the location Driftwood cove"
+          ]
+        },
+        {
+          "marker": "profile page",
+          "aliases": [
+            "the profile page",
+            "Stefan's profile page"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "wrong saffron scarf",
+          "aliases": [
+            "incorrect saffron scarf",
+            "mistaken keepsake saffron scarf"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 3,
+      "difficulty": "easy",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 0
+    },
+    {
+      "id": "short-fact-016",
+      "question": "Which small object in the cedar tube proved that Yara stopped at Cloud Wharf office?",
+      "expected_answer_type": "short_fact",
+      "test_type": "short_fact",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "short-cloud-wharf-office-river-diary-page-016"
+        ]
+      },
+      "required_evidence": [
+        {
+          "marker": "paper moon mask",
+          "aliases": [
+            "small paper moon mask",
+            "paper moon mask from the cedar tube"
+          ]
+        },
+        {
+          "marker": "Cloud Wharf office",
+          "aliases": [
+            "stop at Cloud Wharf office",
+            "visit to Cloud Wharf office"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "wrong carved shell comb",
+          "aliases": [
+            "incorrect carved shell comb",
+            "mistaken keepsake carved shell comb"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "medium",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 0
+    },
+    {
+      "id": "short-fact-017",
+      "question": "Which direct fact from the festival minutes identifies the item recorded for Oren at Moss Archive room?",
+      "expected_answer_type": "short_fact",
+      "test_type": "short_fact",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "short-moss-archive-room-festival-minutes-017"
+        ]
+      },
+      "required_evidence": [
+        {
+          "marker": "glass ink bottle",
+          "aliases": [
+            "item recorded as glass ink bottle",
+            "Oren's recorded glass ink bottle"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "wrong amber lantern",
+          "aliases": [
+            "incorrect amber lantern",
+            "mistaken keepsake amber lantern"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 1,
+      "difficulty": "hard",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 0
+    },
+    {
+      "id": "short-fact-018",
+      "question": "Which item did Milena tuck inside the cedar tube mentioned in the winter letter?",
+      "expected_answer_type": "short_fact",
+      "test_type": "short_fact",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "short-north-bell-workshop-winter-letter-018"
+        ]
+      },
+      "required_evidence": [
+        {
+          "marker": "copper wind vane pin",
+          "aliases": [
+            "copper wind vane pin in the cedar tube",
+            "Milena's copper wind vane pin"
+          ]
+        },
+        {
+          "marker": "cedar tube",
+          "aliases": [
+            "the cedar tube",
+            "North Bell workshop cedar tube"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "wrong basalt sketch",
+          "aliases": [
+            "incorrect basalt sketch",
+            "mistaken keepsake basalt sketch"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "easy",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 0
+    },
+    {
+      "id": "short-fact-019",
+      "question": "What object and color detail identified Lev's keepsake at Snow Orchard storehouse?",
+      "expected_answer_type": "short_fact",
+      "test_type": "short_fact",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "short-snow-orchard-storehouse-station-transcript-019"
+        ]
+      },
+      "required_evidence": [
+        {
+          "marker": "saffron coal stove hiss",
+          "aliases": [
+            "coal stove hiss colored saffron",
+            "saffron keepsake coal stove hiss"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "wrong green apron",
+          "aliases": [
+            "incorrect green apron",
+            "mistaken keepsake green apron"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 1,
+      "difficulty": "medium",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 0
+    },
+    {
+      "id": "short-fact-020",
+      "question": "Which fact in the field recording shows what Ada's stepfather left near Bell Bridge square?",
+      "expected_answer_type": "short_fact",
+      "test_type": "short_fact",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "short-bell-bridge-square-field-recording-020"
+        ]
+      },
+      "required_evidence": [
+        {
+          "marker": "violet ribbon",
+          "aliases": [
+            "stepfather's violet ribbon",
+            "violet ribbon left near Bell Bridge square"
+          ]
+        },
+        {
+          "marker": "stepfather",
+          "aliases": [
+            "Ada's stepfather",
+            "the stepfather of Ada"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "wrong silver booth token",
+          "aliases": [
+            "incorrect silver booth token",
+            "mistaken keepsake silver booth token"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "hard",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 0
+    },
+    {
+      "id": "short-fact-021",
+      "question": "What exact keepsake was listed beside Glass Harbor quay in Nikola's audio reel?",
+      "expected_answer_type": "short_fact",
+      "test_type": "short_fact",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "short-glass-harbor-quay-audio-reel-021"
+        ]
+      },
+      "required_evidence": [
+        {
+          "marker": "tuning fork",
+          "aliases": [
+            "keepsake tuning fork",
+            "tuning fork listed beside Glass Harbor quay"
+          ]
+        },
+        {
+          "marker": "Glass Harbor quay",
+          "aliases": [
+            "site Glass Harbor quay",
+            "the location Glass Harbor quay"
+          ]
+        },
+        {
+          "marker": "audio reel",
+          "aliases": [
+            "the audio reel",
+            "Nikola's audio reel"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "wrong clay watering cup",
+          "aliases": [
+            "incorrect clay watering cup",
+            "mistaken keepsake clay watering cup"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 3,
+      "difficulty": "easy",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 0
+    },
+    {
+      "id": "short-fact-022",
+      "question": "Which small object in the cedar tube proved that Raisa stopped at South Meadow arch?",
+      "expected_answer_type": "short_fact",
+      "test_type": "short_fact",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "short-south-meadow-arch-profile-page-022"
+        ]
+      },
+      "required_evidence": [
+        {
+          "marker": "rope bridge permit",
+          "aliases": [
+            "small rope bridge permit",
+            "rope bridge permit from the cedar tube"
+          ]
+        },
+        {
+          "marker": "South Meadow arch",
+          "aliases": [
+            "stop at South Meadow arch",
+            "visit to South Meadow arch"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "wrong juniper bundles",
+          "aliases": [
+            "incorrect juniper bundles",
+            "mistaken keepsake juniper bundles"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "medium",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 0
+    },
+    {
+      "id": "short-fact-023",
+      "question": "Which direct fact from the river diary page identifies the item recorded for Galen at Hollow Market arcade?",
+      "expected_answer_type": "short_fact",
+      "test_type": "short_fact",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "short-hollow-market-arcade-river-diary-page-023"
+        ]
+      },
+      "required_evidence": [
+        {
+          "marker": "oak barrel hoops",
+          "aliases": [
+            "item recorded as oak barrel hoops",
+            "Galen's recorded oak barrel hoops"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "wrong smoke vent chain",
+          "aliases": [
+            "incorrect smoke vent chain",
+            "mistaken keepsake smoke vent chain"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 1,
+      "difficulty": "hard",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 0
+    },
+    {
+      "id": "short-fact-024",
+      "question": "Which item did Sonya tuck inside the cedar tube mentioned in the festival minutes?",
+      "expected_answer_type": "short_fact",
+      "test_type": "short_fact",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "short-winter-chapel-porch-festival-minutes-024"
+        ]
+      },
+      "required_evidence": [
+        {
+          "marker": "blue glass jar",
+          "aliases": [
+            "blue glass jar in the cedar tube",
+            "Sonya's blue glass jar"
+          ]
+        },
+        {
+          "marker": "cedar tube",
+          "aliases": [
+            "the cedar tube",
+            "Winter Chapel porch cedar tube"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "wrong brass compass",
+          "aliases": [
+            "incorrect brass compass",
+            "mistaken keepsake brass compass"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "easy",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 0
+    },
+    {
+      "id": "short-fact-025",
+      "question": "What object and color detail identified Pavel's keepsake at Driftwood cove?",
+      "expected_answer_type": "short_fact",
+      "test_type": "short_fact",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "short-driftwood-cove-winter-letter-025"
+        ]
+      },
+      "required_evidence": [
+        {
+          "marker": "saffron canal route map",
+          "aliases": [
+            "canal route map colored saffron",
+            "saffron keepsake canal route map"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "wrong linen wick",
+          "aliases": [
+            "incorrect linen wick",
+            "mistaken keepsake linen wick"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 1,
+      "difficulty": "medium",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 0
+    },
+    {
+      "id": "short-fact-026",
+      "question": "Which fact in the station transcript shows what Talia's cousin left near Cloud Wharf office?",
+      "expected_answer_type": "short_fact",
+      "test_type": "short_fact",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "short-cloud-wharf-office-station-transcript-026"
+        ]
+      },
+      "required_evidence": [
+        {
+          "marker": "cedar shovel",
+          "aliases": [
+            "cousin's cedar shovel",
+            "cedar shovel left near Cloud Wharf office"
+          ]
+        },
+        {
+          "marker": "cousin",
+          "aliases": [
+            "Talia's cousin",
+            "the cousin of Talia"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "wrong star ledger page",
+          "aliases": [
+            "incorrect star ledger page",
+            "mistaken keepsake star ledger page"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "hard",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 0
+    },
+    {
+      "id": "short-fact-027",
+      "question": "What exact keepsake was listed beside Moss Archive room in Emil's field recording?",
+      "expected_answer_type": "short_fact",
+      "test_type": "short_fact",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "short-moss-archive-room-field-recording-027"
+        ]
+      },
+      "required_evidence": [
+        {
+          "marker": "copper token",
+          "aliases": [
+            "keepsake copper token",
+            "copper token listed beside Moss Archive room"
+          ]
+        },
+        {
+          "marker": "Moss Archive room",
+          "aliases": [
+            "site Moss Archive room",
+            "the location Moss Archive room"
+          ]
+        },
+        {
+          "marker": "field recording",
+          "aliases": [
+            "the field recording",
+            "Emil's field recording"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "wrong lantern hook",
+          "aliases": [
+            "incorrect lantern hook",
+            "mistaken keepsake lantern hook"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 3,
+      "difficulty": "easy",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 0
+    },
+    {
+      "id": "short-fact-028",
+      "question": "Which small object in the cedar tube proved that Runa stopped at North Bell workshop?",
+      "expected_answer_type": "short_fact",
+      "test_type": "short_fact",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "short-north-bell-workshop-audio-reel-028"
+        ]
+      },
+      "required_evidence": [
+        {
+          "marker": "moonflower cutting",
+          "aliases": [
+            "small moonflower cutting",
+            "moonflower cutting from the cedar tube"
+          ]
+        },
+        {
+          "marker": "North Bell workshop",
+          "aliases": [
+            "stop at North Bell workshop",
+            "visit to North Bell workshop"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "wrong weathered camera strap",
+          "aliases": [
+            "incorrect weathered camera strap",
+            "mistaken keepsake weathered camera strap"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "medium",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 0
+    },
+    {
+      "id": "short-fact-029",
+      "question": "Which direct fact from the profile page identifies the item recorded for Viktor at Snow Orchard storehouse?",
+      "expected_answer_type": "short_fact",
+      "test_type": "short_fact",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "short-snow-orchard-storehouse-profile-page-029"
+        ]
+      },
+      "required_evidence": [
+        {
+          "marker": "birch tea flask",
+          "aliases": [
+            "item recorded as birch tea flask",
+            "Viktor's recorded birch tea flask"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "wrong wax thread",
+          "aliases": [
+            "incorrect wax thread",
+            "mistaken keepsake wax thread"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 1,
+      "difficulty": "hard",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 0
+    },
+    {
+      "id": "short-fact-030",
+      "question": "Which item did Selma tuck inside the cedar tube mentioned in the river diary page?",
+      "expected_answer_type": "short_fact",
+      "test_type": "short_fact",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "short-bell-bridge-square-river-diary-page-030"
+        ]
+      },
+      "required_evidence": [
+        {
+          "marker": "saffron scarf",
+          "aliases": [
+            "saffron scarf in the cedar tube",
+            "Selma's saffron scarf"
+          ]
+        },
+        {
+          "marker": "cedar tube",
+          "aliases": [
+            "the cedar tube",
+            "Bell Bridge square cedar tube"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "wrong tin key",
+          "aliases": [
+            "incorrect tin key",
+            "mistaken keepsake tin key"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "easy",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 0
+    },
+    {
+      "id": "short-fact-031",
+      "question": "What object and color detail identified Damir's keepsake at Glass Harbor quay?",
+      "expected_answer_type": "short_fact",
+      "test_type": "short_fact",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "short-glass-harbor-quay-festival-minutes-031"
+        ]
+      },
+      "required_evidence": [
+        {
+          "marker": "saffron carved shell comb",
+          "aliases": [
+            "carved shell comb colored saffron",
+            "saffron keepsake carved shell comb"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "wrong blue oar",
+          "aliases": [
+            "incorrect blue oar",
+            "mistaken keepsake blue oar"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 1,
+      "difficulty": "medium",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 0
+    },
+    {
+      "id": "short-fact-032",
+      "question": "Which fact in the winter letter shows what Iveta's older sister left near South Meadow arch?",
+      "expected_answer_type": "short_fact",
+      "test_type": "short_fact",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "short-south-meadow-arch-winter-letter-032"
+        ]
+      },
+      "required_evidence": [
+        {
+          "marker": "amber lantern",
+          "aliases": [
+            "older sister's amber lantern",
+            "amber lantern left near South Meadow arch"
+          ]
+        },
+        {
+          "marker": "older sister",
+          "aliases": [
+            "Iveta's older sister",
+            "the older sister of Iveta"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "wrong willow basket",
+          "aliases": [
+            "incorrect willow basket",
+            "mistaken keepsake willow basket"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "hard",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 0
+    },
+    {
+      "id": "short-fact-033",
+      "question": "What exact keepsake was listed beside Hollow Market arcade in Rafi's station transcript?",
+      "expected_answer_type": "short_fact",
+      "test_type": "short_fact",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "short-hollow-market-arcade-station-transcript-033"
+        ]
+      },
+      "required_evidence": [
+        {
+          "marker": "basalt sketch",
+          "aliases": [
+            "keepsake basalt sketch",
+            "basalt sketch listed beside Hollow Market arcade"
+          ]
+        },
+        {
+          "marker": "Hollow Market arcade",
+          "aliases": [
+            "site Hollow Market arcade",
+            "the location Hollow Market arcade"
+          ]
+        },
+        {
+          "marker": "station transcript",
+          "aliases": [
+            "the station transcript",
+            "Rafi's station transcript"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "wrong paper moon mask",
+          "aliases": [
+            "incorrect paper moon mask",
+            "mistaken keepsake paper moon mask"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 3,
+      "difficulty": "easy",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 0
+    },
+    {
+      "id": "short-fact-034",
+      "question": "Which small object in the cedar tube proved that Nessa stopped at Winter Chapel porch?",
+      "expected_answer_type": "short_fact",
+      "test_type": "short_fact",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "short-winter-chapel-porch-field-recording-034"
+        ]
+      },
+      "required_evidence": [
+        {
+          "marker": "green apron",
+          "aliases": [
+            "small green apron",
+            "green apron from the cedar tube"
+          ]
+        },
+        {
+          "marker": "Winter Chapel porch",
+          "aliases": [
+            "stop at Winter Chapel porch",
+            "visit to Winter Chapel porch"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "wrong glass ink bottle",
+          "aliases": [
+            "incorrect glass ink bottle",
+            "mistaken keepsake glass ink bottle"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "medium",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 0
+    },
+    {
+      "id": "short-fact-035",
+      "question": "Which direct fact from the audio reel identifies the item recorded for Anton at Driftwood cove?",
+      "expected_answer_type": "short_fact",
+      "test_type": "short_fact",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "short-driftwood-cove-audio-reel-035"
+        ]
+      },
+      "required_evidence": [
+        {
+          "marker": "silver booth token",
+          "aliases": [
+            "item recorded as silver booth token",
+            "Anton's recorded silver booth token"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "wrong copper wind vane pin",
+          "aliases": [
+            "incorrect copper wind vane pin",
+            "mistaken keepsake copper wind vane pin"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 1,
+      "difficulty": "hard",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 0
+    },
+    {
+      "id": "short-fact-036",
+      "question": "Which item did Zora tuck inside the cedar tube mentioned in the profile page?",
+      "expected_answer_type": "short_fact",
+      "test_type": "short_fact",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "short-cloud-wharf-office-profile-page-036"
+        ]
+      },
+      "required_evidence": [
+        {
+          "marker": "clay watering cup",
+          "aliases": [
+            "clay watering cup in the cedar tube",
+            "Zora's clay watering cup"
+          ]
+        },
+        {
+          "marker": "cedar tube",
+          "aliases": [
+            "the cedar tube",
+            "Cloud Wharf office cedar tube"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "wrong coal stove hiss",
+          "aliases": [
+            "incorrect coal stove hiss",
+            "mistaken keepsake coal stove hiss"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "easy",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 0
+    },
+    {
+      "id": "short-fact-037",
+      "question": "What object and color detail identified Milan's keepsake at Moss Archive room?",
+      "expected_answer_type": "short_fact",
+      "test_type": "short_fact",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "short-moss-archive-room-river-diary-page-037"
+        ]
+      },
+      "required_evidence": [
+        {
+          "marker": "saffron juniper bundles",
+          "aliases": [
+            "juniper bundles colored saffron",
+            "saffron keepsake juniper bundles"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "wrong violet ribbon",
+          "aliases": [
+            "incorrect violet ribbon",
+            "mistaken keepsake violet ribbon"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 1,
+      "difficulty": "medium",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 0
+    },
+    {
+      "id": "short-fact-038",
+      "question": "Which fact in the festival minutes shows what Ilia's twin sister left near North Bell workshop?",
+      "expected_answer_type": "short_fact",
+      "test_type": "short_fact",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "short-north-bell-workshop-festival-minutes-038"
+        ]
+      },
+      "required_evidence": [
+        {
+          "marker": "smoke vent chain",
+          "aliases": [
+            "twin sister's smoke vent chain",
+            "smoke vent chain left near North Bell workshop"
+          ]
+        },
+        {
+          "marker": "twin sister",
+          "aliases": [
+            "Ilia's twin sister",
+            "the twin sister of Ilia"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "wrong tuning fork",
+          "aliases": [
+            "incorrect tuning fork",
+            "mistaken keepsake tuning fork"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "hard",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 0
+    },
+    {
+      "id": "short-fact-039",
+      "question": "What exact keepsake was listed beside Snow Orchard storehouse in Vesna's winter letter?",
+      "expected_answer_type": "short_fact",
+      "test_type": "short_fact",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "short-snow-orchard-storehouse-winter-letter-039"
+        ]
+      },
+      "required_evidence": [
+        {
+          "marker": "brass compass",
+          "aliases": [
+            "keepsake brass compass",
+            "brass compass listed beside Snow Orchard storehouse"
+          ]
+        },
+        {
+          "marker": "Snow Orchard storehouse",
+          "aliases": [
+            "site Snow Orchard storehouse",
+            "the location Snow Orchard storehouse"
+          ]
+        },
+        {
+          "marker": "winter letter",
+          "aliases": [
+            "the winter letter",
+            "Vesna's winter letter"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "wrong rope bridge permit",
+          "aliases": [
+            "incorrect rope bridge permit",
+            "mistaken keepsake rope bridge permit"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 3,
+      "difficulty": "easy",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 0
+    },
+    {
+      "id": "short-fact-040",
+      "question": "Which small object in the cedar tube proved that Mira stopped at Bell Bridge square?",
+      "expected_answer_type": "short_fact",
+      "test_type": "short_fact",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "short-bell-bridge-square-station-transcript-040"
+        ]
+      },
+      "required_evidence": [
+        {
+          "marker": "linen wick",
+          "aliases": [
+            "small linen wick",
+            "linen wick from the cedar tube"
+          ]
+        },
+        {
+          "marker": "Bell Bridge square",
+          "aliases": [
+            "stop at Bell Bridge square",
+            "visit to Bell Bridge square"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "wrong oak barrel hoops",
+          "aliases": [
+            "incorrect oak barrel hoops",
+            "mistaken keepsake oak barrel hoops"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "medium",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 0
+    },
+    {
+      "id": "short-fact-041",
+      "question": "Which direct fact from the field recording identifies the item recorded for Tomas at Glass Harbor quay?",
+      "expected_answer_type": "short_fact",
+      "test_type": "short_fact",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "short-glass-harbor-quay-field-recording-041"
+        ]
+      },
+      "required_evidence": [
+        {
+          "marker": "star ledger page",
+          "aliases": [
+            "item recorded as star ledger page",
+            "Tomas's recorded star ledger page"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "wrong blue glass jar",
+          "aliases": [
+            "incorrect blue glass jar",
+            "mistaken keepsake blue glass jar"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 1,
+      "difficulty": "hard",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 0
+    },
+    {
+      "id": "short-fact-042",
+      "question": "Which item did Elena tuck inside the cedar tube mentioned in the audio reel?",
+      "expected_answer_type": "short_fact",
+      "test_type": "short_fact",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "short-south-meadow-arch-audio-reel-042"
+        ]
+      },
+      "required_evidence": [
+        {
+          "marker": "lantern hook",
+          "aliases": [
+            "lantern hook in the cedar tube",
+            "Elena's lantern hook"
+          ]
+        },
+        {
+          "marker": "cedar tube",
+          "aliases": [
+            "the cedar tube",
+            "South Meadow arch cedar tube"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "wrong canal route map",
+          "aliases": [
+            "incorrect canal route map",
+            "mistaken keepsake canal route map"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "easy",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 0
+    },
+    {
+      "id": "short-fact-043",
+      "question": "What object and color detail identified Radin's keepsake at Hollow Market arcade?",
+      "expected_answer_type": "short_fact",
+      "test_type": "short_fact",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "short-hollow-market-arcade-profile-page-043"
+        ]
+      },
+      "required_evidence": [
+        {
+          "marker": "saffron weathered camera strap",
+          "aliases": [
+            "weathered camera strap colored saffron",
+            "saffron keepsake weathered camera strap"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "wrong cedar shovel",
+          "aliases": [
+            "incorrect cedar shovel",
+            "mistaken keepsake cedar shovel"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 1,
+      "difficulty": "medium",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 0
+    },
+    {
+      "id": "short-fact-044",
+      "question": "Which fact in the river diary page shows what Vera's stepfather left near Winter Chapel porch?",
+      "expected_answer_type": "short_fact",
+      "test_type": "short_fact",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "short-winter-chapel-porch-river-diary-page-044"
+        ]
+      },
+      "required_evidence": [
+        {
+          "marker": "wax thread",
+          "aliases": [
+            "stepfather's wax thread",
+            "wax thread left near Winter Chapel porch"
+          ]
+        },
+        {
+          "marker": "stepfather",
+          "aliases": [
+            "Vera's stepfather",
+            "the stepfather of Vera"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "wrong copper token",
+          "aliases": [
+            "incorrect copper token",
+            "mistaken keepsake copper token"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "hard",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 0
+    },
+    {
+      "id": "short-fact-045",
+      "question": "What exact keepsake was listed beside Driftwood cove in Ilya's festival minutes?",
+      "expected_answer_type": "short_fact",
+      "test_type": "short_fact",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "short-driftwood-cove-festival-minutes-045"
+        ]
+      },
+      "required_evidence": [
+        {
+          "marker": "tin key",
+          "aliases": [
+            "keepsake tin key",
+            "tin key listed beside Driftwood cove"
+          ]
+        },
+        {
+          "marker": "Driftwood cove",
+          "aliases": [
+            "site Driftwood cove",
+            "the location Driftwood cove"
+          ]
+        },
+        {
+          "marker": "festival minutes",
+          "aliases": [
+            "the festival minutes",
+            "Ilya's festival minutes"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "wrong moonflower cutting",
+          "aliases": [
+            "incorrect moonflower cutting",
+            "mistaken keepsake moonflower cutting"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 3,
+      "difficulty": "easy",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 0
+    },
+    {
+      "id": "short-fact-046",
+      "question": "Which small object in the cedar tube proved that Kira stopped at Cloud Wharf office?",
+      "expected_answer_type": "short_fact",
+      "test_type": "short_fact",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "short-cloud-wharf-office-winter-letter-046"
+        ]
+      },
+      "required_evidence": [
+        {
+          "marker": "blue oar",
+          "aliases": [
+            "small blue oar",
+            "blue oar from the cedar tube"
+          ]
+        },
+        {
+          "marker": "Cloud Wharf office",
+          "aliases": [
+            "stop at Cloud Wharf office",
+            "visit to Cloud Wharf office"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "wrong birch tea flask",
+          "aliases": [
+            "incorrect birch tea flask",
+            "mistaken keepsake birch tea flask"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "medium",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 0
+    },
+    {
+      "id": "short-fact-047",
+      "question": "Which direct fact from the station transcript identifies the item recorded for Soren at Moss Archive room?",
+      "expected_answer_type": "short_fact",
+      "test_type": "short_fact",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "short-moss-archive-room-station-transcript-047"
+        ]
+      },
+      "required_evidence": [
+        {
+          "marker": "willow basket",
+          "aliases": [
+            "item recorded as willow basket",
+            "Soren's recorded willow basket"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "wrong saffron scarf",
+          "aliases": [
+            "incorrect saffron scarf",
+            "mistaken keepsake saffron scarf"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 1,
+      "difficulty": "hard",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 0
+    },
+    {
+      "id": "short-fact-048",
+      "question": "Which item did Nadia tuck inside the cedar tube mentioned in the field recording?",
+      "expected_answer_type": "short_fact",
+      "test_type": "short_fact",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "short-north-bell-workshop-field-recording-048"
+        ]
+      },
+      "required_evidence": [
+        {
+          "marker": "paper moon mask",
+          "aliases": [
+            "paper moon mask in the cedar tube",
+            "Nadia's paper moon mask"
+          ]
+        },
+        {
+          "marker": "cedar tube",
+          "aliases": [
+            "the cedar tube",
+            "North Bell workshop cedar tube"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "wrong carved shell comb",
+          "aliases": [
+            "incorrect carved shell comb",
+            "mistaken keepsake carved shell comb"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "easy",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 0
+    },
+    {
+      "id": "short-fact-049",
+      "question": "What object and color detail identified Petar's keepsake at Snow Orchard storehouse?",
+      "expected_answer_type": "short_fact",
+      "test_type": "short_fact",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "short-snow-orchard-storehouse-audio-reel-049"
+        ]
+      },
+      "required_evidence": [
+        {
+          "marker": "saffron glass ink bottle",
+          "aliases": [
+            "glass ink bottle colored saffron",
+            "saffron keepsake glass ink bottle"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "wrong amber lantern",
+          "aliases": [
+            "incorrect amber lantern",
+            "mistaken keepsake amber lantern"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 1,
+      "difficulty": "medium",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 0
+    },
+    {
+      "id": "short-fact-050",
+      "question": "Which fact in the profile page shows what Lina's cousin left near Bell Bridge square?",
+      "expected_answer_type": "short_fact",
+      "test_type": "short_fact",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "short-bell-bridge-square-profile-page-050"
+        ]
+      },
+      "required_evidence": [
+        {
+          "marker": "copper wind vane pin",
+          "aliases": [
+            "cousin's copper wind vane pin",
+            "copper wind vane pin left near Bell Bridge square"
+          ]
+        },
+        {
+          "marker": "cousin",
+          "aliases": [
+            "Lina's cousin",
+            "the cousin of Lina"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "wrong basalt sketch",
+          "aliases": [
+            "incorrect basalt sketch",
+            "mistaken keepsake basalt sketch"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "hard",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 0
+    },
+    {
+      "id": "short-fact-051",
+      "question": "What exact keepsake was listed beside Glass Harbor quay in Boris's river diary page?",
+      "expected_answer_type": "short_fact",
+      "test_type": "short_fact",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "short-glass-harbor-quay-river-diary-page-051"
+        ]
+      },
+      "required_evidence": [
+        {
+          "marker": "coal stove hiss",
+          "aliases": [
+            "keepsake coal stove hiss",
+            "coal stove hiss listed beside Glass Harbor quay"
+          ]
+        },
+        {
+          "marker": "Glass Harbor quay",
+          "aliases": [
+            "site Glass Harbor quay",
+            "the location Glass Harbor quay"
+          ]
+        },
+        {
+          "marker": "river diary page",
+          "aliases": [
+            "the river diary page",
+            "Boris's river diary page"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "wrong green apron",
+          "aliases": [
+            "incorrect green apron",
+            "mistaken keepsake green apron"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 3,
+      "difficulty": "easy",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 0
+    },
+    {
+      "id": "short-fact-052",
+      "question": "Which small object in the cedar tube proved that Anya stopped at South Meadow arch?",
+      "expected_answer_type": "short_fact",
+      "test_type": "short_fact",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "short-south-meadow-arch-festival-minutes-052"
+        ]
+      },
+      "required_evidence": [
+        {
+          "marker": "violet ribbon",
+          "aliases": [
+            "small violet ribbon",
+            "violet ribbon from the cedar tube"
+          ]
+        },
+        {
+          "marker": "South Meadow arch",
+          "aliases": [
+            "stop at South Meadow arch",
+            "visit to South Meadow arch"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "wrong silver booth token",
+          "aliases": [
+            "incorrect silver booth token",
+            "mistaken keepsake silver booth token"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "medium",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 0
+    },
+    {
+      "id": "short-fact-053",
+      "question": "Which direct fact from the winter letter identifies the item recorded for Marek at Hollow Market arcade?",
+      "expected_answer_type": "short_fact",
+      "test_type": "short_fact",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "short-hollow-market-arcade-winter-letter-053"
+        ]
+      },
+      "required_evidence": [
+        {
+          "marker": "tuning fork",
+          "aliases": [
+            "item recorded as tuning fork",
+            "Marek's recorded tuning fork"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "wrong clay watering cup",
+          "aliases": [
+            "incorrect clay watering cup",
+            "mistaken keepsake clay watering cup"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 1,
+      "difficulty": "hard",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 0
+    },
+    {
+      "id": "short-fact-054",
+      "question": "Which item did Daria tuck inside the cedar tube mentioned in the station transcript?",
+      "expected_answer_type": "short_fact",
+      "test_type": "short_fact",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "short-winter-chapel-porch-station-transcript-054"
+        ]
+      },
+      "required_evidence": [
+        {
+          "marker": "rope bridge permit",
+          "aliases": [
+            "rope bridge permit in the cedar tube",
+            "Daria's rope bridge permit"
+          ]
+        },
+        {
+          "marker": "cedar tube",
+          "aliases": [
+            "the cedar tube",
+            "Winter Chapel porch cedar tube"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "wrong juniper bundles",
+          "aliases": [
+            "incorrect juniper bundles",
+            "mistaken keepsake juniper bundles"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "easy",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 0
+    },
+    {
+      "id": "short-fact-055",
+      "question": "What object and color detail identified Stefan's keepsake at Driftwood cove?",
+      "expected_answer_type": "short_fact",
+      "test_type": "short_fact",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "short-driftwood-cove-field-recording-055"
+        ]
+      },
+      "required_evidence": [
+        {
+          "marker": "saffron oak barrel hoops",
+          "aliases": [
+            "oak barrel hoops colored saffron",
+            "saffron keepsake oak barrel hoops"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "wrong smoke vent chain",
+          "aliases": [
+            "incorrect smoke vent chain",
+            "mistaken keepsake smoke vent chain"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 1,
+      "difficulty": "medium",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 0
+    },
+    {
+      "id": "short-fact-056",
+      "question": "Which fact in the audio reel shows what Yara's older sister left near Cloud Wharf office?",
+      "expected_answer_type": "short_fact",
+      "test_type": "short_fact",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "short-cloud-wharf-office-audio-reel-056"
+        ]
+      },
+      "required_evidence": [
+        {
+          "marker": "blue glass jar",
+          "aliases": [
+            "older sister's blue glass jar",
+            "blue glass jar left near Cloud Wharf office"
+          ]
+        },
+        {
+          "marker": "older sister",
+          "aliases": [
+            "Yara's older sister",
+            "the older sister of Yara"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "wrong brass compass",
+          "aliases": [
+            "incorrect brass compass",
+            "mistaken keepsake brass compass"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "hard",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 0
+    },
+    {
+      "id": "short-fact-057",
+      "question": "What exact keepsake was listed beside Moss Archive room in Oren's profile page?",
+      "expected_answer_type": "short_fact",
+      "test_type": "short_fact",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "short-moss-archive-room-profile-page-057"
+        ]
+      },
+      "required_evidence": [
+        {
+          "marker": "canal route map",
+          "aliases": [
+            "keepsake canal route map",
+            "canal route map listed beside Moss Archive room"
+          ]
+        },
+        {
+          "marker": "Moss Archive room",
+          "aliases": [
+            "site Moss Archive room",
+            "the location Moss Archive room"
+          ]
+        },
+        {
+          "marker": "profile page",
+          "aliases": [
+            "the profile page",
+            "Oren's profile page"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "wrong linen wick",
+          "aliases": [
+            "incorrect linen wick",
+            "mistaken keepsake linen wick"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 3,
+      "difficulty": "easy",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 0
+    },
+    {
+      "id": "short-fact-058",
+      "question": "Which small object in the cedar tube proved that Milena stopped at North Bell workshop?",
+      "expected_answer_type": "short_fact",
+      "test_type": "short_fact",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "short-north-bell-workshop-river-diary-page-058"
+        ]
+      },
+      "required_evidence": [
+        {
+          "marker": "cedar shovel",
+          "aliases": [
+            "small cedar shovel",
+            "cedar shovel from the cedar tube"
+          ]
+        },
+        {
+          "marker": "North Bell workshop",
+          "aliases": [
+            "stop at North Bell workshop",
+            "visit to North Bell workshop"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "wrong star ledger page",
+          "aliases": [
+            "incorrect star ledger page",
+            "mistaken keepsake star ledger page"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "medium",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 0
+    },
+    {
+      "id": "short-fact-059",
+      "question": "Which direct fact from the festival minutes identifies the item recorded for Lev at Snow Orchard storehouse?",
+      "expected_answer_type": "short_fact",
+      "test_type": "short_fact",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "short-snow-orchard-storehouse-festival-minutes-059"
+        ]
+      },
+      "required_evidence": [
+        {
+          "marker": "copper token",
+          "aliases": [
+            "item recorded as copper token",
+            "Lev's recorded copper token"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "wrong lantern hook",
+          "aliases": [
+            "incorrect lantern hook",
+            "mistaken keepsake lantern hook"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 1,
+      "difficulty": "hard",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 0
+    },
+    {
+      "id": "short-fact-060",
+      "question": "Which item did Ada tuck inside the cedar tube mentioned in the winter letter?",
+      "expected_answer_type": "short_fact",
+      "test_type": "short_fact",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "short-bell-bridge-square-winter-letter-060"
+        ]
+      },
+      "required_evidence": [
+        {
+          "marker": "moonflower cutting",
+          "aliases": [
+            "moonflower cutting in the cedar tube",
+            "Ada's moonflower cutting"
+          ]
+        },
+        {
+          "marker": "cedar tube",
+          "aliases": [
+            "the cedar tube",
+            "Bell Bridge square cedar tube"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "wrong weathered camera strap",
+          "aliases": [
+            "incorrect weathered camera strap",
+            "mistaken keepsake weathered camera strap"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "easy",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 0
+    },
+    {
+      "id": "short-fact-061",
+      "question": "What object and color detail identified Nikola's keepsake at Glass Harbor quay?",
+      "expected_answer_type": "short_fact",
+      "test_type": "short_fact",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "short-glass-harbor-quay-station-transcript-061"
+        ]
+      },
+      "required_evidence": [
+        {
+          "marker": "saffron birch tea flask",
+          "aliases": [
+            "birch tea flask colored saffron",
+            "saffron keepsake birch tea flask"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "wrong wax thread",
+          "aliases": [
+            "incorrect wax thread",
+            "mistaken keepsake wax thread"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 1,
+      "difficulty": "medium",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 0
+    },
+    {
+      "id": "short-fact-062",
+      "question": "Which fact in the field recording shows what Raisa's twin sister left near South Meadow arch?",
+      "expected_answer_type": "short_fact",
+      "test_type": "short_fact",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "short-south-meadow-arch-field-recording-062"
+        ]
+      },
+      "required_evidence": [
+        {
+          "marker": "saffron scarf",
+          "aliases": [
+            "twin sister's saffron scarf",
+            "saffron scarf left near South Meadow arch"
+          ]
+        },
+        {
+          "marker": "twin sister",
+          "aliases": [
+            "Raisa's twin sister",
+            "the twin sister of Raisa"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "wrong tin key",
+          "aliases": [
+            "incorrect tin key",
+            "mistaken keepsake tin key"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "hard",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 0
+    },
+    {
+      "id": "short-fact-063",
+      "question": "What exact keepsake was listed beside Hollow Market arcade in Galen's audio reel?",
+      "expected_answer_type": "short_fact",
+      "test_type": "short_fact",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "short-hollow-market-arcade-audio-reel-063"
+        ]
+      },
+      "required_evidence": [
+        {
+          "marker": "carved shell comb",
+          "aliases": [
+            "keepsake carved shell comb",
+            "carved shell comb listed beside Hollow Market arcade"
+          ]
+        },
+        {
+          "marker": "Hollow Market arcade",
+          "aliases": [
+            "site Hollow Market arcade",
+            "the location Hollow Market arcade"
+          ]
+        },
+        {
+          "marker": "audio reel",
+          "aliases": [
+            "the audio reel",
+            "Galen's audio reel"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "wrong blue oar",
+          "aliases": [
+            "incorrect blue oar",
+            "mistaken keepsake blue oar"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 3,
+      "difficulty": "easy",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 0
+    },
+    {
+      "id": "short-fact-064",
+      "question": "Which small object in the cedar tube proved that Sonya stopped at Winter Chapel porch?",
+      "expected_answer_type": "short_fact",
+      "test_type": "short_fact",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "short-winter-chapel-porch-profile-page-064"
+        ]
+      },
+      "required_evidence": [
+        {
+          "marker": "amber lantern",
+          "aliases": [
+            "small amber lantern",
+            "amber lantern from the cedar tube"
+          ]
+        },
+        {
+          "marker": "Winter Chapel porch",
+          "aliases": [
+            "stop at Winter Chapel porch",
+            "visit to Winter Chapel porch"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "wrong willow basket",
+          "aliases": [
+            "incorrect willow basket",
+            "mistaken keepsake willow basket"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "medium",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 0
+    },
+    {
+      "id": "short-fact-065",
+      "question": "Which direct fact from the river diary page identifies the item recorded for Pavel at Driftwood cove?",
+      "expected_answer_type": "short_fact",
+      "test_type": "short_fact",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "short-driftwood-cove-river-diary-page-065"
+        ]
+      },
+      "required_evidence": [
+        {
+          "marker": "basalt sketch",
+          "aliases": [
+            "item recorded as basalt sketch",
+            "Pavel's recorded basalt sketch"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "wrong paper moon mask",
+          "aliases": [
+            "incorrect paper moon mask",
+            "mistaken keepsake paper moon mask"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 1,
+      "difficulty": "hard",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 0
+    },
+    {
+      "id": "short-fact-066",
+      "question": "Which item did Talia tuck inside the cedar tube mentioned in the festival minutes?",
+      "expected_answer_type": "short_fact",
+      "test_type": "short_fact",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "short-cloud-wharf-office-festival-minutes-066"
+        ]
+      },
+      "required_evidence": [
+        {
+          "marker": "green apron",
+          "aliases": [
+            "green apron in the cedar tube",
+            "Talia's green apron"
+          ]
+        },
+        {
+          "marker": "cedar tube",
+          "aliases": [
+            "the cedar tube",
+            "Cloud Wharf office cedar tube"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "wrong glass ink bottle",
+          "aliases": [
+            "incorrect glass ink bottle",
+            "mistaken keepsake glass ink bottle"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "easy",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 0
+    },
+    {
+      "id": "short-fact-067",
+      "question": "What object and color detail identified Emil's keepsake at Moss Archive room?",
+      "expected_answer_type": "short_fact",
+      "test_type": "short_fact",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "short-moss-archive-room-winter-letter-067"
+        ]
+      },
+      "required_evidence": [
+        {
+          "marker": "saffron silver booth token",
+          "aliases": [
+            "silver booth token colored saffron",
+            "saffron keepsake silver booth token"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "wrong copper wind vane pin",
+          "aliases": [
+            "incorrect copper wind vane pin",
+            "mistaken keepsake copper wind vane pin"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 1,
+      "difficulty": "medium",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 0
+    },
+    {
+      "id": "short-fact-068",
+      "question": "Which fact in the station transcript shows what Runa's stepfather left near North Bell workshop?",
+      "expected_answer_type": "short_fact",
+      "test_type": "short_fact",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "short-north-bell-workshop-station-transcript-068"
+        ]
+      },
+      "required_evidence": [
+        {
+          "marker": "clay watering cup",
+          "aliases": [
+            "stepfather's clay watering cup",
+            "clay watering cup left near North Bell workshop"
+          ]
+        },
+        {
+          "marker": "stepfather",
+          "aliases": [
+            "Runa's stepfather",
+            "the stepfather of Runa"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "wrong coal stove hiss",
+          "aliases": [
+            "incorrect coal stove hiss",
+            "mistaken keepsake coal stove hiss"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "hard",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 0
+    },
+    {
+      "id": "short-fact-069",
+      "question": "What exact keepsake was listed beside Snow Orchard storehouse in Viktor's field recording?",
+      "expected_answer_type": "short_fact",
+      "test_type": "short_fact",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "short-snow-orchard-storehouse-field-recording-069"
+        ]
+      },
+      "required_evidence": [
+        {
+          "marker": "juniper bundles",
+          "aliases": [
+            "keepsake juniper bundles",
+            "juniper bundles listed beside Snow Orchard storehouse"
+          ]
+        },
+        {
+          "marker": "Snow Orchard storehouse",
+          "aliases": [
+            "site Snow Orchard storehouse",
+            "the location Snow Orchard storehouse"
+          ]
+        },
+        {
+          "marker": "field recording",
+          "aliases": [
+            "the field recording",
+            "Viktor's field recording"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "wrong violet ribbon",
+          "aliases": [
+            "incorrect violet ribbon",
+            "mistaken keepsake violet ribbon"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 3,
+      "difficulty": "easy",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 0
+    },
+    {
+      "id": "short-fact-070",
+      "question": "Which small object in the cedar tube proved that Selma stopped at Bell Bridge square?",
+      "expected_answer_type": "short_fact",
+      "test_type": "short_fact",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "short-bell-bridge-square-audio-reel-070"
+        ]
+      },
+      "required_evidence": [
+        {
+          "marker": "smoke vent chain",
+          "aliases": [
+            "small smoke vent chain",
+            "smoke vent chain from the cedar tube"
+          ]
+        },
+        {
+          "marker": "Bell Bridge square",
+          "aliases": [
+            "stop at Bell Bridge square",
+            "visit to Bell Bridge square"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "wrong tuning fork",
+          "aliases": [
+            "incorrect tuning fork",
+            "mistaken keepsake tuning fork"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "medium",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 0
+    },
+    {
+      "id": "short-fact-071",
+      "question": "Which direct fact from the profile page identifies the item recorded for Damir at Glass Harbor quay?",
+      "expected_answer_type": "short_fact",
+      "test_type": "short_fact",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "short-glass-harbor-quay-profile-page-071"
+        ]
+      },
+      "required_evidence": [
+        {
+          "marker": "brass compass",
+          "aliases": [
+            "item recorded as brass compass",
+            "Damir's recorded brass compass"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "wrong rope bridge permit",
+          "aliases": [
+            "incorrect rope bridge permit",
+            "mistaken keepsake rope bridge permit"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 1,
+      "difficulty": "hard",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 0
+    },
+    {
+      "id": "short-fact-072",
+      "question": "Which item did Iveta tuck inside the cedar tube mentioned in the river diary page?",
+      "expected_answer_type": "short_fact",
+      "test_type": "short_fact",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "short-south-meadow-arch-river-diary-page-072"
+        ]
+      },
+      "required_evidence": [
+        {
+          "marker": "linen wick",
+          "aliases": [
+            "linen wick in the cedar tube",
+            "Iveta's linen wick"
+          ]
+        },
+        {
+          "marker": "cedar tube",
+          "aliases": [
+            "the cedar tube",
+            "South Meadow arch cedar tube"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "wrong oak barrel hoops",
+          "aliases": [
+            "incorrect oak barrel hoops",
+            "mistaken keepsake oak barrel hoops"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "easy",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 0
+    },
+    {
+      "id": "short-fact-073",
+      "question": "What object and color detail identified Rafi's keepsake at Hollow Market arcade?",
+      "expected_answer_type": "short_fact",
+      "test_type": "short_fact",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "short-hollow-market-arcade-festival-minutes-073"
+        ]
+      },
+      "required_evidence": [
+        {
+          "marker": "saffron star ledger page",
+          "aliases": [
+            "star ledger page colored saffron",
+            "saffron keepsake star ledger page"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "wrong blue glass jar",
+          "aliases": [
+            "incorrect blue glass jar",
+            "mistaken keepsake blue glass jar"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 1,
+      "difficulty": "medium",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 0
+    },
+    {
+      "id": "short-fact-074",
+      "question": "Which fact in the winter letter shows what Nessa's cousin left near Winter Chapel porch?",
+      "expected_answer_type": "short_fact",
+      "test_type": "short_fact",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "short-winter-chapel-porch-winter-letter-074"
+        ]
+      },
+      "required_evidence": [
+        {
+          "marker": "lantern hook",
+          "aliases": [
+            "cousin's lantern hook",
+            "lantern hook left near Winter Chapel porch"
+          ]
+        },
+        {
+          "marker": "cousin",
+          "aliases": [
+            "Nessa's cousin",
+            "the cousin of Nessa"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "wrong canal route map",
+          "aliases": [
+            "incorrect canal route map",
+            "mistaken keepsake canal route map"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "hard",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 0
+    },
+    {
+      "id": "short-fact-075",
+      "question": "What exact keepsake was listed beside Driftwood cove in Anton's station transcript?",
+      "expected_answer_type": "short_fact",
+      "test_type": "short_fact",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "short-driftwood-cove-station-transcript-075"
+        ]
+      },
+      "required_evidence": [
+        {
+          "marker": "weathered camera strap",
+          "aliases": [
+            "keepsake weathered camera strap",
+            "weathered camera strap listed beside Driftwood cove"
+          ]
+        },
+        {
+          "marker": "Driftwood cove",
+          "aliases": [
+            "site Driftwood cove",
+            "the location Driftwood cove"
+          ]
+        },
+        {
+          "marker": "station transcript",
+          "aliases": [
+            "the station transcript",
+            "Anton's station transcript"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "wrong cedar shovel",
+          "aliases": [
+            "incorrect cedar shovel",
+            "mistaken keepsake cedar shovel"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 3,
+      "difficulty": "easy",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 0
+    },
+    {
+      "id": "short-fact-076",
+      "question": "Which small object in the cedar tube proved that Zora stopped at Cloud Wharf office?",
+      "expected_answer_type": "short_fact",
+      "test_type": "short_fact",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "short-cloud-wharf-office-field-recording-076"
+        ]
+      },
+      "required_evidence": [
+        {
+          "marker": "wax thread",
+          "aliases": [
+            "small wax thread",
+            "wax thread from the cedar tube"
+          ]
+        },
+        {
+          "marker": "Cloud Wharf office",
+          "aliases": [
+            "stop at Cloud Wharf office",
+            "visit to Cloud Wharf office"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "wrong copper token",
+          "aliases": [
+            "incorrect copper token",
+            "mistaken keepsake copper token"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "medium",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 0
+    },
+    {
+      "id": "short-fact-077",
+      "question": "Which direct fact from the audio reel identifies the item recorded for Milan at Moss Archive room?",
+      "expected_answer_type": "short_fact",
+      "test_type": "short_fact",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "short-moss-archive-room-audio-reel-077"
+        ]
+      },
+      "required_evidence": [
+        {
+          "marker": "tin key",
+          "aliases": [
+            "item recorded as tin key",
+            "Milan's recorded tin key"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "wrong moonflower cutting",
+          "aliases": [
+            "incorrect moonflower cutting",
+            "mistaken keepsake moonflower cutting"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 1,
+      "difficulty": "hard",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 0
+    },
+    {
+      "id": "short-fact-078",
+      "question": "Which item did Ilia tuck inside the cedar tube mentioned in the profile page?",
+      "expected_answer_type": "short_fact",
+      "test_type": "short_fact",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "short-north-bell-workshop-profile-page-078"
+        ]
+      },
+      "required_evidence": [
+        {
+          "marker": "blue oar",
+          "aliases": [
+            "blue oar in the cedar tube",
+            "Ilia's blue oar"
+          ]
+        },
+        {
+          "marker": "cedar tube",
+          "aliases": [
+            "the cedar tube",
+            "North Bell workshop cedar tube"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "wrong birch tea flask",
+          "aliases": [
+            "incorrect birch tea flask",
+            "mistaken keepsake birch tea flask"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "easy",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 0
+    },
+    {
+      "id": "short-fact-079",
+      "question": "What object and color detail identified Vesna's keepsake at Snow Orchard storehouse?",
+      "expected_answer_type": "short_fact",
+      "test_type": "short_fact",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "short-snow-orchard-storehouse-river-diary-page-079"
+        ]
+      },
+      "required_evidence": [
+        {
+          "marker": "saffron willow basket",
+          "aliases": [
+            "willow basket colored saffron",
+            "saffron keepsake willow basket"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "wrong saffron scarf",
+          "aliases": [
+            "incorrect saffron scarf",
+            "mistaken keepsake saffron scarf"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 1,
+      "difficulty": "medium",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 0
+    },
+    {
+      "id": "short-fact-080",
+      "question": "Which fact in the festival minutes shows what Mira's older sister left near Bell Bridge square?",
+      "expected_answer_type": "short_fact",
+      "test_type": "short_fact",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "short-bell-bridge-square-festival-minutes-080"
+        ]
+      },
+      "required_evidence": [
+        {
+          "marker": "paper moon mask",
+          "aliases": [
+            "older sister's paper moon mask",
+            "paper moon mask left near Bell Bridge square"
+          ]
+        },
+        {
+          "marker": "older sister",
+          "aliases": [
+            "Mira's older sister",
+            "the older sister of Mira"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "wrong carved shell comb",
+          "aliases": [
+            "incorrect carved shell comb",
+            "mistaken keepsake carved shell comb"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "hard",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 0
+    },
+    {
+      "id": "short-fact-081",
+      "question": "What exact keepsake was listed beside Glass Harbor quay in Tomas's winter letter?",
+      "expected_answer_type": "short_fact",
+      "test_type": "short_fact",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "short-glass-harbor-quay-winter-letter-081"
+        ]
+      },
+      "required_evidence": [
+        {
+          "marker": "glass ink bottle",
+          "aliases": [
+            "keepsake glass ink bottle",
+            "glass ink bottle listed beside Glass Harbor quay"
+          ]
+        },
+        {
+          "marker": "Glass Harbor quay",
+          "aliases": [
+            "site Glass Harbor quay",
+            "the location Glass Harbor quay"
+          ]
+        },
+        {
+          "marker": "winter letter",
+          "aliases": [
+            "the winter letter",
+            "Tomas's winter letter"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "wrong amber lantern",
+          "aliases": [
+            "incorrect amber lantern",
+            "mistaken keepsake amber lantern"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 3,
+      "difficulty": "easy",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 0
+    },
+    {
+      "id": "short-fact-082",
+      "question": "Which small object in the cedar tube proved that Elena stopped at South Meadow arch?",
+      "expected_answer_type": "short_fact",
+      "test_type": "short_fact",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "short-south-meadow-arch-station-transcript-082"
+        ]
+      },
+      "required_evidence": [
+        {
+          "marker": "copper wind vane pin",
+          "aliases": [
+            "small copper wind vane pin",
+            "copper wind vane pin from the cedar tube"
+          ]
+        },
+        {
+          "marker": "South Meadow arch",
+          "aliases": [
+            "stop at South Meadow arch",
+            "visit to South Meadow arch"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "wrong basalt sketch",
+          "aliases": [
+            "incorrect basalt sketch",
+            "mistaken keepsake basalt sketch"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "medium",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 0
+    },
+    {
+      "id": "short-fact-083",
+      "question": "Which direct fact from the field recording identifies the item recorded for Radin at Hollow Market arcade?",
+      "expected_answer_type": "short_fact",
+      "test_type": "short_fact",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "short-hollow-market-arcade-field-recording-083"
+        ]
+      },
+      "required_evidence": [
+        {
+          "marker": "coal stove hiss",
+          "aliases": [
+            "item recorded as coal stove hiss",
+            "Radin's recorded coal stove hiss"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "wrong green apron",
+          "aliases": [
+            "incorrect green apron",
+            "mistaken keepsake green apron"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 1,
+      "difficulty": "hard",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 0
+    },
+    {
+      "id": "short-fact-084",
+      "question": "Which item did Vera tuck inside the cedar tube mentioned in the audio reel?",
+      "expected_answer_type": "short_fact",
+      "test_type": "short_fact",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "short-winter-chapel-porch-audio-reel-084"
+        ]
+      },
+      "required_evidence": [
+        {
+          "marker": "violet ribbon",
+          "aliases": [
+            "violet ribbon in the cedar tube",
+            "Vera's violet ribbon"
+          ]
+        },
+        {
+          "marker": "cedar tube",
+          "aliases": [
+            "the cedar tube",
+            "Winter Chapel porch cedar tube"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "wrong silver booth token",
+          "aliases": [
+            "incorrect silver booth token",
+            "mistaken keepsake silver booth token"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "easy",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 0
+    },
+    {
+      "id": "short-fact-085",
+      "question": "What object and color detail identified Ilya's keepsake at Driftwood cove?",
+      "expected_answer_type": "short_fact",
+      "test_type": "short_fact",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "short-driftwood-cove-profile-page-085"
+        ]
+      },
+      "required_evidence": [
+        {
+          "marker": "saffron tuning fork",
+          "aliases": [
+            "tuning fork colored saffron",
+            "saffron keepsake tuning fork"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "wrong clay watering cup",
+          "aliases": [
+            "incorrect clay watering cup",
+            "mistaken keepsake clay watering cup"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 1,
+      "difficulty": "medium",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 0
+    },
+    {
+      "id": "short-fact-086",
+      "question": "Which fact in the river diary page shows what Kira's twin sister left near Cloud Wharf office?",
+      "expected_answer_type": "short_fact",
+      "test_type": "short_fact",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "short-cloud-wharf-office-river-diary-page-086"
+        ]
+      },
+      "required_evidence": [
+        {
+          "marker": "rope bridge permit",
+          "aliases": [
+            "twin sister's rope bridge permit",
+            "rope bridge permit left near Cloud Wharf office"
+          ]
+        },
+        {
+          "marker": "twin sister",
+          "aliases": [
+            "Kira's twin sister",
+            "the twin sister of Kira"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "wrong juniper bundles",
+          "aliases": [
+            "incorrect juniper bundles",
+            "mistaken keepsake juniper bundles"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "hard",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 0
+    },
+    {
+      "id": "short-fact-087",
+      "question": "What exact keepsake was listed beside Moss Archive room in Soren's festival minutes?",
+      "expected_answer_type": "short_fact",
+      "test_type": "short_fact",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "short-moss-archive-room-festival-minutes-087"
+        ]
+      },
+      "required_evidence": [
+        {
+          "marker": "oak barrel hoops",
+          "aliases": [
+            "keepsake oak barrel hoops",
+            "oak barrel hoops listed beside Moss Archive room"
+          ]
+        },
+        {
+          "marker": "Moss Archive room",
+          "aliases": [
+            "site Moss Archive room",
+            "the location Moss Archive room"
+          ]
+        },
+        {
+          "marker": "festival minutes",
+          "aliases": [
+            "the festival minutes",
+            "Soren's festival minutes"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "wrong smoke vent chain",
+          "aliases": [
+            "incorrect smoke vent chain",
+            "mistaken keepsake smoke vent chain"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 3,
+      "difficulty": "easy",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 0
+    },
+    {
+      "id": "short-fact-088",
+      "question": "Which small object in the cedar tube proved that Nadia stopped at North Bell workshop?",
+      "expected_answer_type": "short_fact",
+      "test_type": "short_fact",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "short-north-bell-workshop-winter-letter-088"
+        ]
+      },
+      "required_evidence": [
+        {
+          "marker": "blue glass jar",
+          "aliases": [
+            "small blue glass jar",
+            "blue glass jar from the cedar tube"
+          ]
+        },
+        {
+          "marker": "North Bell workshop",
+          "aliases": [
+            "stop at North Bell workshop",
+            "visit to North Bell workshop"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "wrong brass compass",
+          "aliases": [
+            "incorrect brass compass",
+            "mistaken keepsake brass compass"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "medium",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 0
+    },
+    {
+      "id": "short-fact-089",
+      "question": "Which direct fact from the station transcript identifies the item recorded for Petar at Snow Orchard storehouse?",
+      "expected_answer_type": "short_fact",
+      "test_type": "short_fact",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "short-snow-orchard-storehouse-station-transcript-089"
+        ]
+      },
+      "required_evidence": [
+        {
+          "marker": "canal route map",
+          "aliases": [
+            "item recorded as canal route map",
+            "Petar's recorded canal route map"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "wrong linen wick",
+          "aliases": [
+            "incorrect linen wick",
+            "mistaken keepsake linen wick"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 1,
+      "difficulty": "hard",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 0
+    },
+    {
+      "id": "short-fact-090",
+      "question": "Which item did Lina tuck inside the cedar tube mentioned in the field recording?",
+      "expected_answer_type": "short_fact",
+      "test_type": "short_fact",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "short-bell-bridge-square-field-recording-090"
+        ]
+      },
+      "required_evidence": [
+        {
+          "marker": "cedar shovel",
+          "aliases": [
+            "cedar shovel in the cedar tube",
+            "Lina's cedar shovel"
+          ]
+        },
+        {
+          "marker": "cedar tube",
+          "aliases": [
+            "the cedar tube",
+            "Bell Bridge square cedar tube"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "wrong star ledger page",
+          "aliases": [
+            "incorrect star ledger page",
+            "mistaken keepsake star ledger page"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "easy",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 0
+    },
+    {
+      "id": "short-fact-091",
+      "question": "What object and color detail identified Boris's keepsake at Glass Harbor quay?",
+      "expected_answer_type": "short_fact",
+      "test_type": "short_fact",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "short-glass-harbor-quay-audio-reel-091"
+        ]
+      },
+      "required_evidence": [
+        {
+          "marker": "saffron copper token",
+          "aliases": [
+            "copper token colored saffron",
+            "saffron keepsake copper token"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "wrong lantern hook",
+          "aliases": [
+            "incorrect lantern hook",
+            "mistaken keepsake lantern hook"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 1,
+      "difficulty": "medium",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 0
+    },
+    {
+      "id": "short-fact-092",
+      "question": "Which fact in the profile page shows what Anya's stepfather left near South Meadow arch?",
+      "expected_answer_type": "short_fact",
+      "test_type": "short_fact",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "short-south-meadow-arch-profile-page-092"
+        ]
+      },
+      "required_evidence": [
+        {
+          "marker": "moonflower cutting",
+          "aliases": [
+            "stepfather's moonflower cutting",
+            "moonflower cutting left near South Meadow arch"
+          ]
+        },
+        {
+          "marker": "stepfather",
+          "aliases": [
+            "Anya's stepfather",
+            "the stepfather of Anya"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "wrong weathered camera strap",
+          "aliases": [
+            "incorrect weathered camera strap",
+            "mistaken keepsake weathered camera strap"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "hard",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 0
+    },
+    {
+      "id": "short-fact-093",
+      "question": "What exact keepsake was listed beside Hollow Market arcade in Marek's river diary page?",
+      "expected_answer_type": "short_fact",
+      "test_type": "short_fact",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "short-hollow-market-arcade-river-diary-page-093"
+        ]
+      },
+      "required_evidence": [
+        {
+          "marker": "birch tea flask",
+          "aliases": [
+            "keepsake birch tea flask",
+            "birch tea flask listed beside Hollow Market arcade"
+          ]
+        },
+        {
+          "marker": "Hollow Market arcade",
+          "aliases": [
+            "site Hollow Market arcade",
+            "the location Hollow Market arcade"
+          ]
+        },
+        {
+          "marker": "river diary page",
+          "aliases": [
+            "the river diary page",
+            "Marek's river diary page"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "wrong wax thread",
+          "aliases": [
+            "incorrect wax thread",
+            "mistaken keepsake wax thread"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 3,
+      "difficulty": "easy",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 0
+    },
+    {
+      "id": "short-fact-094",
+      "question": "Which small object in the cedar tube proved that Daria stopped at Winter Chapel porch?",
+      "expected_answer_type": "short_fact",
+      "test_type": "short_fact",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "short-winter-chapel-porch-festival-minutes-094"
+        ]
+      },
+      "required_evidence": [
+        {
+          "marker": "saffron scarf",
+          "aliases": [
+            "small saffron scarf",
+            "saffron scarf from the cedar tube"
+          ]
+        },
+        {
+          "marker": "Winter Chapel porch",
+          "aliases": [
+            "stop at Winter Chapel porch",
+            "visit to Winter Chapel porch"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "wrong tin key",
+          "aliases": [
+            "incorrect tin key",
+            "mistaken keepsake tin key"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "medium",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 0
+    },
+    {
+      "id": "short-fact-095",
+      "question": "Which direct fact from the winter letter identifies the item recorded for Stefan at Driftwood cove?",
+      "expected_answer_type": "short_fact",
+      "test_type": "short_fact",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "short-driftwood-cove-winter-letter-095"
+        ]
+      },
+      "required_evidence": [
+        {
+          "marker": "carved shell comb",
+          "aliases": [
+            "item recorded as carved shell comb",
+            "Stefan's recorded carved shell comb"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "wrong blue oar",
+          "aliases": [
+            "incorrect blue oar",
+            "mistaken keepsake blue oar"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 1,
+      "difficulty": "hard",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 0
+    },
+    {
+      "id": "short-fact-096",
+      "question": "Which item did Yara tuck inside the cedar tube mentioned in the station transcript?",
+      "expected_answer_type": "short_fact",
+      "test_type": "short_fact",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "short-cloud-wharf-office-station-transcript-096"
+        ]
+      },
+      "required_evidence": [
+        {
+          "marker": "amber lantern",
+          "aliases": [
+            "amber lantern in the cedar tube",
+            "Yara's amber lantern"
+          ]
+        },
+        {
+          "marker": "cedar tube",
+          "aliases": [
+            "the cedar tube",
+            "Cloud Wharf office cedar tube"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "wrong willow basket",
+          "aliases": [
+            "incorrect willow basket",
+            "mistaken keepsake willow basket"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "easy",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 0
+    },
+    {
+      "id": "short-fact-097",
+      "question": "What object and color detail identified Oren's keepsake at Moss Archive room?",
+      "expected_answer_type": "short_fact",
+      "test_type": "short_fact",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "short-moss-archive-room-field-recording-097"
+        ]
+      },
+      "required_evidence": [
+        {
+          "marker": "saffron basalt sketch",
+          "aliases": [
+            "basalt sketch colored saffron",
+            "saffron keepsake basalt sketch"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "wrong paper moon mask",
+          "aliases": [
+            "incorrect paper moon mask",
+            "mistaken keepsake paper moon mask"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 1,
+      "difficulty": "medium",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 0
+    },
+    {
+      "id": "short-fact-098",
+      "question": "Which fact in the audio reel shows what Milena's cousin left near North Bell workshop?",
+      "expected_answer_type": "short_fact",
+      "test_type": "short_fact",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "short-north-bell-workshop-audio-reel-098"
+        ]
+      },
+      "required_evidence": [
+        {
+          "marker": "green apron",
+          "aliases": [
+            "cousin's green apron",
+            "green apron left near North Bell workshop"
+          ]
+        },
+        {
+          "marker": "cousin",
+          "aliases": [
+            "Milena's cousin",
+            "the cousin of Milena"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "wrong glass ink bottle",
+          "aliases": [
+            "incorrect glass ink bottle",
+            "mistaken keepsake glass ink bottle"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "hard",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 0
+    },
+    {
+      "id": "short-fact-099",
+      "question": "What exact keepsake was listed beside Snow Orchard storehouse in Lev's profile page?",
+      "expected_answer_type": "short_fact",
+      "test_type": "short_fact",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "short-snow-orchard-storehouse-profile-page-099"
+        ]
+      },
+      "required_evidence": [
+        {
+          "marker": "silver booth token",
+          "aliases": [
+            "keepsake silver booth token",
+            "silver booth token listed beside Snow Orchard storehouse"
+          ]
+        },
+        {
+          "marker": "Snow Orchard storehouse",
+          "aliases": [
+            "site Snow Orchard storehouse",
+            "the location Snow Orchard storehouse"
+          ]
+        },
+        {
+          "marker": "profile page",
+          "aliases": [
+            "the profile page",
+            "Lev's profile page"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "wrong copper wind vane pin",
+          "aliases": [
+            "incorrect copper wind vane pin",
+            "mistaken keepsake copper wind vane pin"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 3,
+      "difficulty": "easy",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 0
+    },
+    {
+      "id": "short-fact-100",
+      "question": "Which small object in the cedar tube proved that Ada stopped at Bell Bridge square?",
+      "expected_answer_type": "short_fact",
+      "test_type": "short_fact",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "short-bell-bridge-square-river-diary-page-100"
+        ]
+      },
+      "required_evidence": [
+        {
+          "marker": "clay watering cup",
+          "aliases": [
+            "small clay watering cup",
+            "clay watering cup from the cedar tube"
+          ]
+        },
+        {
+          "marker": "Bell Bridge square",
+          "aliases": [
+            "stop at Bell Bridge square",
+            "visit to Bell Bridge square"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "wrong coal stove hiss",
+          "aliases": [
+            "incorrect coal stove hiss",
+            "mistaken keepsake coal stove hiss"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "medium",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 0
+    },
+    {
+      "id": "short-fact-101",
+      "question": "Which direct fact from the festival minutes identifies the item recorded for Nikola at Glass Harbor quay?",
+      "expected_answer_type": "short_fact",
+      "test_type": "short_fact",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "short-glass-harbor-quay-festival-minutes-101"
+        ]
+      },
+      "required_evidence": [
+        {
+          "marker": "juniper bundles",
+          "aliases": [
+            "item recorded as juniper bundles",
+            "Nikola's recorded juniper bundles"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "wrong violet ribbon",
+          "aliases": [
+            "incorrect violet ribbon",
+            "mistaken keepsake violet ribbon"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 1,
+      "difficulty": "hard",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 0
+    },
+    {
+      "id": "short-fact-102",
+      "question": "Which item did Raisa tuck inside the cedar tube mentioned in the winter letter?",
+      "expected_answer_type": "short_fact",
+      "test_type": "short_fact",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "short-south-meadow-arch-winter-letter-102"
+        ]
+      },
+      "required_evidence": [
+        {
+          "marker": "smoke vent chain",
+          "aliases": [
+            "smoke vent chain in the cedar tube",
+            "Raisa's smoke vent chain"
+          ]
+        },
+        {
+          "marker": "cedar tube",
+          "aliases": [
+            "the cedar tube",
+            "South Meadow arch cedar tube"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "wrong tuning fork",
+          "aliases": [
+            "incorrect tuning fork",
+            "mistaken keepsake tuning fork"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "easy",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 0
+    },
+    {
+      "id": "short-fact-103",
+      "question": "What object and color detail identified Galen's keepsake at Hollow Market arcade?",
+      "expected_answer_type": "short_fact",
+      "test_type": "short_fact",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "short-hollow-market-arcade-station-transcript-103"
+        ]
+      },
+      "required_evidence": [
+        {
+          "marker": "saffron brass compass",
+          "aliases": [
+            "brass compass colored saffron",
+            "saffron keepsake brass compass"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "wrong rope bridge permit",
+          "aliases": [
+            "incorrect rope bridge permit",
+            "mistaken keepsake rope bridge permit"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 1,
+      "difficulty": "medium",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 0
+    },
+    {
+      "id": "short-fact-104",
+      "question": "Which fact in the field recording shows what Sonya's older sister left near Winter Chapel porch?",
+      "expected_answer_type": "short_fact",
+      "test_type": "short_fact",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "short-winter-chapel-porch-field-recording-104"
+        ]
+      },
+      "required_evidence": [
+        {
+          "marker": "linen wick",
+          "aliases": [
+            "older sister's linen wick",
+            "linen wick left near Winter Chapel porch"
+          ]
+        },
+        {
+          "marker": "older sister",
+          "aliases": [
+            "Sonya's older sister",
+            "the older sister of Sonya"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "wrong oak barrel hoops",
+          "aliases": [
+            "incorrect oak barrel hoops",
+            "mistaken keepsake oak barrel hoops"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "hard",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 0
+    },
+    {
+      "id": "short-fact-105",
+      "question": "What exact keepsake was listed beside Driftwood cove in Pavel's audio reel?",
+      "expected_answer_type": "short_fact",
+      "test_type": "short_fact",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "short-driftwood-cove-audio-reel-105"
+        ]
+      },
+      "required_evidence": [
+        {
+          "marker": "star ledger page",
+          "aliases": [
+            "keepsake star ledger page",
+            "star ledger page listed beside Driftwood cove"
+          ]
+        },
+        {
+          "marker": "Driftwood cove",
+          "aliases": [
+            "site Driftwood cove",
+            "the location Driftwood cove"
+          ]
+        },
+        {
+          "marker": "audio reel",
+          "aliases": [
+            "the audio reel",
+            "Pavel's audio reel"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "wrong blue glass jar",
+          "aliases": [
+            "incorrect blue glass jar",
+            "mistaken keepsake blue glass jar"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 3,
+      "difficulty": "easy",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 0
+    },
+    {
+      "id": "short-fact-106",
+      "question": "Which small object in the cedar tube proved that Talia stopped at Cloud Wharf office?",
+      "expected_answer_type": "short_fact",
+      "test_type": "short_fact",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "short-cloud-wharf-office-profile-page-106"
+        ]
+      },
+      "required_evidence": [
+        {
+          "marker": "lantern hook",
+          "aliases": [
+            "small lantern hook",
+            "lantern hook from the cedar tube"
+          ]
+        },
+        {
+          "marker": "Cloud Wharf office",
+          "aliases": [
+            "stop at Cloud Wharf office",
+            "visit to Cloud Wharf office"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "wrong canal route map",
+          "aliases": [
+            "incorrect canal route map",
+            "mistaken keepsake canal route map"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "medium",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 0
+    },
+    {
+      "id": "short-fact-107",
+      "question": "Which direct fact from the river diary page identifies the item recorded for Emil at Moss Archive room?",
+      "expected_answer_type": "short_fact",
+      "test_type": "short_fact",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "short-moss-archive-room-river-diary-page-107"
+        ]
+      },
+      "required_evidence": [
+        {
+          "marker": "weathered camera strap",
+          "aliases": [
+            "item recorded as weathered camera strap",
+            "Emil's recorded weathered camera strap"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "wrong cedar shovel",
+          "aliases": [
+            "incorrect cedar shovel",
+            "mistaken keepsake cedar shovel"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 1,
+      "difficulty": "hard",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 0
+    },
+    {
+      "id": "short-fact-108",
+      "question": "Which item did Runa tuck inside the cedar tube mentioned in the festival minutes?",
+      "expected_answer_type": "short_fact",
+      "test_type": "short_fact",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "short-north-bell-workshop-festival-minutes-108"
+        ]
+      },
+      "required_evidence": [
+        {
+          "marker": "wax thread",
+          "aliases": [
+            "wax thread in the cedar tube",
+            "Runa's wax thread"
+          ]
+        },
+        {
+          "marker": "cedar tube",
+          "aliases": [
+            "the cedar tube",
+            "North Bell workshop cedar tube"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "wrong copper token",
+          "aliases": [
+            "incorrect copper token",
+            "mistaken keepsake copper token"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "easy",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 0
+    },
+    {
+      "id": "short-fact-109",
+      "question": "What object and color detail identified Viktor's keepsake at Snow Orchard storehouse?",
+      "expected_answer_type": "short_fact",
+      "test_type": "short_fact",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "short-snow-orchard-storehouse-winter-letter-109"
+        ]
+      },
+      "required_evidence": [
+        {
+          "marker": "saffron tin key",
+          "aliases": [
+            "tin key colored saffron",
+            "saffron keepsake tin key"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "wrong moonflower cutting",
+          "aliases": [
+            "incorrect moonflower cutting",
+            "mistaken keepsake moonflower cutting"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 1,
+      "difficulty": "medium",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 0
+    },
+    {
+      "id": "short-fact-110",
+      "question": "Which fact in the station transcript shows what Selma's twin sister left near Bell Bridge square?",
+      "expected_answer_type": "short_fact",
+      "test_type": "short_fact",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "short-bell-bridge-square-station-transcript-110"
+        ]
+      },
+      "required_evidence": [
+        {
+          "marker": "blue oar",
+          "aliases": [
+            "twin sister's blue oar",
+            "blue oar left near Bell Bridge square"
+          ]
+        },
+        {
+          "marker": "twin sister",
+          "aliases": [
+            "Selma's twin sister",
+            "the twin sister of Selma"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "wrong birch tea flask",
+          "aliases": [
+            "incorrect birch tea flask",
+            "mistaken keepsake birch tea flask"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "hard",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 0
+    },
+    {
+      "id": "short-fact-111",
+      "question": "What exact keepsake was listed beside Glass Harbor quay in Damir's field recording?",
+      "expected_answer_type": "short_fact",
+      "test_type": "short_fact",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "short-glass-harbor-quay-field-recording-111"
+        ]
+      },
+      "required_evidence": [
+        {
+          "marker": "willow basket",
+          "aliases": [
+            "keepsake willow basket",
+            "willow basket listed beside Glass Harbor quay"
+          ]
+        },
+        {
+          "marker": "Glass Harbor quay",
+          "aliases": [
+            "site Glass Harbor quay",
+            "the location Glass Harbor quay"
+          ]
+        },
+        {
+          "marker": "field recording",
+          "aliases": [
+            "the field recording",
+            "Damir's field recording"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "wrong saffron scarf",
+          "aliases": [
+            "incorrect saffron scarf",
+            "mistaken keepsake saffron scarf"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 3,
+      "difficulty": "easy",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 0
+    },
+    {
+      "id": "short-fact-112",
+      "question": "Which small object in the cedar tube proved that Iveta stopped at South Meadow arch?",
+      "expected_answer_type": "short_fact",
+      "test_type": "short_fact",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "short-south-meadow-arch-audio-reel-112"
+        ]
+      },
+      "required_evidence": [
+        {
+          "marker": "paper moon mask",
+          "aliases": [
+            "small paper moon mask",
+            "paper moon mask from the cedar tube"
+          ]
+        },
+        {
+          "marker": "South Meadow arch",
+          "aliases": [
+            "stop at South Meadow arch",
+            "visit to South Meadow arch"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "wrong carved shell comb",
+          "aliases": [
+            "incorrect carved shell comb",
+            "mistaken keepsake carved shell comb"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "medium",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 0
+    },
+    {
+      "id": "short-fact-113",
+      "question": "Which direct fact from the profile page identifies the item recorded for Rafi at Hollow Market arcade?",
+      "expected_answer_type": "short_fact",
+      "test_type": "short_fact",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "short-hollow-market-arcade-profile-page-113"
+        ]
+      },
+      "required_evidence": [
+        {
+          "marker": "glass ink bottle",
+          "aliases": [
+            "item recorded as glass ink bottle",
+            "Rafi's recorded glass ink bottle"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "wrong amber lantern",
+          "aliases": [
+            "incorrect amber lantern",
+            "mistaken keepsake amber lantern"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 1,
+      "difficulty": "hard",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 0
+    },
+    {
+      "id": "short-fact-114",
+      "question": "Which item did Nessa tuck inside the cedar tube mentioned in the river diary page?",
+      "expected_answer_type": "short_fact",
+      "test_type": "short_fact",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "short-winter-chapel-porch-river-diary-page-114"
+        ]
+      },
+      "required_evidence": [
+        {
+          "marker": "copper wind vane pin",
+          "aliases": [
+            "copper wind vane pin in the cedar tube",
+            "Nessa's copper wind vane pin"
+          ]
+        },
+        {
+          "marker": "cedar tube",
+          "aliases": [
+            "the cedar tube",
+            "Winter Chapel porch cedar tube"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "wrong basalt sketch",
+          "aliases": [
+            "incorrect basalt sketch",
+            "mistaken keepsake basalt sketch"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "easy",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 0
+    },
+    {
+      "id": "short-fact-115",
+      "question": "What object and color detail identified Anton's keepsake at Driftwood cove?",
+      "expected_answer_type": "short_fact",
+      "test_type": "short_fact",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "short-driftwood-cove-festival-minutes-115"
+        ]
+      },
+      "required_evidence": [
+        {
+          "marker": "saffron coal stove hiss",
+          "aliases": [
+            "coal stove hiss colored saffron",
+            "saffron keepsake coal stove hiss"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "wrong green apron",
+          "aliases": [
+            "incorrect green apron",
+            "mistaken keepsake green apron"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 1,
+      "difficulty": "medium",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 0
+    },
+    {
+      "id": "short-fact-116",
+      "question": "Which fact in the winter letter shows what Zora's stepfather left near Cloud Wharf office?",
+      "expected_answer_type": "short_fact",
+      "test_type": "short_fact",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "short-cloud-wharf-office-winter-letter-116"
+        ]
+      },
+      "required_evidence": [
+        {
+          "marker": "violet ribbon",
+          "aliases": [
+            "stepfather's violet ribbon",
+            "violet ribbon left near Cloud Wharf office"
+          ]
+        },
+        {
+          "marker": "stepfather",
+          "aliases": [
+            "Zora's stepfather",
+            "the stepfather of Zora"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "wrong silver booth token",
+          "aliases": [
+            "incorrect silver booth token",
+            "mistaken keepsake silver booth token"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "hard",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 0
+    },
+    {
+      "id": "short-fact-117",
+      "question": "What exact keepsake was listed beside Moss Archive room in Milan's station transcript?",
+      "expected_answer_type": "short_fact",
+      "test_type": "short_fact",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "short-moss-archive-room-station-transcript-117"
+        ]
+      },
+      "required_evidence": [
+        {
+          "marker": "tuning fork",
+          "aliases": [
+            "keepsake tuning fork",
+            "tuning fork listed beside Moss Archive room"
+          ]
+        },
+        {
+          "marker": "Moss Archive room",
+          "aliases": [
+            "site Moss Archive room",
+            "the location Moss Archive room"
+          ]
+        },
+        {
+          "marker": "station transcript",
+          "aliases": [
+            "the station transcript",
+            "Milan's station transcript"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "wrong clay watering cup",
+          "aliases": [
+            "incorrect clay watering cup",
+            "mistaken keepsake clay watering cup"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 3,
+      "difficulty": "easy",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 0
+    },
+    {
+      "id": "short-fact-118",
+      "question": "Which small object in the cedar tube proved that Ilia stopped at North Bell workshop?",
+      "expected_answer_type": "short_fact",
+      "test_type": "short_fact",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "short-north-bell-workshop-field-recording-118"
+        ]
+      },
+      "required_evidence": [
+        {
+          "marker": "rope bridge permit",
+          "aliases": [
+            "small rope bridge permit",
+            "rope bridge permit from the cedar tube"
+          ]
+        },
+        {
+          "marker": "North Bell workshop",
+          "aliases": [
+            "stop at North Bell workshop",
+            "visit to North Bell workshop"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "wrong juniper bundles",
+          "aliases": [
+            "incorrect juniper bundles",
+            "mistaken keepsake juniper bundles"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "medium",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 0
+    },
+    {
+      "id": "short-fact-119",
+      "question": "Which direct fact from the audio reel identifies the item recorded for Vesna at Snow Orchard storehouse?",
+      "expected_answer_type": "short_fact",
+      "test_type": "short_fact",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "short-snow-orchard-storehouse-audio-reel-119"
+        ]
+      },
+      "required_evidence": [
+        {
+          "marker": "oak barrel hoops",
+          "aliases": [
+            "item recorded as oak barrel hoops",
+            "Vesna's recorded oak barrel hoops"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "wrong smoke vent chain",
+          "aliases": [
+            "incorrect smoke vent chain",
+            "mistaken keepsake smoke vent chain"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 1,
+      "difficulty": "hard",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 0
+    },
+    {
+      "id": "short-fact-120",
+      "question": "Which item did Mira tuck inside the cedar tube mentioned in the profile page?",
+      "expected_answer_type": "short_fact",
+      "test_type": "short_fact",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "short-bell-bridge-square-profile-page-120"
+        ]
+      },
+      "required_evidence": [
+        {
+          "marker": "blue glass jar",
+          "aliases": [
+            "blue glass jar in the cedar tube",
+            "Mira's blue glass jar"
+          ]
+        },
+        {
+          "marker": "cedar tube",
+          "aliases": [
+            "the cedar tube",
+            "Bell Bridge square cedar tube"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "wrong brass compass",
+          "aliases": [
+            "incorrect brass compass",
+            "mistaken keepsake brass compass"
+          ]
         }
       ],
       "minimum_coverage": 1.0,

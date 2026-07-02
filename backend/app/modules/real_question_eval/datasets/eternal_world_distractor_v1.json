@@ -1,13 +1,15 @@
 {
   "dataset_id": "eternal-world-distractor-v1",
   "name": "Eternal World Distractor Validation V1",
-  "description": "Fictional distractor-heavy retrieval validation dataset for Eternal World with similar names, dates, places, and memory-like events.",
+  "description": "Expanded fictional distractor-heavy retrieval validation dataset for Eternal World with similar names, dates, places, objects, and memory events.",
   "project_name": "Eternal World",
   "metadata": {
     "version": "v1",
     "fictional": true,
     "safe_validation_only": true,
-    "test_type": "distractor"
+    "test_type": "distractor",
+    "case_count": 100,
+    "expanded_validation": true
   },
   "cases": [
     {
@@ -17,22 +19,33 @@
       "test_type": "distractor",
       "source_scope": {
         "scope_type": "document",
-        "document_ids": ["innkeeper-letters"]
+        "document_ids": [
+          "innkeeper-letters"
+        ]
       },
       "required_evidence": [
         {
           "marker": "Marta of North Inn",
-          "aliases": ["North Inn Marta", "Marta from the North Inn"]
+          "aliases": [
+            "North Inn Marta",
+            "Marta from the North Inn"
+          ]
         },
         {
           "marker": "green apron",
-          "aliases": ["apron dyed green", "green inn apron"]
+          "aliases": [
+            "apron dyed green",
+            "green inn apron"
+          ]
         }
       ],
       "forbidden_evidence": [
         {
           "marker": "Marta of River Inn",
-          "aliases": ["River Inn Marta", "Marta from the river inn"]
+          "aliases": [
+            "River Inn Marta",
+            "Marta from the river inn"
+          ]
         }
       ],
       "minimum_coverage": 1.0,
@@ -50,22 +63,33 @@
       "test_type": "distractor",
       "source_scope": {
         "scope_type": "document",
-        "document_ids": ["market-announcements"]
+        "document_ids": [
+          "market-announcements"
+        ]
       },
       "required_evidence": [
         {
           "marker": "June 14 night market",
-          "aliases": ["night market on June 14", "14 June market at night"]
+          "aliases": [
+            "night market on June 14",
+            "14 June market at night"
+          ]
         },
         {
           "marker": "Bell Bridge square",
-          "aliases": ["square by Bell Bridge", "Bell Bridge plaza"]
+          "aliases": [
+            "square by Bell Bridge",
+            "Bell Bridge plaza"
+          ]
         }
       ],
       "forbidden_evidence": [
         {
           "marker": "June 4 noon market",
-          "aliases": ["noon market on June 4", "4 June daytime market"]
+          "aliases": [
+            "noon market on June 4",
+            "4 June daytime market"
+          ]
         }
       ],
       "minimum_coverage": 1.0,
@@ -83,22 +107,33 @@
       "test_type": "distractor",
       "source_scope": {
         "scope_type": "document",
-        "document_ids": ["workshop-accounts"]
+        "document_ids": [
+          "workshop-accounts"
+        ]
       },
       "required_evidence": [
         {
           "marker": "Lev the cooper",
-          "aliases": ["cooper named Lev", "Lev of the cooper's bench"]
+          "aliases": [
+            "cooper named Lev",
+            "Lev of the cooper's bench"
+          ]
         },
         {
           "marker": "oak barrel hoops",
-          "aliases": ["hoops for oak barrels", "oak hoop repairs"]
+          "aliases": [
+            "hoops for oak barrels",
+            "oak hoop repairs"
+          ]
         }
       ],
       "forbidden_evidence": [
         {
           "marker": "Lev the ferryman",
-          "aliases": ["ferryman named Lev", "Lev from the ferry dock"]
+          "aliases": [
+            "ferryman named Lev",
+            "Lev from the ferry dock"
+          ]
         }
       ],
       "minimum_coverage": 1.0,
@@ -116,22 +151,33 @@
       "test_type": "distractor",
       "source_scope": {
         "scope_type": "document",
-        "document_ids": ["ferry-shed-notes"]
+        "document_ids": [
+          "ferry-shed-notes"
+        ]
       },
       "required_evidence": [
         {
           "marker": "Fog Island ferry shed",
-          "aliases": ["ferry shed on Fog Island", "Fog Island shed"]
+          "aliases": [
+            "ferry shed on Fog Island",
+            "Fog Island shed"
+          ]
         },
         {
           "marker": "painted blue oar",
-          "aliases": ["blue-painted oar", "oar painted blue"]
+          "aliases": [
+            "blue-painted oar",
+            "oar painted blue"
+          ]
         }
       ],
       "forbidden_evidence": [
         {
           "marker": "Fox Island ferry shed",
-          "aliases": ["ferry shed on Fox Island", "Fox Island shed"]
+          "aliases": [
+            "ferry shed on Fox Island",
+            "Fox Island shed"
+          ]
         }
       ],
       "minimum_coverage": 1.0,
@@ -149,22 +195,33 @@
       "test_type": "distractor",
       "source_scope": {
         "scope_type": "document",
-        "document_ids": ["courier-bag-index"]
+        "document_ids": [
+          "courier-bag-index"
+        ]
       },
       "required_evidence": [
         {
           "marker": "Ada's winter letter",
-          "aliases": ["winter letter from Ada", "Ada winter letter"]
+          "aliases": [
+            "winter letter from Ada",
+            "Ada winter letter"
+          ]
         },
         {
           "marker": "violet wax thread",
-          "aliases": ["thread of violet wax", "violet wax seal thread"]
+          "aliases": [
+            "thread of violet wax",
+            "violet wax seal thread"
+          ]
         }
       ],
       "forbidden_evidence": [
         {
           "marker": "Alda's spring letter",
-          "aliases": ["spring letter from Alda", "Alda spring note"]
+          "aliases": [
+            "spring letter from Alda",
+            "Alda spring note"
+          ]
         }
       ],
       "minimum_coverage": 1.0,
@@ -174,6 +231,4186 @@
       "language": "en",
       "expected_long_context": true,
       "minimum_context_chars": 75
+    },
+    {
+      "id": "distractor-006",
+      "question": "Which date belongs to the real Bellwater Fair memory at North Bell workshop rather than the similar notice?",
+      "expected_answer_type": "grounded_summary",
+      "test_type": "distractor",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "distractor-north-bell-workshop-006"
+        ]
+      },
+      "required_evidence": [
+        {
+          "marker": "March 16 Bellwater Fair",
+          "aliases": [
+            "Bellwater Fair on March 16",
+            "memory dated March 16"
+          ]
+        },
+        {
+          "marker": "North Bell workshop",
+          "aliases": [
+            "site North Bell workshop",
+            "the place North Bell workshop"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "March 17 Bellwater Fair",
+          "aliases": [
+            "Bellwater Fair on March 17",
+            "wrong date March 17"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "easy",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 170
+    },
+    {
+      "id": "distractor-007",
+      "question": "Which place held the true profile detail for Nikola, not the nearly identical place name?",
+      "expected_answer_type": "grounded_summary",
+      "test_type": "distractor",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "distractor-blue-trunk-cabin-007"
+        ]
+      },
+      "required_evidence": [
+        {
+          "marker": "Blue Trunk cabin",
+          "aliases": [
+            "true place Blue Trunk cabin",
+            "the real location Blue Trunk cabin"
+          ]
+        },
+        {
+          "marker": "brass compass",
+          "aliases": [
+            "profile detail brass compass",
+            "brass compass at Blue Trunk cabin"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "East Signal room",
+          "aliases": [
+            "similar place East Signal room",
+            "wrong location East Signal room"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "medium",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 80
+    },
+    {
+      "id": "distractor-008",
+      "question": "Which object belongs to Sonya's archive scene at North Orchard lane, not the similar object from Winter Choir Eve?",
+      "expected_answer_type": "grounded_summary",
+      "test_type": "distractor",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "distractor-north-orchard-lane-008"
+        ]
+      },
+      "required_evidence": [
+        {
+          "marker": "linen wick",
+          "aliases": [
+            "true object linen wick",
+            "linen wick in Sonya's archive scene"
+          ]
+        },
+        {
+          "marker": "Sonya of North Orchard lane",
+          "aliases": [
+            "Sonya from North Orchard lane",
+            "North Orchard lane scene of Sonya"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "tuning fork",
+          "aliases": [
+            "similar object tuning fork",
+            "wrong object tuning fork"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "hard",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 95
+    },
+    {
+      "id": "distractor-009",
+      "question": "Which memory event is the correct one for Emil at South Meadow arch, and which similar event is only a distractor?",
+      "expected_answer_type": "grounded_summary",
+      "test_type": "distractor",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "distractor-south-meadow-arch-009"
+        ]
+      },
+      "required_evidence": [
+        {
+          "marker": "Signal Lantern Morning at South Meadow arch",
+          "aliases": [
+            "Signal Lantern Morning memory at South Meadow arch",
+            "event Signal Lantern Morning in South Meadow arch"
+          ]
+        },
+        {
+          "marker": "star ledger page",
+          "aliases": [
+            "event detail star ledger page",
+            "star ledger page in the correct event"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "Bridgefire Supper at South Meadow arch",
+          "aliases": [
+            "Bridgefire Supper memory at South Meadow arch",
+            "wrong event Bridgefire Supper in South Meadow arch"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "easy",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 110
+    },
+    {
+      "id": "distractor-010",
+      "question": "Which Selma kept the correct memory note at Birch Ferry shed, not the similar entry for Damir?",
+      "expected_answer_type": "grounded_summary",
+      "test_type": "distractor",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "distractor-birch-ferry-shed-010"
+        ]
+      },
+      "required_evidence": [
+        {
+          "marker": "Selma of Birch Ferry shed",
+          "aliases": [
+            "Selma from Birch Ferry shed",
+            "Birch Ferry shed Selma"
+          ]
+        },
+        {
+          "marker": "lantern hook",
+          "aliases": [
+            "correct object lantern hook",
+            "lantern hook in the true note"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "Damir of Birch Ferry shed",
+          "aliases": [
+            "Damir from Birch Ferry shed",
+            "Birch Ferry shed Damir"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "medium",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 125
+    },
+    {
+      "id": "distractor-011",
+      "question": "Which date belongs to the real Bellwater Fair memory at Lantern Row kiosk rather than the similar notice?",
+      "expected_answer_type": "grounded_summary",
+      "test_type": "distractor",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "distractor-lantern-row-kiosk-011"
+        ]
+      },
+      "required_evidence": [
+        {
+          "marker": "March 21 Bellwater Fair",
+          "aliases": [
+            "Bellwater Fair on March 21",
+            "memory dated March 21"
+          ]
+        },
+        {
+          "marker": "Lantern Row kiosk",
+          "aliases": [
+            "site Lantern Row kiosk",
+            "the place Lantern Row kiosk"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "March 22 Bellwater Fair",
+          "aliases": [
+            "Bellwater Fair on March 22",
+            "wrong date March 22"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "hard",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 140
+    },
+    {
+      "id": "distractor-012",
+      "question": "Which place held the true profile detail for Zora, not the nearly identical place name?",
+      "expected_answer_type": "grounded_summary",
+      "test_type": "distractor",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "distractor-cloud-wharf-office-012"
+        ]
+      },
+      "required_evidence": [
+        {
+          "marker": "Cloud Wharf office",
+          "aliases": [
+            "true place Cloud Wharf office",
+            "the real location Cloud Wharf office"
+          ]
+        },
+        {
+          "marker": "wax thread",
+          "aliases": [
+            "profile detail wax thread",
+            "wax thread at Cloud Wharf office"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "Fox Hollow bridge",
+          "aliases": [
+            "similar place Fox Hollow bridge",
+            "wrong location Fox Hollow bridge"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "easy",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 155
+    },
+    {
+      "id": "distractor-013",
+      "question": "Which object belongs to Vesna's archive scene at Ridge Post loft, not the similar object from Winter Choir Eve?",
+      "expected_answer_type": "grounded_summary",
+      "test_type": "distractor",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "distractor-ridge-post-loft-013"
+        ]
+      },
+      "required_evidence": [
+        {
+          "marker": "tin key",
+          "aliases": [
+            "true object tin key",
+            "tin key in Vesna's archive scene"
+          ]
+        },
+        {
+          "marker": "Vesna of Ridge Post loft",
+          "aliases": [
+            "Vesna from Ridge Post loft",
+            "Ridge Post loft scene of Vesna"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "cedar shovel",
+          "aliases": [
+            "similar object cedar shovel",
+            "wrong object cedar shovel"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "medium",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 170
+    },
+    {
+      "id": "distractor-014",
+      "question": "Which memory event is the correct one for Elena at Willow Courtyard well, and which similar event is only a distractor?",
+      "expected_answer_type": "grounded_summary",
+      "test_type": "distractor",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "distractor-willow-courtyard-well-014"
+        ]
+      },
+      "required_evidence": [
+        {
+          "marker": "Signal Lantern Morning at Willow Courtyard well",
+          "aliases": [
+            "Signal Lantern Morning memory at Willow Courtyard well",
+            "event Signal Lantern Morning in Willow Courtyard well"
+          ]
+        },
+        {
+          "marker": "blue oar",
+          "aliases": [
+            "event detail blue oar",
+            "blue oar in the correct event"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "Bridgefire Supper at Willow Courtyard well",
+          "aliases": [
+            "Bridgefire Supper memory at Willow Courtyard well",
+            "wrong event Bridgefire Supper in Willow Courtyard well"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "hard",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 80
+    },
+    {
+      "id": "distractor-015",
+      "question": "Which Ilya kept the correct memory note at Bell Bridge square, not the similar entry for Kira?",
+      "expected_answer_type": "grounded_summary",
+      "test_type": "distractor",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "distractor-bell-bridge-square-015"
+        ]
+      },
+      "required_evidence": [
+        {
+          "marker": "Ilya of Bell Bridge square",
+          "aliases": [
+            "Ilya from Bell Bridge square",
+            "Bell Bridge square Ilya"
+          ]
+        },
+        {
+          "marker": "willow basket",
+          "aliases": [
+            "correct object willow basket",
+            "willow basket in the true note"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "Kira of Bell Bridge square",
+          "aliases": [
+            "Kira from Bell Bridge square",
+            "Bell Bridge square Kira"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "easy",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 95
+    },
+    {
+      "id": "distractor-016",
+      "question": "Which date belongs to the real Bellwater Fair memory at Cedar Hill station rather than the similar notice?",
+      "expected_answer_type": "grounded_summary",
+      "test_type": "distractor",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "distractor-cedar-hill-station-016"
+        ]
+      },
+      "required_evidence": [
+        {
+          "marker": "March 26 Bellwater Fair",
+          "aliases": [
+            "Bellwater Fair on March 26",
+            "memory dated March 26"
+          ]
+        },
+        {
+          "marker": "Cedar Hill station",
+          "aliases": [
+            "site Cedar Hill station",
+            "the place Cedar Hill station"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "March 27 Bellwater Fair",
+          "aliases": [
+            "Bellwater Fair on March 27",
+            "wrong date March 27"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "medium",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 110
+    },
+    {
+      "id": "distractor-017",
+      "question": "Which place held the true profile detail for Boris, not the nearly identical place name?",
+      "expected_answer_type": "grounded_summary",
+      "test_type": "distractor",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "distractor-moon-mill-yard-017"
+        ]
+      },
+      "required_evidence": [
+        {
+          "marker": "Moon Mill yard",
+          "aliases": [
+            "true place Moon Mill yard",
+            "the real location Moon Mill yard"
+          ]
+        },
+        {
+          "marker": "glass ink bottle",
+          "aliases": [
+            "profile detail glass ink bottle",
+            "glass ink bottle at Moon Mill yard"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "Hollow Market arcade",
+          "aliases": [
+            "similar place Hollow Market arcade",
+            "wrong location Hollow Market arcade"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "hard",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 125
+    },
+    {
+      "id": "distractor-018",
+      "question": "Which object belongs to Daria's archive scene at Winter Chapel porch, not the similar object from Winter Choir Eve?",
+      "expected_answer_type": "grounded_summary",
+      "test_type": "distractor",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "distractor-winter-chapel-porch-018"
+        ]
+      },
+      "required_evidence": [
+        {
+          "marker": "copper wind vane pin",
+          "aliases": [
+            "true object copper wind vane pin",
+            "copper wind vane pin in Daria's archive scene"
+          ]
+        },
+        {
+          "marker": "Daria of Winter Chapel porch",
+          "aliases": [
+            "Daria from Winter Chapel porch",
+            "Winter Chapel porch scene of Daria"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "carved shell comb",
+          "aliases": [
+            "similar object carved shell comb",
+            "wrong object carved shell comb"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "easy",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 140
+    },
+    {
+      "id": "distractor-019",
+      "question": "Which memory event is the correct one for Oren at Marble stair hall, and which similar event is only a distractor?",
+      "expected_answer_type": "grounded_summary",
+      "test_type": "distractor",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "distractor-marble-stair-hall-019"
+        ]
+      },
+      "required_evidence": [
+        {
+          "marker": "Signal Lantern Morning at Marble stair hall",
+          "aliases": [
+            "Signal Lantern Morning memory at Marble stair hall",
+            "event Signal Lantern Morning in Marble stair hall"
+          ]
+        },
+        {
+          "marker": "coal stove hiss",
+          "aliases": [
+            "event detail coal stove hiss",
+            "coal stove hiss in the correct event"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "Bridgefire Supper at Marble stair hall",
+          "aliases": [
+            "Bridgefire Supper memory at Marble stair hall",
+            "wrong event Bridgefire Supper in Marble stair hall"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "medium",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 155
+    },
+    {
+      "id": "distractor-020",
+      "question": "Which Ada kept the correct memory note at Star Basin gallery, not the similar entry for Nikola?",
+      "expected_answer_type": "grounded_summary",
+      "test_type": "distractor",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "distractor-star-basin-gallery-020"
+        ]
+      },
+      "required_evidence": [
+        {
+          "marker": "Ada of Star Basin gallery",
+          "aliases": [
+            "Ada from Star Basin gallery",
+            "Star Basin gallery Ada"
+          ]
+        },
+        {
+          "marker": "violet ribbon",
+          "aliases": [
+            "correct object violet ribbon",
+            "violet ribbon in the true note"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "Nikola of Star Basin gallery",
+          "aliases": [
+            "Nikola from Star Basin gallery",
+            "Star Basin gallery Nikola"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "hard",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 170
+    },
+    {
+      "id": "distractor-021",
+      "question": "Which date belongs to the real Bellwater Fair memory at North Bell workshop rather than the similar notice?",
+      "expected_answer_type": "grounded_summary",
+      "test_type": "distractor",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "distractor-north-bell-workshop-021"
+        ]
+      },
+      "required_evidence": [
+        {
+          "marker": "March 13 Bellwater Fair",
+          "aliases": [
+            "Bellwater Fair on March 13",
+            "memory dated March 13"
+          ]
+        },
+        {
+          "marker": "North Bell workshop",
+          "aliases": [
+            "site North Bell workshop",
+            "the place North Bell workshop"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "March 14 Bellwater Fair",
+          "aliases": [
+            "Bellwater Fair on March 14",
+            "wrong date March 14"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "easy",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 80
+    },
+    {
+      "id": "distractor-022",
+      "question": "Which place held the true profile detail for Talia, not the nearly identical place name?",
+      "expected_answer_type": "grounded_summary",
+      "test_type": "distractor",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "distractor-blue-trunk-cabin-022"
+        ]
+      },
+      "required_evidence": [
+        {
+          "marker": "Blue Trunk cabin",
+          "aliases": [
+            "true place Blue Trunk cabin",
+            "the real location Blue Trunk cabin"
+          ]
+        },
+        {
+          "marker": "rope bridge permit",
+          "aliases": [
+            "profile detail rope bridge permit",
+            "rope bridge permit at Blue Trunk cabin"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "East Signal room",
+          "aliases": [
+            "similar place East Signal room",
+            "wrong location East Signal room"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "medium",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 95
+    },
+    {
+      "id": "distractor-023",
+      "question": "Which object belongs to Viktor's archive scene at North Orchard lane, not the similar object from Winter Choir Eve?",
+      "expected_answer_type": "grounded_summary",
+      "test_type": "distractor",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "distractor-north-orchard-lane-023"
+        ]
+      },
+      "required_evidence": [
+        {
+          "marker": "oak barrel hoops",
+          "aliases": [
+            "true object oak barrel hoops",
+            "oak barrel hoops in Viktor's archive scene"
+          ]
+        },
+        {
+          "marker": "Viktor of North Orchard lane",
+          "aliases": [
+            "Viktor from North Orchard lane",
+            "North Orchard lane scene of Viktor"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "clay watering cup",
+          "aliases": [
+            "similar object clay watering cup",
+            "wrong object clay watering cup"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "hard",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 110
+    },
+    {
+      "id": "distractor-024",
+      "question": "Which memory event is the correct one for Iveta at South Meadow arch, and which similar event is only a distractor?",
+      "expected_answer_type": "grounded_summary",
+      "test_type": "distractor",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "distractor-south-meadow-arch-024"
+        ]
+      },
+      "required_evidence": [
+        {
+          "marker": "Signal Lantern Morning at South Meadow arch",
+          "aliases": [
+            "Signal Lantern Morning memory at South Meadow arch",
+            "event Signal Lantern Morning in South Meadow arch"
+          ]
+        },
+        {
+          "marker": "blue glass jar",
+          "aliases": [
+            "event detail blue glass jar",
+            "blue glass jar in the correct event"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "Bridgefire Supper at South Meadow arch",
+          "aliases": [
+            "Bridgefire Supper memory at South Meadow arch",
+            "wrong event Bridgefire Supper in South Meadow arch"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "easy",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 125
+    },
+    {
+      "id": "distractor-025",
+      "question": "Which Anton kept the correct memory note at Birch Ferry shed, not the similar entry for Zora?",
+      "expected_answer_type": "grounded_summary",
+      "test_type": "distractor",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "distractor-birch-ferry-shed-025"
+        ]
+      },
+      "required_evidence": [
+        {
+          "marker": "Anton of Birch Ferry shed",
+          "aliases": [
+            "Anton from Birch Ferry shed",
+            "Birch Ferry shed Anton"
+          ]
+        },
+        {
+          "marker": "canal route map",
+          "aliases": [
+            "correct object canal route map",
+            "canal route map in the true note"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "Zora of Birch Ferry shed",
+          "aliases": [
+            "Zora from Birch Ferry shed",
+            "Birch Ferry shed Zora"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "medium",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 140
+    },
+    {
+      "id": "distractor-026",
+      "question": "Which date belongs to the real Bellwater Fair memory at Lantern Row kiosk rather than the similar notice?",
+      "expected_answer_type": "grounded_summary",
+      "test_type": "distractor",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "distractor-lantern-row-kiosk-026"
+        ]
+      },
+      "required_evidence": [
+        {
+          "marker": "March 18 Bellwater Fair",
+          "aliases": [
+            "Bellwater Fair on March 18",
+            "memory dated March 18"
+          ]
+        },
+        {
+          "marker": "Lantern Row kiosk",
+          "aliases": [
+            "site Lantern Row kiosk",
+            "the place Lantern Row kiosk"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "March 19 Bellwater Fair",
+          "aliases": [
+            "Bellwater Fair on March 19",
+            "wrong date March 19"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "hard",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 155
+    },
+    {
+      "id": "distractor-027",
+      "question": "Which place held the true profile detail for Tomas, not the nearly identical place name?",
+      "expected_answer_type": "grounded_summary",
+      "test_type": "distractor",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "distractor-cloud-wharf-office-027"
+        ]
+      },
+      "required_evidence": [
+        {
+          "marker": "Cloud Wharf office",
+          "aliases": [
+            "true place Cloud Wharf office",
+            "the real location Cloud Wharf office"
+          ]
+        },
+        {
+          "marker": "copper token",
+          "aliases": [
+            "profile detail copper token",
+            "copper token at Cloud Wharf office"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "Fox Hollow bridge",
+          "aliases": [
+            "similar place Fox Hollow bridge",
+            "wrong location Fox Hollow bridge"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "easy",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 170
+    },
+    {
+      "id": "distractor-028",
+      "question": "Which object belongs to Vera's archive scene at Ridge Post loft, not the similar object from Winter Choir Eve?",
+      "expected_answer_type": "grounded_summary",
+      "test_type": "distractor",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "distractor-ridge-post-loft-028"
+        ]
+      },
+      "required_evidence": [
+        {
+          "marker": "moonflower cutting",
+          "aliases": [
+            "true object moonflower cutting",
+            "moonflower cutting in Vera's archive scene"
+          ]
+        },
+        {
+          "marker": "Vera of Ridge Post loft",
+          "aliases": [
+            "Vera from Ridge Post loft",
+            "Ridge Post loft scene of Vera"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "star ledger page",
+          "aliases": [
+            "similar object star ledger page",
+            "wrong object star ledger page"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "medium",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 80
+    },
+    {
+      "id": "distractor-029",
+      "question": "Which memory event is the correct one for Soren at Willow Courtyard well, and which similar event is only a distractor?",
+      "expected_answer_type": "grounded_summary",
+      "test_type": "distractor",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "distractor-willow-courtyard-well-029"
+        ]
+      },
+      "required_evidence": [
+        {
+          "marker": "Signal Lantern Morning at Willow Courtyard well",
+          "aliases": [
+            "Signal Lantern Morning memory at Willow Courtyard well",
+            "event Signal Lantern Morning in Willow Courtyard well"
+          ]
+        },
+        {
+          "marker": "birch tea flask",
+          "aliases": [
+            "event detail birch tea flask",
+            "birch tea flask in the correct event"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "Bridgefire Supper at Willow Courtyard well",
+          "aliases": [
+            "Bridgefire Supper memory at Willow Courtyard well",
+            "wrong event Bridgefire Supper in Willow Courtyard well"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "hard",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 95
+    },
+    {
+      "id": "distractor-030",
+      "question": "Which Lina kept the correct memory note at Bell Bridge square, not the similar entry for Boris?",
+      "expected_answer_type": "grounded_summary",
+      "test_type": "distractor",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "distractor-bell-bridge-square-030"
+        ]
+      },
+      "required_evidence": [
+        {
+          "marker": "Lina of Bell Bridge square",
+          "aliases": [
+            "Lina from Bell Bridge square",
+            "Bell Bridge square Lina"
+          ]
+        },
+        {
+          "marker": "saffron scarf",
+          "aliases": [
+            "correct object saffron scarf",
+            "saffron scarf in the true note"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "Boris of Bell Bridge square",
+          "aliases": [
+            "Boris from Bell Bridge square",
+            "Bell Bridge square Boris"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "easy",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 110
+    },
+    {
+      "id": "distractor-031",
+      "question": "Which date belongs to the real Bellwater Fair memory at Cedar Hill station rather than the similar notice?",
+      "expected_answer_type": "grounded_summary",
+      "test_type": "distractor",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "distractor-cedar-hill-station-031"
+        ]
+      },
+      "required_evidence": [
+        {
+          "marker": "March 23 Bellwater Fair",
+          "aliases": [
+            "Bellwater Fair on March 23",
+            "memory dated March 23"
+          ]
+        },
+        {
+          "marker": "Cedar Hill station",
+          "aliases": [
+            "site Cedar Hill station",
+            "the place Cedar Hill station"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "March 24 Bellwater Fair",
+          "aliases": [
+            "Bellwater Fair on March 24",
+            "wrong date March 24"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "medium",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 125
+    },
+    {
+      "id": "distractor-032",
+      "question": "Which place held the true profile detail for Yara, not the nearly identical place name?",
+      "expected_answer_type": "grounded_summary",
+      "test_type": "distractor",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "distractor-moon-mill-yard-032"
+        ]
+      },
+      "required_evidence": [
+        {
+          "marker": "Moon Mill yard",
+          "aliases": [
+            "true place Moon Mill yard",
+            "the real location Moon Mill yard"
+          ]
+        },
+        {
+          "marker": "amber lantern",
+          "aliases": [
+            "profile detail amber lantern",
+            "amber lantern at Moon Mill yard"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "Hollow Market arcade",
+          "aliases": [
+            "similar place Hollow Market arcade",
+            "wrong location Hollow Market arcade"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "hard",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 140
+    },
+    {
+      "id": "distractor-033",
+      "question": "Which object belongs to Lev's archive scene at Winter Chapel porch, not the similar object from Winter Choir Eve?",
+      "expected_answer_type": "grounded_summary",
+      "test_type": "distractor",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "distractor-winter-chapel-porch-033"
+        ]
+      },
+      "required_evidence": [
+        {
+          "marker": "basalt sketch",
+          "aliases": [
+            "true object basalt sketch",
+            "basalt sketch in Lev's archive scene"
+          ]
+        },
+        {
+          "marker": "Lev of Winter Chapel porch",
+          "aliases": [
+            "Lev from Winter Chapel porch",
+            "Winter Chapel porch scene of Lev"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "blue oar",
+          "aliases": [
+            "similar object blue oar",
+            "wrong object blue oar"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "easy",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 155
+    },
+    {
+      "id": "distractor-034",
+      "question": "Which memory event is the correct one for Raisa at Marble stair hall, and which similar event is only a distractor?",
+      "expected_answer_type": "grounded_summary",
+      "test_type": "distractor",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "distractor-marble-stair-hall-034"
+        ]
+      },
+      "required_evidence": [
+        {
+          "marker": "Signal Lantern Morning at Marble stair hall",
+          "aliases": [
+            "Signal Lantern Morning memory at Marble stair hall",
+            "event Signal Lantern Morning in Marble stair hall"
+          ]
+        },
+        {
+          "marker": "green apron",
+          "aliases": [
+            "event detail green apron",
+            "green apron in the correct event"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "Bridgefire Supper at Marble stair hall",
+          "aliases": [
+            "Bridgefire Supper memory at Marble stair hall",
+            "wrong event Bridgefire Supper in Marble stair hall"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "medium",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 170
+    },
+    {
+      "id": "distractor-035",
+      "question": "Which Pavel kept the correct memory note at Star Basin gallery, not the similar entry for Talia?",
+      "expected_answer_type": "grounded_summary",
+      "test_type": "distractor",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "distractor-star-basin-gallery-035"
+        ]
+      },
+      "required_evidence": [
+        {
+          "marker": "Pavel of Star Basin gallery",
+          "aliases": [
+            "Pavel from Star Basin gallery",
+            "Star Basin gallery Pavel"
+          ]
+        },
+        {
+          "marker": "silver booth token",
+          "aliases": [
+            "correct object silver booth token",
+            "silver booth token in the true note"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "Talia of Star Basin gallery",
+          "aliases": [
+            "Talia from Star Basin gallery",
+            "Star Basin gallery Talia"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "hard",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 80
+    },
+    {
+      "id": "distractor-036",
+      "question": "Which date belongs to the real Bellwater Fair memory at North Bell workshop rather than the similar notice?",
+      "expected_answer_type": "grounded_summary",
+      "test_type": "distractor",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "distractor-north-bell-workshop-036"
+        ]
+      },
+      "required_evidence": [
+        {
+          "marker": "March 10 Bellwater Fair",
+          "aliases": [
+            "Bellwater Fair on March 10",
+            "memory dated March 10"
+          ]
+        },
+        {
+          "marker": "North Bell workshop",
+          "aliases": [
+            "site North Bell workshop",
+            "the place North Bell workshop"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "March 11 Bellwater Fair",
+          "aliases": [
+            "Bellwater Fair on March 11",
+            "wrong date March 11"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "easy",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 95
+    },
+    {
+      "id": "distractor-037",
+      "question": "Which place held the true profile detail for Damir, not the nearly identical place name?",
+      "expected_answer_type": "grounded_summary",
+      "test_type": "distractor",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "distractor-blue-trunk-cabin-037"
+        ]
+      },
+      "required_evidence": [
+        {
+          "marker": "Blue Trunk cabin",
+          "aliases": [
+            "true place Blue Trunk cabin",
+            "the real location Blue Trunk cabin"
+          ]
+        },
+        {
+          "marker": "juniper bundles",
+          "aliases": [
+            "profile detail juniper bundles",
+            "juniper bundles at Blue Trunk cabin"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "East Signal room",
+          "aliases": [
+            "similar place East Signal room",
+            "wrong location East Signal room"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "medium",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 110
+    },
+    {
+      "id": "distractor-038",
+      "question": "Which object belongs to Nessa's archive scene at North Orchard lane, not the similar object from Winter Choir Eve?",
+      "expected_answer_type": "grounded_summary",
+      "test_type": "distractor",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "distractor-north-orchard-lane-038"
+        ]
+      },
+      "required_evidence": [
+        {
+          "marker": "smoke vent chain",
+          "aliases": [
+            "true object smoke vent chain",
+            "smoke vent chain in Nessa's archive scene"
+          ]
+        },
+        {
+          "marker": "Nessa of North Orchard lane",
+          "aliases": [
+            "Nessa from North Orchard lane",
+            "North Orchard lane scene of Nessa"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "coal stove hiss",
+          "aliases": [
+            "similar object coal stove hiss",
+            "wrong object coal stove hiss"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "hard",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 125
+    },
+    {
+      "id": "distractor-039",
+      "question": "Which memory event is the correct one for Milan at South Meadow arch, and which similar event is only a distractor?",
+      "expected_answer_type": "grounded_summary",
+      "test_type": "distractor",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "distractor-south-meadow-arch-039"
+        ]
+      },
+      "required_evidence": [
+        {
+          "marker": "Signal Lantern Morning at South Meadow arch",
+          "aliases": [
+            "Signal Lantern Morning memory at South Meadow arch",
+            "event Signal Lantern Morning in South Meadow arch"
+          ]
+        },
+        {
+          "marker": "brass compass",
+          "aliases": [
+            "event detail brass compass",
+            "brass compass in the correct event"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "Bridgefire Supper at South Meadow arch",
+          "aliases": [
+            "Bridgefire Supper memory at South Meadow arch",
+            "wrong event Bridgefire Supper in South Meadow arch"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "easy",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 140
+    },
+    {
+      "id": "distractor-040",
+      "question": "Which Mira kept the correct memory note at Birch Ferry shed, not the similar entry for Tomas?",
+      "expected_answer_type": "grounded_summary",
+      "test_type": "distractor",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "distractor-birch-ferry-shed-040"
+        ]
+      },
+      "required_evidence": [
+        {
+          "marker": "Mira of Birch Ferry shed",
+          "aliases": [
+            "Mira from Birch Ferry shed",
+            "Birch Ferry shed Mira"
+          ]
+        },
+        {
+          "marker": "linen wick",
+          "aliases": [
+            "correct object linen wick",
+            "linen wick in the true note"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "Tomas of Birch Ferry shed",
+          "aliases": [
+            "Tomas from Birch Ferry shed",
+            "Birch Ferry shed Tomas"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "medium",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 155
+    },
+    {
+      "id": "distractor-041",
+      "question": "Which date belongs to the real Bellwater Fair memory at Lantern Row kiosk rather than the similar notice?",
+      "expected_answer_type": "grounded_summary",
+      "test_type": "distractor",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "distractor-lantern-row-kiosk-041"
+        ]
+      },
+      "required_evidence": [
+        {
+          "marker": "March 15 Bellwater Fair",
+          "aliases": [
+            "Bellwater Fair on March 15",
+            "memory dated March 15"
+          ]
+        },
+        {
+          "marker": "Lantern Row kiosk",
+          "aliases": [
+            "site Lantern Row kiosk",
+            "the place Lantern Row kiosk"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "March 16 Bellwater Fair",
+          "aliases": [
+            "Bellwater Fair on March 16",
+            "wrong date March 16"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "hard",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 170
+    },
+    {
+      "id": "distractor-042",
+      "question": "Which place held the true profile detail for Kira, not the nearly identical place name?",
+      "expected_answer_type": "grounded_summary",
+      "test_type": "distractor",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "distractor-cloud-wharf-office-042"
+        ]
+      },
+      "required_evidence": [
+        {
+          "marker": "Cloud Wharf office",
+          "aliases": [
+            "true place Cloud Wharf office",
+            "the real location Cloud Wharf office"
+          ]
+        },
+        {
+          "marker": "lantern hook",
+          "aliases": [
+            "profile detail lantern hook",
+            "lantern hook at Cloud Wharf office"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "Fox Hollow bridge",
+          "aliases": [
+            "similar place Fox Hollow bridge",
+            "wrong location Fox Hollow bridge"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "easy",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 80
+    },
+    {
+      "id": "distractor-043",
+      "question": "Which object belongs to Petar's archive scene at Ridge Post loft, not the similar object from Winter Choir Eve?",
+      "expected_answer_type": "grounded_summary",
+      "test_type": "distractor",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "distractor-ridge-post-loft-043"
+        ]
+      },
+      "required_evidence": [
+        {
+          "marker": "weathered camera strap",
+          "aliases": [
+            "true object weathered camera strap",
+            "weathered camera strap in Petar's archive scene"
+          ]
+        },
+        {
+          "marker": "Petar of Ridge Post loft",
+          "aliases": [
+            "Petar from Ridge Post loft",
+            "Ridge Post loft scene of Petar"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "blue glass jar",
+          "aliases": [
+            "similar object blue glass jar",
+            "wrong object blue glass jar"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "medium",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 95
+    },
+    {
+      "id": "distractor-044",
+      "question": "Which memory event is the correct one for Anya at Willow Courtyard well, and which similar event is only a distractor?",
+      "expected_answer_type": "grounded_summary",
+      "test_type": "distractor",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "distractor-willow-courtyard-well-044"
+        ]
+      },
+      "required_evidence": [
+        {
+          "marker": "Signal Lantern Morning at Willow Courtyard well",
+          "aliases": [
+            "Signal Lantern Morning memory at Willow Courtyard well",
+            "event Signal Lantern Morning in Willow Courtyard well"
+          ]
+        },
+        {
+          "marker": "wax thread",
+          "aliases": [
+            "event detail wax thread",
+            "wax thread in the correct event"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "Bridgefire Supper at Willow Courtyard well",
+          "aliases": [
+            "Bridgefire Supper memory at Willow Courtyard well",
+            "wrong event Bridgefire Supper in Willow Courtyard well"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "hard",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 110
+    },
+    {
+      "id": "distractor-045",
+      "question": "Which Stefan kept the correct memory note at Bell Bridge square, not the similar entry for Yara?",
+      "expected_answer_type": "grounded_summary",
+      "test_type": "distractor",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "distractor-bell-bridge-square-045"
+        ]
+      },
+      "required_evidence": [
+        {
+          "marker": "Stefan of Bell Bridge square",
+          "aliases": [
+            "Stefan from Bell Bridge square",
+            "Bell Bridge square Stefan"
+          ]
+        },
+        {
+          "marker": "tin key",
+          "aliases": [
+            "correct object tin key",
+            "tin key in the true note"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "Yara of Bell Bridge square",
+          "aliases": [
+            "Yara from Bell Bridge square",
+            "Bell Bridge square Yara"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "easy",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 125
+    },
+    {
+      "id": "distractor-046",
+      "question": "Which date belongs to the real Bellwater Fair memory at Cedar Hill station rather than the similar notice?",
+      "expected_answer_type": "grounded_summary",
+      "test_type": "distractor",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "distractor-cedar-hill-station-046"
+        ]
+      },
+      "required_evidence": [
+        {
+          "marker": "March 20 Bellwater Fair",
+          "aliases": [
+            "Bellwater Fair on March 20",
+            "memory dated March 20"
+          ]
+        },
+        {
+          "marker": "Cedar Hill station",
+          "aliases": [
+            "site Cedar Hill station",
+            "the place Cedar Hill station"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "March 21 Bellwater Fair",
+          "aliases": [
+            "Bellwater Fair on March 21",
+            "wrong date March 21"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "medium",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 140
+    },
+    {
+      "id": "distractor-047",
+      "question": "Which place held the true profile detail for Nikola, not the nearly identical place name?",
+      "expected_answer_type": "grounded_summary",
+      "test_type": "distractor",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "distractor-moon-mill-yard-047"
+        ]
+      },
+      "required_evidence": [
+        {
+          "marker": "Moon Mill yard",
+          "aliases": [
+            "true place Moon Mill yard",
+            "the real location Moon Mill yard"
+          ]
+        },
+        {
+          "marker": "willow basket",
+          "aliases": [
+            "profile detail willow basket",
+            "willow basket at Moon Mill yard"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "Hollow Market arcade",
+          "aliases": [
+            "similar place Hollow Market arcade",
+            "wrong location Hollow Market arcade"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "hard",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 155
+    },
+    {
+      "id": "distractor-048",
+      "question": "Which object belongs to Sonya's archive scene at Winter Chapel porch, not the similar object from Winter Choir Eve?",
+      "expected_answer_type": "grounded_summary",
+      "test_type": "distractor",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "distractor-winter-chapel-porch-048"
+        ]
+      },
+      "required_evidence": [
+        {
+          "marker": "paper moon mask",
+          "aliases": [
+            "true object paper moon mask",
+            "paper moon mask in Sonya's archive scene"
+          ]
+        },
+        {
+          "marker": "Sonya of Winter Chapel porch",
+          "aliases": [
+            "Sonya from Winter Chapel porch",
+            "Winter Chapel porch scene of Sonya"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "birch tea flask",
+          "aliases": [
+            "similar object birch tea flask",
+            "wrong object birch tea flask"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "easy",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 170
+    },
+    {
+      "id": "distractor-049",
+      "question": "Which memory event is the correct one for Emil at Marble stair hall, and which similar event is only a distractor?",
+      "expected_answer_type": "grounded_summary",
+      "test_type": "distractor",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "distractor-marble-stair-hall-049"
+        ]
+      },
+      "required_evidence": [
+        {
+          "marker": "Signal Lantern Morning at Marble stair hall",
+          "aliases": [
+            "Signal Lantern Morning memory at Marble stair hall",
+            "event Signal Lantern Morning in Marble stair hall"
+          ]
+        },
+        {
+          "marker": "glass ink bottle",
+          "aliases": [
+            "event detail glass ink bottle",
+            "glass ink bottle in the correct event"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "Bridgefire Supper at Marble stair hall",
+          "aliases": [
+            "Bridgefire Supper memory at Marble stair hall",
+            "wrong event Bridgefire Supper in Marble stair hall"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "medium",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 80
+    },
+    {
+      "id": "distractor-050",
+      "question": "Which Selma kept the correct memory note at Star Basin gallery, not the similar entry for Damir?",
+      "expected_answer_type": "grounded_summary",
+      "test_type": "distractor",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "distractor-star-basin-gallery-050"
+        ]
+      },
+      "required_evidence": [
+        {
+          "marker": "Selma of Star Basin gallery",
+          "aliases": [
+            "Selma from Star Basin gallery",
+            "Star Basin gallery Selma"
+          ]
+        },
+        {
+          "marker": "copper wind vane pin",
+          "aliases": [
+            "correct object copper wind vane pin",
+            "copper wind vane pin in the true note"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "Damir of Star Basin gallery",
+          "aliases": [
+            "Damir from Star Basin gallery",
+            "Star Basin gallery Damir"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "hard",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 95
+    },
+    {
+      "id": "distractor-051",
+      "question": "Which date belongs to the real Bellwater Fair memory at North Bell workshop rather than the similar notice?",
+      "expected_answer_type": "grounded_summary",
+      "test_type": "distractor",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "distractor-north-bell-workshop-051"
+        ]
+      },
+      "required_evidence": [
+        {
+          "marker": "March 25 Bellwater Fair",
+          "aliases": [
+            "Bellwater Fair on March 25",
+            "memory dated March 25"
+          ]
+        },
+        {
+          "marker": "North Bell workshop",
+          "aliases": [
+            "site North Bell workshop",
+            "the place North Bell workshop"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "March 26 Bellwater Fair",
+          "aliases": [
+            "Bellwater Fair on March 26",
+            "wrong date March 26"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "easy",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 110
+    },
+    {
+      "id": "distractor-052",
+      "question": "Which place held the true profile detail for Zora, not the nearly identical place name?",
+      "expected_answer_type": "grounded_summary",
+      "test_type": "distractor",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "distractor-blue-trunk-cabin-052"
+        ]
+      },
+      "required_evidence": [
+        {
+          "marker": "Blue Trunk cabin",
+          "aliases": [
+            "true place Blue Trunk cabin",
+            "the real location Blue Trunk cabin"
+          ]
+        },
+        {
+          "marker": "violet ribbon",
+          "aliases": [
+            "profile detail violet ribbon",
+            "violet ribbon at Blue Trunk cabin"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "East Signal room",
+          "aliases": [
+            "similar place East Signal room",
+            "wrong location East Signal room"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "medium",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 125
+    },
+    {
+      "id": "distractor-053",
+      "question": "Which object belongs to Vesna's archive scene at North Orchard lane, not the similar object from Winter Choir Eve?",
+      "expected_answer_type": "grounded_summary",
+      "test_type": "distractor",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "distractor-north-orchard-lane-053"
+        ]
+      },
+      "required_evidence": [
+        {
+          "marker": "tuning fork",
+          "aliases": [
+            "true object tuning fork",
+            "tuning fork in Vesna's archive scene"
+          ]
+        },
+        {
+          "marker": "Vesna of North Orchard lane",
+          "aliases": [
+            "Vesna from North Orchard lane",
+            "North Orchard lane scene of Vesna"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "green apron",
+          "aliases": [
+            "similar object green apron",
+            "wrong object green apron"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "hard",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 140
+    },
+    {
+      "id": "distractor-054",
+      "question": "Which memory event is the correct one for Elena at South Meadow arch, and which similar event is only a distractor?",
+      "expected_answer_type": "grounded_summary",
+      "test_type": "distractor",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "distractor-south-meadow-arch-054"
+        ]
+      },
+      "required_evidence": [
+        {
+          "marker": "Signal Lantern Morning at South Meadow arch",
+          "aliases": [
+            "Signal Lantern Morning memory at South Meadow arch",
+            "event Signal Lantern Morning in South Meadow arch"
+          ]
+        },
+        {
+          "marker": "rope bridge permit",
+          "aliases": [
+            "event detail rope bridge permit",
+            "rope bridge permit in the correct event"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "Bridgefire Supper at South Meadow arch",
+          "aliases": [
+            "Bridgefire Supper memory at South Meadow arch",
+            "wrong event Bridgefire Supper in South Meadow arch"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "easy",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 155
+    },
+    {
+      "id": "distractor-055",
+      "question": "Which Ilya kept the correct memory note at Birch Ferry shed, not the similar entry for Kira?",
+      "expected_answer_type": "grounded_summary",
+      "test_type": "distractor",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "distractor-birch-ferry-shed-055"
+        ]
+      },
+      "required_evidence": [
+        {
+          "marker": "Ilya of Birch Ferry shed",
+          "aliases": [
+            "Ilya from Birch Ferry shed",
+            "Birch Ferry shed Ilya"
+          ]
+        },
+        {
+          "marker": "oak barrel hoops",
+          "aliases": [
+            "correct object oak barrel hoops",
+            "oak barrel hoops in the true note"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "Kira of Birch Ferry shed",
+          "aliases": [
+            "Kira from Birch Ferry shed",
+            "Birch Ferry shed Kira"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "medium",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 170
+    },
+    {
+      "id": "distractor-056",
+      "question": "Which date belongs to the real Bellwater Fair memory at Lantern Row kiosk rather than the similar notice?",
+      "expected_answer_type": "grounded_summary",
+      "test_type": "distractor",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "distractor-lantern-row-kiosk-056"
+        ]
+      },
+      "required_evidence": [
+        {
+          "marker": "March 12 Bellwater Fair",
+          "aliases": [
+            "Bellwater Fair on March 12",
+            "memory dated March 12"
+          ]
+        },
+        {
+          "marker": "Lantern Row kiosk",
+          "aliases": [
+            "site Lantern Row kiosk",
+            "the place Lantern Row kiosk"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "March 13 Bellwater Fair",
+          "aliases": [
+            "Bellwater Fair on March 13",
+            "wrong date March 13"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "hard",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 80
+    },
+    {
+      "id": "distractor-057",
+      "question": "Which place held the true profile detail for Boris, not the nearly identical place name?",
+      "expected_answer_type": "grounded_summary",
+      "test_type": "distractor",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "distractor-cloud-wharf-office-057"
+        ]
+      },
+      "required_evidence": [
+        {
+          "marker": "Cloud Wharf office",
+          "aliases": [
+            "true place Cloud Wharf office",
+            "the real location Cloud Wharf office"
+          ]
+        },
+        {
+          "marker": "canal route map",
+          "aliases": [
+            "profile detail canal route map",
+            "canal route map at Cloud Wharf office"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "Fox Hollow bridge",
+          "aliases": [
+            "similar place Fox Hollow bridge",
+            "wrong location Fox Hollow bridge"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "easy",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 95
+    },
+    {
+      "id": "distractor-058",
+      "question": "Which object belongs to Daria's archive scene at Ridge Post loft, not the similar object from Winter Choir Eve?",
+      "expected_answer_type": "grounded_summary",
+      "test_type": "distractor",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "distractor-ridge-post-loft-058"
+        ]
+      },
+      "required_evidence": [
+        {
+          "marker": "cedar shovel",
+          "aliases": [
+            "true object cedar shovel",
+            "cedar shovel in Daria's archive scene"
+          ]
+        },
+        {
+          "marker": "Daria of Ridge Post loft",
+          "aliases": [
+            "Daria from Ridge Post loft",
+            "Ridge Post loft scene of Daria"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "brass compass",
+          "aliases": [
+            "similar object brass compass",
+            "wrong object brass compass"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "medium",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 110
+    },
+    {
+      "id": "distractor-059",
+      "question": "Which memory event is the correct one for Oren at Willow Courtyard well, and which similar event is only a distractor?",
+      "expected_answer_type": "grounded_summary",
+      "test_type": "distractor",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "distractor-willow-courtyard-well-059"
+        ]
+      },
+      "required_evidence": [
+        {
+          "marker": "Signal Lantern Morning at Willow Courtyard well",
+          "aliases": [
+            "Signal Lantern Morning memory at Willow Courtyard well",
+            "event Signal Lantern Morning in Willow Courtyard well"
+          ]
+        },
+        {
+          "marker": "copper token",
+          "aliases": [
+            "event detail copper token",
+            "copper token in the correct event"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "Bridgefire Supper at Willow Courtyard well",
+          "aliases": [
+            "Bridgefire Supper memory at Willow Courtyard well",
+            "wrong event Bridgefire Supper in Willow Courtyard well"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "hard",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 125
+    },
+    {
+      "id": "distractor-060",
+      "question": "Which Ada kept the correct memory note at Bell Bridge square, not the similar entry for Nikola?",
+      "expected_answer_type": "grounded_summary",
+      "test_type": "distractor",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "distractor-bell-bridge-square-060"
+        ]
+      },
+      "required_evidence": [
+        {
+          "marker": "Ada of Bell Bridge square",
+          "aliases": [
+            "Ada from Bell Bridge square",
+            "Bell Bridge square Ada"
+          ]
+        },
+        {
+          "marker": "moonflower cutting",
+          "aliases": [
+            "correct object moonflower cutting",
+            "moonflower cutting in the true note"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "Nikola of Bell Bridge square",
+          "aliases": [
+            "Nikola from Bell Bridge square",
+            "Bell Bridge square Nikola"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "easy",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 140
+    },
+    {
+      "id": "distractor-061",
+      "question": "Which date belongs to the real Bellwater Fair memory at Cedar Hill station rather than the similar notice?",
+      "expected_answer_type": "grounded_summary",
+      "test_type": "distractor",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "distractor-cedar-hill-station-061"
+        ]
+      },
+      "required_evidence": [
+        {
+          "marker": "March 17 Bellwater Fair",
+          "aliases": [
+            "Bellwater Fair on March 17",
+            "memory dated March 17"
+          ]
+        },
+        {
+          "marker": "Cedar Hill station",
+          "aliases": [
+            "site Cedar Hill station",
+            "the place Cedar Hill station"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "March 18 Bellwater Fair",
+          "aliases": [
+            "Bellwater Fair on March 18",
+            "wrong date March 18"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "medium",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 155
+    },
+    {
+      "id": "distractor-062",
+      "question": "Which place held the true profile detail for Talia, not the nearly identical place name?",
+      "expected_answer_type": "grounded_summary",
+      "test_type": "distractor",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "distractor-moon-mill-yard-062"
+        ]
+      },
+      "required_evidence": [
+        {
+          "marker": "Moon Mill yard",
+          "aliases": [
+            "true place Moon Mill yard",
+            "the real location Moon Mill yard"
+          ]
+        },
+        {
+          "marker": "saffron scarf",
+          "aliases": [
+            "profile detail saffron scarf",
+            "saffron scarf at Moon Mill yard"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "Hollow Market arcade",
+          "aliases": [
+            "similar place Hollow Market arcade",
+            "wrong location Hollow Market arcade"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "hard",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 170
+    },
+    {
+      "id": "distractor-063",
+      "question": "Which object belongs to Viktor's archive scene at Winter Chapel porch, not the similar object from Winter Choir Eve?",
+      "expected_answer_type": "grounded_summary",
+      "test_type": "distractor",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "distractor-winter-chapel-porch-063"
+        ]
+      },
+      "required_evidence": [
+        {
+          "marker": "carved shell comb",
+          "aliases": [
+            "true object carved shell comb",
+            "carved shell comb in Viktor's archive scene"
+          ]
+        },
+        {
+          "marker": "Viktor of Winter Chapel porch",
+          "aliases": [
+            "Viktor from Winter Chapel porch",
+            "Winter Chapel porch scene of Viktor"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "wax thread",
+          "aliases": [
+            "similar object wax thread",
+            "wrong object wax thread"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "easy",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 80
+    },
+    {
+      "id": "distractor-064",
+      "question": "Which memory event is the correct one for Iveta at Marble stair hall, and which similar event is only a distractor?",
+      "expected_answer_type": "grounded_summary",
+      "test_type": "distractor",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "distractor-marble-stair-hall-064"
+        ]
+      },
+      "required_evidence": [
+        {
+          "marker": "Signal Lantern Morning at Marble stair hall",
+          "aliases": [
+            "Signal Lantern Morning memory at Marble stair hall",
+            "event Signal Lantern Morning in Marble stair hall"
+          ]
+        },
+        {
+          "marker": "amber lantern",
+          "aliases": [
+            "event detail amber lantern",
+            "amber lantern in the correct event"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "Bridgefire Supper at Marble stair hall",
+          "aliases": [
+            "Bridgefire Supper memory at Marble stair hall",
+            "wrong event Bridgefire Supper in Marble stair hall"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "medium",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 95
+    },
+    {
+      "id": "distractor-065",
+      "question": "Which Anton kept the correct memory note at Star Basin gallery, not the similar entry for Zora?",
+      "expected_answer_type": "grounded_summary",
+      "test_type": "distractor",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "distractor-star-basin-gallery-065"
+        ]
+      },
+      "required_evidence": [
+        {
+          "marker": "Anton of Star Basin gallery",
+          "aliases": [
+            "Anton from Star Basin gallery",
+            "Star Basin gallery Anton"
+          ]
+        },
+        {
+          "marker": "basalt sketch",
+          "aliases": [
+            "correct object basalt sketch",
+            "basalt sketch in the true note"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "Zora of Star Basin gallery",
+          "aliases": [
+            "Zora from Star Basin gallery",
+            "Star Basin gallery Zora"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "hard",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 110
+    },
+    {
+      "id": "distractor-066",
+      "question": "Which date belongs to the real Bellwater Fair memory at North Bell workshop rather than the similar notice?",
+      "expected_answer_type": "grounded_summary",
+      "test_type": "distractor",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "distractor-north-bell-workshop-066"
+        ]
+      },
+      "required_evidence": [
+        {
+          "marker": "March 22 Bellwater Fair",
+          "aliases": [
+            "Bellwater Fair on March 22",
+            "memory dated March 22"
+          ]
+        },
+        {
+          "marker": "North Bell workshop",
+          "aliases": [
+            "site North Bell workshop",
+            "the place North Bell workshop"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "March 23 Bellwater Fair",
+          "aliases": [
+            "Bellwater Fair on March 23",
+            "wrong date March 23"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "easy",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 125
+    },
+    {
+      "id": "distractor-067",
+      "question": "Which place held the true profile detail for Tomas, not the nearly identical place name?",
+      "expected_answer_type": "grounded_summary",
+      "test_type": "distractor",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "distractor-blue-trunk-cabin-067"
+        ]
+      },
+      "required_evidence": [
+        {
+          "marker": "Blue Trunk cabin",
+          "aliases": [
+            "true place Blue Trunk cabin",
+            "the real location Blue Trunk cabin"
+          ]
+        },
+        {
+          "marker": "silver booth token",
+          "aliases": [
+            "profile detail silver booth token",
+            "silver booth token at Blue Trunk cabin"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "East Signal room",
+          "aliases": [
+            "similar place East Signal room",
+            "wrong location East Signal room"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "medium",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 140
+    },
+    {
+      "id": "distractor-068",
+      "question": "Which object belongs to Vera's archive scene at North Orchard lane, not the similar object from Winter Choir Eve?",
+      "expected_answer_type": "grounded_summary",
+      "test_type": "distractor",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "distractor-north-orchard-lane-068"
+        ]
+      },
+      "required_evidence": [
+        {
+          "marker": "clay watering cup",
+          "aliases": [
+            "true object clay watering cup",
+            "clay watering cup in Vera's archive scene"
+          ]
+        },
+        {
+          "marker": "Vera of North Orchard lane",
+          "aliases": [
+            "Vera from North Orchard lane",
+            "North Orchard lane scene of Vera"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "glass ink bottle",
+          "aliases": [
+            "similar object glass ink bottle",
+            "wrong object glass ink bottle"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "hard",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 155
+    },
+    {
+      "id": "distractor-069",
+      "question": "Which memory event is the correct one for Soren at South Meadow arch, and which similar event is only a distractor?",
+      "expected_answer_type": "grounded_summary",
+      "test_type": "distractor",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "distractor-south-meadow-arch-069"
+        ]
+      },
+      "required_evidence": [
+        {
+          "marker": "Signal Lantern Morning at South Meadow arch",
+          "aliases": [
+            "Signal Lantern Morning memory at South Meadow arch",
+            "event Signal Lantern Morning in South Meadow arch"
+          ]
+        },
+        {
+          "marker": "juniper bundles",
+          "aliases": [
+            "event detail juniper bundles",
+            "juniper bundles in the correct event"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "Bridgefire Supper at South Meadow arch",
+          "aliases": [
+            "Bridgefire Supper memory at South Meadow arch",
+            "wrong event Bridgefire Supper in South Meadow arch"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "easy",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 170
+    },
+    {
+      "id": "distractor-070",
+      "question": "Which Lina kept the correct memory note at Birch Ferry shed, not the similar entry for Boris?",
+      "expected_answer_type": "grounded_summary",
+      "test_type": "distractor",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "distractor-birch-ferry-shed-070"
+        ]
+      },
+      "required_evidence": [
+        {
+          "marker": "Lina of Birch Ferry shed",
+          "aliases": [
+            "Lina from Birch Ferry shed",
+            "Birch Ferry shed Lina"
+          ]
+        },
+        {
+          "marker": "smoke vent chain",
+          "aliases": [
+            "correct object smoke vent chain",
+            "smoke vent chain in the true note"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "Boris of Birch Ferry shed",
+          "aliases": [
+            "Boris from Birch Ferry shed",
+            "Birch Ferry shed Boris"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "medium",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 80
+    },
+    {
+      "id": "distractor-071",
+      "question": "Which date belongs to the real Bellwater Fair memory at Lantern Row kiosk rather than the similar notice?",
+      "expected_answer_type": "grounded_summary",
+      "test_type": "distractor",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "distractor-lantern-row-kiosk-071"
+        ]
+      },
+      "required_evidence": [
+        {
+          "marker": "March 27 Bellwater Fair",
+          "aliases": [
+            "Bellwater Fair on March 27",
+            "memory dated March 27"
+          ]
+        },
+        {
+          "marker": "Lantern Row kiosk",
+          "aliases": [
+            "site Lantern Row kiosk",
+            "the place Lantern Row kiosk"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "March 28 Bellwater Fair",
+          "aliases": [
+            "Bellwater Fair on March 28",
+            "wrong date March 28"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "hard",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 95
+    },
+    {
+      "id": "distractor-072",
+      "question": "Which place held the true profile detail for Yara, not the nearly identical place name?",
+      "expected_answer_type": "grounded_summary",
+      "test_type": "distractor",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "distractor-cloud-wharf-office-072"
+        ]
+      },
+      "required_evidence": [
+        {
+          "marker": "Cloud Wharf office",
+          "aliases": [
+            "true place Cloud Wharf office",
+            "the real location Cloud Wharf office"
+          ]
+        },
+        {
+          "marker": "linen wick",
+          "aliases": [
+            "profile detail linen wick",
+            "linen wick at Cloud Wharf office"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "Fox Hollow bridge",
+          "aliases": [
+            "similar place Fox Hollow bridge",
+            "wrong location Fox Hollow bridge"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "easy",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 110
+    },
+    {
+      "id": "distractor-073",
+      "question": "Which object belongs to Lev's archive scene at Ridge Post loft, not the similar object from Winter Choir Eve?",
+      "expected_answer_type": "grounded_summary",
+      "test_type": "distractor",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "distractor-ridge-post-loft-073"
+        ]
+      },
+      "required_evidence": [
+        {
+          "marker": "star ledger page",
+          "aliases": [
+            "true object star ledger page",
+            "star ledger page in Lev's archive scene"
+          ]
+        },
+        {
+          "marker": "Lev of Ridge Post loft",
+          "aliases": [
+            "Lev from Ridge Post loft",
+            "Ridge Post loft scene of Lev"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "rope bridge permit",
+          "aliases": [
+            "similar object rope bridge permit",
+            "wrong object rope bridge permit"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "medium",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 125
+    },
+    {
+      "id": "distractor-074",
+      "question": "Which memory event is the correct one for Raisa at Willow Courtyard well, and which similar event is only a distractor?",
+      "expected_answer_type": "grounded_summary",
+      "test_type": "distractor",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "distractor-willow-courtyard-well-074"
+        ]
+      },
+      "required_evidence": [
+        {
+          "marker": "Signal Lantern Morning at Willow Courtyard well",
+          "aliases": [
+            "Signal Lantern Morning memory at Willow Courtyard well",
+            "event Signal Lantern Morning in Willow Courtyard well"
+          ]
+        },
+        {
+          "marker": "lantern hook",
+          "aliases": [
+            "event detail lantern hook",
+            "lantern hook in the correct event"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "Bridgefire Supper at Willow Courtyard well",
+          "aliases": [
+            "Bridgefire Supper memory at Willow Courtyard well",
+            "wrong event Bridgefire Supper in Willow Courtyard well"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "hard",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 140
+    },
+    {
+      "id": "distractor-075",
+      "question": "Which Pavel kept the correct memory note at Bell Bridge square, not the similar entry for Talia?",
+      "expected_answer_type": "grounded_summary",
+      "test_type": "distractor",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "distractor-bell-bridge-square-075"
+        ]
+      },
+      "required_evidence": [
+        {
+          "marker": "Pavel of Bell Bridge square",
+          "aliases": [
+            "Pavel from Bell Bridge square",
+            "Bell Bridge square Pavel"
+          ]
+        },
+        {
+          "marker": "weathered camera strap",
+          "aliases": [
+            "correct object weathered camera strap",
+            "weathered camera strap in the true note"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "Talia of Bell Bridge square",
+          "aliases": [
+            "Talia from Bell Bridge square",
+            "Bell Bridge square Talia"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "easy",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 155
+    },
+    {
+      "id": "distractor-076",
+      "question": "Which date belongs to the real Bellwater Fair memory at Cedar Hill station rather than the similar notice?",
+      "expected_answer_type": "grounded_summary",
+      "test_type": "distractor",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "distractor-cedar-hill-station-076"
+        ]
+      },
+      "required_evidence": [
+        {
+          "marker": "March 14 Bellwater Fair",
+          "aliases": [
+            "Bellwater Fair on March 14",
+            "memory dated March 14"
+          ]
+        },
+        {
+          "marker": "Cedar Hill station",
+          "aliases": [
+            "site Cedar Hill station",
+            "the place Cedar Hill station"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "March 15 Bellwater Fair",
+          "aliases": [
+            "Bellwater Fair on March 15",
+            "wrong date March 15"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "medium",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 170
+    },
+    {
+      "id": "distractor-077",
+      "question": "Which place held the true profile detail for Damir, not the nearly identical place name?",
+      "expected_answer_type": "grounded_summary",
+      "test_type": "distractor",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "distractor-moon-mill-yard-077"
+        ]
+      },
+      "required_evidence": [
+        {
+          "marker": "Moon Mill yard",
+          "aliases": [
+            "true place Moon Mill yard",
+            "the real location Moon Mill yard"
+          ]
+        },
+        {
+          "marker": "tin key",
+          "aliases": [
+            "profile detail tin key",
+            "tin key at Moon Mill yard"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "Hollow Market arcade",
+          "aliases": [
+            "similar place Hollow Market arcade",
+            "wrong location Hollow Market arcade"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "hard",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 80
+    },
+    {
+      "id": "distractor-078",
+      "question": "Which object belongs to Nessa's archive scene at Winter Chapel porch, not the similar object from Winter Choir Eve?",
+      "expected_answer_type": "grounded_summary",
+      "test_type": "distractor",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "distractor-winter-chapel-porch-078"
+        ]
+      },
+      "required_evidence": [
+        {
+          "marker": "blue oar",
+          "aliases": [
+            "true object blue oar",
+            "blue oar in Nessa's archive scene"
+          ]
+        },
+        {
+          "marker": "Nessa of Winter Chapel porch",
+          "aliases": [
+            "Nessa from Winter Chapel porch",
+            "Winter Chapel porch scene of Nessa"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "copper token",
+          "aliases": [
+            "similar object copper token",
+            "wrong object copper token"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "easy",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 95
+    },
+    {
+      "id": "distractor-079",
+      "question": "Which memory event is the correct one for Milan at Marble stair hall, and which similar event is only a distractor?",
+      "expected_answer_type": "grounded_summary",
+      "test_type": "distractor",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "distractor-marble-stair-hall-079"
+        ]
+      },
+      "required_evidence": [
+        {
+          "marker": "Signal Lantern Morning at Marble stair hall",
+          "aliases": [
+            "Signal Lantern Morning memory at Marble stair hall",
+            "event Signal Lantern Morning in Marble stair hall"
+          ]
+        },
+        {
+          "marker": "willow basket",
+          "aliases": [
+            "event detail willow basket",
+            "willow basket in the correct event"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "Bridgefire Supper at Marble stair hall",
+          "aliases": [
+            "Bridgefire Supper memory at Marble stair hall",
+            "wrong event Bridgefire Supper in Marble stair hall"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "medium",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 110
+    },
+    {
+      "id": "distractor-080",
+      "question": "Which Mira kept the correct memory note at Star Basin gallery, not the similar entry for Tomas?",
+      "expected_answer_type": "grounded_summary",
+      "test_type": "distractor",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "distractor-star-basin-gallery-080"
+        ]
+      },
+      "required_evidence": [
+        {
+          "marker": "Mira of Star Basin gallery",
+          "aliases": [
+            "Mira from Star Basin gallery",
+            "Star Basin gallery Mira"
+          ]
+        },
+        {
+          "marker": "paper moon mask",
+          "aliases": [
+            "correct object paper moon mask",
+            "paper moon mask in the true note"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "Tomas of Star Basin gallery",
+          "aliases": [
+            "Tomas from Star Basin gallery",
+            "Star Basin gallery Tomas"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "hard",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 125
+    },
+    {
+      "id": "distractor-081",
+      "question": "Which date belongs to the real Bellwater Fair memory at North Bell workshop rather than the similar notice?",
+      "expected_answer_type": "grounded_summary",
+      "test_type": "distractor",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "distractor-north-bell-workshop-081"
+        ]
+      },
+      "required_evidence": [
+        {
+          "marker": "March 19 Bellwater Fair",
+          "aliases": [
+            "Bellwater Fair on March 19",
+            "memory dated March 19"
+          ]
+        },
+        {
+          "marker": "North Bell workshop",
+          "aliases": [
+            "site North Bell workshop",
+            "the place North Bell workshop"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "March 20 Bellwater Fair",
+          "aliases": [
+            "Bellwater Fair on March 20",
+            "wrong date March 20"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "easy",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 140
+    },
+    {
+      "id": "distractor-082",
+      "question": "Which place held the true profile detail for Kira, not the nearly identical place name?",
+      "expected_answer_type": "grounded_summary",
+      "test_type": "distractor",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "distractor-blue-trunk-cabin-082"
+        ]
+      },
+      "required_evidence": [
+        {
+          "marker": "Blue Trunk cabin",
+          "aliases": [
+            "true place Blue Trunk cabin",
+            "the real location Blue Trunk cabin"
+          ]
+        },
+        {
+          "marker": "copper wind vane pin",
+          "aliases": [
+            "profile detail copper wind vane pin",
+            "copper wind vane pin at Blue Trunk cabin"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "East Signal room",
+          "aliases": [
+            "similar place East Signal room",
+            "wrong location East Signal room"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "medium",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 155
+    },
+    {
+      "id": "distractor-083",
+      "question": "Which object belongs to Petar's archive scene at North Orchard lane, not the similar object from Winter Choir Eve?",
+      "expected_answer_type": "grounded_summary",
+      "test_type": "distractor",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "distractor-north-orchard-lane-083"
+        ]
+      },
+      "required_evidence": [
+        {
+          "marker": "coal stove hiss",
+          "aliases": [
+            "true object coal stove hiss",
+            "coal stove hiss in Petar's archive scene"
+          ]
+        },
+        {
+          "marker": "Petar of North Orchard lane",
+          "aliases": [
+            "Petar from North Orchard lane",
+            "North Orchard lane scene of Petar"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "amber lantern",
+          "aliases": [
+            "similar object amber lantern",
+            "wrong object amber lantern"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "hard",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 170
+    },
+    {
+      "id": "distractor-084",
+      "question": "Which memory event is the correct one for Anya at South Meadow arch, and which similar event is only a distractor?",
+      "expected_answer_type": "grounded_summary",
+      "test_type": "distractor",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "distractor-south-meadow-arch-084"
+        ]
+      },
+      "required_evidence": [
+        {
+          "marker": "Signal Lantern Morning at South Meadow arch",
+          "aliases": [
+            "Signal Lantern Morning memory at South Meadow arch",
+            "event Signal Lantern Morning in South Meadow arch"
+          ]
+        },
+        {
+          "marker": "violet ribbon",
+          "aliases": [
+            "event detail violet ribbon",
+            "violet ribbon in the correct event"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "Bridgefire Supper at South Meadow arch",
+          "aliases": [
+            "Bridgefire Supper memory at South Meadow arch",
+            "wrong event Bridgefire Supper in South Meadow arch"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "easy",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 80
+    },
+    {
+      "id": "distractor-085",
+      "question": "Which Stefan kept the correct memory note at Birch Ferry shed, not the similar entry for Yara?",
+      "expected_answer_type": "grounded_summary",
+      "test_type": "distractor",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "distractor-birch-ferry-shed-085"
+        ]
+      },
+      "required_evidence": [
+        {
+          "marker": "Stefan of Birch Ferry shed",
+          "aliases": [
+            "Stefan from Birch Ferry shed",
+            "Birch Ferry shed Stefan"
+          ]
+        },
+        {
+          "marker": "tuning fork",
+          "aliases": [
+            "correct object tuning fork",
+            "tuning fork in the true note"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "Yara of Birch Ferry shed",
+          "aliases": [
+            "Yara from Birch Ferry shed",
+            "Birch Ferry shed Yara"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "medium",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 95
+    },
+    {
+      "id": "distractor-086",
+      "question": "Which date belongs to the real Bellwater Fair memory at Lantern Row kiosk rather than the similar notice?",
+      "expected_answer_type": "grounded_summary",
+      "test_type": "distractor",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "distractor-lantern-row-kiosk-086"
+        ]
+      },
+      "required_evidence": [
+        {
+          "marker": "March 24 Bellwater Fair",
+          "aliases": [
+            "Bellwater Fair on March 24",
+            "memory dated March 24"
+          ]
+        },
+        {
+          "marker": "Lantern Row kiosk",
+          "aliases": [
+            "site Lantern Row kiosk",
+            "the place Lantern Row kiosk"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "March 25 Bellwater Fair",
+          "aliases": [
+            "Bellwater Fair on March 25",
+            "wrong date March 25"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "hard",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 110
+    },
+    {
+      "id": "distractor-087",
+      "question": "Which place held the true profile detail for Nikola, not the nearly identical place name?",
+      "expected_answer_type": "grounded_summary",
+      "test_type": "distractor",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "distractor-cloud-wharf-office-087"
+        ]
+      },
+      "required_evidence": [
+        {
+          "marker": "Cloud Wharf office",
+          "aliases": [
+            "true place Cloud Wharf office",
+            "the real location Cloud Wharf office"
+          ]
+        },
+        {
+          "marker": "oak barrel hoops",
+          "aliases": [
+            "profile detail oak barrel hoops",
+            "oak barrel hoops at Cloud Wharf office"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "Fox Hollow bridge",
+          "aliases": [
+            "similar place Fox Hollow bridge",
+            "wrong location Fox Hollow bridge"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "easy",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 125
+    },
+    {
+      "id": "distractor-088",
+      "question": "Which object belongs to Sonya's archive scene at Ridge Post loft, not the similar object from Winter Choir Eve?",
+      "expected_answer_type": "grounded_summary",
+      "test_type": "distractor",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "distractor-ridge-post-loft-088"
+        ]
+      },
+      "required_evidence": [
+        {
+          "marker": "blue glass jar",
+          "aliases": [
+            "true object blue glass jar",
+            "blue glass jar in Sonya's archive scene"
+          ]
+        },
+        {
+          "marker": "Sonya of Ridge Post loft",
+          "aliases": [
+            "Sonya from Ridge Post loft",
+            "Ridge Post loft scene of Sonya"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "juniper bundles",
+          "aliases": [
+            "similar object juniper bundles",
+            "wrong object juniper bundles"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "medium",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 140
+    },
+    {
+      "id": "distractor-089",
+      "question": "Which memory event is the correct one for Emil at Willow Courtyard well, and which similar event is only a distractor?",
+      "expected_answer_type": "grounded_summary",
+      "test_type": "distractor",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "distractor-willow-courtyard-well-089"
+        ]
+      },
+      "required_evidence": [
+        {
+          "marker": "Signal Lantern Morning at Willow Courtyard well",
+          "aliases": [
+            "Signal Lantern Morning memory at Willow Courtyard well",
+            "event Signal Lantern Morning in Willow Courtyard well"
+          ]
+        },
+        {
+          "marker": "canal route map",
+          "aliases": [
+            "event detail canal route map",
+            "canal route map in the correct event"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "Bridgefire Supper at Willow Courtyard well",
+          "aliases": [
+            "Bridgefire Supper memory at Willow Courtyard well",
+            "wrong event Bridgefire Supper in Willow Courtyard well"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "hard",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 155
+    },
+    {
+      "id": "distractor-090",
+      "question": "Which Selma kept the correct memory note at Bell Bridge square, not the similar entry for Damir?",
+      "expected_answer_type": "grounded_summary",
+      "test_type": "distractor",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "distractor-bell-bridge-square-090"
+        ]
+      },
+      "required_evidence": [
+        {
+          "marker": "Selma of Bell Bridge square",
+          "aliases": [
+            "Selma from Bell Bridge square",
+            "Bell Bridge square Selma"
+          ]
+        },
+        {
+          "marker": "cedar shovel",
+          "aliases": [
+            "correct object cedar shovel",
+            "cedar shovel in the true note"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "Damir of Bell Bridge square",
+          "aliases": [
+            "Damir from Bell Bridge square",
+            "Bell Bridge square Damir"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "easy",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 170
+    },
+    {
+      "id": "distractor-091",
+      "question": "Which date belongs to the real Bellwater Fair memory at Cedar Hill station rather than the similar notice?",
+      "expected_answer_type": "grounded_summary",
+      "test_type": "distractor",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "distractor-cedar-hill-station-091"
+        ]
+      },
+      "required_evidence": [
+        {
+          "marker": "March 11 Bellwater Fair",
+          "aliases": [
+            "Bellwater Fair on March 11",
+            "memory dated March 11"
+          ]
+        },
+        {
+          "marker": "Cedar Hill station",
+          "aliases": [
+            "site Cedar Hill station",
+            "the place Cedar Hill station"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "March 12 Bellwater Fair",
+          "aliases": [
+            "Bellwater Fair on March 12",
+            "wrong date March 12"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "medium",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 80
+    },
+    {
+      "id": "distractor-092",
+      "question": "Which place held the true profile detail for Zora, not the nearly identical place name?",
+      "expected_answer_type": "grounded_summary",
+      "test_type": "distractor",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "distractor-moon-mill-yard-092"
+        ]
+      },
+      "required_evidence": [
+        {
+          "marker": "Moon Mill yard",
+          "aliases": [
+            "true place Moon Mill yard",
+            "the real location Moon Mill yard"
+          ]
+        },
+        {
+          "marker": "moonflower cutting",
+          "aliases": [
+            "profile detail moonflower cutting",
+            "moonflower cutting at Moon Mill yard"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "Hollow Market arcade",
+          "aliases": [
+            "similar place Hollow Market arcade",
+            "wrong location Hollow Market arcade"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "hard",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 95
+    },
+    {
+      "id": "distractor-093",
+      "question": "Which object belongs to Vesna's archive scene at Winter Chapel porch, not the similar object from Winter Choir Eve?",
+      "expected_answer_type": "grounded_summary",
+      "test_type": "distractor",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "distractor-winter-chapel-porch-093"
+        ]
+      },
+      "required_evidence": [
+        {
+          "marker": "birch tea flask",
+          "aliases": [
+            "true object birch tea flask",
+            "birch tea flask in Vesna's archive scene"
+          ]
+        },
+        {
+          "marker": "Vesna of Winter Chapel porch",
+          "aliases": [
+            "Vesna from Winter Chapel porch",
+            "Winter Chapel porch scene of Vesna"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "lantern hook",
+          "aliases": [
+            "similar object lantern hook",
+            "wrong object lantern hook"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "easy",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 110
+    },
+    {
+      "id": "distractor-094",
+      "question": "Which memory event is the correct one for Elena at Marble stair hall, and which similar event is only a distractor?",
+      "expected_answer_type": "grounded_summary",
+      "test_type": "distractor",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "distractor-marble-stair-hall-094"
+        ]
+      },
+      "required_evidence": [
+        {
+          "marker": "Signal Lantern Morning at Marble stair hall",
+          "aliases": [
+            "Signal Lantern Morning memory at Marble stair hall",
+            "event Signal Lantern Morning in Marble stair hall"
+          ]
+        },
+        {
+          "marker": "saffron scarf",
+          "aliases": [
+            "event detail saffron scarf",
+            "saffron scarf in the correct event"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "Bridgefire Supper at Marble stair hall",
+          "aliases": [
+            "Bridgefire Supper memory at Marble stair hall",
+            "wrong event Bridgefire Supper in Marble stair hall"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "medium",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 125
+    },
+    {
+      "id": "distractor-095",
+      "question": "Which Ilya kept the correct memory note at Star Basin gallery, not the similar entry for Kira?",
+      "expected_answer_type": "grounded_summary",
+      "test_type": "distractor",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "distractor-star-basin-gallery-095"
+        ]
+      },
+      "required_evidence": [
+        {
+          "marker": "Ilya of Star Basin gallery",
+          "aliases": [
+            "Ilya from Star Basin gallery",
+            "Star Basin gallery Ilya"
+          ]
+        },
+        {
+          "marker": "carved shell comb",
+          "aliases": [
+            "correct object carved shell comb",
+            "carved shell comb in the true note"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "Kira of Star Basin gallery",
+          "aliases": [
+            "Kira from Star Basin gallery",
+            "Star Basin gallery Kira"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "hard",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 140
+    },
+    {
+      "id": "distractor-096",
+      "question": "Which date belongs to the real Bellwater Fair memory at North Bell workshop rather than the similar notice?",
+      "expected_answer_type": "grounded_summary",
+      "test_type": "distractor",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "distractor-north-bell-workshop-096"
+        ]
+      },
+      "required_evidence": [
+        {
+          "marker": "March 16 Bellwater Fair",
+          "aliases": [
+            "Bellwater Fair on March 16",
+            "memory dated March 16"
+          ]
+        },
+        {
+          "marker": "North Bell workshop",
+          "aliases": [
+            "site North Bell workshop",
+            "the place North Bell workshop"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "March 17 Bellwater Fair",
+          "aliases": [
+            "Bellwater Fair on March 17",
+            "wrong date March 17"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "easy",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 155
+    },
+    {
+      "id": "distractor-097",
+      "question": "Which place held the true profile detail for Boris, not the nearly identical place name?",
+      "expected_answer_type": "grounded_summary",
+      "test_type": "distractor",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "distractor-blue-trunk-cabin-097"
+        ]
+      },
+      "required_evidence": [
+        {
+          "marker": "Blue Trunk cabin",
+          "aliases": [
+            "true place Blue Trunk cabin",
+            "the real location Blue Trunk cabin"
+          ]
+        },
+        {
+          "marker": "basalt sketch",
+          "aliases": [
+            "profile detail basalt sketch",
+            "basalt sketch at Blue Trunk cabin"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "East Signal room",
+          "aliases": [
+            "similar place East Signal room",
+            "wrong location East Signal room"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "medium",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 170
+    },
+    {
+      "id": "distractor-098",
+      "question": "Which object belongs to Daria's archive scene at North Orchard lane, not the similar object from Winter Choir Eve?",
+      "expected_answer_type": "grounded_summary",
+      "test_type": "distractor",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "distractor-north-orchard-lane-098"
+        ]
+      },
+      "required_evidence": [
+        {
+          "marker": "green apron",
+          "aliases": [
+            "true object green apron",
+            "green apron in Daria's archive scene"
+          ]
+        },
+        {
+          "marker": "Daria of North Orchard lane",
+          "aliases": [
+            "Daria from North Orchard lane",
+            "North Orchard lane scene of Daria"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "willow basket",
+          "aliases": [
+            "similar object willow basket",
+            "wrong object willow basket"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "hard",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 80
+    },
+    {
+      "id": "distractor-099",
+      "question": "Which memory event is the correct one for Oren at South Meadow arch, and which similar event is only a distractor?",
+      "expected_answer_type": "grounded_summary",
+      "test_type": "distractor",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "distractor-south-meadow-arch-099"
+        ]
+      },
+      "required_evidence": [
+        {
+          "marker": "Signal Lantern Morning at South Meadow arch",
+          "aliases": [
+            "Signal Lantern Morning memory at South Meadow arch",
+            "event Signal Lantern Morning in South Meadow arch"
+          ]
+        },
+        {
+          "marker": "silver booth token",
+          "aliases": [
+            "event detail silver booth token",
+            "silver booth token in the correct event"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "Bridgefire Supper at South Meadow arch",
+          "aliases": [
+            "Bridgefire Supper memory at South Meadow arch",
+            "wrong event Bridgefire Supper in South Meadow arch"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "easy",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 95
+    },
+    {
+      "id": "distractor-100",
+      "question": "Which Ada kept the correct memory note at Birch Ferry shed, not the similar entry for Nikola?",
+      "expected_answer_type": "grounded_summary",
+      "test_type": "distractor",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": [
+          "distractor-birch-ferry-shed-100"
+        ]
+      },
+      "required_evidence": [
+        {
+          "marker": "Ada of Birch Ferry shed",
+          "aliases": [
+            "Ada from Birch Ferry shed",
+            "Birch Ferry shed Ada"
+          ]
+        },
+        {
+          "marker": "clay watering cup",
+          "aliases": [
+            "correct object clay watering cup",
+            "clay watering cup in the true note"
+          ]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "Nikola of Birch Ferry shed",
+          "aliases": [
+            "Nikola from Birch Ferry shed",
+            "Birch Ferry shed Nikola"
+          ]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "medium",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 110
     }
   ]
 }
