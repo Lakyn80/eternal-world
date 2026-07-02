@@ -325,12 +325,20 @@ def test_real_question_eval_compares_both_candidates_writes_report_and_verifies_
     assert "Purpose: retrieval quality testing" in markdown_text
     assert result.artifact_paths.latest_markdown_report is not None
     assert result.artifact_paths.latest_json_result is not None
+    assert result.artifact_paths.latest_markdown_summary is not None
+    assert result.artifact_paths.latest_json_summary is not None
     assert result.artifact_paths.archived_markdown_report is not None
     assert result.artifact_paths.archived_json_result is not None
+    assert result.artifact_paths.archived_markdown_summary is not None
+    assert result.artifact_paths.archived_json_summary is not None
     assert Path(result.artifact_paths.latest_markdown_report).exists()
     assert Path(result.artifact_paths.latest_json_result).exists()
+    assert Path(result.artifact_paths.latest_markdown_summary).exists()
+    assert Path(result.artifact_paths.latest_json_summary).exists()
     assert Path(result.artifact_paths.archived_markdown_report).exists()
     assert Path(result.artifact_paths.archived_json_result).exists()
+    assert Path(result.artifact_paths.archived_markdown_summary).exists()
+    assert Path(result.artifact_paths.archived_json_summary).exists()
 
     latest_json_payload = json.loads(Path(result.artifact_paths.latest_json_result).read_text(encoding="utf-8"))
     assert latest_json_payload["run_id"] == result.run_id
@@ -341,8 +349,11 @@ def test_real_question_eval_compares_both_candidates_writes_report_and_verifies_
     assert latest_json_payload["used_fake_models"] is True
     assert "latest_fake" in latest_json_payload["artifact_paths"]["latest_markdown_report"]
     assert "latest_fake" in latest_json_payload["artifact_paths"]["latest_json_result"]
+    assert "latest_fake" in latest_json_payload["artifact_paths"]["latest_markdown_summary"]
+    assert "latest_fake" in latest_json_payload["artifact_paths"]["latest_json_summary"]
     assert latest_json_payload["artifact_paths"]["latest_markdown_report"] == result.artifact_paths.latest_markdown_report
     assert latest_json_payload["artifact_paths"]["archived_json_result"] == result.artifact_paths.archived_json_result
+    assert latest_json_payload["artifact_paths"]["latest_json_summary"] == result.artifact_paths.latest_json_summary
     assert latest_json_payload["client_view"]["overall_winner"] == "bge_m3"
     assert latest_json_payload["client_view"]["recommended_active_model"] == "bge_m3"
     assert latest_json_payload["client_view"]["questions"]
@@ -352,7 +363,33 @@ def test_real_question_eval_compares_both_candidates_writes_report_and_verifies_
     assert latest_json_payload["developer_view"]["activated_config"]
     assert latest_json_payload["developer_view"]["runtime_retrieval_verification"]
     assert latest_json_payload["client_view"]["questions"][0]["model_summaries"]
+    assert latest_json_payload["developer_view"]["questions"][0]["test_type"] is None
     assert latest_json_payload["developer_view"]["questions"][0]["model_results"][0]["top_chunks"][0]["rank"] == 1
+
+    latest_summary_payload = json.loads(Path(result.artifact_paths.latest_json_summary).read_text(encoding="utf-8"))
+    assert latest_summary_payload["run_id"] == result.run_id
+    assert latest_summary_payload["created_at"] == result.generated_at
+    assert latest_summary_payload["run_mode"] == "fake_eval"
+    assert latest_summary_payload["dataset_name"] == result.dataset_name
+    assert latest_summary_payload["dataset_id"] == result.dataset_id
+    assert latest_summary_payload["dataset_file"] is None
+    assert latest_summary_payload["status"] == "PASS"
+    assert latest_summary_payload["overall_winner"] == "bge_m3"
+    assert latest_summary_payload["total_questions"] == 3
+    assert latest_summary_payload["models"] == ["multilingual_e5_small", "bge_m3"]
+    assert len(latest_summary_payload["model_results"]) == 2
+    assert len(latest_summary_payload["question_results"]) == 6
+    assert latest_summary_payload["question_results"][0]["test_type"] is None
+    assert isinstance(latest_summary_payload["question_results"][0]["missing_evidence"], list)
+    assert isinstance(latest_summary_payload["question_results"][0]["forbidden_evidence_hits"], list)
+
+    latest_summary_markdown = Path(result.artifact_paths.latest_markdown_summary).read_text(encoding="utf-8")
+    assert "# Real Question Eval Summary" in latest_summary_markdown
+    assert "## Run" in latest_summary_markdown
+    assert "## Model Results" in latest_summary_markdown
+    assert "## Question Results" in latest_summary_markdown
+    assert "| model | status | passed | total | coverage | missing | distractors | latency_ms | winner |" in latest_summary_markdown
+    assert "| question_id | test_type | model | status | coverage | missing | forbidden_hits | distractors | latency_ms |" in latest_summary_markdown
 
     for question_result in result.question_results:
         assert len(question_result.model_results) == 2
@@ -481,8 +518,12 @@ def test_real_question_eval_script_output_prints_latest_and_archived_artifact_pa
     captured = capsys.readouterr()
     assert "latest_markdown_report:" in captured.out
     assert "latest_json_result:" in captured.out
+    assert "latest_markdown_summary:" in captured.out
+    assert "latest_json_summary:" in captured.out
     assert "archived_markdown_report:" in captured.out
     assert "archived_json_result:" in captured.out
+    assert "archived_markdown_summary:" in captured.out
+    assert "archived_json_summary:" in captured.out
     assert "execution_mode: fake_eval" in captured.out
     assert "latest_fake" in captured.out
 

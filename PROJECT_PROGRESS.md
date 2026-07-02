@@ -3658,6 +3658,59 @@ Scope confirmation:
 - production retrieval runtime behavior was not changed
 - frontend was not changed
 - billing/chat behavior was not changed
+
+## Task 52 Follow-up Automatic Summary Artifacts
+
+Goal:
+
+- make every Real Question Eval run automatically write compact but complete summary artifacts alongside the existing report and raw result artifacts
+
+What was added:
+
+- automatic summary artifacts for every successful/failing Real Question Eval write path:
+  - `backend/artifacts/real_question_eval/latest_*/real_question_eval_summary.json`
+  - `backend/artifacts/real_question_eval/latest_*/real_question_eval_summary.md`
+  - `backend/artifacts/real_question_eval/runs/<run_id>_*/real_question_eval_summary.json`
+  - `backend/artifacts/real_question_eval/runs/<run_id>_*/real_question_eval_summary.md`
+- reporter update:
+  - `backend/scripts/print_real_question_eval_summary.py` now prefers `real_question_eval_summary.json`
+  - falls back to legacy `real_question_eval_result.json` parsing when summary JSON is missing
+
+Summary JSON contents:
+
+- run metadata:
+  - `run_id`
+  - `created_at`
+  - `run_mode`
+  - `dataset_name`
+  - `dataset_id`
+  - `dataset_file`
+  - `status`
+  - `overall_winner`
+  - `total_questions`
+  - `models`
+- per-model rows under `model_results`
+- flattened per-question/per-model rows under `question_results`
+
+Summary Markdown contents:
+
+- title and run metadata section
+- dataset metadata
+- status and overall winner
+- total question count
+- model results markdown table
+- question results markdown table
+
+Verification scope:
+
+- fake-safe/local tests only
+- no scoring changes
+- no retrieval logic changes
+- no provider selection changes
+- no active retrieval config changes
+- no production runtime behavior changes
+- no benchmarks were intentionally rerun
+- no model downloads were triggered
 - `latest_full_version_batch_*` artifacts were not overwritten
 
 ## Task 52 Extended Validation Datasets
@@ -3741,3 +3794,52 @@ Scope confirmation:
 - frontend was not changed
 - billing/chat behavior was not changed
 - `latest_full_version_batch_*` artifacts were not overwritten
+
+## Task 52 Follow-up Compact Eval Summary Reporter
+
+Goal:
+
+- add a compact human-readable reporter for real question eval artifacts after the expanded fake validation runs
+- expose dataset/run metadata plus per-model pass and evidence metrics without changing scoring or retrieval behavior
+
+What was added:
+
+- reporter script:
+  - `backend/scripts/print_real_question_eval_summary.py`
+- reporter tests:
+  - `backend/tests/test_print_real_question_eval_summary.py`
+
+How to run it:
+
+- from `backend/`:
+  - `python scripts/print_real_question_eval_summary.py --latest 5`
+  - `python scripts/print_real_question_eval_summary.py --latest-fake`
+  - `python scripts/print_real_question_eval_summary.py --runs-dir artifacts/real_question_eval/runs --latest 5`
+  - `python scripts/print_real_question_eval_summary.py --run-dir artifacts/real_question_eval/runs/<run_folder>`
+
+Artifact metrics note:
+
+- current real question eval artifacts already include per-model compactable metrics under:
+  - `developer_view.aggregate_results`
+- the reporter reads those existing fields and renders:
+  - passed questions
+  - total questions
+  - evidence coverage
+  - missing evidence count
+  - distractor / false-positive count
+  - latency when present
+- no new scoring logic was introduced
+- no `summary.json` artifact was required for this follow-up because the needed per-model metrics are already present in current artifact JSON
+
+Verification scope:
+
+- only fake-safe/local tests were run
+- no benchmarks were rerun
+- no model downloads were triggered
+
+Scope confirmation:
+
+- active retrieval provider was not changed
+- production retrieval runtime behavior was not changed
+- frontend was not changed
+- billing/chat behavior was not changed

@@ -90,6 +90,7 @@ class RealQuestionEvalModelResult(BaseModel):
 class RealQuestionEvalQuestionResult(BaseModel):
     question_id: str
     question_text: str
+    test_type: str | None = None
     expected_markers: list[str] = Field(default_factory=list)
     forbidden_markers: list[str] = Field(default_factory=list)
     model_results: list[RealQuestionEvalModelResult] = Field(default_factory=list)
@@ -113,8 +114,12 @@ class RealQuestionEvalAggregateModelResult(BaseModel):
 class RealQuestionEvalArtifactPaths(BaseModel):
     latest_markdown_report: str | None = None
     latest_json_result: str | None = None
+    latest_markdown_summary: str | None = None
+    latest_json_summary: str | None = None
     archived_markdown_report: str | None = None
     archived_json_result: str | None = None
+    archived_markdown_summary: str | None = None
+    archived_json_summary: str | None = None
 
 
 class RealQuestionEvalResult(BaseModel):
@@ -141,6 +146,7 @@ class RealQuestionEvalResult(BaseModel):
     job_id: int | None = None
     dataset_id: str = ""
     dataset_name: str = ""
+    dataset_file: str | None = None
     source_chunk_count: int = 0
     compared_models: list[str] = Field(default_factory=list)
     question_results: list[RealQuestionEvalQuestionResult] = Field(default_factory=list)

@@ -256,8 +256,12 @@ def _print_text_result(result) -> None:
     print(f"runtime_verified: {str(result.runtime_verified).lower()}")
     print(f"latest_markdown_report: {result.artifact_paths.latest_markdown_report}")
     print(f"latest_json_result: {result.artifact_paths.latest_json_result}")
+    print(f"latest_markdown_summary: {result.artifact_paths.latest_markdown_summary}")
+    print(f"latest_json_summary: {result.artifact_paths.latest_json_summary}")
     print(f"archived_markdown_report: {result.artifact_paths.archived_markdown_report}")
     print(f"archived_json_result: {result.artifact_paths.archived_json_result}")
+    print(f"archived_markdown_summary: {result.artifact_paths.archived_markdown_summary}")
+    print(f"archived_json_summary: {result.artifact_paths.archived_json_summary}")
     print()
 
     for question_result in result.question_results:

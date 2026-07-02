@@ -69,8 +69,12 @@ def build_real_question_eval_markdown(result: RealQuestionEvalResult) -> str:
             "## Artifact Files",
             f"- Latest Markdown: `{result.artifact_paths.latest_markdown_report or 'n/a'}`",
             f"- Latest JSON: `{result.artifact_paths.latest_json_result or 'n/a'}`",
+            f"- Latest Summary Markdown: `{result.artifact_paths.latest_markdown_summary or 'n/a'}`",
+            f"- Latest Summary JSON: `{result.artifact_paths.latest_json_summary or 'n/a'}`",
             f"- Archived Markdown: `{result.artifact_paths.archived_markdown_report or 'n/a'}`",
             f"- Archived JSON: `{result.artifact_paths.archived_json_result or 'n/a'}`",
+            f"- Archived Summary Markdown: `{result.artifact_paths.archived_markdown_summary or 'n/a'}`",
+            f"- Archived Summary JSON: `{result.artifact_paths.archived_json_summary or 'n/a'}`",
             "",
             "## Client Question Breakdown",
         ]
@@ -331,8 +335,12 @@ def build_real_question_eval_benchmark_batch_markdown(result: RealQuestionEvalRe
             "## Artifact Files",
             f"- Latest Markdown: `{result.artifact_paths.latest_markdown_report or 'n/a'}`",
             f"- Latest JSON: `{result.artifact_paths.latest_json_result or 'n/a'}`",
+            f"- Latest Summary Markdown: `{result.artifact_paths.latest_markdown_summary or 'n/a'}`",
+            f"- Latest Summary JSON: `{result.artifact_paths.latest_json_summary or 'n/a'}`",
             f"- Archived Markdown: `{result.artifact_paths.archived_markdown_report or 'n/a'}`",
             f"- Archived JSON: `{result.artifact_paths.archived_json_result or 'n/a'}`",
+            f"- Archived Summary Markdown: `{result.artifact_paths.archived_markdown_summary or 'n/a'}`",
+            f"- Archived Summary JSON: `{result.artifact_paths.archived_json_summary or 'n/a'}`",
             "",
             "## Developer Details",
             "",
@@ -382,6 +390,7 @@ def build_real_question_eval_json_payload(result: RealQuestionEvalResult) -> dic
         "historical_providers": list(result.historical_providers),
         "new_real_providers": list(result.new_real_providers),
         "timestamp": result.generated_at,
+        "dataset_file": result.dataset_file,
         "used_fake_models": result.used_fake_models,
         "status": "PASS" if result.passed else "FAIL",
         "benchmark_status": result.benchmark_status,
@@ -438,6 +447,7 @@ def build_real_question_eval_client_view(result: RealQuestionEvalResult) -> dict
             {
                 "question_id": question_result.question_id,
                 "question": question_result.question_text,
+                "test_type": question_result.test_type,
                 "expected_markers": list(question_result.expected_markers),
                 "expected_distractors": list(question_result.forbidden_markers),
                 "winner": question_result.winner_model_code,
@@ -574,6 +584,7 @@ def build_real_question_eval_developer_view(result: RealQuestionEvalResult) -> d
             {
                 "question_id": question_result.question_id,
                 "question": question_result.question_text,
+                "test_type": question_result.test_type,
                 "expected_markers": list(question_result.expected_markers),
                 "expected_distractors": list(question_result.forbidden_markers),
                 "winner": question_result.winner_model_code,
@@ -677,6 +688,177 @@ def _resolve_artifact_variant(*, result: RealQuestionEvalResult) -> str:
     return _resolve_run_type(result=result)
 
 
+def _format_status(value: bool | None) -> str | None:
+    if value is None:
+        return None
+    return "PASS" if value else "FAIL"
+
+
+def _format_optional_float(value: float | None, *, decimals: int = 4) -> str:
+    if value is None:
+        return "n/a"
+    return f"{value:.{decimals}f}"
+
+
+def _format_optional_value(value: object) -> str:
+    if value is None:
+        return "n/a"
+    if isinstance(value, list):
+        return ", ".join(str(item) for item in value) or "none"
+    return str(value)
+
+
+def _escape_markdown_cell(value: object) -> str:
+    return _format_optional_value(value).replace("|", "\\|").replace("\n", " ")
+
+
+def _build_markdown_table(*, headers: list[str], rows: list[list[object]]) -> list[str]:
+    lines = [
+        "| " + " | ".join(headers) + " |",
+        "|" + "|".join("---" for _ in headers) + "|",
+    ]
+    for row in rows:
+        lines.append("| " + " | ".join(_escape_markdown_cell(cell) for cell in row) + " |")
+    return lines
+
+
+def _build_summary_model_results(result: RealQuestionEvalResult) -> list[dict[str, object]]:
+    total_questions = len(result.question_results) or None
+    return [
+        {
+            "model": aggregate_result.model_code,
+            "status": _format_status(
+                aggregate_result.passed_questions == total_questions if total_questions is not None else None
+            ),
+            "passed_questions": aggregate_result.passed_questions,
+            "total_questions": total_questions,
+            "evidence_coverage": aggregate_result.average_evidence_coverage,
+            "missing_evidence": aggregate_result.total_missing_markers,
+            "distractors": aggregate_result.total_false_positive_markers,
+            "false_positives": (
+                aggregate_result.official_metrics.get("false_positive_count")
+                if isinstance(aggregate_result.official_metrics, dict)
+                and aggregate_result.official_metrics.get("false_positive_count") is not None
+                else aggregate_result.total_false_positive_markers
+            ),
+            "latency_ms": (
+                aggregate_result.official_metrics.get("average_latency_ms")
+                if isinstance(aggregate_result.official_metrics, dict)
+                else None
+            ),
+            "average_latency_ms": (
+                aggregate_result.official_metrics.get("average_latency_ms")
+                if isinstance(aggregate_result.official_metrics, dict)
+                else None
+            ),
+            "is_winner": aggregate_result.model_code == result.overall_winner_model_code,
+        }
+        for aggregate_result in result.aggregate_results
+    ]
+
+
+def _build_summary_question_results(result: RealQuestionEvalResult) -> list[dict[str, object]]:
+    rows: list[dict[str, object]] = []
+    for question_result in result.question_results:
+        for model_result in question_result.model_results:
+            rows.append(
+                {
+                    "question_id": question_result.question_id,
+                    "question": question_result.question_text,
+                    "test_type": question_result.test_type,
+                    "model": model_result.model_code,
+                    "status": _format_status(model_result.passed),
+                    "evidence_coverage": model_result.evidence_coverage,
+                    "missing_evidence": list(model_result.missing_expected_markers),
+                    "forbidden_evidence_hits": list(model_result.false_positive_markers),
+                    "distractors": list(model_result.false_positive_markers),
+                    "latency_ms": None,
+                }
+            )
+    return rows
+
+
+def build_real_question_eval_summary_json_payload(result: RealQuestionEvalResult) -> dict[str, object]:
+    return {
+        "run_id": result.run_id,
+        "created_at": result.generated_at,
+        "run_mode": result.execution_mode or _resolve_execution_mode(result=result),
+        "dataset_name": result.dataset_name,
+        "dataset_id": result.dataset_id,
+        "dataset_file": result.dataset_file,
+        "status": "PASS" if result.passed else "FAIL",
+        "overall_winner": result.overall_winner_model_code,
+        "total_questions": len(result.question_results),
+        "models": list(result.compared_models),
+        "model_results": _build_summary_model_results(result),
+        "question_results": _build_summary_question_results(result),
+    }
+
+
+def build_real_question_eval_summary_markdown(result: RealQuestionEvalResult) -> str:
+    summary_payload = build_real_question_eval_summary_json_payload(result)
+    model_rows = [
+        [
+            item.get("model"),
+            item.get("status"),
+            item.get("passed_questions"),
+            item.get("total_questions"),
+            _format_optional_float(item.get("evidence_coverage"), decimals=4),
+            item.get("missing_evidence"),
+            item.get("distractors"),
+            _format_optional_float(item.get("average_latency_ms"), decimals=1)
+            if item.get("average_latency_ms") is not None
+            else None,
+            "yes" if item.get("is_winner") else "no",
+        ]
+        for item in summary_payload["model_results"]
+    ]
+    question_rows = [
+        [
+            item.get("question_id"),
+            item.get("test_type"),
+            item.get("model"),
+            item.get("status"),
+            _format_optional_float(item.get("evidence_coverage"), decimals=4),
+            item.get("missing_evidence"),
+            item.get("forbidden_evidence_hits"),
+            item.get("distractors"),
+            _format_optional_float(item.get("latency_ms"), decimals=1) if item.get("latency_ms") is not None else None,
+        ]
+        for item in summary_payload["question_results"]
+    ]
+    lines = [
+        "# Real Question Eval Summary",
+        "",
+        "## Run",
+        f"- Run ID: `{summary_payload['run_id'] or 'unknown'}`",
+        f"- Created: `{summary_payload['created_at'] or 'unknown'}`",
+        f"- Mode: `{summary_payload['run_mode'] or 'unknown'}`",
+        f"- Dataset: `{summary_payload['dataset_name'] or 'unknown'}`",
+        f"- Dataset ID: `{summary_payload['dataset_id'] or 'unknown'}`",
+        f"- Dataset file: `{summary_payload['dataset_file'] or 'n/a'}`",
+        f"- Status: `{summary_payload['status']}`",
+        f"- Overall winner: `{summary_payload['overall_winner'] or 'unknown'}`",
+        f"- Total questions: `{summary_payload['total_questions']}`",
+        "",
+        "## Model Results",
+        "",
+        *_build_markdown_table(
+            headers=["model", "status", "passed", "total", "coverage", "missing", "distractors", "latency_ms", "winner"],
+            rows=model_rows,
+        ),
+        "",
+        "## Question Results",
+        "",
+        *_build_markdown_table(
+            headers=["question_id", "test_type", "model", "status", "coverage", "missing", "forbidden_hits", "distractors", "latency_ms"],
+            rows=question_rows,
+        ),
+        "",
+    ]
+    return "\n".join(lines)
+
+
 def build_real_question_eval_artifact_paths(*, artifact_dir: Path, run_id: str) -> RealQuestionEvalArtifactPaths:
     raise NotImplementedError("Use build_real_question_eval_artifact_paths_for_result")
 
@@ -693,8 +875,12 @@ def build_real_question_eval_artifact_paths_for_result(
     return RealQuestionEvalArtifactPaths(
         latest_markdown_report=str(latest_dir / "real_question_eval_report.md"),
         latest_json_result=str(latest_dir / "real_question_eval_result.json"),
+        latest_markdown_summary=str(latest_dir / "real_question_eval_summary.md"),
+        latest_json_summary=str(latest_dir / "real_question_eval_summary.json"),
         archived_markdown_report=str(archived_dir / "real_question_eval_report.md"),
         archived_json_result=str(archived_dir / "real_question_eval_result.json"),
+        archived_markdown_summary=str(archived_dir / "real_question_eval_summary.md"),
+        archived_json_summary=str(archived_dir / "real_question_eval_summary.json"),
     )
 
 
@@ -714,20 +900,31 @@ def write_real_question_eval_artifacts(*, artifact_dir: Path, result: RealQuesti
 
     latest_markdown_path = Path(artifact_paths.latest_markdown_report)
     latest_json_path = Path(artifact_paths.latest_json_result)
+    latest_summary_markdown_path = Path(artifact_paths.latest_markdown_summary)
+    latest_summary_json_path = Path(artifact_paths.latest_json_summary)
     archived_markdown_path = Path(artifact_paths.archived_markdown_report)
     archived_json_path = Path(artifact_paths.archived_json_result)
+    archived_summary_markdown_path = Path(artifact_paths.archived_markdown_summary)
+    archived_summary_json_path = Path(artifact_paths.archived_json_summary)
 
     latest_markdown_path.parent.mkdir(parents=True, exist_ok=True)
     archived_markdown_path.parent.mkdir(parents=True, exist_ok=True)
 
     markdown_content = build_real_question_eval_markdown(result)
     json_payload = build_real_question_eval_json_payload(result)
+    summary_markdown_content = build_real_question_eval_summary_markdown(result)
+    summary_json_payload = build_real_question_eval_summary_json_payload(result)
     json_content = json.dumps(json_payload, indent=2, ensure_ascii=False) + "\n"
+    summary_json_content = json.dumps(summary_json_payload, indent=2, ensure_ascii=False) + "\n"
 
     latest_markdown_path.write_text(markdown_content, encoding="utf-8")
     latest_json_path.write_text(json_content, encoding="utf-8")
+    latest_summary_markdown_path.write_text(summary_markdown_content, encoding="utf-8")
+    latest_summary_json_path.write_text(summary_json_content, encoding="utf-8")
     archived_markdown_path.write_text(markdown_content, encoding="utf-8")
     archived_json_path.write_text(json_content, encoding="utf-8")
+    archived_summary_markdown_path.write_text(summary_markdown_content, encoding="utf-8")
+    archived_summary_json_path.write_text(summary_json_content, encoding="utf-8")
     if result.run_type in {"fake", "real"}:
         _ensure_other_latest_variant_preserved(artifact_dir=artifact_dir, current_run_type=result.run_type)
 
@@ -739,17 +936,31 @@ def _ensure_other_latest_variant_preserved(*, artifact_dir: Path, current_run_ty
     latest_dir = artifact_dir / f"latest_{other_run_type}"
     latest_markdown_path = latest_dir / "real_question_eval_report.md"
     latest_json_path = latest_dir / "real_question_eval_result.json"
-    if latest_markdown_path.exists() and latest_json_path.exists():
-        return
+    latest_summary_markdown_path = latest_dir / "real_question_eval_summary.md"
+    latest_summary_json_path = latest_dir / "real_question_eval_summary.json"
 
     source_pair = _find_latest_existing_run_pair(artifact_dir=artifact_dir, run_type=other_run_type)
+    if latest_markdown_path.exists() and latest_json_path.exists() and (
+        latest_summary_markdown_path.exists() or source_pair is None
+    ) and (
+        latest_summary_json_path.exists() or source_pair is None
+    ):
+        return
     if source_pair is None:
         return
 
     source_markdown_path, source_json_path = source_pair
     latest_dir.mkdir(parents=True, exist_ok=True)
-    shutil.copyfile(source_markdown_path, latest_markdown_path)
-    shutil.copyfile(source_json_path, latest_json_path)
+    if not latest_markdown_path.exists():
+        shutil.copyfile(source_markdown_path, latest_markdown_path)
+    if not latest_json_path.exists():
+        shutil.copyfile(source_json_path, latest_json_path)
+    source_summary_markdown_path = source_markdown_path.with_name("real_question_eval_summary.md")
+    source_summary_json_path = source_json_path.with_name("real_question_eval_summary.json")
+    if not latest_summary_markdown_path.exists() and source_summary_markdown_path.exists():
+        shutil.copyfile(source_summary_markdown_path, latest_summary_markdown_path)
+    if not latest_summary_json_path.exists() and source_summary_json_path.exists():
+        shutil.copyfile(source_summary_json_path, latest_summary_json_path)
 
 
 def _find_latest_existing_run_pair(*, artifact_dir: Path, run_type: str) -> tuple[Path, Path] | None:

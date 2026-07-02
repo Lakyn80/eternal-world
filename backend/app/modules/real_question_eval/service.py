@@ -531,6 +531,7 @@ class RealQuestionEvalRunner:
                     job_id=background_job.id,
                     dataset_id=request_payload.dataset.dataset_id,
                     dataset_name=request_payload.dataset.name,
+                    dataset_file=str(self.config.dataset_path.resolve()) if self.config.dataset_path is not None else None,
                     source_chunk_count=source_chunk_count,
                     compared_models=[candidate.model_code for candidate in request_payload.candidates],
                     question_results=question_results,
@@ -569,6 +570,7 @@ class RealQuestionEvalRunner:
                 used_fake_models=not self.config.use_real_local_models,
                 run_type=_resolve_configured_run_type(self.config),
                 execution_mode=_resolve_configured_execution_mode(self.config),
+                dataset_file=str(self.config.dataset_path.resolve()) if self.config.dataset_path is not None else None,
                 error=f"{exc.__class__.__name__}: {exc}",
                 benchmark_status="failed",
                 incomplete_reason=f"{exc.__class__.__name__}: {exc}",
@@ -781,6 +783,7 @@ class RealQuestionEvalRunner:
                 RealQuestionEvalQuestionResult(
                     question_id=case.case_id,
                     question_text=case.query,
+                    test_type=getattr(case, "test_type", None),
                     expected_markers=list(case.expected_markers),
                     forbidden_markers=list(case.forbidden_markers),
                     model_results=model_results,
@@ -1233,6 +1236,11 @@ def _build_historical_question_results(payload: dict[str, object]) -> list[RealQ
             RealQuestionEvalQuestionResult(
                 question_id=str(question_payload["question_id"]),
                 question_text=str(question_payload["question"]),
+                test_type=(
+                    str(question_payload["test_type"])
+                    if question_payload.get("test_type") is not None
+                    else None
+                ),
                 expected_markers=[str(item) for item in question_payload.get("expected_markers", [])],
                 forbidden_markers=[str(item) for item in question_payload.get("expected_distractors", [])],
                 model_results=model_results,
@@ -1744,6 +1752,7 @@ def _build_result_from_json_payload(payload: dict[str, object]) -> RealQuestionE
         run_id=str(payload.get("run_id") or "") or None,
         dataset_id=str(dataset_payload.get("id") or ""),
         dataset_name=str(dataset_payload.get("name") or ""),
+        dataset_file=str(payload.get("dataset_file") or "") or None,
         compared_models=[
             str(item)
             for item in developer_view.get("models_compared", client_view.get("models_compared", []))
@@ -2065,6 +2074,7 @@ def run_incremental_real_question_eval(
         job_id=new_provider_result.job_id,
         dataset_id=new_provider_result.dataset_id,
         dataset_name=new_provider_result.dataset_name,
+        dataset_file=new_provider_result.dataset_file,
         source_chunk_count=new_provider_result.source_chunk_count,
         compared_models=combined_model_codes,
         question_results=combined_question_results,
@@ -2211,6 +2221,7 @@ def run_full_version_batch_a_question_eval(
         job_id=new_provider_result.job_id,
         dataset_id=new_provider_result.dataset_id,
         dataset_name=new_provider_result.dataset_name,
+        dataset_file=new_provider_result.dataset_file,
         source_chunk_count=new_provider_result.source_chunk_count,
         compared_models=combined_model_codes,
         question_results=combined_question_results,
@@ -2380,6 +2391,7 @@ def run_full_version_batch_b_question_eval(
         job_id=new_provider_result.job_id,
         dataset_id=new_provider_result.dataset_id,
         dataset_name=new_provider_result.dataset_name,
+        dataset_file=new_provider_result.dataset_file,
         source_chunk_count=new_provider_result.source_chunk_count,
         compared_models=combined_model_codes,
         question_results=combined_question_results,
@@ -2543,6 +2555,7 @@ def run_full_version_batch_c_question_eval(
         job_id=new_provider_result.job_id,
         dataset_id=new_provider_result.dataset_id,
         dataset_name=new_provider_result.dataset_name,
+        dataset_file=new_provider_result.dataset_file,
         source_chunk_count=new_provider_result.source_chunk_count,
         compared_models=combined_model_codes,
         question_results=combined_question_results,
@@ -2655,6 +2668,7 @@ def run_full_version_batch_d_question_eval(
             any_new_provider_beat_historical_winner=False,
             dataset_id=REAL_QUESTION_EVAL_DATASET_ID,
             dataset_name=REAL_QUESTION_EVAL_DATASET_NAME,
+            dataset_file=str(config.dataset_path.resolve()) if config.dataset_path is not None else None,
             compared_models=[baseline_provider_code],
             question_results=baseline_question_results,
             aggregate_results=baseline_aggregate_results,
@@ -2723,6 +2737,7 @@ def run_full_version_batch_d_question_eval(
             source_id=source.id,
             dataset_id=REAL_QUESTION_EVAL_DATASET_ID,
             dataset_name=REAL_QUESTION_EVAL_DATASET_NAME,
+            dataset_file=str(config.dataset_path.resolve()) if config.dataset_path is not None else None,
             source_chunk_count=len(source_chunks),
             compared_models=[baseline_provider_code],
             question_results=baseline_question_results,
@@ -2835,6 +2850,7 @@ def run_full_version_batch_d_question_eval(
         source_id=source.id,
         dataset_id=REAL_QUESTION_EVAL_DATASET_ID,
         dataset_name=REAL_QUESTION_EVAL_DATASET_NAME,
+        dataset_file=str(config.dataset_path.resolve()) if config.dataset_path is not None else None,
         source_chunk_count=len(source_chunks),
         compared_models=combined_model_codes,
         question_results=combined_question_results,
