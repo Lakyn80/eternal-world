@@ -1,0 +1,189 @@
+{
+  "dataset_id": "eternal-world-page-level-v1",
+  "name": "Eternal World Page Level Validation V1",
+  "description": "Fictional page-level retrieval validation dataset for Eternal World with longer context expectations.",
+  "project_name": "Eternal World",
+  "metadata": {
+    "version": "v1",
+    "fictional": true,
+    "safe_validation_only": true,
+    "test_type": "page_level"
+  },
+  "cases": [
+    {
+      "id": "page-level-attic-instructions",
+      "question": "Which two maintenance details on the attic instruction page explain how the lamp smoke was controlled?",
+      "expected_answer_type": "page_fact",
+      "test_type": "page_level",
+      "source_scope": {
+        "scope_type": "page",
+        "document_ids": ["attic-manual-archive"],
+        "page_numbers": [4],
+        "section_ids": ["attic-lamps"]
+      },
+      "required_evidence": [
+        {
+          "marker": "linen wick",
+          "aliases": ["wick of linen", "attic linen wick"]
+        },
+        {
+          "marker": "smoke vent chain",
+          "aliases": ["chain for the smoke vent", "vent chain"]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "cellar coal scoop",
+          "aliases": ["coal scoop from the cellar"]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "medium",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 120
+    },
+    {
+      "id": "page-level-river-meeting",
+      "question": "Which two details on the river meeting page explain why the delegation arrived late?",
+      "expected_answer_type": "page_fact",
+      "test_type": "page_level",
+      "source_scope": {
+        "scope_type": "page",
+        "document_ids": ["river-meeting-minutes"],
+        "page_numbers": [7],
+        "section_ids": ["delay-notes"]
+      },
+      "required_evidence": [
+        {
+          "marker": "flooded footbridge",
+          "aliases": ["footbridge flooded", "washed-over footbridge"]
+        },
+        {
+          "marker": "late telegraph reply",
+          "aliases": ["telegraph reply arrived late", "delayed telegraph answer"]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "harvest parade rumor",
+          "aliases": ["rumor about the harvest parade"]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "medium",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 140
+    },
+    {
+      "id": "page-level-station-caretaker",
+      "question": "What page-level details from the station caretaker log explain the cold draft on the night round?",
+      "expected_answer_type": "page_fact",
+      "test_type": "page_level",
+      "source_scope": {
+        "scope_type": "page",
+        "document_ids": ["station-caretaker-log"],
+        "page_numbers": [3],
+        "section_ids": ["night-round"]
+      },
+      "required_evidence": [
+        {
+          "marker": "coal stove hiss",
+          "aliases": ["hissing coal stove", "stove hiss"]
+        },
+        {
+          "marker": "cracked west window",
+          "aliases": ["west window crack", "window on the west side"]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "sealed ticket drawer",
+          "aliases": ["ticket drawer was sealed"]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "medium",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 130
+    },
+    {
+      "id": "page-level-herbal-room",
+      "question": "Which page-level inventory details identify the winter shelf in the herbal room?",
+      "expected_answer_type": "page_fact",
+      "test_type": "page_level",
+      "source_scope": {
+        "scope_type": "page",
+        "document_ids": ["herbal-room-ledger"],
+        "page_numbers": [6],
+        "section_ids": ["winter-shelf"]
+      },
+      "required_evidence": [
+        {
+          "marker": "juniper bundles",
+          "aliases": ["bundles of juniper", "juniper tied in bundles"]
+        },
+        {
+          "marker": "blue glass jar",
+          "aliases": ["jar of blue glass", "blue herbal jar"]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "summer nettle basket",
+          "aliases": ["basket of summer nettles"]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "medium",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 125
+    },
+    {
+      "id": "page-level-watchtower",
+      "question": "Which details on the watchtower repair page identify the upper landing hardware?",
+      "expected_answer_type": "page_fact",
+      "test_type": "page_level",
+      "source_scope": {
+        "scope_type": "page",
+        "document_ids": ["watchtower-repair-book"],
+        "page_numbers": [9],
+        "section_ids": ["upper-landing"]
+      },
+      "required_evidence": [
+        {
+          "marker": "iron rung",
+          "aliases": ["rung of iron", "upper landing rung"]
+        },
+        {
+          "marker": "lantern hook",
+          "aliases": ["hook for the lantern", "watchtower lantern hook"]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "rope bucket pulley",
+          "aliases": ["bucket pulley"]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "medium",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 135
+    }
+  ]
+}

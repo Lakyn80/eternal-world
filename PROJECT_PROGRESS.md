@@ -3659,3 +3659,80 @@ Scope confirmation:
 - frontend was not changed
 - billing/chat behavior was not changed
 - `latest_full_version_batch_*` artifacts were not overwritten
+
+## Task 52 Extended Validation Datasets
+
+Goal:
+
+- create larger fictional validation datasets for Real Question Eval and Multi Embedding Eval
+- expand coverage using the external JSON dataset schema from Task 51
+- keep this task focused on dataset breadth rather than model benchmarking
+
+Added dataset files:
+
+- `backend/app/modules/real_question_eval/datasets/eternal_world_short_fact_v1.json`
+- `backend/app/modules/real_question_eval/datasets/eternal_world_page_level_v1.json`
+- `backend/app/modules/real_question_eval/datasets/eternal_world_multi_document_v1.json`
+- `backend/app/modules/real_question_eval/datasets/eternal_world_negative_v1.json`
+- `backend/app/modules/real_question_eval/datasets/eternal_world_distractor_v1.json`
+
+Dataset inventory helper:
+
+- `get_extended_external_eval_dataset_inventory()`
+- exported through `app.modules.real_question_eval`
+
+Dataset coverage and case counts:
+
+- short fact dataset:
+  - `8` cases
+  - each case uses `1-3` precise required evidence markers with aliases
+- page-level dataset:
+  - `5` cases
+  - each case uses `expected_long_context: true`
+  - each case uses positive `minimum_context_chars`
+  - each case requires multiple evidence markers
+- multi-document dataset:
+  - `5` cases
+  - each case uses `source_scope.scope_type = "multi_document"`
+  - each case requires evidence from multiple document IDs
+- negative dataset:
+  - `5` cases
+  - each case uses `test_type = "negative"`
+  - each case keeps `required_evidence` empty and uses `forbidden_evidence`
+- distractor dataset:
+  - `5` cases
+  - each case uses distractor-heavy fictional names, dates, places, or events
+  - each case uses `forbidden_evidence`
+
+Covered supported test types:
+
+- `short_fact`
+- `page_level`
+- `multi_document`
+- `negative`
+- `distractor`
+
+Fake-safe data confirmation:
+
+- all added validation datasets use fictional Eternal World style archive content
+- no private, legal, production, customer, or real personal data was introduced
+
+Tests added/updated:
+
+- `backend/tests/test_real_question_eval_external_dataset.py`
+- `backend/tests/test_embedding_benchmark_foundation.py`
+- `backend/tests/test_multi_embedding_eval.py`
+
+Verification scope:
+
+- only fake-safe/local tests were run
+- no real benchmarks were rerun
+- no model downloads were triggered
+
+Scope confirmation:
+
+- active retrieval provider was not changed
+- production retrieval runtime behavior was not changed
+- frontend was not changed
+- billing/chat behavior was not changed
+- `latest_full_version_batch_*` artifacts were not overwritten

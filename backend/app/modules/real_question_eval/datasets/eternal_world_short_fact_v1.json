@@ -1,0 +1,274 @@
+{
+  "dataset_id": "eternal-world-short-fact-v1",
+  "name": "Eternal World Short Fact Validation V1",
+  "description": "Fictional short fact retrieval validation dataset for Eternal World. Safe for local schema and retrieval-quality validation.",
+  "project_name": "Eternal World",
+  "metadata": {
+    "version": "v1",
+    "fictional": true,
+    "safe_validation_only": true,
+    "test_type": "short_fact"
+  },
+  "cases": [
+    {
+      "id": "short-fact-ferry-lantern",
+      "question": "Which lantern hung above the ferry workshop bench?",
+      "expected_answer_type": "short_fact",
+      "test_type": "short_fact",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": ["ferry-workshop-notes"]
+      },
+      "required_evidence": [
+        {
+          "marker": "amber lantern",
+          "aliases": ["warm amber lantern", "lantern over the ferry bench"]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "silver quay flag",
+          "aliases": ["flag from the quay", "silver dock flag"]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 1,
+      "difficulty": "easy",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 0
+    },
+    {
+      "id": "short-fact-orchard-key",
+      "question": "What small object was tied to the orchard ledger with a ribbon?",
+      "expected_answer_type": "short_fact",
+      "test_type": "short_fact",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": ["orchard-ledger-fragment"]
+      },
+      "required_evidence": [
+        {
+          "marker": "tin key",
+          "aliases": ["small tin key", "orchard key"]
+        },
+        {
+          "marker": "cherry ribbon",
+          "aliases": ["red cherry ribbon", "ribbon with cherry dye"]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "plum ribbon",
+          "aliases": ["purple plum ribbon"]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "easy",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 0
+    },
+    {
+      "id": "short-fact-postmaster-map",
+      "question": "Which map did the postmaster keep rolled inside the cedar tube?",
+      "expected_answer_type": "short_fact",
+      "test_type": "short_fact",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": ["postmaster-map-roll"]
+      },
+      "required_evidence": [
+        {
+          "marker": "folded canal map",
+          "aliases": ["canal route map", "map of the canal locks"]
+        },
+        {
+          "marker": "brass corner clasp",
+          "aliases": ["corner clasp", "brass clasp on the map"]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "hill road sketch",
+          "aliases": ["sketch of the hill road"]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "medium",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 0
+    },
+    {
+      "id": "short-fact-clocktower-bell",
+      "question": "What held the clocktower bell rope in place after the repair?",
+      "expected_answer_type": "short_fact",
+      "test_type": "short_fact",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": ["clocktower-repair-note"]
+      },
+      "required_evidence": [
+        {
+          "marker": "green bell rope",
+          "aliases": ["green rope", "rope for the bell"]
+        },
+        {
+          "marker": "brass hook",
+          "aliases": ["hook of brass", "bell hook"]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "iron bucket handle",
+          "aliases": ["bucket handle"]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "easy",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 0
+    },
+    {
+      "id": "short-fact-river-mill-basket",
+      "question": "What container was left beside the river mill flour stones?",
+      "expected_answer_type": "short_fact",
+      "test_type": "short_fact",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": ["river-mill-inventory"]
+      },
+      "required_evidence": [
+        {
+          "marker": "willow basket",
+          "aliases": ["woven willow basket", "basket by the mill stones"]
+        },
+        {
+          "marker": "flour chalk mark",
+          "aliases": ["chalk flour mark", "white flour chalk line"]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "pine crate",
+          "aliases": ["pine storage crate"]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "easy",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 0
+    },
+    {
+      "id": "short-fact-market-tokens",
+      "question": "Which market tokens were counted together in the rain ledger?",
+      "expected_answer_type": "short_fact",
+      "test_type": "short_fact",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": ["market-token-tally"]
+      },
+      "required_evidence": [
+        {
+          "marker": "copper rain token",
+          "aliases": ["rain token", "copper weather token"]
+        },
+        {
+          "marker": "east gate token",
+          "aliases": ["token from the east gate", "east-gate tally token"]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "harvest ribbon token",
+          "aliases": ["ribbon harvest token"]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "medium",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 0
+    },
+    {
+      "id": "short-fact-garden-journal",
+      "question": "What cutting was stored inside the gardener's folded journal leaf?",
+      "expected_answer_type": "short_fact",
+      "test_type": "short_fact",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": ["garden-journal-leaf"]
+      },
+      "required_evidence": [
+        {
+          "marker": "moonflower cutting",
+          "aliases": ["cutting of moonflower", "pressed moonflower stem"]
+        },
+        {
+          "marker": "clay watering cup",
+          "aliases": ["small clay cup", "watering cup of clay"]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "mint bundle",
+          "aliases": ["garden mint bundle"]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "easy",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 0
+    },
+    {
+      "id": "short-fact-snow-shed",
+      "question": "Which tool was noted in the snow shed after the thaw?",
+      "expected_answer_type": "short_fact",
+      "test_type": "short_fact",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": ["snow-shed-log"]
+      },
+      "required_evidence": [
+        {
+          "marker": "cedar shovel",
+          "aliases": ["shovel of cedar", "cedar-handled shovel"]
+        },
+        {
+          "marker": "rope handle",
+          "aliases": ["wrapped rope handle", "handle with rope binding"]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "iron rake",
+          "aliases": ["winter iron rake"]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "easy",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 0
+    }
+  ]
+}

@@ -1,0 +1,183 @@
+{
+  "dataset_id": "eternal-world-multi-document-v1",
+  "name": "Eternal World Multi Document Validation V1",
+  "description": "Fictional multi-document retrieval validation dataset for Eternal World requiring grounded evidence across multiple archives.",
+  "project_name": "Eternal World",
+  "metadata": {
+    "version": "v1",
+    "fictional": true,
+    "safe_validation_only": true,
+    "test_type": "multi_document"
+  },
+  "cases": [
+    {
+      "id": "multi-document-winter-convoy",
+      "question": "Which route record and warm supply together identify the winter convoy preparations?",
+      "expected_answer_type": "multi_fact",
+      "test_type": "multi_document",
+      "source_scope": {
+        "scope_type": "multi_document",
+        "document_ids": ["convoy-route-roll", "convoy-supply-note"]
+      },
+      "required_evidence": [
+        {
+          "marker": "canvas route map",
+          "aliases": ["route map on canvas", "convoy canvas map"]
+        },
+        {
+          "marker": "birch tea flask",
+          "aliases": ["tea flask of birch", "birchwood flask"]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "summer parade ribbon",
+          "aliases": ["ribbon from the summer parade"]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "medium",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 50
+    },
+    {
+      "id": "multi-document-harbor-fair",
+      "question": "Which token and banner patch together identify the harbor fair stall that stayed open in the rain?",
+      "expected_answer_type": "multi_fact",
+      "test_type": "multi_document",
+      "source_scope": {
+        "scope_type": "multi_document",
+        "document_ids": ["harbor-fair-ledger", "banner-mender-note"]
+      },
+      "required_evidence": [
+        {
+          "marker": "silver booth token",
+          "aliases": ["booth token of silver", "silver token for the booth"]
+        },
+        {
+          "marker": "violet banner patch",
+          "aliases": ["patch on the violet banner", "violet cloth patch"]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "midday bell ticket",
+          "aliases": ["ticket for the midday bell"]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "medium",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 50
+    },
+    {
+      "id": "multi-document-school-rehearsal",
+      "question": "Which stage prop and music-room tool together identify the school rehearsal setup?",
+      "expected_answer_type": "multi_fact",
+      "test_type": "multi_document",
+      "source_scope": {
+        "scope_type": "multi_document",
+        "document_ids": ["school-stage-list", "music-room-note"]
+      },
+      "required_evidence": [
+        {
+          "marker": "paper moon mask",
+          "aliases": ["moon mask of paper", "stage moon mask"]
+        },
+        {
+          "marker": "tuning fork",
+          "aliases": ["brass tuning fork", "fork for tuning"]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "chalk race pennant",
+          "aliases": ["school race pennant"]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "easy",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 40
+    },
+    {
+      "id": "multi-document-valley-expedition",
+      "question": "Which expedition records together explain how the valley crossing was prepared?",
+      "expected_answer_type": "multi_fact",
+      "test_type": "multi_document",
+      "source_scope": {
+        "scope_type": "multi_document",
+        "document_ids": ["valley-sketchbook", "bridge-permit-roll", "trail-warden-log"]
+      },
+      "required_evidence": [
+        {
+          "marker": "basalt sketch",
+          "aliases": ["sketch of the basalt ridge", "basalt ridge sketch"]
+        },
+        {
+          "marker": "rope bridge permit",
+          "aliases": ["permit for the rope bridge", "bridge crossing permit"]
+        },
+        {
+          "marker": "chalk trail mark",
+          "aliases": ["trail mark in chalk", "chalk mark on the trail"]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "orchard picnic note",
+          "aliases": ["picnic note from the orchard"]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 3,
+      "difficulty": "hard",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 80
+    },
+    {
+      "id": "multi-document-observatory-storm",
+      "question": "Which observatory records together identify the storm-night repair at the roof line?",
+      "expected_answer_type": "multi_fact",
+      "test_type": "multi_document",
+      "source_scope": {
+        "scope_type": "multi_document",
+        "document_ids": ["observatory-ledger", "roof-repair-slip"]
+      },
+      "required_evidence": [
+        {
+          "marker": "star ledger page",
+          "aliases": ["page from the star ledger", "observatory ledger page"]
+        },
+        {
+          "marker": "copper wind vane pin",
+          "aliases": ["wind vane pin of copper", "copper pin for the vane"]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "garden feast ticket",
+          "aliases": ["ticket from the garden feast"]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "medium",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 70
+    }
+  ]
+}

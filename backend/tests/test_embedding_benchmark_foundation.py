@@ -8,6 +8,7 @@ from app.modules.embedding_models.registry import (
 )
 from app.modules.real_question_eval.dataset_foundation import (
     EXTERNAL_EVAL_SAMPLE_DATASET_PATH,
+    get_extended_external_eval_dataset_inventory,
     build_default_real_question_eval_dataset,
     build_core_real_question_eval_cases,
     build_extended_real_question_eval_dataset,
@@ -61,6 +62,19 @@ def test_default_real_question_eval_dataset_keeps_three_question_smoke_dataset()
 
 def test_external_eval_sample_dataset_file_exists():
     assert EXTERNAL_EVAL_SAMPLE_DATASET_PATH.exists()
+
+
+def test_extended_external_eval_dataset_files_exist():
+    inventory = get_extended_external_eval_dataset_inventory()
+
+    assert set(inventory) == {
+        "short_fact_v1",
+        "page_level_v1",
+        "multi_document_v1",
+        "negative_v1",
+        "distractor_v1",
+    }
+    assert all(dataset_path.exists() for dataset_path in inventory.values())
 
 
 def test_bge_m3_future_retrieval_modes_are_registered_for_planning():

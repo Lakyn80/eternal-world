@@ -1,0 +1,179 @@
+{
+  "dataset_id": "eternal-world-distractor-v1",
+  "name": "Eternal World Distractor Validation V1",
+  "description": "Fictional distractor-heavy retrieval validation dataset for Eternal World with similar names, dates, places, and memory-like events.",
+  "project_name": "Eternal World",
+  "metadata": {
+    "version": "v1",
+    "fictional": true,
+    "safe_validation_only": true,
+    "test_type": "distractor"
+  },
+  "cases": [
+    {
+      "id": "distractor-twin-innkeepers",
+      "question": "Which Marta kept the North Inn ledger, and what detail identified her apron?",
+      "expected_answer_type": "grounded_summary",
+      "test_type": "distractor",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": ["innkeeper-letters"]
+      },
+      "required_evidence": [
+        {
+          "marker": "Marta of North Inn",
+          "aliases": ["North Inn Marta", "Marta from the North Inn"]
+        },
+        {
+          "marker": "green apron",
+          "aliases": ["apron dyed green", "green inn apron"]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "Marta of River Inn",
+          "aliases": ["River Inn Marta", "Marta from the river inn"]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "medium",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 80
+    },
+    {
+      "id": "distractor-june-market-date",
+      "question": "Which June market date belongs to the night market at Bell Bridge square rather than the similar daytime notice?",
+      "expected_answer_type": "grounded_summary",
+      "test_type": "distractor",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": ["market-announcements"]
+      },
+      "required_evidence": [
+        {
+          "marker": "June 14 night market",
+          "aliases": ["night market on June 14", "14 June market at night"]
+        },
+        {
+          "marker": "Bell Bridge square",
+          "aliases": ["square by Bell Bridge", "Bell Bridge plaza"]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "June 4 noon market",
+          "aliases": ["noon market on June 4", "4 June daytime market"]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "medium",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 90
+    },
+    {
+      "id": "distractor-two-levs",
+      "question": "Which Lev repaired the oak barrels, not the one who worked by the ferry?",
+      "expected_answer_type": "grounded_summary",
+      "test_type": "distractor",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": ["workshop-accounts"]
+      },
+      "required_evidence": [
+        {
+          "marker": "Lev the cooper",
+          "aliases": ["cooper named Lev", "Lev of the cooper's bench"]
+        },
+        {
+          "marker": "oak barrel hoops",
+          "aliases": ["hoops for oak barrels", "oak hoop repairs"]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "Lev the ferryman",
+          "aliases": ["ferryman named Lev", "Lev from the ferry dock"]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "medium",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 70
+    },
+    {
+      "id": "distractor-similar-islands",
+      "question": "Which island shed kept the painted blue oar, and which similar island name is only a distractor?",
+      "expected_answer_type": "grounded_summary",
+      "test_type": "distractor",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": ["ferry-shed-notes"]
+      },
+      "required_evidence": [
+        {
+          "marker": "Fog Island ferry shed",
+          "aliases": ["ferry shed on Fog Island", "Fog Island shed"]
+        },
+        {
+          "marker": "painted blue oar",
+          "aliases": ["blue-painted oar", "oar painted blue"]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "Fox Island ferry shed",
+          "aliases": ["ferry shed on Fox Island", "Fox Island shed"]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "hard",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 85
+    },
+    {
+      "id": "distractor-letter-mixup",
+      "question": "Which winter letter carried the violet wax thread, and which nearly identical name belongs to the wrong season?",
+      "expected_answer_type": "grounded_summary",
+      "test_type": "distractor",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": ["courier-bag-index"]
+      },
+      "required_evidence": [
+        {
+          "marker": "Ada's winter letter",
+          "aliases": ["winter letter from Ada", "Ada winter letter"]
+        },
+        {
+          "marker": "violet wax thread",
+          "aliases": ["thread of violet wax", "violet wax seal thread"]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "Alda's spring letter",
+          "aliases": ["spring letter from Alda", "Alda spring note"]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 2,
+      "difficulty": "medium",
+      "language": "en",
+      "expected_long_context": true,
+      "minimum_context_chars": 75
+    }
+  ]
+}

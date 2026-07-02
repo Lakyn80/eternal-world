@@ -1,0 +1,131 @@
+{
+  "dataset_id": "eternal-world-negative-v1",
+  "name": "Eternal World Negative Validation V1",
+  "description": "Fictional negative retrieval validation dataset for Eternal World. Questions intentionally ask for unsupported details and should not induce hallucinated evidence.",
+  "project_name": "Eternal World",
+  "metadata": {
+    "version": "v1",
+    "fictional": true,
+    "safe_validation_only": true,
+    "test_type": "negative"
+  },
+  "cases": [
+    {
+      "id": "negative-missing-compass-serial",
+      "question": "What was the exact serial number engraved on the missing brass compass?",
+      "expected_answer_type": "no_answer",
+      "test_type": "negative",
+      "source_scope": {
+        "scope_type": "collection"
+      },
+      "required_evidence": [],
+      "forbidden_evidence": [
+        {
+          "marker": "invented serial number",
+          "aliases": ["serial number 8471", "fabricated compass serial"]
+        }
+      ],
+      "minimum_coverage": 0.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 0,
+      "difficulty": "medium",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 0
+    },
+    {
+      "id": "negative-mill-tunnel-password",
+      "question": "What password opened the secret tunnel beneath the old mill?",
+      "expected_answer_type": "no_answer",
+      "test_type": "negative",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": ["mill-foundation-notes"]
+      },
+      "required_evidence": [],
+      "forbidden_evidence": [
+        {
+          "marker": "moon password",
+          "aliases": ["password moon-salt", "secret moon password"]
+        }
+      ],
+      "minimum_coverage": 0.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 0,
+      "difficulty": "medium",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 0
+    },
+    {
+      "id": "negative-mayor-hidden-daughter",
+      "question": "What was the name of the mayor's hidden daughter mentioned nowhere in the archive?",
+      "expected_answer_type": "no_answer",
+      "test_type": "negative",
+      "source_scope": {
+        "scope_type": "collection"
+      },
+      "required_evidence": [],
+      "forbidden_evidence": [
+        {
+          "marker": "Ilona Vey",
+          "aliases": ["hidden daughter Ilona", "Ilona Vey of the mayor"]
+        }
+      ],
+      "minimum_coverage": 0.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 0,
+      "difficulty": "hard",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 0
+    },
+    {
+      "id": "negative-sapphire-weight",
+      "question": "How much did the unopened sapphire parcel weigh before anyone recorded it?",
+      "expected_answer_type": "no_answer",
+      "test_type": "negative",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": ["parcel-watch-log"]
+      },
+      "required_evidence": [],
+      "forbidden_evidence": [
+        {
+          "marker": "twelve-gram sapphire",
+          "aliases": ["12 gram sapphire parcel", "parcel weighed twelve grams"]
+        }
+      ],
+      "minimum_coverage": 0.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 0,
+      "difficulty": "medium",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 0
+    },
+    {
+      "id": "negative-sixth-bell-verse",
+      "question": "What was the lost sixth verse of the river bell song?",
+      "expected_answer_type": "no_answer",
+      "test_type": "negative",
+      "source_scope": {
+        "scope_type": "collection"
+      },
+      "required_evidence": [],
+      "forbidden_evidence": [
+        {
+          "marker": "lost sixth bell verse",
+          "aliases": ["sixth verse of the bell song", "invented river bell lyric"]
+        }
+      ],
+      "minimum_coverage": 0.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 0,
+      "difficulty": "easy",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 0
+    }
+  ]
+}

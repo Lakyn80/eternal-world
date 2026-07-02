@@ -9,9 +9,25 @@ REAL_QUESTION_EVAL_DATASET_ID = "real-question-eval-dataset"
 REAL_QUESTION_EVAL_DATASET_NAME = "Real Question Evaluation Dataset"
 EXTENDED_REAL_QUESTION_EVAL_DATASET_ID = "real-question-eval-extended-dataset-plan"
 EXTENDED_REAL_QUESTION_EVAL_DATASET_NAME = "Real Question Evaluation Extended Dataset Plan"
-EXTERNAL_EVAL_SAMPLE_DATASET_PATH = (
-    Path(__file__).resolve().parent / "datasets" / "eternal_world_eval_dataset_sample.json"
+REAL_QUESTION_EVAL_DATASETS_DIR = Path(__file__).resolve().parent / "datasets"
+EXTERNAL_EVAL_SAMPLE_DATASET_PATH = REAL_QUESTION_EVAL_DATASETS_DIR / "eternal_world_eval_dataset_sample.json"
+ETERNAL_WORLD_SHORT_FACT_V1_DATASET_PATH = REAL_QUESTION_EVAL_DATASETS_DIR / "eternal_world_short_fact_v1.json"
+ETERNAL_WORLD_PAGE_LEVEL_V1_DATASET_PATH = REAL_QUESTION_EVAL_DATASETS_DIR / "eternal_world_page_level_v1.json"
+ETERNAL_WORLD_MULTI_DOCUMENT_V1_DATASET_PATH = (
+    REAL_QUESTION_EVAL_DATASETS_DIR / "eternal_world_multi_document_v1.json"
 )
+ETERNAL_WORLD_NEGATIVE_V1_DATASET_PATH = REAL_QUESTION_EVAL_DATASETS_DIR / "eternal_world_negative_v1.json"
+ETERNAL_WORLD_DISTRACTOR_V1_DATASET_PATH = REAL_QUESTION_EVAL_DATASETS_DIR / "eternal_world_distractor_v1.json"
+
+
+def get_extended_external_eval_dataset_inventory() -> dict[str, Path]:
+    return {
+        "short_fact_v1": ETERNAL_WORLD_SHORT_FACT_V1_DATASET_PATH,
+        "page_level_v1": ETERNAL_WORLD_PAGE_LEVEL_V1_DATASET_PATH,
+        "multi_document_v1": ETERNAL_WORLD_MULTI_DOCUMENT_V1_DATASET_PATH,
+        "negative_v1": ETERNAL_WORLD_NEGATIVE_V1_DATASET_PATH,
+        "distractor_v1": ETERNAL_WORLD_DISTRACTOR_V1_DATASET_PATH,
+    }
 
 
 def build_core_real_question_eval_cases() -> list[RagQualityEvalCase]:

@@ -1,15 +1,19 @@
 from __future__ import annotations
 
-from pathlib import Path
-
 import pytest
 
 from app.modules.real_question_eval import (
     EXTERNAL_EVAL_SAMPLE_DATASET_PATH,
+    ETERNAL_WORLD_DISTRACTOR_V1_DATASET_PATH,
+    ETERNAL_WORLD_MULTI_DOCUMENT_V1_DATASET_PATH,
+    ETERNAL_WORLD_NEGATIVE_V1_DATASET_PATH,
+    ETERNAL_WORLD_PAGE_LEVEL_V1_DATASET_PATH,
+    ETERNAL_WORLD_SHORT_FACT_V1_DATASET_PATH,
     RealQuestionEvalConfig,
     RealQuestionEvalRunner,
     SUPPORTED_EXTERNAL_EVAL_SOURCE_SCOPE_TYPES,
     SUPPORTED_EXTERNAL_EVAL_TEST_TYPES,
+    get_extended_external_eval_dataset_inventory,
     load_external_eval_dataset,
 )
 
@@ -27,6 +31,37 @@ def test_sample_external_eval_dataset_exists_and_loads():
     assert dataset.metadata["external_dataset_path"] == str(EXTERNAL_EVAL_SAMPLE_DATASET_PATH.resolve())
 
 
+def test_extended_external_eval_dataset_inventory_loads_successfully():
+    expected_case_counts = {
+        "short_fact_v1": 8,
+        "page_level_v1": 5,
+        "multi_document_v1": 5,
+        "negative_v1": 5,
+        "distractor_v1": 5,
+    }
+
+    inventory = get_extended_external_eval_dataset_inventory()
+
+    assert set(inventory) == set(expected_case_counts)
+
+    for dataset_key, dataset_path in inventory.items():
+        assert dataset_path.exists(), f"Missing dataset file: {dataset_path}"
+        dataset = load_external_eval_dataset(dataset_path)
+        assert len(dataset.cases) == expected_case_counts[dataset_key]
+        assert dataset.metadata["external_dataset"] is True
+        assert dataset.metadata["external_dataset_path"] == str(dataset_path.resolve())
+
+
+def test_extended_external_eval_datasets_cover_all_supported_test_types():
+    represented_test_types: set[str] = set()
+
+    for dataset_path in get_extended_external_eval_dataset_inventory().values():
+        dataset = load_external_eval_dataset(dataset_path)
+        represented_test_types.update(case.test_type for case in dataset.cases)
+
+    assert represented_test_types == set(SUPPORTED_EXTERNAL_EVAL_TEST_TYPES)
+
+
 def test_external_eval_dataset_required_evidence_aliases_parse_correctly():
     dataset = load_external_eval_dataset(EXTERNAL_EVAL_SAMPLE_DATASET_PATH)
     short_fact_case = next(case for case in dataset.cases if case.case_id == "short-fact-sunflower-house")
@@ -38,12 +73,29 @@ def test_external_eval_dataset_required_evidence_aliases_parse_correctly():
     ]
 
 
+def test_extended_short_fact_dataset_requires_precise_evidence_with_aliases():
+    dataset = load_external_eval_dataset(ETERNAL_WORLD_SHORT_FACT_V1_DATASET_PATH)
+
+    assert all(case.test_type == "short_fact" for case in dataset.cases)
+    assert all(1 <= len(case.required_evidence) <= 3 for case in dataset.cases)
+    assert all(case.required_evidence[0].aliases for case in dataset.cases)
+
+
 def test_external_eval_dataset_forbidden_evidence_parses_correctly():
     dataset = load_external_eval_dataset(EXTERNAL_EVAL_SAMPLE_DATASET_PATH)
     distractor_case = next(case for case in dataset.cases if case.case_id == "distractor-grandmother-soup")
 
     assert distractor_case.forbidden_evidence[0].marker == "vanilla jam"
     assert distractor_case.forbidden_evidence[0].aliases == ["jam for beach travelers"]
+
+
+def test_extended_distractor_dataset_parses_forbidden_evidence():
+    dataset = load_external_eval_dataset(ETERNAL_WORLD_DISTRACTOR_V1_DATASET_PATH)
+    case = next(case for case in dataset.cases if case.case_id == "distractor-twin-innkeepers")
+
+    assert case.test_type == "distractor"
+    assert case.forbidden_evidence[0].marker == "Marta of River Inn"
+    assert case.forbidden_evidence[0].aliases == ["River Inn Marta", "Marta from the river inn"]
 
 
 def test_external_eval_dataset_page_level_fields_parse_correctly():
@@ -55,6 +107,16 @@ def test_external_eval_dataset_page_level_fields_parse_correctly():
     assert page_case.source_scope["document_ids"] == ["village-house-archive"]
     assert page_case.source_scope["page_numbers"] == [2]
     assert page_case.source_scope["section_ids"] == ["gate-section"]
+
+
+def test_extended_page_level_dataset_parses_long_context_fields():
+    dataset = load_external_eval_dataset(ETERNAL_WORLD_PAGE_LEVEL_V1_DATASET_PATH)
+
+    assert all(case.test_type == "page_level" for case in dataset.cases)
+    assert all(case.source_scope["scope_type"] == "page" for case in dataset.cases)
+    assert all(case.expected_long_context is True for case in dataset.cases)
+    assert all(case.minimum_context_chars >= 120 for case in dataset.cases)
+    assert all(len(case.required_evidence) >= 2 for case in dataset.cases)
 
 
 def test_external_eval_dataset_multi_document_scope_parses_correctly():
@@ -69,6 +131,15 @@ def test_external_eval_dataset_multi_document_scope_parses_correctly():
     ]
 
 
+def test_extended_multi_document_dataset_parses_source_scopes():
+    dataset = load_external_eval_dataset(ETERNAL_WORLD_MULTI_DOCUMENT_V1_DATASET_PATH)
+
+    assert all(case.test_type == "multi_document" for case in dataset.cases)
+    assert all(case.source_scope["scope_type"] == "multi_document" for case in dataset.cases)
+    assert all(len(case.source_scope["document_ids"]) >= 2 for case in dataset.cases)
+    assert any(len(case.required_evidence) == 3 for case in dataset.cases)
+
+
 def test_external_eval_dataset_negative_case_parses_correctly():
     dataset = load_external_eval_dataset(EXTERNAL_EVAL_SAMPLE_DATASET_PATH)
     negative_case = next(case for case in dataset.cases if case.case_id == "negative-missing-compass")
@@ -77,6 +148,15 @@ def test_external_eval_dataset_negative_case_parses_correctly():
     assert negative_case.expected_behavior == "lack_of_evidence"
     assert negative_case.required_evidence == []
     assert negative_case.forbidden_evidence[0].marker == "invented serial number"
+
+
+def test_extended_negative_dataset_does_not_require_hallucinated_evidence():
+    dataset = load_external_eval_dataset(ETERNAL_WORLD_NEGATIVE_V1_DATASET_PATH)
+
+    assert all(case.test_type == "negative" for case in dataset.cases)
+    assert all(case.expected_behavior == "lack_of_evidence" for case in dataset.cases)
+    assert all(case.required_evidence == [] for case in dataset.cases)
+    assert all(case.forbidden_evidence for case in dataset.cases)
 
 
 def test_external_eval_dataset_distractor_case_parses_correctly():
@@ -141,3 +221,15 @@ def test_real_question_eval_runner_build_request_can_use_external_dataset_path()
     assert request.dataset.dataset_id == "eternal-world-external-eval-sample"
     assert len(request.dataset.cases) == 5
     assert request.dataset.metadata["external_dataset"] is True
+
+
+def test_real_question_eval_runner_build_request_can_use_extended_dataset_path():
+    runner = RealQuestionEvalRunner(
+        db=None,
+        config=RealQuestionEvalConfig(dataset_path=ETERNAL_WORLD_SHORT_FACT_V1_DATASET_PATH),
+    )
+
+    request = runner.build_request()
+
+    assert request.dataset.dataset_id == "eternal-world-short-fact-v1"
+    assert len(request.dataset.cases) == 8

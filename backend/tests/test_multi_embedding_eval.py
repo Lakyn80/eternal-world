@@ -20,7 +20,11 @@ from app.modules.multi_embedding_eval.service import (
     WORKFLOW_NAME,
     process_multi_embedding_eval_job,
 )
-from app.modules.real_question_eval import EXTERNAL_EVAL_SAMPLE_DATASET_PATH, load_external_eval_dataset
+from app.modules.real_question_eval import (
+    EXTERNAL_EVAL_SAMPLE_DATASET_PATH,
+    ETERNAL_WORLD_MULTI_DOCUMENT_V1_DATASET_PATH,
+    load_external_eval_dataset,
+)
 from app.modules.qdrant_indexing.schemas import RagSourceIndexingSummaryRead
 from app.modules.rag_quality.schemas import (
     RagQualityCaseResultsInput,
@@ -1292,3 +1296,22 @@ def test_multi_embedding_eval_request_accepts_loaded_external_eval_dataset():
     assert payload.dataset.dataset_id == "eternal-world-external-eval-sample"
     assert len(payload.dataset.cases) == 5
     assert payload.dataset.cases[2].test_type == "multi_document"
+
+
+def test_multi_embedding_eval_request_accepts_extended_multi_document_dataset():
+    payload = MultiEmbeddingEvalRequest(
+        dataset=load_external_eval_dataset(ETERNAL_WORLD_MULTI_DOCUMENT_V1_DATASET_PATH),
+        candidates=[
+            {
+                "config_id": "candidate-bge-m3",
+                "model_code": "bge_m3",
+                "collection_name": "eternal_world_rag_chunks__bge_m3_extended_eval",
+                "top_k": 4,
+                "retrieval_mode": "hybrid",
+            }
+        ],
+    )
+
+    assert payload.dataset.dataset_id == "eternal-world-multi-document-v1"
+    assert len(payload.dataset.cases) == 5
+    assert all(case.test_type == "multi_document" for case in payload.dataset.cases)
