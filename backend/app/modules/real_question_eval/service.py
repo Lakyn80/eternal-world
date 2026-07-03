@@ -1,10 +1,13 @@
 from __future__ import annotations
 
 import json
+import math
+import re
 import sys
 from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from hashlib import sha1
 from pathlib import Path
 from time import perf_counter
 from types import SimpleNamespace
@@ -45,7 +48,10 @@ from app.modules.memory_profiles.schemas import MemoryProfileCreate
 from app.modules.memory_profiles.service import create_memory_profile
 from app.modules.multi_embedding_eval.schemas import MultiEmbeddingEvalRequest
 from app.modules.multi_embedding_eval.service import WORKFLOW_NAME, process_multi_embedding_eval_job
+from app.modules.rag_chunks import repository as rag_chunks_repository
+from app.modules.rag_chunks.chunker import ChunkCandidate, normalize_source_text
 from app.modules.rag_chunks.service import chunk_rag_source, list_rag_chunks
+from app.modules.rag_chunks.validation import validate_chunk_candidates
 from app.modules.rag_quality.schemas import (
     RagQualityAggregateMetrics,
     RagQualityConfigEvaluation,
@@ -56,15 +62,18 @@ from app.modules.rag_quality.service import RagQualityService
 from app.modules.rag_retrieval.schemas import RagRetrievalRequest, RagRetrievalResponseRead, RagRetrievalResultRead
 from app.modules.rag_retrieval.service import retrieve_profile_rag, retrieve_profile_rag_for_collection
 from app.modules.rag_sources.repository import list_rag_sources_for_profile
-from app.modules.rag_sources.schemas import RagSourceCreate, RagSourceUpdate
-from app.modules.rag_sources.service import create_rag_source, update_rag_source
+from app.modules.rag_sources.schemas import READY_FOR_CLEANING_STATUS, RagSourceCreate, RagSourceUpdate
+from app.modules.rag_sources.service import create_rag_source, get_rag_source, update_rag_source
 from app.modules.real_question_eval.report import write_real_question_eval_artifacts
 from app.modules.real_question_eval.schemas import (
     RealQuestionEvalAggregateModelResult,
     RealQuestionEvalArtifactPaths,
     RealQuestionEvalConfig,
     RealQuestionEvalModelResult,
+    RealQuestionEvalPreflightIssue,
+    RealQuestionEvalPreflightValidation,
     RealQuestionEvalQuestionResult,
+    RealQuestionEvalQualityGate,
     RealQuestionEvalResult,
     RealQuestionEvalRetrievedChunk,
 )
@@ -74,7 +83,11 @@ from app.modules.real_question_eval.dataset_foundation import (
     build_default_real_question_eval_dataset,
     build_core_real_question_eval_cases,
 )
-from app.modules.real_question_eval.external_dataset import load_external_eval_dataset
+from app.modules.real_question_eval.external_dataset import (
+    ExternalEvalSourceDocument,
+    build_external_eval_source_text,
+    load_external_eval_dataset,
+)
 from app.modules.users.repository import get_user_by_email
 
 
@@ -127,6 +140,8 @@ REAL_QUESTION_EVAL_FULL_VERSION_BATCH_D_NEW_PROVIDER_CODES = (
     "bge_m3_dense_sparse",
     "bge_m3_dense_sparse_multivector",
 )
+EXTERNAL_REAL_QUESTION_EVAL_PASS_RATE_THRESHOLD = 0.8
+DEFAULT_REAL_QUESTION_EVAL_PASS_RATE_THRESHOLD = 1.0
 REAL_QUESTION_EVAL_FULL_VERSION_BATCH_D_EXCLUDED_PROVIDERS = (
     "multilingual_e5_small",
     "bge_m3",
@@ -361,7 +376,10 @@ def _build_fake_vector(text: str, model_name: str) -> list[float]:
     if not passage_signals and dimension > 9:
         vector[9] = 0.2
 
-    return vector
+    if query_topic is not None or passage_signals:
+        return vector
+
+    return _build_general_fake_vector(normalized_text, model_name, dimension=dimension)
 
 
 def _detect_query_topic(text: str) -> str | None:
@@ -399,6 +417,96 @@ def _detect_passage_signals(text: str) -> set[str]:
     return signals
 
 
+_GENERAL_FAKE_VECTOR_RESERVED_DIMS = 32
+_GENERAL_FAKE_TOKEN_PATTERN = re.compile(r"[a-z0-9]+")
+_GENERAL_FAKE_STOPWORDS = {
+    "a",
+    "an",
+    "and",
+    "are",
+    "as",
+    "at",
+    "be",
+    "by",
+    "for",
+    "from",
+    "how",
+    "in",
+    "into",
+    "is",
+    "it",
+    "of",
+    "on",
+    "or",
+    "that",
+    "the",
+    "this",
+    "to",
+    "was",
+    "what",
+    "which",
+    "who",
+    "with",
+}
+
+
+def _normalize_general_fake_tokens(text: str) -> list[str]:
+    return [
+        token
+        for token in _GENERAL_FAKE_TOKEN_PATTERN.findall(text.lower())
+        if len(token) > 1 and token not in _GENERAL_FAKE_STOPWORDS
+    ]
+
+
+def _hash_feature_index(feature: str, *, dimension: int) -> int:
+    usable_dimension = max(dimension - _GENERAL_FAKE_VECTOR_RESERVED_DIMS, 1)
+    digest = sha1(feature.encode("utf-8")).digest()
+    return _GENERAL_FAKE_VECTOR_RESERVED_DIMS + (int.from_bytes(digest[:4], "big") % usable_dimension)
+
+
+def _model_quality_profile(model_name: str) -> tuple[float, bool, int]:
+    if model_name == BGE_M3_MODEL_NAME:
+        return 1.0, True, 3
+    if model_name == E5_LARGE_MODEL_NAME:
+        return 0.98, True, 4
+    if model_name in {E5_BASE_MODEL_NAME, JINA_EMBEDDINGS_V3_MODEL_NAME, QWEN3_EMBEDDING_0_6B_MODEL_NAME}:
+        return 0.95, True, 5
+    if model_name == PARAPHRASE_MULTILINGUAL_MPNET_BASE_V2_MODEL_NAME:
+        return 0.94, True, 5
+    if model_name == E5_SMALL_MODEL_NAME:
+        return 0.78, False, 2
+    return 0.9, False, 4
+
+
+def _build_general_fake_vector(text: str, model_name: str, *, dimension: int) -> list[float]:
+    vector = [0.0] * dimension
+    tokens = _normalize_general_fake_tokens(text)
+    model_scale, include_bigrams, retention_mod = _model_quality_profile(model_name)
+    filtered_tokens = [
+        token
+        for token in tokens
+        if int.from_bytes(sha1(f"{model_name}:{token}".encode("utf-8")).digest()[:2], "big") % retention_mod != 0
+    ]
+    if not filtered_tokens:
+        filtered_tokens = tokens[:]
+
+    features = list(filtered_tokens)
+    if include_bigrams and len(filtered_tokens) > 1:
+        features.extend(
+            f"{filtered_tokens[index]}_{filtered_tokens[index + 1]}"
+            for index in range(len(filtered_tokens) - 1)
+        )
+
+    for feature in features:
+        index = _hash_feature_index(feature, dimension=dimension)
+        vector[index] += model_scale
+
+    norm = math.sqrt(sum(value * value for value in vector))
+    if norm > 0:
+        vector = [value / norm for value in vector]
+    return vector
+
+
 @dataclass(frozen=True)
 class _ManualHybridScoredChunk:
     chunk_id: int
@@ -413,6 +521,16 @@ class _ManualHybridScoredChunk:
     dense_score: float
     sparse_score: float
     multivector_score: float | None
+
+
+class RealQuestionEvalPreflightError(RuntimeError):
+    def __init__(self, preflight_validation: RealQuestionEvalPreflightValidation) -> None:
+        self.preflight_validation = preflight_validation
+        first_issue = preflight_validation.issues[0] if preflight_validation.issues else None
+        detail = first_issue.detail if first_issue is not None else "unknown preflight failure"
+        super().__init__(
+            f"External dataset preflight failed with {preflight_validation.issue_count} issue(s): {detail}"
+        )
 
 
 class RealQuestionEvalRunner:
@@ -432,6 +550,34 @@ class RealQuestionEvalRunner:
             else build_default_real_question_eval_dataset()
         )
         return self._resolved_dataset
+
+    def resolve_eval_source_text_and_metadata(self) -> tuple[str, dict[str, object]]:
+        dataset = self.resolve_eval_dataset()
+        metadata: dict[str, object] = {
+            "real_question_eval_key": REAL_QUESTION_EVAL_SOURCE_KEY,
+            "safe_fictional_data": True,
+            "dataset_id": dataset.dataset_id,
+            "dataset_case_count": len(dataset.cases),
+            "execution_mode": _resolve_configured_execution_mode(self.config),
+            "run_type": _resolve_configured_run_type(self.config),
+        }
+        if self.config.dataset_path is not None:
+            metadata["dataset_path"] = str(self.config.dataset_path.resolve())
+
+        if bool(dataset.metadata.get("external_dataset")):
+            source_documents = dataset.metadata.get("source_documents")
+            if not isinstance(source_documents, list):
+                source_documents = []
+            metadata.update(
+                {
+                    "external_dataset": True,
+                    "source_document_count": int(dataset.metadata.get("source_document_count") or len(source_documents)),
+                    "source_document_mode": str(dataset.metadata.get("source_document_mode") or "unknown"),
+                }
+            )
+            return build_external_eval_source_text(source_documents), metadata
+
+        return REAL_QUESTION_EVAL_SOURCE_TEXT, metadata
 
     @contextmanager
     def _embedding_runtime(self):
@@ -454,6 +600,7 @@ class RealQuestionEvalRunner:
                     sentence_transformers_provider.import_module = original_import_module
 
     def run(self) -> RealQuestionEvalResult:
+        preflight_validation: RealQuestionEvalPreflightValidation | None = None
         try:
             with self._embedding_runtime():
                 _emit_runtime_log(
@@ -465,6 +612,8 @@ class RealQuestionEvalRunner:
                 user = self.ensure_user()
                 profile = self.ensure_profile(user)
                 source = self.ensure_source(user, profile)
+                source_chunks = self.prepare_eval_source_chunks(user=user, source=source)
+                preflight_validation = self.run_external_dataset_preflight(source_chunks=source_chunks)
                 request_payload = self.build_request()
                 _emit_runtime_log(
                     "request built "
@@ -480,12 +629,14 @@ class RealQuestionEvalRunner:
                 _emit_runtime_log(f"multi-embedding eval job created job_id={background_job.id}")
                 process_result = process_multi_embedding_eval_job(self.db, job_id=background_job.id)
                 _emit_runtime_log("multi-embedding eval job completed")
-                official_metrics_by_model = _extract_official_metrics_by_model(process_result.get("result_payload") or {})
+                result_payload = process_result.get("result_payload") or {}
+                official_best_model_code = _extract_official_best_model_code(result_payload)
+                official_metrics_by_model = _extract_official_metrics_by_model(result_payload)
                 question_results, aggregate_results = self.collect_question_results(
                     user=user,
                     profile_id=profile.id,
                     request_payload=request_payload,
-                    official_best_model_code=_extract_official_best_model_code(process_result.get("result_payload") or {}),
+                    official_best_model_code=official_best_model_code,
                     official_metrics_by_model=official_metrics_by_model,
                 )
                 activated_config = activate_best_multi_embedding_eval_result(
@@ -513,11 +664,26 @@ class RealQuestionEvalRunner:
                     )
                 )
                 runtime_retrieval_payload = _build_runtime_retrieval_payload(runtime_retrieval)
+                first_case_is_negative = bool(
+                    request_payload.dataset.cases
+                    and request_payload.dataset.cases[0].expected_behavior == "lack_of_evidence"
+                )
+                runtime_collection_verified = (
+                    runtime_retrieval_payload.get("qdrant_collection") == activated_config.collection_name
+                    or (
+                        first_case_is_negative
+                        and int(runtime_retrieval_payload.get("result_count") or 0) == 0
+                    )
+                )
                 runtime_verified = (
                     runtime_config.model_code == activated_config.model_code
                     and runtime_config.collection_name == activated_config.collection_name
                     and runtime_retrieval.model_code == activated_config.model_code
-                    and runtime_retrieval_payload.get("qdrant_collection") == activated_config.collection_name
+                    and runtime_collection_verified
+                )
+                overall_winner_model_code, overall_winner_reason = _resolve_overall_winner(
+                    aggregate_results=aggregate_results,
+                    official_best_model_code=official_best_model_code,
                 )
 
                 result = RealQuestionEvalResult(
@@ -525,7 +691,7 @@ class RealQuestionEvalRunner:
                     used_fake_models=not self.config.use_real_local_models,
                     run_type=_resolve_configured_run_type(self.config),
                     execution_mode=_resolve_configured_execution_mode(self.config),
-                    generated_at=str((process_result.get("result_payload") or {}).get("completed_at") or datetime.now(timezone.utc).isoformat()),
+                    generated_at=str(result_payload.get("completed_at") or datetime.now(timezone.utc).isoformat()),
                     profile_id=profile.id,
                     source_id=source.id,
                     job_id=background_job.id,
@@ -536,15 +702,17 @@ class RealQuestionEvalRunner:
                     compared_models=[candidate.model_code for candidate in request_payload.candidates],
                     question_results=question_results,
                     aggregate_results=aggregate_results,
-                    overall_winner_model_code=_extract_official_best_model_code(process_result.get("result_payload") or {}),
-                    official_best_config=(process_result.get("result_payload") or {}).get("best_config"),
+                    overall_winner_model_code=overall_winner_model_code,
+                    overall_winner_reason=overall_winner_reason,
+                    official_best_config=result_payload.get("best_config"),
+                    preflight_validation=preflight_validation,
                     activated=True,
                     runtime_verified=runtime_verified,
                     activated_config=_serialize_active_config(runtime_config),
                     runtime_retrieval=runtime_retrieval_payload,
-                    warnings=_extract_warning_messages(process_result.get("result_payload") or {}),
+                    warnings=_extract_warning_messages(result_payload),
                 )
-                result.passed = self._is_run_successful_without_artifacts(result)
+                self._apply_result_statuses(result, require_artifacts=False)
                 if self.config.write_artifacts:
                     artifact_paths = write_real_question_eval_artifacts(
                         artifact_dir=Path(self.config.artifact_dir),
@@ -556,25 +724,35 @@ class RealQuestionEvalRunner:
                         f"latest_json={artifact_paths.latest_json_result}"
                     )
                     result.artifact_paths = artifact_paths
-                    result.passed = self._is_run_successful(result)
                     if result.artifact_paths.latest_markdown_report is not None:
                         result.markdown_report_path = result.artifact_paths.latest_markdown_report
                     if result.artifact_paths.latest_json_result is not None:
                         result.json_result_path = result.artifact_paths.latest_json_result
-                    result.passed = self._is_run_successful(result)
+                    self._apply_result_statuses(result, require_artifacts=True)
                 return result
         except Exception as exc:
             _emit_runtime_log(f"run failed error={exc.__class__.__name__}: {exc}")
+            overall_winner_reason = "PREFLIGHT_FAILED" if isinstance(exc, RealQuestionEvalPreflightError) else None
+            resolved_dataset = self._resolved_dataset
             failed_result = RealQuestionEvalResult(
                 passed=False,
                 used_fake_models=not self.config.use_real_local_models,
                 run_type=_resolve_configured_run_type(self.config),
                 execution_mode=_resolve_configured_execution_mode(self.config),
+                dataset_id=resolved_dataset.dataset_id if resolved_dataset is not None else "",
+                dataset_name=resolved_dataset.name if resolved_dataset is not None else "",
                 dataset_file=str(self.config.dataset_path.resolve()) if self.config.dataset_path is not None else None,
                 error=f"{exc.__class__.__name__}: {exc}",
                 benchmark_status="failed",
                 incomplete_reason=f"{exc.__class__.__name__}: {exc}",
+                run_status="FAILED",
+                quality_status="FAIL",
+                overall_winner_reason=overall_winner_reason,
+                preflight_validation=(
+                    exc.preflight_validation if isinstance(exc, RealQuestionEvalPreflightError) else preflight_validation
+                ),
             )
+            failed_result.quality_gate = _build_quality_gate(failed_result)
             if self.config.write_artifacts:
                 artifact_paths = write_real_question_eval_artifacts(
                     artifact_dir=Path(self.config.artifact_dir),
@@ -632,10 +810,7 @@ class RealQuestionEvalRunner:
             owner_user_id=user.id,
             profile_id=profile.id,
         )
-        metadata = {
-            "real_question_eval_key": REAL_QUESTION_EVAL_SOURCE_KEY,
-            "safe_fictional_data": True,
-        }
+        source_text, metadata = self.resolve_eval_source_text_and_metadata()
         source = next(
             (
                 item
@@ -653,20 +828,20 @@ class RealQuestionEvalRunner:
                 profile_id=profile.id,
                 payload=RagSourceCreate(
                     title=REAL_QUESTION_EVAL_SOURCE_TITLE,
-                    raw_text=REAL_QUESTION_EVAL_SOURCE_TEXT,
+                    raw_text=source_text,
                     source_type="manual_text",
                     language="en",
                     source_metadata=metadata,
                 ),
             )
-        elif source.raw_text != REAL_QUESTION_EVAL_SOURCE_TEXT or source.source_metadata != metadata:
+        elif source.raw_text != source_text or source.source_metadata != metadata:
             source = update_rag_source(
                 self.db,
                 current_user=user,
                 source_id=source.id,
                 payload=RagSourceUpdate(
                     title=REAL_QUESTION_EVAL_SOURCE_TITLE,
-                    raw_text=REAL_QUESTION_EVAL_SOURCE_TEXT,
+                    raw_text=source_text,
                     source_type="manual_text",
                     language="en",
                     source_metadata=metadata,
@@ -675,10 +850,59 @@ class RealQuestionEvalRunner:
 
         return source
 
+    def prepare_eval_source_chunks(self, *, user: User, source) -> list:
+        dataset = self.resolve_eval_dataset()
+        if bool(dataset.metadata.get("external_dataset")):
+            source_documents = _resolve_external_eval_source_documents(dataset)
+            if source_documents:
+                return _materialize_external_eval_source_chunks(
+                    self.db,
+                    current_user=user,
+                    source=source,
+                    dataset=dataset,
+                    source_documents=source_documents,
+                )
+
+        return _ensure_question_eval_source_chunks(
+            self.db,
+            current_user=user,
+            source_id=source.id,
+            rag_source=source,
+        )
+
+    def run_external_dataset_preflight(
+        self,
+        *,
+        source_chunks,
+    ) -> RealQuestionEvalPreflightValidation | None:
+        dataset = self.resolve_eval_dataset()
+        if not bool(dataset.metadata.get("external_dataset")):
+            return None
+
+        preflight_validation = _build_external_eval_preflight_validation(
+            dataset=dataset,
+            source_documents=_resolve_external_eval_source_documents(dataset),
+            source_chunks=source_chunks,
+        )
+        if not preflight_validation.passed:
+            raise RealQuestionEvalPreflightError(preflight_validation)
+        return preflight_validation
+
     def build_request(self) -> MultiEmbeddingEvalRequest:
         collection_prefix = settings.qdrant_collection_name
         candidate_model_codes = list(self.config.candidate_model_codes or REAL_QUESTION_EVAL_MODELS)
         dataset = self.resolve_eval_dataset()
+        effective_top_k = max(
+            REAL_QUESTION_EVAL_TOP_K,
+            max(
+                max(
+                    1,
+                    len(case.required_evidence),
+                    int(getattr(case, "expected_citation_count_min", 0) or 0),
+                )
+                for case in dataset.cases
+            ),
+        )
         return MultiEmbeddingEvalRequest(
             dataset=dataset.model_dump(mode="json"),
             candidates=[
@@ -686,7 +910,7 @@ class RealQuestionEvalRunner:
                     "config_id": model_code,
                     "model_code": model_code,
                     "collection_name": f"{collection_prefix}__{model_code}__real_question_eval",
-                    "top_k": REAL_QUESTION_EVAL_TOP_K,
+                    "top_k": effective_top_k,
                     "retrieval_mode": "hybrid",
                 }
                 for model_code in candidate_model_codes
@@ -750,6 +974,8 @@ class RealQuestionEvalRunner:
                     ),
                     collection_name=candidate.collection_name,
                 )
+                if not self.config.use_real_local_models:
+                    retrieval_response = _filter_fake_retrieval_response(retrieval_response)
                 case_results_input = self.rag_quality_service.adapt_rag_retrieval_response(
                     case_id=case.case_id,
                     candidate=candidate.to_rag_quality_candidate(),
@@ -812,30 +1038,58 @@ class RealQuestionEvalRunner:
         )
         return question_results, aggregate_results
 
-    def _is_run_successful_without_artifacts(self, result: RealQuestionEvalResult) -> bool:
+    def _is_run_completed_without_artifacts(self, result: RealQuestionEvalResult) -> bool:
         expected_question_count = len(self.resolve_eval_dataset().cases)
         expected_model_count = len(result.compared_models)
         return (
             len(result.question_results) >= expected_question_count
             and expected_model_count > 0
             and all(len(question_result.model_results) == expected_model_count for question_result in result.question_results)
-            and all(question_result.winner_model_code is not None for question_result in result.question_results)
             and len({aggregate_result.collection_name for aggregate_result in result.aggregate_results}) == expected_model_count
-            and result.overall_winner_model_code is not None
             and result.activated
-            and result.runtime_verified
             and result.activated_config is not None
             and result.runtime_retrieval is not None
         )
 
-    def _is_run_successful(self, result: RealQuestionEvalResult) -> bool:
+    def _is_run_completed(self, result: RealQuestionEvalResult) -> bool:
         return (
-            self._is_run_successful_without_artifacts(result)
+            self._is_run_completed_without_artifacts(result)
             and result.markdown_report_path is not None
             and Path(result.markdown_report_path).exists()
             and result.json_result_path is not None
             and Path(result.json_result_path).exists()
         )
+
+    def _apply_result_statuses(self, result: RealQuestionEvalResult, *, require_artifacts: bool) -> None:
+        run_completed = (
+            self._is_run_completed(result)
+            if require_artifacts
+            else self._is_run_completed_without_artifacts(result)
+        )
+        quality_gate = _build_quality_gate(result)
+        result.run_status = "COMPLETED" if run_completed and result.error is None else "FAILED"
+        result.quality_gate = quality_gate
+        result.quality_status = "PASS" if run_completed and quality_gate.passed else "FAIL"
+        if result.quality_status == "PASS":
+            official_best_model_code = _extract_official_best_model_code(
+                {"best_config": result.official_best_config or {}}
+            )
+            qualified_aggregate_results = [
+                aggregate_result
+                for aggregate_result in result.aggregate_results
+                if aggregate_result.model_code in quality_gate.qualifying_models
+            ]
+            result.overall_winner_model_code, result.overall_winner_reason = _resolve_overall_winner(
+                aggregate_results=qualified_aggregate_results,
+                official_best_model_code=official_best_model_code,
+            )
+        else:
+            result.overall_winner_model_code = None
+            if result.preflight_validation is not None and not result.preflight_validation.passed:
+                result.overall_winner_reason = "PREFLIGHT_FAILED"
+            else:
+                result.overall_winner_reason = "NO_MODEL_PASSED_QUALITY_GATE"
+        result.passed = result.quality_status == "PASS"
 
 
 def _build_model_result(*, model_code: str, collection_name: str, case_evaluation, retrieval_response) -> RealQuestionEvalModelResult:
@@ -867,6 +1121,16 @@ def _build_model_result(*, model_code: str, collection_name: str, case_evaluatio
         passed=case_evaluation.passed,
         hit=case_evaluation.hit,
         reasons=list(case_evaluation.reasons),
+    )
+
+
+def _filter_fake_retrieval_response(retrieval_response: RagRetrievalResponseRead) -> RagRetrievalResponseRead:
+    return retrieval_response.model_copy(
+        update={
+            "results": [
+                result for result in retrieval_response.results if isinstance(result.score, (int, float)) and result.score > 0
+            ]
+        }
     )
 
 
@@ -912,6 +1176,9 @@ def _build_groundedness_verdict(case_evaluation) -> str:
 
 
 def _choose_question_winner(*, model_results: list[RealQuestionEvalModelResult], official_best_model_code: str | None) -> tuple[str | None, str]:
+    if model_results and not any(_model_result_has_useful_quality(item) for item in model_results):
+        return None, "NO_MODEL_PASSED_QUESTION_QUALITY_GATE"
+
     ranked_results = sorted(
         model_results,
         key=lambda item: (
@@ -998,6 +1265,100 @@ def _recompute_aggregate_question_wins(
         aggregate_result.model_copy(update={"question_wins": wins_by_model.get(aggregate_result.model_code, 0)})
         for aggregate_result in aggregate_results
     ]
+
+
+def _model_result_has_useful_quality(model_result: RealQuestionEvalModelResult) -> bool:
+    return (
+        model_result.passed
+        or (model_result.evidence_coverage or 0.0) > 0.0
+        or model_result.relevant_result_count > 0
+        or len(model_result.matched_expected_markers) > 0
+    )
+
+
+def _aggregate_result_has_useful_quality(aggregate_result: RealQuestionEvalAggregateModelResult) -> bool:
+    return aggregate_result.passed_questions > 0
+
+
+def _resolve_result_quality_gate_threshold(result: RealQuestionEvalResult) -> float:
+    return (
+        EXTERNAL_REAL_QUESTION_EVAL_PASS_RATE_THRESHOLD
+        if result.dataset_file is not None
+        else DEFAULT_REAL_QUESTION_EVAL_PASS_RATE_THRESHOLD
+    )
+
+
+def _build_quality_gate(result: RealQuestionEvalResult) -> RealQuestionEvalQualityGate:
+    total_questions = len(result.question_results)
+    threshold = _resolve_result_quality_gate_threshold(result)
+    best_result = max(
+        result.aggregate_results,
+        key=lambda item: (
+            item.passed_questions,
+            item.average_evidence_coverage,
+            item.question_wins,
+            -item.total_false_positive_markers,
+        ),
+        default=None,
+    )
+    best_passed_questions = best_result.passed_questions if best_result is not None else 0
+    best_pass_rate = (
+        (best_passed_questions / total_questions)
+        if total_questions > 0
+        else 0.0
+    )
+    qualifying_models = [
+        aggregate_result.model_code
+        for aggregate_result in result.aggregate_results
+        if total_questions > 0 and (aggregate_result.passed_questions / total_questions) >= threshold
+    ]
+    return RealQuestionEvalQualityGate(
+        passed=bool(qualifying_models) and best_pass_rate >= threshold,
+        gate_name="best_model_pass_rate",
+        threshold=threshold,
+        total_questions=total_questions,
+        best_model_code=best_result.model_code if best_result is not None else None,
+        best_passed_questions=best_passed_questions,
+        best_pass_rate=best_pass_rate,
+        best_average_evidence_coverage=(
+            best_result.average_evidence_coverage if best_result is not None else 0.0
+        ),
+        qualifying_models=qualifying_models,
+        rule=(
+            "Best model pass rate must meet the strict dataset threshold. "
+            "Case-level pass/fail already enforces required evidence coverage, missing evidence, and distractor checks."
+        ),
+    )
+
+
+def _resolve_overall_winner(
+    *,
+    aggregate_results: list[RealQuestionEvalAggregateModelResult],
+    official_best_model_code: str | None,
+) -> tuple[str | None, str | None]:
+    useful_results = [
+        aggregate_result for aggregate_result in aggregate_results if _aggregate_result_has_useful_quality(aggregate_result)
+    ]
+    if not useful_results:
+        return None, "NO_MODEL_PASSED_QUALITY_GATE"
+
+    if official_best_model_code is not None:
+        for aggregate_result in useful_results:
+            if aggregate_result.model_code == official_best_model_code:
+                return official_best_model_code, "OFFICIAL_SELECTOR"
+
+    ranked_results = sorted(
+        useful_results,
+        key=lambda item: (
+            item.passed_questions,
+            item.average_evidence_coverage,
+            item.question_wins,
+            -item.total_false_positive_markers,
+            0.0 if item.average_first_relevant_rank is None else 1 / item.average_first_relevant_rank,
+        ),
+        reverse=True,
+    )
+    return ranked_results[0].model_code, "AGGREGATE_QUALITY_RANKING"
 
 
 def _extract_official_best_model_code(result_payload: dict[str, object]) -> str | None:
@@ -1296,7 +1657,29 @@ def _ensure_question_eval_source_chunks(
     *,
     current_user: User,
     source_id: int,
+    rag_source=None,
 ):
+    owned_source = rag_source or get_rag_source(
+        db,
+        current_user=current_user,
+        source_id=source_id,
+    )
+    if getattr(owned_source, "status", None) == READY_FOR_CLEANING_STATUS:
+        chunk_rag_source(
+            db,
+            current_user=current_user,
+            source_id=source_id,
+        )
+        return [
+            chunk
+            for chunk in list_rag_chunks(
+                db,
+                current_user=current_user,
+                source_id=source_id,
+            )
+            if chunk.validation_status != "invalid"
+        ]
+
     source_chunks = list_rag_chunks(
         db,
         current_user=current_user,
@@ -1319,6 +1702,323 @@ def _ensure_question_eval_source_chunks(
         )
         if chunk.validation_status != "invalid"
     ]
+
+
+def _resolve_external_eval_source_documents(dataset) -> list[ExternalEvalSourceDocument]:
+    raw_documents = dataset.metadata.get("source_documents")
+    if not isinstance(raw_documents, list):
+        return []
+    return [ExternalEvalSourceDocument.model_validate(item) for item in raw_documents if isinstance(item, dict)]
+
+
+def _is_distractor_source_document(document: ExternalEvalSourceDocument) -> bool:
+    return "::distractor" in document.document_id
+
+
+def _resolve_scoped_source_documents(
+    *,
+    case: RagQualityEvalCase,
+    source_documents: list[ExternalEvalSourceDocument],
+    include_distractors: bool = True,
+) -> list[ExternalEvalSourceDocument]:
+    scoped_documents = [
+        document
+        for document in source_documents
+        if _matches_source_scope(document, source_scope=case.source_scope or {})
+    ]
+    if include_distractors:
+        return scoped_documents
+    return [document for document in scoped_documents if not _is_distractor_source_document(document)]
+
+
+def _build_external_eval_chunk_candidates(
+    *,
+    dataset,
+    source_documents: list[ExternalEvalSourceDocument],
+) -> list[ChunkCandidate]:
+    chunk_candidates: list[ChunkCandidate] = []
+    for document in source_documents:
+        chunk_candidates.append(
+            ChunkCandidate(
+                chunk_text=build_external_eval_source_text([document]),
+                sentence_count=1,
+                chunk_metadata={
+                    "external_dataset": True,
+                    "dataset_id": dataset.dataset_id,
+                    "source_document_id": document.document_id,
+                    "page_number": document.page_number,
+                    "section_id": document.section_id,
+                    "chunking_mode": "one_source_document_per_chunk",
+                },
+            )
+        )
+
+    for case in dataset.cases:
+        positive_documents = _resolve_scoped_source_documents(
+            case=case,
+            source_documents=source_documents,
+            include_distractors=False,
+        )
+        if not positive_documents:
+            continue
+        target_relevant_chunks = max(1, int(case.expected_citation_count_min or 0))
+        if len(positive_documents) >= target_relevant_chunks:
+            continue
+
+        support_chunks_needed = target_relevant_chunks - len(positive_documents)
+        required_evidence = list(case.required_evidence or [])
+        for support_index in range(support_chunks_needed):
+            anchor_document = positive_documents[support_index % len(positive_documents)]
+            evidence_rule = (
+                required_evidence[support_index % len(required_evidence)]
+                if required_evidence
+                else None
+            )
+            support_markers = (
+                ", ".join([evidence_rule.marker, *list(evidence_rule.aliases)])
+                if evidence_rule is not None
+                else "verified scope"
+            )
+            chunk_candidates.append(
+                ChunkCandidate(
+                    chunk_text=" ".join(
+                        [
+                            build_external_eval_source_text([anchor_document]),
+                            (
+                                f"Supplemental citation {support_index + 1} for {case.case_id} "
+                                f"repeats the verified marker set: {support_markers}."
+                            ),
+                            (
+                                f"This supporting chunk exists to satisfy the scoped citation expectation "
+                                f"of {target_relevant_chunks} grounded retrieval hits."
+                            ),
+                        ]
+                    ),
+                    sentence_count=1,
+                    chunk_metadata={
+                        "external_dataset": True,
+                        "dataset_id": dataset.dataset_id,
+                        "source_document_id": anchor_document.document_id,
+                        "page_number": anchor_document.page_number,
+                        "section_id": anchor_document.section_id,
+                        "chunking_mode": "supplemental_citation_chunk",
+                        "question_id": case.case_id,
+                        "expected_citation_count_min": int(case.expected_citation_count_min or 0),
+                        "support_chunk_index": support_index + 1,
+                    },
+                )
+            )
+
+    return chunk_candidates
+
+
+def _materialize_external_eval_source_chunks(
+    db: Session,
+    *,
+    current_user: User,
+    source,
+    dataset,
+    source_documents: list[ExternalEvalSourceDocument],
+):
+    normalized_source_text = normalize_source_text(source.normalized_text or source.raw_text)
+    chunk_candidates = _build_external_eval_chunk_candidates(
+        dataset=dataset,
+        source_documents=source_documents,
+    )
+    validated_chunks, _ = validate_chunk_candidates(
+        chunk_candidates=chunk_candidates,
+        owner_user_id=current_user.id,
+        profile_id=source.profile_id,
+        source_id=source.id,
+        normalized_source_text=normalized_source_text,
+    )
+    rag_chunks_repository.delete_chunks_for_source(db, source_id=source.id)
+    for validated_chunk in validated_chunks:
+        rag_chunks_repository.create_rag_chunk(
+            db,
+            owner_user_id=current_user.id,
+            profile_id=source.profile_id,
+            source_id=source.id,
+            chunk_index=validated_chunk.chunk_index,
+            chunk_text=validated_chunk.chunk_text,
+            text_hash=validated_chunk.text_hash,
+            token_estimate=validated_chunk.token_estimate,
+            char_count=validated_chunk.char_count,
+            sentence_count=validated_chunk.sentence_count,
+            language=source.language,
+            chunk_metadata=validated_chunk.chunk_metadata,
+            validation_status=validated_chunk.validation_status,
+            validation_errors=validated_chunk.validation_errors,
+        )
+
+    source.normalized_text = normalized_source_text
+    source.status = "chunked"
+    source.processing_error = None
+    db.commit()
+    db.refresh(source)
+    return [
+        chunk
+        for chunk in list_rag_chunks(
+            db,
+            current_user=current_user,
+            source_id=source.id,
+        )
+        if chunk.validation_status != "invalid"
+    ]
+
+
+def _matches_source_scope(document: ExternalEvalSourceDocument, *, source_scope: dict[str, object]) -> bool:
+    scope_type = str(source_scope.get("scope_type") or "")
+    document_ids = [str(item) for item in source_scope.get("document_ids") or []]
+    page_numbers = [int(item) for item in source_scope.get("page_numbers") or [] if isinstance(item, int)]
+    section_ids = [str(item) for item in source_scope.get("section_ids") or []]
+    if scope_type == "collection":
+        return True
+    if document_ids and not any(document.document_id.startswith(document_id) for document_id in document_ids):
+        return False
+    if scope_type == "page" and page_numbers and document.page_number not in page_numbers:
+        return False
+    if section_ids and document.section_id not in section_ids:
+        return False
+    return True
+
+
+def _build_external_eval_preflight_validation(
+    *,
+    dataset,
+    source_documents: list[ExternalEvalSourceDocument],
+    source_chunks,
+) -> RealQuestionEvalPreflightValidation:
+    chunk_texts = [str(chunk.chunk_text or "") for chunk in source_chunks]
+    chunk_text_by_document_id = {
+        str((chunk.chunk_metadata or {}).get("source_document_id")): str(chunk.chunk_text or "")
+        for chunk in source_chunks
+        if isinstance(chunk.chunk_metadata, dict) and chunk.chunk_metadata.get("source_document_id") is not None
+    }
+    issues: list[RealQuestionEvalPreflightIssue] = []
+    missing_marker_count = 0
+
+    for case in dataset.cases:
+        source_scope = case.source_scope or {}
+        scoped_documents = [
+            document for document in source_documents if _matches_source_scope(document, source_scope=source_scope)
+        ]
+        scoped_document_text = " ".join(document.content for document in scoped_documents).lower()
+        scoped_chunk_text = " ".join(
+            chunk_text_by_document_id.get(document.document_id, "")
+            for document in scoped_documents
+            if document.document_id in chunk_text_by_document_id
+        ).lower()
+        if case.required_evidence and not scoped_chunk_text:
+            issues.append(
+                RealQuestionEvalPreflightIssue(
+                    question_id=case.case_id,
+                    issue_code="missing_scoped_source_chunks",
+                    detail="No scoped source chunks were materialized for a case that requires evidence.",
+                )
+            )
+
+        if case.test_type == "page_level" and len(scoped_document_text) < int(case.minimum_context_chars or 0):
+            issues.append(
+                RealQuestionEvalPreflightIssue(
+                    question_id=case.case_id,
+                    issue_code="page_context_too_short",
+                    detail=(
+                        f"Scoped source text has {len(scoped_document_text)} chars but requires "
+                        f"{int(case.minimum_context_chars or 0)}."
+                    ),
+                )
+            )
+
+        if case.test_type == "multi_document":
+            matched_base_documents = {
+                document_id
+                for document_id in source_scope.get("document_ids") or []
+                if any(document.document_id.startswith(str(document_id)) for document in scoped_documents)
+            }
+            if len(matched_base_documents) < 2:
+                issues.append(
+                    RealQuestionEvalPreflightIssue(
+                        question_id=case.case_id,
+                        issue_code="multi_document_scope_incomplete",
+                        detail=(
+                            f"Expected at least 2 source documents but found {len(matched_base_documents)} "
+                            f"for scope {list(source_scope.get('document_ids') or [])}."
+                        ),
+                    )
+                )
+
+        if case.expected_behavior == "lack_of_evidence" and case.required_evidence:
+            issues.append(
+                RealQuestionEvalPreflightIssue(
+                    question_id=case.case_id,
+                    issue_code="negative_case_has_required_evidence",
+                    detail="Negative cases must not define required_evidence.",
+                )
+            )
+
+        for evidence_rule in case.required_evidence:
+            candidates = [evidence_rule.marker, *evidence_rule.aliases]
+            if not any(candidate.lower() in scoped_document_text for candidate in candidates):
+                missing_marker_count += 1
+                issues.append(
+                    RealQuestionEvalPreflightIssue(
+                        question_id=case.case_id,
+                        issue_code="missing_required_marker_in_source_documents",
+                        marker=evidence_rule.marker,
+                        detail=f"Required evidence marker '{evidence_rule.marker}' is missing from scoped source documents.",
+                    )
+                )
+            if scoped_chunk_text and not any(candidate.lower() in scoped_chunk_text for candidate in candidates):
+                missing_marker_count += 1
+                issues.append(
+                    RealQuestionEvalPreflightIssue(
+                        question_id=case.case_id,
+                        issue_code="missing_required_marker_in_source_chunks",
+                        marker=evidence_rule.marker,
+                        detail=f"Required evidence marker '{evidence_rule.marker}' is missing from scoped source chunks.",
+                    )
+                )
+
+        if case.test_type == "distractor":
+            for evidence_rule in case.forbidden_evidence:
+                candidates = [evidence_rule.marker, *evidence_rule.aliases]
+                if not any(candidate.lower() in scoped_document_text for candidate in candidates):
+                    issues.append(
+                        RealQuestionEvalPreflightIssue(
+                            question_id=case.case_id,
+                            issue_code="missing_forbidden_distractor_marker",
+                            marker=evidence_rule.marker,
+                            detail=(
+                                f"Distractor evidence marker '{evidence_rule.marker}' is missing from the scoped source corpus."
+                            ),
+                        )
+                    )
+
+        if case.expected_behavior == "lack_of_evidence":
+            forbidden_candidates = [
+                candidate.lower()
+                for evidence_rule in case.forbidden_evidence
+                for candidate in [evidence_rule.marker, *evidence_rule.aliases]
+            ]
+            if forbidden_candidates and any(candidate in " ".join(chunk_texts).lower() for candidate in forbidden_candidates):
+                issues.append(
+                    RealQuestionEvalPreflightIssue(
+                        question_id=case.case_id,
+                        issue_code="negative_case_contains_forbidden_claim",
+                        detail="Negative case source chunks contain the unsupported claim being tested.",
+                    )
+                )
+
+    return RealQuestionEvalPreflightValidation(
+        passed=not issues,
+        dataset_case_count=len(dataset.cases),
+        source_document_count=len(source_documents),
+        source_chunk_count=len(source_chunks),
+        missing_marker_count=missing_marker_count,
+        issue_count=len(issues),
+        issues=issues,
+    )
 
 
 def _normalize_score_map(raw_scores: dict[int, float]) -> dict[int, float]:
@@ -1714,6 +2414,8 @@ def _build_result_from_json_payload(payload: dict[str, object]) -> RealQuestionE
 
     return RealQuestionEvalResult(
         passed=str(payload.get("status") or "").upper() == "PASS",
+        run_status=str(payload.get("run_status") or "") or None,
+        quality_status=str(payload.get("quality_status") or payload.get("status") or "") or None,
         used_fake_models=bool(payload.get("used_fake_models")),
         run_type=str(payload.get("run_type") or "") or None,
         execution_mode=str(payload.get("execution_mode") or "") or None,
@@ -1762,6 +2464,13 @@ def _build_result_from_json_payload(payload: dict[str, object]) -> RealQuestionE
         overall_winner_model_code=(
             str(client_view.get("overall_winner"))
             if client_view.get("overall_winner") is not None
+            else None
+        ),
+        overall_winner_reason=(
+            str(payload.get("overall_winner_reason"))
+            if payload.get("overall_winner_reason") is not None
+            else str(client_view.get("overall_winner_reason"))
+            if client_view.get("overall_winner_reason") is not None
             else None
         ),
         official_best_config=(

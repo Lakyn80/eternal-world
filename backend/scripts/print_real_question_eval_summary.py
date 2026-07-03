@@ -34,8 +34,12 @@ class CompactRunSummary:
     run_id: str
     dataset_name: str | None
     dataset_id: str | None
-    status: str | None
+    run_status: str | None
+    quality_status: str | None
+    quality_gate: dict[str, Any]
     overall_winner: str | None
+    overall_winner_reason: str | None
+    preflight_validation: dict[str, Any]
     model_results: list[CompactModelResult]
     artifact_path: Path
     warning: str | None = None
@@ -131,8 +135,26 @@ def _resolve_dataset_id(payload: dict[str, Any]) -> str | None:
     )
 
 
-def _resolve_status(payload: dict[str, Any]) -> str | None:
-    status = _extract_string(payload.get("status"))
+def _resolve_run_status(payload: dict[str, Any]) -> str | None:
+    client_view = _coerce_dict(payload.get("client_view"))
+    developer_view = _coerce_dict(payload.get("developer_view"))
+    return _first_non_none(
+        _extract_string(payload.get("run_status")),
+        _extract_string(client_view.get("run_status")),
+        _extract_string(developer_view.get("run_status")),
+        "FAILED" if payload.get("error") else None,
+    )
+
+
+def _resolve_quality_status(payload: dict[str, Any]) -> str | None:
+    client_view = _coerce_dict(payload.get("client_view"))
+    developer_view = _coerce_dict(payload.get("developer_view"))
+    status = _first_non_none(
+        _extract_string(payload.get("quality_status")),
+        _extract_string(client_view.get("quality_status")),
+        _extract_string(developer_view.get("quality_status")),
+        _extract_string(payload.get("status")),
+    )
     if status is not None:
         return status
     passed = payload.get("passed")
@@ -149,6 +171,38 @@ def _resolve_overall_winner(payload: dict[str, Any]) -> str | None:
         _extract_string(client_view.get("overall_winner")),
         _extract_string(_coerce_dict(payload.get("selected_config")).get("best_model_code")),
         _extract_string(_coerce_dict(_coerce_dict(payload.get("developer_view")).get("selected_config")).get("best_model_code")),
+    )
+
+
+def _resolve_overall_winner_reason(payload: dict[str, Any]) -> str | None:
+    client_view = _coerce_dict(payload.get("client_view"))
+    developer_view = _coerce_dict(payload.get("developer_view"))
+    return _first_non_none(
+        _extract_string(payload.get("overall_winner_reason")),
+        _extract_string(client_view.get("overall_winner_reason")),
+        _extract_string(developer_view.get("overall_winner_reason")),
+    )
+
+
+def _resolve_quality_gate(payload: dict[str, Any]) -> dict[str, Any]:
+    client_view = _coerce_dict(payload.get("client_view"))
+    developer_view = _coerce_dict(payload.get("developer_view"))
+    return _first_non_none(
+        _coerce_dict(payload.get("quality_gate")),
+        _coerce_dict(client_view.get("quality_gate")),
+        _coerce_dict(developer_view.get("quality_gate")),
+        {},
+    )
+
+
+def _resolve_preflight_validation(payload: dict[str, Any]) -> dict[str, Any]:
+    client_view = _coerce_dict(payload.get("client_view"))
+    developer_view = _coerce_dict(payload.get("developer_view"))
+    return _first_non_none(
+        _coerce_dict(payload.get("preflight_validation")),
+        _coerce_dict(client_view.get("preflight_validation")),
+        _coerce_dict(developer_view.get("preflight_validation")),
+        {},
     )
 
 
@@ -257,8 +311,12 @@ def summarize_artifact(artifact_path: Path) -> CompactRunSummary:
         run_id=_resolve_run_id(payload, artifact_path=artifact_path),
         dataset_name=_resolve_dataset_name(payload),
         dataset_id=_resolve_dataset_id(payload),
-        status=_resolve_status(payload),
+        run_status=_resolve_run_status(payload),
+        quality_status=_resolve_quality_status(payload),
+        quality_gate=_resolve_quality_gate(payload),
         overall_winner=_resolve_overall_winner(payload),
+        overall_winner_reason=_resolve_overall_winner_reason(payload),
+        preflight_validation=_resolve_preflight_validation(payload),
         model_results=model_results,
         artifact_path=artifact_path,
         warning=warning,
@@ -277,6 +335,41 @@ def _format_int(value: int | None) -> str:
     return str(value)
 
 
+def _format_quality_gate(gate: dict[str, Any]) -> str:
+    if not gate:
+        return "n/a"
+    gate_name = _extract_string(gate.get("gate_name")) or "unknown"
+    threshold = _extract_float(gate.get("threshold"))
+    best_model_code = _extract_string(gate.get("best_model_code")) or "none"
+    best_passed_questions = _extract_int(gate.get("best_passed_questions"))
+    total_questions = _extract_int(gate.get("total_questions"))
+    best_pass_rate = _extract_float(gate.get("best_pass_rate"))
+    threshold_text = _format_float(threshold, decimals=4)
+    pass_rate_text = _format_float(best_pass_rate, decimals=4)
+    counts_text = (
+        f"{_format_int(best_passed_questions)}/{_format_int(total_questions)}"
+        if best_passed_questions is not None or total_questions is not None
+        else "n/a"
+    )
+    return f"{gate_name} >= {threshold_text} (best={best_model_code} {counts_text}, pass_rate={pass_rate_text})"
+
+
+def _format_preflight_validation(preflight_validation: dict[str, Any]) -> str:
+    if not preflight_validation:
+        return "n/a"
+    passed = preflight_validation.get("passed")
+    status = "PASS" if passed is True else "FAIL" if passed is False else "unknown"
+    missing_marker_count = _extract_int(preflight_validation.get("missing_marker_count"))
+    source_document_count = _extract_int(preflight_validation.get("source_document_count"))
+    source_chunk_count = _extract_int(preflight_validation.get("source_chunk_count"))
+    return (
+        f"{status} "
+        f"(missing_markers={_format_int(missing_marker_count)}, "
+        f"source_documents={_format_int(source_document_count)}, "
+        f"source_chunks={_format_int(source_chunk_count)})"
+    )
+
+
 def render_summary(summary: CompactRunSummary) -> str:
     lines = [
         "REAL QUESTION EVAL SUMMARY",
@@ -288,8 +381,12 @@ def render_summary(summary: CompactRunSummary) -> str:
         lines.append(f"DATASET ID: {summary.dataset_id}")
     lines.extend(
         [
-            f"STATUS: {summary.status or 'unknown'}",
+            f"RUN STATUS: {summary.run_status or 'unknown'}",
+            f"QUALITY STATUS: {summary.quality_status or 'unknown'}",
+            f"QUALITY GATE: {_format_quality_gate(summary.quality_gate)}",
             f"WINNER: {summary.overall_winner or 'unknown'}",
+            f"WINNER REASON: {summary.overall_winner_reason or 'n/a'}",
+            f"PREFLIGHT: {_format_preflight_validation(summary.preflight_validation)}",
             f"ARTIFACT PATH: {summary.artifact_path}",
         ]
     )

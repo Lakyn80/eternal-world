@@ -39,6 +39,11 @@ def build_real_question_eval_markdown(result: RealQuestionEvalResult) -> str:
             f"- Speed vs accuracy tradeoff: {client_view['speed_vs_accuracy_tradeoff']}",
             f"- Production recommendation: {client_view['production_recommendation']}",
             f"- Timestamp: {result.generated_at or 'unknown'}",
+            f"- Run status: `{client_view['run_status']}`",
+            f"- Quality status: `{client_view['quality_status']}`",
+            f"- Quality gate: `{client_view.get('quality_gate', {}).get('gate_name', 'n/a')}`",
+            f"- Preflight validation: `{('PASS' if client_view.get('preflight_validation', {}).get('passed') else 'FAIL') if client_view.get('preflight_validation') else 'n/a'}`",
+            f"- Preflight missing marker count: `{client_view.get('preflight_validation', {}).get('missing_marker_count', 'n/a')}`",
             f"- Run type: `{result.run_type or 'unknown'}`",
             *(
                 ["- Historical baseline providers:"]
@@ -247,6 +252,11 @@ def build_real_question_eval_benchmark_batch_markdown(result: RealQuestionEvalRe
             f"- Run type: `{result.run_type or 'unknown'}`",
             f"- Execution mode: `{result.execution_mode or 'unknown'}`",
             f"- Benchmark status: `{client_view['benchmark_status'] or 'unknown'}`",
+            f"- Run status: `{client_view['run_status']}`",
+            f"- Quality status: `{client_view['quality_status']}`",
+            f"- Quality gate: `{client_view.get('quality_gate', {}).get('gate_name', 'n/a')}`",
+            f"- Preflight validation: `{('PASS' if client_view.get('preflight_validation', {}).get('passed') else 'FAIL') if client_view.get('preflight_validation') else 'n/a'}`",
+            f"- Preflight missing marker count: `{client_view.get('preflight_validation', {}).get('missing_marker_count', 'n/a')}`",
             f"- Used fake models: `{str(result.used_fake_models).lower()}`",
             f"- Historical current winner before {batch_label}: `{client_view['historical_overall_winner'] or 'none'}`",
             f"- Any new provider beat baseline/current winner: `{str(client_view['any_new_provider_beat_historical_winner']).lower()}`",
@@ -380,6 +390,8 @@ def build_real_question_eval_json_payload(result: RealQuestionEvalResult) -> dic
     return {
         "task": TASK_NAME,
         "run_id": result.run_id,
+        "run_status": _resolve_run_status(result),
+        "quality_status": _resolve_quality_status(result),
         "run_type": result.run_type,
         "execution_mode": result.execution_mode,
         "benchmark_batch_label": result.benchmark_batch_label,
@@ -392,10 +404,14 @@ def build_real_question_eval_json_payload(result: RealQuestionEvalResult) -> dic
         "timestamp": result.generated_at,
         "dataset_file": result.dataset_file,
         "used_fake_models": result.used_fake_models,
-        "status": "PASS" if result.passed else "FAIL",
+        "status": _resolve_quality_status(result),
         "benchmark_status": result.benchmark_status,
         "incomplete_reason": result.incomplete_reason,
         "non_compared_notes": list(result.non_compared_notes),
+        "overall_winner_model_code": result.overall_winner_model_code,
+        "overall_winner_reason": result.overall_winner_reason,
+        "quality_gate": _build_quality_gate_payload(result),
+        "preflight_validation": _build_preflight_validation_payload(result),
         "artifact_paths": result.artifact_paths.model_dump(mode="json"),
         "client_view": client_view,
         "developer_view": developer_view,
@@ -551,7 +567,12 @@ def build_real_question_eval_client_view(result: RealQuestionEvalResult) -> dict
             "name": result.dataset_name,
         },
         "models_compared": list(result.compared_models),
+        "run_status": _resolve_run_status(result),
+        "quality_status": _resolve_quality_status(result),
         "overall_winner": result.overall_winner_model_code,
+        "overall_winner_reason": result.overall_winner_reason,
+        "quality_gate": _build_quality_gate_payload(result),
+        "preflight_validation": _build_preflight_validation_payload(result),
         "recommended_active_model": recommended_active_model,
         "speed_vs_accuracy_tradeoff": speed_vs_accuracy_tradeoff,
         "production_recommendation": production_recommendation,
@@ -580,6 +601,11 @@ def build_real_question_eval_developer_view(result: RealQuestionEvalResult) -> d
             "name": result.dataset_name,
         },
         "models_compared": list(result.compared_models),
+        "run_status": _resolve_run_status(result),
+        "quality_status": _resolve_quality_status(result),
+        "overall_winner_reason": result.overall_winner_reason,
+        "quality_gate": _build_quality_gate_payload(result),
+        "preflight_validation": _build_preflight_validation_payload(result),
         "questions": [
             {
                 "question_id": question_result.question_id,
@@ -694,10 +720,30 @@ def _format_status(value: bool | None) -> str | None:
     return "PASS" if value else "FAIL"
 
 
+def _resolve_run_status(result: RealQuestionEvalResult) -> str:
+    if result.run_status:
+        return result.run_status
+    return "FAILED" if result.error else "COMPLETED"
+
+
+def _resolve_quality_status(result: RealQuestionEvalResult) -> str:
+    if result.quality_status:
+        return result.quality_status
+    return "PASS" if result.passed else "FAIL"
+
+
 def _format_optional_float(value: float | None, *, decimals: int = 4) -> str:
     if value is None:
         return "n/a"
     return f"{value:.{decimals}f}"
+
+
+def _build_quality_gate_payload(result: RealQuestionEvalResult) -> dict[str, object]:
+    return result.quality_gate.model_dump(mode="json") if result.quality_gate is not None else {}
+
+
+def _build_preflight_validation_payload(result: RealQuestionEvalResult) -> dict[str, object]:
+    return result.preflight_validation.model_dump(mode="json") if result.preflight_validation is not None else {}
 
 
 def _format_optional_value(value: object) -> str:
@@ -732,6 +778,11 @@ def _build_summary_model_results(result: RealQuestionEvalResult) -> list[dict[st
             ),
             "passed_questions": aggregate_result.passed_questions,
             "total_questions": total_questions,
+            "pass_rate": (
+                (aggregate_result.passed_questions / total_questions)
+                if total_questions not in (None, 0)
+                else None
+            ),
             "evidence_coverage": aggregate_result.average_evidence_coverage,
             "missing_evidence": aggregate_result.total_missing_markers,
             "distractors": aggregate_result.total_false_positive_markers,
@@ -786,8 +837,13 @@ def build_real_question_eval_summary_json_payload(result: RealQuestionEvalResult
         "dataset_name": result.dataset_name,
         "dataset_id": result.dataset_id,
         "dataset_file": result.dataset_file,
-        "status": "PASS" if result.passed else "FAIL",
+        "run_status": _resolve_run_status(result),
+        "quality_status": _resolve_quality_status(result),
+        "status": _resolve_quality_status(result),
+        "quality_gate": _build_quality_gate_payload(result),
         "overall_winner": result.overall_winner_model_code,
+        "overall_winner_reason": result.overall_winner_reason,
+        "preflight_validation": _build_preflight_validation_payload(result),
         "total_questions": len(result.question_results),
         "models": list(result.compared_models),
         "model_results": _build_summary_model_results(result),
@@ -803,6 +859,7 @@ def build_real_question_eval_summary_markdown(result: RealQuestionEvalResult) ->
             item.get("status"),
             item.get("passed_questions"),
             item.get("total_questions"),
+            _format_optional_float(item.get("pass_rate"), decimals=4),
             _format_optional_float(item.get("evidence_coverage"), decimals=4),
             item.get("missing_evidence"),
             item.get("distractors"),
@@ -837,14 +894,35 @@ def build_real_question_eval_summary_markdown(result: RealQuestionEvalResult) ->
         f"- Dataset: `{summary_payload['dataset_name'] or 'unknown'}`",
         f"- Dataset ID: `{summary_payload['dataset_id'] or 'unknown'}`",
         f"- Dataset file: `{summary_payload['dataset_file'] or 'n/a'}`",
-        f"- Status: `{summary_payload['status']}`",
+        f"- Run status: `{summary_payload['run_status']}`",
+        f"- Quality status: `{summary_payload['quality_status']}`",
+        (
+            f"- Quality gate: `"
+            f"{summary_payload['quality_gate'].get('gate_name', 'n/a')}"
+            f" >= {summary_payload['quality_gate'].get('threshold', 'n/a')}`"
+            if isinstance(summary_payload.get("quality_gate"), dict)
+            else "- Quality gate: `n/a`"
+        ),
         f"- Overall winner: `{summary_payload['overall_winner'] or 'unknown'}`",
+        f"- Overall winner reason: `{summary_payload['overall_winner_reason'] or 'n/a'}`",
+        (
+            f"- Preflight validation: `"
+            f"{'PASS' if summary_payload['preflight_validation'].get('passed') else 'FAIL'}`"
+            if isinstance(summary_payload.get("preflight_validation"), dict) and summary_payload.get("preflight_validation")
+            else "- Preflight validation: `n/a`"
+        ),
+        (
+            f"- Preflight missing marker count: `"
+            f"{summary_payload['preflight_validation'].get('missing_marker_count', 0)}`"
+            if isinstance(summary_payload.get("preflight_validation"), dict) and summary_payload.get("preflight_validation")
+            else "- Preflight missing marker count: `n/a`"
+        ),
         f"- Total questions: `{summary_payload['total_questions']}`",
         "",
         "## Model Results",
         "",
         *_build_markdown_table(
-            headers=["model", "status", "passed", "total", "coverage", "missing", "distractors", "latency_ms", "winner"],
+            headers=["model", "status", "passed", "total", "pass_rate", "coverage", "missing", "distractors", "latency_ms", "winner"],
             rows=model_rows,
         ),
         "",

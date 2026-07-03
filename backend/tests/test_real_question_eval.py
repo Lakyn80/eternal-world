@@ -8,10 +8,12 @@ from app.db.models import ActiveRetrievalConfig
 from app.db.session import get_db
 from app.main import app
 from app.modules.real_question_eval import (
+    EXTERNAL_EVAL_SAMPLE_DATASET_PATH,
     RealQuestionEvalConfig,
     RealQuestionEvalAggregateModelResult,
     RealQuestionEvalModelResult,
     RealQuestionEvalQuestionResult,
+    RealQuestionEvalResult,
     RealQuestionEvalRunner,
     run_full_version_batch_a_question_eval,
     run_full_version_batch_b_question_eval,
@@ -25,8 +27,15 @@ from app.modules.embeddings.providers.bge_m3_hybrid import (
     clear_bge_m3_hybrid_shared_model_cache,
     enable_bge_m3_hybrid_shared_model_cache,
 )
+from app.modules.real_question_eval.external_dataset import ExternalEvalSourceDocument
 from app.modules.real_question_eval.service import _QuestionEvalFakeSentenceTransformer
-from app.modules.real_question_eval.service import rerender_incremental_real_artifacts_from_existing_json
+from app.modules.real_question_eval.service import (
+    _build_external_eval_preflight_validation,
+    _build_quality_gate,
+    _choose_question_winner,
+    _resolve_overall_winner,
+    rerender_incremental_real_artifacts_from_existing_json,
+)
 from scripts.run_real_question_eval import (
     _print_text_result,
     resolve_full_version_batch_a_providers,
@@ -296,6 +305,12 @@ def test_real_question_eval_compares_both_candidates_writes_report_and_verifies_
     assert result.used_fake_models is True
     assert result.run_type == "fake"
     assert result.execution_mode == "fake_eval"
+    assert result.run_status == "COMPLETED"
+    assert result.quality_status == "PASS"
+    assert result.quality_gate is not None
+    assert result.quality_gate.passed is True
+    assert result.quality_gate.threshold == 1.0
+    assert result.preflight_validation is None
     assert result.dataset_id == "real-question-eval-dataset"
     assert len(result.question_results) == 3
     assert result.overall_winner_model_code == "bge_m3"
@@ -344,6 +359,11 @@ def test_real_question_eval_compares_both_candidates_writes_report_and_verifies_
     assert latest_json_payload["run_id"] == result.run_id
     assert latest_json_payload["run_type"] == "fake"
     assert latest_json_payload["execution_mode"] == "fake_eval"
+    assert latest_json_payload["run_status"] == "COMPLETED"
+    assert latest_json_payload["quality_status"] == "PASS"
+    assert latest_json_payload["quality_gate"]["passed"] is True
+    assert latest_json_payload["quality_gate"]["threshold"] == 1.0
+    assert latest_json_payload["preflight_validation"] == {}
     assert latest_json_payload["timestamp"] == result.generated_at
     assert latest_json_payload["status"] == "PASS"
     assert latest_json_payload["used_fake_models"] is True
@@ -373,6 +393,11 @@ def test_real_question_eval_compares_both_candidates_writes_report_and_verifies_
     assert latest_summary_payload["dataset_name"] == result.dataset_name
     assert latest_summary_payload["dataset_id"] == result.dataset_id
     assert latest_summary_payload["dataset_file"] is None
+    assert latest_summary_payload["run_status"] == "COMPLETED"
+    assert latest_summary_payload["quality_status"] == "PASS"
+    assert latest_summary_payload["quality_gate"]["passed"] is True
+    assert latest_summary_payload["quality_gate"]["threshold"] == 1.0
+    assert latest_summary_payload["preflight_validation"] == {}
     assert latest_summary_payload["status"] == "PASS"
     assert latest_summary_payload["overall_winner"] == "bge_m3"
     assert latest_summary_payload["total_questions"] == 3
@@ -388,7 +413,11 @@ def test_real_question_eval_compares_both_candidates_writes_report_and_verifies_
     assert "## Run" in latest_summary_markdown
     assert "## Model Results" in latest_summary_markdown
     assert "## Question Results" in latest_summary_markdown
-    assert "| model | status | passed | total | coverage | missing | distractors | latency_ms | winner |" in latest_summary_markdown
+    assert "- Run status: `COMPLETED`" in latest_summary_markdown
+    assert "- Quality status: `PASS`" in latest_summary_markdown
+    assert "- Quality gate: `best_model_pass_rate >= 1.0`" in latest_summary_markdown
+    assert "- Preflight validation: `n/a`" in latest_summary_markdown
+    assert "| model | status | passed | total | pass_rate | coverage | missing | distractors | latency_ms | winner |" in latest_summary_markdown
     assert "| question_id | test_type | model | status | coverage | missing | forbidden_hits | distractors | latency_ms |" in latest_summary_markdown
 
     for question_result in result.question_results:
@@ -422,6 +451,238 @@ def test_real_question_eval_compares_both_candidates_writes_report_and_verifies_
     root_level_json = tmp_path / "real_question_eval_artifacts" / "real_question_eval_result.json"
     assert not root_level_markdown.exists()
     assert not root_level_json.exists()
+
+
+def test_fake_external_dataset_run_uses_synthesized_source_documents_and_passes_negative_case(
+    client,
+    monkeypatch,
+    tmp_path,
+):
+    _install_fake_qdrant_client(monkeypatch)
+
+    db, session_generator = _get_test_db_session()
+    try:
+        result = RealQuestionEvalRunner(
+            db,
+            RealQuestionEvalConfig(
+                artifact_dir=tmp_path / "real_question_eval_artifacts",
+                dataset_path=EXTERNAL_EVAL_SAMPLE_DATASET_PATH,
+            ),
+        ).run()
+    finally:
+        _close_test_db_session(session_generator)
+
+    assert result.dataset_id == "eternal-world-external-eval-sample"
+    assert result.run_status == "COMPLETED"
+    assert result.quality_status == "PASS"
+    assert result.quality_gate is not None
+    assert result.quality_gate.threshold == 0.8
+    assert result.preflight_validation is not None
+    assert result.preflight_validation.passed is True
+    assert result.preflight_validation.missing_marker_count == 0
+    assert result.source_chunk_count > 0
+    assert result.source_chunk_count == result.preflight_validation.source_chunk_count
+    assert result.source_chunk_count >= result.preflight_validation.source_document_count
+    assert any(aggregate_result.passed_questions > 0 for aggregate_result in result.aggregate_results)
+
+    negative_question = next(
+        item for item in result.question_results if item.question_id == "negative-missing-compass"
+    )
+    assert all(model_result.passed for model_result in negative_question.model_results)
+    assert all(not model_result.top_chunks for model_result in negative_question.model_results)
+
+
+def test_fake_external_dataset_run_rechunks_after_default_smoke_source_in_same_profile(
+    client,
+    monkeypatch,
+    tmp_path,
+):
+    _install_fake_qdrant_client(monkeypatch)
+
+    db, session_generator = _get_test_db_session()
+    try:
+        default_result = RealQuestionEvalRunner(
+            db,
+            RealQuestionEvalConfig(artifact_dir=tmp_path / "default_artifacts"),
+        ).run()
+        external_result = RealQuestionEvalRunner(
+            db,
+            RealQuestionEvalConfig(
+                artifact_dir=tmp_path / "external_artifacts",
+                dataset_path=EXTERNAL_EVAL_SAMPLE_DATASET_PATH,
+            ),
+        ).run()
+    finally:
+        _close_test_db_session(session_generator)
+
+    assert default_result.dataset_id == "real-question-eval-dataset"
+    assert external_result.dataset_id == "eternal-world-external-eval-sample"
+    assert external_result.run_status == "COMPLETED"
+    assert external_result.quality_status == "PASS"
+    assert external_result.preflight_validation is not None
+    assert external_result.preflight_validation.passed is True
+    assert any(model_result.passed for question in external_result.question_results for model_result in question.model_results)
+
+
+def test_zero_coverage_question_and_aggregate_do_not_report_misleading_winner():
+    zero_model_results = [
+        RealQuestionEvalModelResult(
+            model_code="multilingual_e5_small",
+            collection_name="fixture_a",
+            top_chunks=[],
+            evidence_coverage=0.0,
+            relevant_result_count=0,
+            false_positive_count=0,
+            answer_summary="No grounded evidence markers were retrieved.",
+            groundedness_verdict="no_evidence",
+            passed=False,
+            hit=False,
+        ),
+        RealQuestionEvalModelResult(
+            model_code="bge_m3",
+            collection_name="fixture_b",
+            top_chunks=[],
+            evidence_coverage=0.0,
+            relevant_result_count=0,
+            false_positive_count=0,
+            answer_summary="No grounded evidence markers were retrieved.",
+            groundedness_verdict="no_evidence",
+            passed=False,
+            hit=False,
+        ),
+    ]
+
+    question_winner_model_code, question_winner_reason = _choose_question_winner(
+        model_results=zero_model_results,
+        official_best_model_code="bge_m3",
+    )
+    overall_winner_model_code, overall_winner_reason = _resolve_overall_winner(
+        aggregate_results=[
+            RealQuestionEvalAggregateModelResult(
+                model_code="multilingual_e5_small",
+                collection_name="fixture_a",
+                passed_questions=0,
+                average_evidence_coverage=0.0,
+                total_matched_markers=0,
+            ),
+            RealQuestionEvalAggregateModelResult(
+                model_code="bge_m3",
+                collection_name="fixture_b",
+                passed_questions=0,
+                average_evidence_coverage=0.0,
+                total_matched_markers=0,
+            ),
+        ],
+        official_best_model_code="bge_m3",
+    )
+
+    assert question_winner_model_code is None
+    assert question_winner_reason == "NO_MODEL_PASSED_QUESTION_QUALITY_GATE"
+    assert overall_winner_model_code is None
+    assert overall_winner_reason == "NO_MODEL_PASSED_QUALITY_GATE"
+
+
+def test_quality_gate_rejects_low_best_model_pass_rate():
+    result = RealQuestionEvalResult(
+        passed=False,
+        used_fake_models=True,
+        dataset_id="eternal-world-short-fact-v1",
+        dataset_name="Eternal World Short Fact Validation V1",
+        dataset_file=str(EXTERNAL_EVAL_SAMPLE_DATASET_PATH),
+        question_results=[
+            RealQuestionEvalQuestionResult(
+                question_id=f"question-{index}",
+                question_text="fixture",
+                model_results=[],
+            )
+            for index in range(120)
+        ],
+        aggregate_results=[
+            RealQuestionEvalAggregateModelResult(
+                model_code="multilingual_e5_small",
+                collection_name="fixture_a",
+                passed_questions=7,
+                average_evidence_coverage=0.3597,
+            ),
+            RealQuestionEvalAggregateModelResult(
+                model_code="bge_m3",
+                collection_name="fixture_b",
+                passed_questions=13,
+                average_evidence_coverage=0.3708,
+            ),
+        ],
+    )
+
+    quality_gate = _build_quality_gate(result)
+
+    assert quality_gate.passed is False
+    assert quality_gate.threshold == 0.8
+    assert quality_gate.best_model_code == "bge_m3"
+    assert round(quality_gate.best_pass_rate, 4) == 0.1083
+    assert quality_gate.qualifying_models == []
+
+
+def test_external_preflight_catches_missing_required_evidence():
+    runner = RealQuestionEvalRunner(
+        db=None,
+        config=RealQuestionEvalConfig(dataset_path=EXTERNAL_EVAL_SAMPLE_DATASET_PATH),
+    )
+    dataset = runner.resolve_eval_dataset()
+    source_documents = [
+        ExternalEvalSourceDocument.model_validate(item)
+        for item in dataset.metadata["source_documents"]
+    ]
+    target_document_id = next(
+        document.document_id for document in source_documents if "sunflower seeds" in document.content
+    )
+    damaged_documents = [
+        document.model_copy(
+            update={"content": document.content.replace("sunflower seeds", "missing seed marker")}
+        )
+        if document.document_id == target_document_id
+        else document
+        for document in source_documents
+    ]
+
+    preflight_validation = _build_external_eval_preflight_validation(
+        dataset=dataset,
+        source_documents=damaged_documents,
+        source_chunks=[],
+    )
+
+    assert preflight_validation.passed is False
+    assert preflight_validation.missing_marker_count >= 1
+    assert any(issue.question_id == "short-fact-sunflower-house" for issue in preflight_validation.issues)
+    assert any(issue.issue_code == "missing_required_marker_in_source_documents" for issue in preflight_validation.issues)
+
+
+def test_external_preflight_passes_when_source_documents_and_chunks_preserve_markers():
+    runner = RealQuestionEvalRunner(
+        db=None,
+        config=RealQuestionEvalConfig(dataset_path=EXTERNAL_EVAL_SAMPLE_DATASET_PATH),
+    )
+    dataset = runner.resolve_eval_dataset()
+    source_documents = [
+        ExternalEvalSourceDocument.model_validate(item)
+        for item in dataset.metadata["source_documents"]
+    ]
+    source_chunks = [
+        SimpleNamespace(
+            chunk_text=f"document {document.document_id}: {document.content}",
+            chunk_metadata={"source_document_id": document.document_id},
+        )
+        for document in source_documents
+    ]
+
+    preflight_validation = _build_external_eval_preflight_validation(
+        dataset=dataset,
+        source_documents=source_documents,
+        source_chunks=source_chunks,
+    )
+
+    assert preflight_validation.passed is True
+    assert preflight_validation.missing_marker_count == 0
+    assert preflight_validation.issue_count == 0
 
 
 def test_fake_run_does_not_overwrite_existing_latest_real_and_can_backfill_it_from_historical_real_run(
@@ -524,6 +785,9 @@ def test_real_question_eval_script_output_prints_latest_and_archived_artifact_pa
     assert "archived_json_result:" in captured.out
     assert "archived_markdown_summary:" in captured.out
     assert "archived_json_summary:" in captured.out
+    assert "run_status: COMPLETED" in captured.out
+    assert "quality_status: PASS" in captured.out
+    assert "quality_gate: best_model_pass_rate>=1.0000" in captured.out
     assert "execution_mode: fake_eval" in captured.out
     assert "latest_fake" in captured.out
 

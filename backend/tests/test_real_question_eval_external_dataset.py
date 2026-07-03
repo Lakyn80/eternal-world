@@ -16,6 +16,7 @@ from app.modules.real_question_eval import (
     get_extended_external_eval_dataset_inventory,
     load_external_eval_dataset,
 )
+from app.modules.real_question_eval.external_dataset import build_external_eval_source_text
 
 EXPECTED_EXTENDED_CASE_COUNTS = {
     "short_fact_v1": 120,
@@ -37,6 +38,8 @@ def test_sample_external_eval_dataset_exists_and_loads():
     assert dataset.metadata["supported_test_types"] == list(SUPPORTED_EXTERNAL_EVAL_TEST_TYPES)
     assert dataset.metadata["supported_source_scope_types"] == list(SUPPORTED_EXTERNAL_EVAL_SOURCE_SCOPE_TYPES)
     assert dataset.metadata["external_dataset_path"] == str(EXTERNAL_EVAL_SAMPLE_DATASET_PATH.resolve())
+    assert dataset.metadata["source_document_count"] > 0
+    assert dataset.metadata["source_document_mode"] == "synthesized"
 
 
 def test_extended_external_eval_dataset_inventory_loads_successfully():
@@ -234,6 +237,7 @@ def test_real_question_eval_runner_build_request_can_use_external_dataset_path()
     assert request.dataset.dataset_id == "eternal-world-external-eval-sample"
     assert len(request.dataset.cases) == 5
     assert request.dataset.metadata["external_dataset"] is True
+    assert request.dataset.metadata["source_document_count"] > 0
 
 
 def test_real_question_eval_runner_build_request_can_use_extended_dataset_path():
@@ -246,3 +250,56 @@ def test_real_question_eval_runner_build_request_can_use_extended_dataset_path()
 
     assert request.dataset.dataset_id == "eternal-world-short-fact-v1"
     assert len(request.dataset.cases) == 120
+    assert request.dataset.metadata["source_document_count"] > 0
+
+
+def test_all_non_negative_external_dataset_markers_exist_in_synthesized_source_documents():
+    for dataset_path in (
+        ETERNAL_WORLD_SHORT_FACT_V1_DATASET_PATH,
+        ETERNAL_WORLD_PAGE_LEVEL_V1_DATASET_PATH,
+        ETERNAL_WORLD_MULTI_DOCUMENT_V1_DATASET_PATH,
+        ETERNAL_WORLD_DISTRACTOR_V1_DATASET_PATH,
+    ):
+        dataset = load_external_eval_dataset(dataset_path)
+        source_text = build_external_eval_source_text(dataset.metadata["source_documents"]).lower()
+
+        for case in dataset.cases:
+            for evidence_rule in case.required_evidence:
+                candidates = [evidence_rule.marker, *evidence_rule.aliases]
+                assert any(candidate.lower() in source_text for candidate in candidates), (
+                    f"Missing required evidence for {dataset.dataset_id}:{case.case_id}: {evidence_rule.marker}"
+                )
+
+
+def test_page_level_synthesized_source_documents_meet_minimum_context_chars():
+    dataset = load_external_eval_dataset(ETERNAL_WORLD_PAGE_LEVEL_V1_DATASET_PATH)
+    source_documents = dataset.metadata["source_documents"]
+
+    for case in dataset.cases:
+        scoped_text = " ".join(
+            item["content"]
+            for item in source_documents
+            if any(str(item["document_id"]).startswith(document_id) for document_id in case.source_scope["document_ids"])
+            and item.get("page_number") in case.source_scope["page_numbers"]
+        )
+        assert len(scoped_text) >= case.minimum_context_chars, case.case_id
+
+
+def test_multi_document_synthesized_source_documents_span_multiple_documents():
+    dataset = load_external_eval_dataset(ETERNAL_WORLD_MULTI_DOCUMENT_V1_DATASET_PATH)
+    source_documents = dataset.metadata["source_documents"]
+
+    for case in dataset.cases:
+        matched_base_documents = {
+            document_id
+            for document_id in case.source_scope["document_ids"]
+            if any(str(item["document_id"]).startswith(document_id) for item in source_documents)
+        }
+        assert len(matched_base_documents) >= 2, case.case_id
+
+
+def test_negative_dataset_keeps_source_documents_optional_and_non_hallucinated():
+    dataset = load_external_eval_dataset(ETERNAL_WORLD_NEGATIVE_V1_DATASET_PATH)
+
+    assert dataset.metadata["source_document_count"] == 0
+    assert build_external_eval_source_text(dataset.metadata["source_documents"])

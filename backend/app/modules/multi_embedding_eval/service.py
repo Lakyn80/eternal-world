@@ -51,6 +51,7 @@ from app.modules.rag_retrieval.exceptions import (
 )
 from app.modules.rag_retrieval.schemas import RagRetrievalRequest
 from app.modules.rag_retrieval.service import retrieve_profile_rag_for_collection
+from app.modules.rag_sources.schemas import READY_FOR_CLEANING_STATUS
 from app.modules.rag_sources.service import RagSourceNotFoundError, get_rag_source
 
 
@@ -101,6 +102,9 @@ def _summarize_existing_chunks(
     owner: User,
     rag_source,
 ) -> RagSourceChunkingSummaryRead | None:
+    if getattr(rag_source, "status", None) == READY_FOR_CLEANING_STATUS:
+        return None
+
     existing_chunks = rag_chunks_repository.list_chunks_for_source(
         db,
         owner_user_id=owner.id,

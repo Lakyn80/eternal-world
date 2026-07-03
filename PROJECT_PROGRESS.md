@@ -3659,6 +3659,66 @@ Scope confirmation:
 - frontend was not changed
 - billing/chat behavior was not changed
 
+## Task 54 Real Question Eval External Quality Gate And Preflight
+
+Goal:
+
+- finish the external 500-case Real Question Eval follow-up with a real quality gate, source preflight, and compact summary/report propagation
+
+What changed:
+
+- `backend/scripts/print_real_question_eval_summary.py` now prints:
+  - run status
+  - quality status
+  - quality gate
+  - winner reason
+  - preflight result
+  - preflight missing marker count
+- external non-negative eval runs now materialize eval-only chunks as one synthesized source document per chunk before model comparison
+- external dataset preflight now validates:
+  - dataset case count
+  - required evidence marker presence in scoped source documents
+  - required evidence marker presence in scoped source chunks
+  - page-level `minimum_context_chars`
+  - multi-document scope coverage across multiple documents
+  - distractor marker presence
+  - negative-case unsupported claim absence from source chunks
+- `quality_status` now means actual quality:
+  - external datasets use a strict best-model pass-rate gate of `0.8`
+  - the default internal smoke dataset keeps a strict gate of `1.0`
+  - if no model meets the gate, `overall_winner` is cleared and `overall_winner_reason` is `NO_MODEL_PASSED_QUALITY_GATE`
+- summary/report payloads now include:
+  - `quality_gate`
+  - `preflight_validation`
+  - per-model `pass_rate`
+
+How to run:
+
+- from `backend/`:
+  - `python scripts/print_real_question_eval_summary.py --latest 5`
+  - `python scripts/print_real_question_eval_summary.py --latest-fake`
+  - `python scripts/print_real_question_eval_summary.py --runs-dir artifacts/real_question_eval/runs --latest 5`
+  - `python scripts/print_real_question_eval_summary.py --run-dir artifacts/real_question_eval/runs/<run_folder>`
+
+Artifact metrics note:
+
+- current artifacts already exposed enough per-model metrics to support the reporter
+- this follow-up still uses `real_question_eval_summary.json`
+- no separate `summary.json` alias was added
+
+Verification scope:
+
+- no real benchmarks were rerun
+- no model downloads were triggered
+- runtime fake eval artifacts can be generated during verification and must be removed afterward
+
+Scope confirmation:
+
+- active retrieval provider was not changed
+- production retrieval runtime behavior was not changed
+- frontend was not changed
+- billing/chat behavior was not changed
+
 ## Task 52 Follow-up Automatic Summary Artifacts
 
 Goal:
@@ -3835,6 +3895,60 @@ Verification scope:
 
 - only fake-safe/local tests were run
 - no benchmarks were rerun
+- no model downloads were triggered
+
+Scope confirmation:
+
+- active retrieval provider was not changed
+- production retrieval runtime behavior was not changed
+- frontend was not changed
+- billing/chat behavior was not changed
+
+## Task 53 Real Question Eval External Fake Corpus Repair
+
+Goal:
+
+- make the 500-case external Real Question Eval datasets executable against a matching fake corpus instead of the old 3-question smoke corpus
+- separate run completion from eval quality reporting
+- remove misleading winners when no model passes the eval quality gate
+
+Root cause found:
+
+- `RealQuestionEvalRunner.ensure_source()` was still reusing the fixed smoke source text for external datasets
+- `multi_embedding_eval` reused stale chunks even after the source raw text changed, so external runs could still execute against old smoke chunks
+- fake artifacts exposed only one `status`, so a completed run with broken quality still appeared as `PASS`
+
+What changed:
+
+- external dataset support now synthesizes backward-compatible source documents when datasets do not define explicit `source_documents`
+- fake eval source text is now built from those external source documents for `--dataset-file` runs
+- stale chunk reuse is blocked when a source is marked `ready_for_cleaning`
+- fake eval results now expose:
+  - `run_status`
+  - `quality_status`
+  - `overall_winner_reason`
+- compact summary artifacts and the console summary reporter now print the separate run/quality statuses
+- no-winner artifacts now use `overall_winner: null` plus `NO_MODEL_PASSED_QUALITY_GATE`
+
+How to run:
+
+- from `backend/`:
+  - `python scripts/print_real_question_eval_summary.py --latest 5`
+  - `python scripts/print_real_question_eval_summary.py --latest-fake`
+  - `python scripts/print_real_question_eval_summary.py --runs-dir artifacts/real_question_eval/runs --latest 5`
+  - `python scripts/print_real_question_eval_summary.py --run-dir artifacts/real_question_eval/runs/<run_folder>`
+
+Artifact metrics note:
+
+- current result artifacts continue to expose per-model metrics under `developer_view.aggregate_results`
+- current summary artifacts continue to expose compact per-model rows under `real_question_eval_summary.json`
+- no separate `summary.json` alias was added in this follow-up
+
+Verification scope:
+
+- fake-safe/local tests were run
+- docker fake eval runs were executed for external datasets
+- no real benchmarks were rerun
 - no model downloads were triggered
 
 Scope confirmation:

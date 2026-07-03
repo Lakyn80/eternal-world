@@ -122,8 +122,42 @@ class RealQuestionEvalArtifactPaths(BaseModel):
     archived_json_summary: str | None = None
 
 
+class RealQuestionEvalQualityGate(BaseModel):
+    passed: bool = False
+    gate_name: str = "best_model_pass_rate"
+    threshold: float = 1.0
+    total_questions: int = 0
+    best_model_code: str | None = None
+    best_passed_questions: int = 0
+    best_pass_rate: float = 0
+    best_average_evidence_coverage: float = 0
+    qualifying_models: list[str] = Field(default_factory=list)
+    rule: str | None = None
+
+
+class RealQuestionEvalPreflightIssue(BaseModel):
+    question_id: str | None = None
+    issue_code: str
+    marker: str | None = None
+    detail: str
+
+
+class RealQuestionEvalPreflightValidation(BaseModel):
+    passed: bool = True
+    dataset_case_count: int = 0
+    source_document_count: int = 0
+    source_chunk_count: int = 0
+    missing_marker_count: int = 0
+    issue_count: int = 0
+    issues: list[RealQuestionEvalPreflightIssue] = Field(default_factory=list)
+
+
 class RealQuestionEvalResult(BaseModel):
     passed: bool
+    run_status: str | None = None
+    quality_status: str | None = None
+    quality_gate: RealQuestionEvalQualityGate | None = None
+    preflight_validation: RealQuestionEvalPreflightValidation | None = None
     used_fake_models: bool
     run_type: str | None = None
     execution_mode: str | None = None
@@ -152,6 +186,7 @@ class RealQuestionEvalResult(BaseModel):
     question_results: list[RealQuestionEvalQuestionResult] = Field(default_factory=list)
     aggregate_results: list[RealQuestionEvalAggregateModelResult] = Field(default_factory=list)
     overall_winner_model_code: str | None = None
+    overall_winner_reason: str | None = None
     official_best_config: dict[str, Any] | None = None
     activated: bool = False
     runtime_verified: bool = False

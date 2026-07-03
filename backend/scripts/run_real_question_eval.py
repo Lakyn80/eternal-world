@@ -227,10 +227,27 @@ def resolve_real_question_eval_execution_mode(
 
 
 def _print_text_result(result) -> None:
-    print(f"REAL QUESTION EVAL RESULT: {'PASS' if result.passed else 'FAIL'}")
+    print(f"REAL QUESTION EVAL RESULT: {result.quality_status or ('PASS' if result.passed else 'FAIL')}")
     print()
     print(f"dataset: {result.dataset_name} ({result.dataset_id})")
+    print(f"run_status: {result.run_status or 'unknown'}")
+    print(f"quality_status: {result.quality_status or ('PASS' if result.passed else 'FAIL')}")
+    if result.quality_gate is not None:
+        print(
+            "quality_gate: "
+            f"{result.quality_gate.gate_name}>={result.quality_gate.threshold:.4f} "
+            f"best={result.quality_gate.best_model_code or 'none'} "
+            f"pass_rate={result.quality_gate.best_pass_rate:.4f}"
+        )
     print(f"overall_winner: {result.overall_winner_model_code}")
+    if result.overall_winner_reason:
+        print(f"overall_winner_reason: {result.overall_winner_reason}")
+    if result.preflight_validation is not None:
+        print(
+            "preflight_validation: "
+            f"{'PASS' if result.preflight_validation.passed else 'FAIL'} "
+            f"missing_marker_count={result.preflight_validation.missing_marker_count}"
+        )
     print(f"execution_mode: {result.execution_mode}")
     print(f"used_fake_models: {str(result.used_fake_models).lower()}")
     if result.benchmark_batch_label:
@@ -280,7 +297,7 @@ def _print_text_result(result) -> None:
 
     if result.error:
         print(f"error: {result.error}")
-    print(f"status: {'PASS' if result.passed else 'FAIL'}")
+    print(f"status: {result.quality_status or ('PASS' if result.passed else 'FAIL')}")
 
 
 def _run_with_config(*, args, config: RealQuestionEvalConfig, execution_mode: str) -> int:

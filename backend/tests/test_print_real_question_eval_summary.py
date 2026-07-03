@@ -28,13 +28,36 @@ def _build_result_payload(
 ) -> dict[str, object]:
     return {
         "run_id": run_id,
+        "run_status": "COMPLETED",
+        "quality_status": status,
         "status": status,
+        "quality_gate": {
+            "passed": status == "PASS",
+            "gate_name": "best_model_pass_rate",
+            "threshold": 0.8,
+            "total_questions": total_questions,
+            "best_model_code": overall_winner,
+            "best_passed_questions": total_questions,
+            "best_pass_rate": 1.0,
+            "qualifying_models": [overall_winner] if overall_winner is not None else [],
+        },
+        "preflight_validation": {
+            "passed": True,
+            "dataset_case_count": total_questions,
+            "source_document_count": total_questions,
+            "source_chunk_count": total_questions,
+            "missing_marker_count": 0,
+            "issue_count": 0,
+            "issues": [],
+        },
+        "overall_winner_reason": "OFFICIAL_SELECTOR",
         "client_view": {
             "dataset": {
                 "id": dataset_id,
                 "name": dataset_name,
             },
             "overall_winner": overall_winner,
+            "overall_winner_reason": "OFFICIAL_SELECTOR",
             "questions": [{} for _ in range(total_questions)],
         },
         "developer_view": {
@@ -89,8 +112,30 @@ def _build_summary_payload(
         "dataset_name": dataset_name,
         "dataset_id": dataset_id,
         "dataset_file": "app/modules/real_question_eval/datasets/eternal_world_short_fact_v1.json",
+        "run_status": "COMPLETED",
+        "quality_status": "PASS",
         "status": "PASS",
+        "quality_gate": {
+            "passed": True,
+            "gate_name": "best_model_pass_rate",
+            "threshold": 0.8,
+            "total_questions": 10,
+            "best_model_code": winner,
+            "best_passed_questions": 9,
+            "best_pass_rate": 0.9,
+            "qualifying_models": [winner],
+        },
         "overall_winner": winner,
+        "overall_winner_reason": "OFFICIAL_SELECTOR",
+        "preflight_validation": {
+            "passed": True,
+            "dataset_case_count": 10,
+            "source_document_count": 10,
+            "source_chunk_count": 10,
+            "missing_marker_count": 0,
+            "issue_count": 0,
+            "issues": [],
+        },
         "total_questions": 10,
         "models": ["bge_m3"],
         "model_results": [
@@ -137,6 +182,10 @@ def test_print_summary_reads_latest_fake_summary_artifact(tmp_path, capsys) -> N
     assert "REAL QUESTION EVAL SUMMARY" in captured.out
     assert "DATASET: Latest Fake Summary Dataset" in captured.out
     assert "DATASET ID: fixture-summary-dataset" in captured.out
+    assert "RUN STATUS: COMPLETED" in captured.out
+    assert "QUALITY STATUS: PASS" in captured.out
+    assert "QUALITY GATE: best_model_pass_rate >= 0.8000" in captured.out
+    assert "PREFLIGHT: PASS" in captured.out
     assert "WINNER: bge_m3" in captured.out
     assert "bge_m3" in captured.out
 
@@ -150,7 +199,8 @@ def test_print_summary_reads_specific_run_dir(tmp_path, capsys) -> None:
 
     assert exit_code == 0
     assert f"ARTIFACT PATH: {artifact_path}" in captured.out
-    assert "STATUS: PASS" in captured.out
+    assert "QUALITY STATUS: PASS" in captured.out
+    assert "QUALITY GATE: best_model_pass_rate >= 0.8000" in captured.out
 
 
 def test_print_summary_reads_latest_archived_runs_in_desc_order(tmp_path, capsys) -> None:
@@ -203,13 +253,35 @@ def test_print_summary_warns_when_per_model_metrics_are_missing(tmp_path, capsys
     run_dir = tmp_path / "artifacts" / "real_question_eval" / "runs" / "20260702_124856Z_fake"
     _write_json(
         run_dir / "real_question_eval_result.json",
-        {
-            "run_id": "20260702_124856Z",
-            "status": "PASS",
-            "client_view": {
-                "dataset": {"id": "eternal-world-negative-v1", "name": "Eternal World Negative Validation V1"},
-                "overall_winner": "bge_m3",
-            },
+            {
+                "run_id": "20260702_124856Z",
+                "run_status": "COMPLETED",
+                "quality_status": "FAIL",
+                "status": "PASS",
+                "quality_gate": {
+                    "passed": False,
+                    "gate_name": "best_model_pass_rate",
+                    "threshold": 0.8,
+                    "total_questions": 80,
+                    "best_model_code": None,
+                    "best_passed_questions": 0,
+                    "best_pass_rate": 0.0,
+                    "qualifying_models": [],
+                },
+                "preflight_validation": {
+                    "passed": True,
+                    "dataset_case_count": 80,
+                    "source_document_count": 0,
+                    "source_chunk_count": 1,
+                    "missing_marker_count": 0,
+                    "issue_count": 0,
+                    "issues": [],
+                },
+                "client_view": {
+                    "dataset": {"id": "eternal-world-negative-v1", "name": "Eternal World Negative Validation V1"},
+                    "overall_winner": None,
+                    "overall_winner_reason": "NO_MODEL_PASSED_QUALITY_GATE",
+                },
         },
     )
 
@@ -218,6 +290,9 @@ def test_print_summary_warns_when_per_model_metrics_are_missing(tmp_path, capsys
 
     assert exit_code == 0
     assert f"WARNING: {MISSING_MODEL_METRICS_WARNING}" in captured.out
+    assert "RUN STATUS: COMPLETED" in captured.out
+    assert "QUALITY STATUS: FAIL" in captured.out
+    assert "QUALITY GATE: best_model_pass_rate >= 0.8000" in captured.out
 
 
 def test_print_summary_renders_table_from_summary_json_fixture(tmp_path) -> None:
@@ -232,6 +307,7 @@ def test_print_summary_renders_table_from_summary_json_fixture(tmp_path) -> None
     assert "bge_m3" in text
     assert "0.7500" in text
     assert "42.0" in text
+    assert "PREFLIGHT: PASS" in text
 
 
 def test_print_summary_does_not_crash_when_optional_metrics_are_missing(tmp_path) -> None:
@@ -242,6 +318,8 @@ def test_print_summary_does_not_crash_when_optional_metrics_are_missing(tmp_path
             "run_id": "20260702_124856Z",
             "dataset_name": "Optional Metrics Dataset",
             "dataset_id": "optional-metrics-dataset",
+            "run_status": "COMPLETED",
+            "quality_status": "PASS",
             "status": "PASS",
             "overall_winner": "bge_m3",
             "total_questions": 1,
@@ -275,3 +353,28 @@ def test_print_summary_unknown_shape_does_not_crash(tmp_path, capsys) -> None:
     assert exit_code == 0
     assert "DATASET: unknown" in captured.out
     assert f"WARNING: {MISSING_MODEL_METRICS_WARNING}" in captured.out
+
+
+def test_print_summary_renders_winner_reason_when_quality_gate_failed(tmp_path) -> None:
+    run_dir = tmp_path / "artifacts" / "real_question_eval" / "runs" / "20260702_124856Z_fake"
+    artifact_path = _write_json(
+        run_dir / "real_question_eval_summary.json",
+        {
+            "run_id": "20260702_124856Z",
+            "dataset_name": "Zero Coverage Dataset",
+            "dataset_id": "zero-coverage-dataset",
+            "run_status": "COMPLETED",
+            "quality_status": "FAIL",
+            "status": "FAIL",
+            "overall_winner": None,
+            "overall_winner_reason": "NO_MODEL_PASSED_QUALITY_GATE",
+            "total_questions": 2,
+            "model_results": [],
+            "question_results": [],
+        },
+    )
+
+    text = render_summary(summarize_artifact(artifact_path))
+
+    assert "QUALITY STATUS: FAIL" in text
+    assert "WINNER REASON: NO_MODEL_PASSED_QUALITY_GATE" in text
