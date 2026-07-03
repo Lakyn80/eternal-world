@@ -271,6 +271,24 @@ def test_all_non_negative_external_dataset_markers_exist_in_synthesized_source_d
                 )
 
 
+def test_all_non_negative_external_dataset_aliases_exist_in_synthesized_source_documents():
+    for dataset_path in (
+        ETERNAL_WORLD_SHORT_FACT_V1_DATASET_PATH,
+        ETERNAL_WORLD_PAGE_LEVEL_V1_DATASET_PATH,
+        ETERNAL_WORLD_MULTI_DOCUMENT_V1_DATASET_PATH,
+        ETERNAL_WORLD_DISTRACTOR_V1_DATASET_PATH,
+    ):
+        dataset = load_external_eval_dataset(dataset_path)
+        source_text = build_external_eval_source_text(dataset.metadata["source_documents"]).lower()
+
+        for case in dataset.cases:
+            for evidence_rule in case.required_evidence:
+                for alias in evidence_rule.aliases:
+                    assert alias.lower() in source_text, (
+                        f"Missing evidence alias for {dataset.dataset_id}:{case.case_id}: {alias}"
+                    )
+
+
 def test_page_level_synthesized_source_documents_meet_minimum_context_chars():
     dataset = load_external_eval_dataset(ETERNAL_WORLD_PAGE_LEVEL_V1_DATASET_PATH)
     source_documents = dataset.metadata["source_documents"]

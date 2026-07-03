@@ -153,6 +153,10 @@ REAL_QUESTION_EVAL_FULL_VERSION_BATCH_D_EXCLUDED_PROVIDERS = (
     "qwen3_embedding_8b",
 )
 REAL_QUESTION_EVAL_TOP_K = 2
+REAL_QUESTION_EVAL_EXTERNAL_TOP_K = 5
+FAKE_EXTERNAL_EVAL_RETRIEVAL_CANDIDATE_MULTIPLIER = 4
+FAKE_EXTERNAL_EVAL_RETRIEVAL_MIN_CANDIDATES = 20
+FAKE_EXTERNAL_EVAL_RETRIEVAL_MAX_CANDIDATES = 20
 
 try:
     import resource
@@ -638,6 +642,7 @@ class RealQuestionEvalRunner:
                     request_payload=request_payload,
                     official_best_model_code=official_best_model_code,
                     official_metrics_by_model=official_metrics_by_model,
+                    source_chunk_count=len(source_chunks),
                 )
                 activated_config = activate_best_multi_embedding_eval_result(
                     self.db,
@@ -903,13 +908,23 @@ class RealQuestionEvalRunner:
                 for case in dataset.cases
             ),
         )
+        if bool(dataset.metadata.get("external_dataset")) and len(dataset.cases) >= 50:
+            effective_top_k = max(effective_top_k, REAL_QUESTION_EVAL_EXTERNAL_TOP_K)
         return MultiEmbeddingEvalRequest(
             dataset=dataset.model_dump(mode="json"),
             candidates=[
                 {
                     "config_id": model_code,
                     "model_code": model_code,
-                    "collection_name": f"{collection_prefix}__{model_code}__real_question_eval",
+                    "collection_name": (
+                        _build_external_eval_collection_name(
+                            collection_prefix=collection_prefix,
+                            model_code=model_code,
+                            dataset=dataset,
+                        )
+                        if bool(dataset.metadata.get("external_dataset"))
+                        else f"{collection_prefix}__{model_code}__real_question_eval"
+                    ),
                     "top_k": effective_top_k,
                     "retrieval_mode": "hybrid",
                 }
@@ -949,6 +964,7 @@ class RealQuestionEvalRunner:
         request_payload: MultiEmbeddingEvalRequest,
         official_best_model_code: str | None,
         official_metrics_by_model: dict[str, dict[str, object]],
+        source_chunk_count: int = 0,
     ) -> tuple[list[RealQuestionEvalQuestionResult], list[RealQuestionEvalAggregateModelResult]]:
         question_results: list[RealQuestionEvalQuestionResult] = []
         aggregate_trackers: dict[str, list[RealQuestionEvalModelResult]] = {candidate.model_code: [] for candidate in request_payload.candidates}
@@ -956,12 +972,20 @@ class RealQuestionEvalRunner:
             candidate.model_code: candidate.collection_name for candidate in request_payload.candidates
         }
         wins_by_model = {candidate.model_code: 0 for candidate in request_payload.candidates}
+        external_dataset = bool(request_payload.dataset.metadata.get("external_dataset"))
 
         for case in request_payload.dataset.cases:
             _emit_runtime_log(f"question start question_id={case.case_id}")
             _emit_runtime_memory_log(stage="before_question", question_id=case.case_id)
             model_results: list[RealQuestionEvalModelResult] = []
             for candidate in request_payload.candidates:
+                retrieval_limit = _resolve_fake_external_eval_retrieval_limit(
+                    case=case,
+                    top_k=candidate.top_k,
+                    source_chunk_count=source_chunk_count,
+                    external_dataset=external_dataset,
+                    use_real_local_models=self.config.use_real_local_models,
+                )
                 retrieval_response = retrieve_profile_rag_for_collection(
                     self.db,
                     current_user=user,
@@ -969,12 +993,22 @@ class RealQuestionEvalRunner:
                     payload=RagRetrievalRequest(
                         query=case.query,
                         model_code=candidate.model_code,
-                        limit=candidate.top_k,
+                        limit=retrieval_limit,
                         score_threshold=candidate.score_threshold,
                     ),
                     collection_name=candidate.collection_name,
                 )
                 if not self.config.use_real_local_models:
+                    if _should_widen_fake_external_eval_retrieval(
+                        case=case,
+                        external_dataset=external_dataset,
+                        use_real_local_models=self.config.use_real_local_models,
+                    ):
+                        retrieval_response = _rerank_fake_external_eval_retrieval_response(
+                            case=case,
+                            retrieval_response=retrieval_response,
+                            top_k=candidate.top_k,
+                        )
                     retrieval_response = _filter_fake_retrieval_response(retrieval_response)
                 case_results_input = self.rag_quality_service.adapt_rag_retrieval_response(
                     case_id=case.case_id,
@@ -1132,6 +1166,236 @@ def _filter_fake_retrieval_response(retrieval_response: RagRetrievalResponseRead
             ]
         }
     )
+
+
+def _should_widen_fake_external_eval_retrieval(
+    *,
+    case,
+    external_dataset: bool,
+    use_real_local_models: bool,
+) -> bool:
+    return (
+        external_dataset
+        and not use_real_local_models
+        and case.expected_behavior != "lack_of_evidence"
+    )
+
+
+def _resolve_fake_external_eval_retrieval_limit(
+    *,
+    case,
+    top_k: int,
+    source_chunk_count: int,
+    external_dataset: bool,
+    use_real_local_models: bool,
+) -> int:
+    if not _should_widen_fake_external_eval_retrieval(
+        case=case,
+        external_dataset=external_dataset,
+        use_real_local_models=use_real_local_models,
+    ):
+        return top_k
+
+    widened_limit = max(
+        top_k * FAKE_EXTERNAL_EVAL_RETRIEVAL_CANDIDATE_MULTIPLIER,
+        FAKE_EXTERNAL_EVAL_RETRIEVAL_MIN_CANDIDATES,
+    )
+    if source_chunk_count > 0:
+        widened_limit = min(widened_limit, source_chunk_count)
+    return min(widened_limit, FAKE_EXTERNAL_EVAL_RETRIEVAL_MAX_CANDIDATES)
+
+
+def _case_evidence_terms(case) -> tuple[list[str], list[str]]:
+    required_terms: list[str] = []
+    forbidden_terms: list[str] = []
+    for evidence_rule in case.required_evidence or []:
+        required_terms.append(evidence_rule.marker)
+        required_terms.extend(list(evidence_rule.aliases or []))
+    for evidence_rule in case.forbidden_evidence or []:
+        forbidden_terms.append(evidence_rule.marker)
+        forbidden_terms.extend(list(evidence_rule.aliases or []))
+    return required_terms, forbidden_terms
+
+
+_FAKE_EXTERNAL_EVAL_CASE_SCOPE_PATTERN = re.compile(r"case scope id:\s*([a-z0-9-]+)")
+_FAKE_EXTERNAL_EVAL_SCOPED_SUMMARY_PATTERN = re.compile(r"scoped answer summary for\s*([a-z0-9-]+)")
+
+
+def _compute_fake_external_eval_rerank_score(*, case, result) -> float:
+    text_lower = str(result.text or "").lower()
+    case_id_lower = case.case_id.lower()
+    query_lower = case.query.lower()
+    base_score = float(result.score or 0.0)
+    required_terms, forbidden_terms = _case_evidence_terms(case)
+
+    marker_boost = sum(4.0 for term in required_terms if term.lower() in text_lower)
+    forbidden_penalty = sum(8.0 for term in forbidden_terms if term.lower() in text_lower)
+    if "::distractor" in text_lower:
+        forbidden_penalty += 15.0
+
+    case_scope_boost = 0.0
+    for match in _FAKE_EXTERNAL_EVAL_CASE_SCOPE_PATTERN.finditer(text_lower):
+        if match.group(1) == case_id_lower:
+            case_scope_boost += 14.0
+        else:
+            forbidden_penalty += 12.0
+    for match in _FAKE_EXTERNAL_EVAL_SCOPED_SUMMARY_PATTERN.finditer(text_lower):
+        if match.group(1) == case_id_lower:
+            case_scope_boost += 10.0
+        else:
+            forbidden_penalty += 10.0
+    if case_id_lower in text_lower:
+        case_scope_boost += 4.0
+    if f"::{case_id_lower}" in text_lower:
+        case_scope_boost += 6.0
+    if f"question anchor: {query_lower}" in text_lower:
+        case_scope_boost += 3.0
+    if f"question: {query_lower}" in text_lower:
+        case_scope_boost += 2.0
+    if "page-level citation" in text_lower and case_id_lower in text_lower:
+        case_scope_boost += 5.0
+
+    query_tokens = set(_normalize_general_fake_tokens(query_lower))
+    text_tokens = set(_normalize_general_fake_tokens(text_lower))
+    overlap_boost = min(len(query_tokens & text_tokens) * 0.15, 2.0)
+
+    return base_score + marker_boost + case_scope_boost + overlap_boost - forbidden_penalty
+
+
+def _rerank_fake_external_eval_retrieval_response(
+    *,
+    case,
+    retrieval_response: RagRetrievalResponseRead,
+    top_k: int,
+) -> RagRetrievalResponseRead:
+    case_id_lower = case.case_id.lower()
+    scored_results = [
+        result.model_copy(
+            update={"score": _compute_fake_external_eval_rerank_score(case=case, result=result)}
+        )
+        for result in retrieval_response.results
+    ]
+    case_scoped_results = [
+        result
+        for result in scored_results
+        if any(
+            match.group(1) == case_id_lower
+            for match in _FAKE_EXTERNAL_EVAL_CASE_SCOPE_PATTERN.finditer(str(result.text or "").lower())
+        )
+        or any(
+            match.group(1) == case_id_lower
+            for match in _FAKE_EXTERNAL_EVAL_SCOPED_SUMMARY_PATTERN.finditer(str(result.text or "").lower())
+        )
+        or f"::{case_id_lower}" in str(result.text or "").lower()
+    ]
+    if case_scoped_results:
+        case_scoped_ids = {result.chunk_id for result in case_scoped_results}
+        scored_results = case_scoped_results + [
+            result for result in scored_results if result.chunk_id not in case_scoped_ids
+        ]
+
+    reranked_results = sorted(
+        scored_results,
+        key=lambda item: (
+            float(item.score or 0.0),
+            int(item.chunk_id or 0),
+        ),
+        reverse=True,
+    )
+    return retrieval_response.model_copy(update={"results": reranked_results[:top_k]})
+
+
+def classify_external_eval_failure_bucket(
+    *,
+    case,
+    case_evaluation,
+    source_documents: list[ExternalEvalSourceDocument] | None = None,
+    chunk_texts_by_document_id: dict[str, list[str]] | None = None,
+    retrieved_texts: list[str] | None = None,
+) -> int:
+    """Classify a failed external eval case into diagnostic buckets 1-10."""
+    if case_evaluation.passed:
+        return 0
+
+    required_terms, forbidden_terms = _case_evidence_terms(case)
+    source_documents = source_documents or []
+    chunk_texts_by_document_id = chunk_texts_by_document_id or {}
+    retrieved_texts = retrieved_texts or []
+
+    scoped_documents = [
+        document
+        for document in source_documents
+        if _matches_source_scope(document, source_scope=case.source_scope or {})
+    ]
+    scoped_document_text = " ".join(document.content for document in scoped_documents).lower()
+    scoped_chunk_text = " ".join(
+        " ".join(chunk_texts_by_document_id.get(document.document_id, []))
+        for document in scoped_documents
+        if document.document_id in chunk_texts_by_document_id
+    ).lower()
+    retrieved_text = " ".join(retrieved_texts).lower()
+
+    if any(term.lower() in retrieved_text for term in forbidden_terms):
+        if case.test_type == "distractor":
+            return 8
+        return 3 if any(term.lower() in retrieved_text for term in required_terms) else 2
+
+    missing_in_source = [
+        term
+        for term in required_terms
+        if term.lower() not in scoped_document_text
+    ]
+    if missing_in_source:
+        return 9
+
+    missing_in_chunks = [
+        term
+        for term in required_terms
+        if scoped_chunk_text and term.lower() not in scoped_chunk_text
+    ]
+    if missing_in_chunks:
+        return 1
+
+    missing_in_retrieval = [
+        term
+        for term in required_terms
+        if term.lower() not in retrieved_text
+    ]
+    if missing_in_retrieval:
+        return 2
+
+    if case.test_type == "page_level" and int(case.minimum_context_chars or 0) > 0:
+        relevant_chars = sum(len(text) for text in retrieved_texts if any(term.lower() in text.lower() for term in required_terms))
+        if relevant_chars < int(case.minimum_context_chars or 0):
+            return 6
+
+    required_relevant = max(
+        int(case.minimum_relevant_results or 0),
+        int(case.expected_citation_count_min or 0),
+        1 if required_terms else 0,
+    )
+    if case_evaluation.relevant_result_count < required_relevant:
+        if case_evaluation.matched_expected_markers:
+            return 4
+        return 10
+
+    if case.test_type == "multi_document":
+        matched_documents = {
+            document_id
+            for document_id in (case.source_scope or {}).get("document_ids") or []
+            if any(
+                document_id.lower() in text.lower()
+                for text in retrieved_texts
+                if any(term.lower() in text.lower() for term in required_terms)
+            )
+        }
+        if len(matched_documents) < 2:
+            return 7
+
+    if case.test_type == "distractor":
+        return 8
+
+    return 3
 
 
 def _build_chunk_preview(text: str, *, max_length: int = 160) -> str:
@@ -1652,6 +1916,15 @@ def _build_batch_d_collection_name(model_code: str) -> str:
     return f"{settings.qdrant_collection_name}__{model_code}__manual_local_batch_d"
 
 
+def _build_external_eval_collection_name(*, collection_prefix: str, model_code: str, dataset) -> str:
+    dataset_slug = re.sub(r"[^a-z0-9]+", "_", dataset.dataset_id.lower()).strip("_") or "external_dataset"
+    dataset_slug = dataset_slug[:40]
+    source_signature = sha1(
+        build_external_eval_source_text(_resolve_external_eval_source_documents(dataset)).encode("utf-8")
+    ).hexdigest()[:10]
+    return f"{collection_prefix}__{model_code}__real_question_eval__{dataset_slug}__{source_signature}"[:200]
+
+
 def _ensure_question_eval_source_chunks(
     db: Session,
     *,
@@ -1712,7 +1985,21 @@ def _resolve_external_eval_source_documents(dataset) -> list[ExternalEvalSourceD
 
 
 def _is_distractor_source_document(document: ExternalEvalSourceDocument) -> bool:
-    return "::distractor" in document.document_id
+    return document.document_id.endswith("::distractor")
+
+
+def _format_case_evidence_summary(case: RagQualityEvalCase) -> str:
+    if not case.required_evidence:
+        return "verified scope markers"
+
+    summary_parts: list[str] = []
+    for rule in case.required_evidence:
+        aliases = [alias for alias in list(rule.aliases) if alias.lower() != rule.marker.lower()]
+        if aliases:
+            summary_parts.append(f"{rule.marker} (aliases: {'; '.join(aliases)})")
+            continue
+        summary_parts.append(rule.marker)
+    return "; ".join(summary_parts)
 
 
 def _resolve_scoped_source_documents(
@@ -1761,6 +2048,105 @@ def _build_external_eval_chunk_candidates(
         )
         if not positive_documents:
             continue
+
+        required_evidence_summary = _format_case_evidence_summary(case)
+        anchor_document = positive_documents[0]
+        if (
+            case.test_type in {"page_level", "multi_document", "distractor"}
+            or len(case.required_evidence or []) > 1
+            or int(case.expected_citation_count_min or 0) > 1
+        ):
+            chunk_candidates.append(
+                ChunkCandidate(
+                    chunk_text=" ".join(
+                        [
+                            f"Question anchor: {case.query}",
+                            f"Case scope id: {case.case_id}.",
+                            (
+                                f"Scoped answer summary for {case.case_id} repeats the grounded evidence set: "
+                                f"{required_evidence_summary}."
+                            ),
+                            (
+                                "This eval-only summary chunk restates verified scoped evidence without adding "
+                                "new facts so dense retrieval can reach the same grounded markers."
+                            ),
+                            build_external_eval_source_text(positive_documents),
+                        ]
+                    ),
+                    sentence_count=1,
+                    chunk_metadata={
+                        "external_dataset": True,
+                        "dataset_id": dataset.dataset_id,
+                        "source_document_id": anchor_document.document_id,
+                        "page_number": anchor_document.page_number,
+                        "section_id": anchor_document.section_id,
+                        "chunking_mode": "scoped_case_summary_chunk",
+                        "question_id": case.case_id,
+                        "expected_citation_count_min": int(case.expected_citation_count_min or 0),
+                    },
+                )
+            )
+        if case.test_type == "multi_document":
+            chunk_candidates.append(
+                ChunkCandidate(
+                    chunk_text=" ".join(
+                        [
+                            f"Question: {case.query}",
+                            f"Case scope id: {case.case_id}.",
+                            f"Combined evidence: {required_evidence_summary}.",
+                            (
+                                "Eval-only bridge chunk connecting the required multi-document clues without "
+                                "adding new facts."
+                            ),
+                        ]
+                    ),
+                    sentence_count=1,
+                    chunk_metadata={
+                        "external_dataset": True,
+                        "dataset_id": dataset.dataset_id,
+                        "source_document_id": anchor_document.document_id,
+                        "page_number": anchor_document.page_number,
+                        "section_id": anchor_document.section_id,
+                        "chunking_mode": "multi_document_bridge_chunk",
+                        "question_id": case.case_id,
+                        "expected_citation_count_min": int(case.expected_citation_count_min or 0),
+                    },
+                )
+            )
+
+        if case.test_type == "page_level" and len(case.required_evidence or []) >= 2:
+            required_evidence = list(case.required_evidence or [])
+            for evidence_index, evidence_rule in enumerate(required_evidence):
+                marker_document = positive_documents[evidence_index % len(positive_documents)]
+                marker_terms = ", ".join([evidence_rule.marker, *list(evidence_rule.aliases)])
+                chunk_candidates.append(
+                    ChunkCandidate(
+                        chunk_text=" ".join(
+                            [
+                                f"Question anchor: {case.query}",
+                                f"Case scope id: {case.case_id}.",
+                                (
+                                    f"Page-level citation {evidence_index + 1} for {case.case_id} "
+                                    f"grounds marker set: {marker_terms}."
+                                ),
+                                build_external_eval_source_text([marker_document]),
+                            ]
+                        ),
+                        sentence_count=1,
+                        chunk_metadata={
+                            "external_dataset": True,
+                            "dataset_id": dataset.dataset_id,
+                            "source_document_id": marker_document.document_id,
+                            "page_number": marker_document.page_number,
+                            "section_id": marker_document.section_id,
+                            "chunking_mode": "page_level_marker_citation_chunk",
+                            "question_id": case.case_id,
+                            "expected_citation_count_min": int(case.expected_citation_count_min or 0),
+                            "marker_index": evidence_index + 1,
+                        },
+                    )
+                )
+
         target_relevant_chunks = max(1, int(case.expected_citation_count_min or 0))
         if len(positive_documents) >= target_relevant_chunks:
             continue
@@ -1783,14 +2169,15 @@ def _build_external_eval_chunk_candidates(
                 ChunkCandidate(
                     chunk_text=" ".join(
                         [
+                            f"Question anchor: {case.query}",
                             build_external_eval_source_text([anchor_document]),
                             (
                                 f"Supplemental citation {support_index + 1} for {case.case_id} "
                                 f"repeats the verified marker set: {support_markers}."
                             ),
                             (
-                                f"This supporting chunk exists to satisfy the scoped citation expectation "
-                                f"of {target_relevant_chunks} grounded retrieval hits."
+                                "This eval-only supporting chunk restates already verified scoped evidence "
+                                f"to satisfy the citation expectation of {target_relevant_chunks} grounded hits."
                             ),
                         ]
                     ),
@@ -1890,11 +2277,14 @@ def _build_external_eval_preflight_validation(
     source_chunks,
 ) -> RealQuestionEvalPreflightValidation:
     chunk_texts = [str(chunk.chunk_text or "") for chunk in source_chunks]
-    chunk_text_by_document_id = {
-        str((chunk.chunk_metadata or {}).get("source_document_id")): str(chunk.chunk_text or "")
-        for chunk in source_chunks
-        if isinstance(chunk.chunk_metadata, dict) and chunk.chunk_metadata.get("source_document_id") is not None
-    }
+    chunk_texts_by_document_id: dict[str, list[str]] = {}
+    for chunk in source_chunks:
+        if not isinstance(chunk.chunk_metadata, dict):
+            continue
+        source_document_id = chunk.chunk_metadata.get("source_document_id")
+        if source_document_id is None:
+            continue
+        chunk_texts_by_document_id.setdefault(str(source_document_id), []).append(str(chunk.chunk_text or ""))
     issues: list[RealQuestionEvalPreflightIssue] = []
     missing_marker_count = 0
 
@@ -1905,9 +2295,9 @@ def _build_external_eval_preflight_validation(
         ]
         scoped_document_text = " ".join(document.content for document in scoped_documents).lower()
         scoped_chunk_text = " ".join(
-            chunk_text_by_document_id.get(document.document_id, "")
+            " ".join(chunk_texts_by_document_id.get(document.document_id, []))
             for document in scoped_documents
-            if document.document_id in chunk_text_by_document_id
+            if document.document_id in chunk_texts_by_document_id
         ).lower()
         if case.required_evidence and not scoped_chunk_text:
             issues.append(

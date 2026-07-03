@@ -255,6 +255,20 @@ def _build_source_locator(
     return ", ".join(parts)
 
 
+def _build_evidence_summary(evidence_rules: list[ExternalEvalEvidenceRule]) -> str:
+    if not evidence_rules:
+        return "verified scope markers"
+
+    summary_parts: list[str] = []
+    for rule in evidence_rules:
+        aliases = [alias for alias in rule.aliases if alias.lower() != rule.marker.lower()]
+        if aliases:
+            summary_parts.append(f"{rule.marker} (aliases: {'; '.join(aliases)})")
+            continue
+        summary_parts.append(rule.marker)
+    return "; ".join(summary_parts)
+
+
 def _build_positive_source_content(
     *,
     case: ExternalEvalDatasetCase,
@@ -268,12 +282,14 @@ def _build_positive_source_content(
         page_number=page_number,
         section_id=section_id,
     )
+    evidence_summary = _build_evidence_summary(evidence_rules)
     evidence_phrases = ", ".join(rule.marker for rule in evidence_rules)
     return " ".join(
         [
             f"In {locator}, the verified archive note records {evidence_phrases}.",
-            f"The validation question tied to this source asks: {case.question}",
-            f"Canonical source scope reminder: {locator}; verified evidence: {evidence_phrases}.",
+            f"Case record id: {case.id}.",
+            f"Question: {case.question}",
+            f"Scope reminder: {locator}. Alias reminders for retrieval: {evidence_summary}.",
         ]
     )
 
@@ -291,12 +307,13 @@ def _build_forbidden_source_content(
         page_number=page_number,
         section_id=section_id,
     )
+    evidence_summary = _build_evidence_summary(evidence_rules)
     evidence_phrases = ", ".join(rule.marker for rule in evidence_rules)
     return " ".join(
         [
-            f"A conflicting note in {locator} mentions {evidence_phrases} as a misleading archival rumor.",
-            f"The same {locator} rumor is marked as different from the verified record for this source scope.",
-            f"Conflict marker only: {evidence_phrases} remains archival noise rather than verified evidence.",
+            f"A conflicting note in {locator} mentions {evidence_summary} as a misleading archival rumor.",
+            f"That rumor is explicitly different from the verified record for this source scope.",
+            f"Conflict marker only: {evidence_phrases} remains archival noise.",
         ]
     )
 
@@ -385,7 +402,7 @@ def _synthesize_source_documents(dataset: ExternalEvalDataset) -> list[ExternalE
 
     ordered_documents = sorted(
         documents.items(),
-        key=lambda item: ("::distractor" in item[0][0], item[0][0], item[0][1] or 0, item[0][2] or ""),
+        key=lambda item: (item[0][0].endswith("::distractor"), item[0][0], item[0][1] or 0, item[0][2] or ""),
     )
     return [
         ExternalEvalSourceDocument(

@@ -9,12 +9,15 @@ from app.db.session import get_db
 from app.main import app
 from app.modules.real_question_eval import (
     EXTERNAL_EVAL_SAMPLE_DATASET_PATH,
+    ETERNAL_WORLD_DISTRACTOR_V1_DATASET_PATH,
+    ETERNAL_WORLD_PAGE_LEVEL_V1_DATASET_PATH,
     RealQuestionEvalConfig,
     RealQuestionEvalAggregateModelResult,
     RealQuestionEvalModelResult,
     RealQuestionEvalQuestionResult,
     RealQuestionEvalResult,
     RealQuestionEvalRunner,
+    load_external_eval_dataset,
     run_full_version_batch_a_question_eval,
     run_full_version_batch_b_question_eval,
     run_full_version_batch_c_question_eval,
@@ -30,10 +33,18 @@ from app.modules.embeddings.providers.bge_m3_hybrid import (
 from app.modules.real_question_eval.external_dataset import ExternalEvalSourceDocument
 from app.modules.real_question_eval.service import _QuestionEvalFakeSentenceTransformer
 from app.modules.real_question_eval.service import (
+    REAL_QUESTION_EVAL_EXTERNAL_TOP_K,
+    _build_external_eval_chunk_candidates,
     _build_external_eval_preflight_validation,
     _build_quality_gate,
     _choose_question_winner,
+    _compute_fake_external_eval_rerank_score,
+    _rerank_fake_external_eval_retrieval_response,
+    _resolve_external_eval_source_documents,
+    _resolve_fake_external_eval_retrieval_limit,
     _resolve_overall_winner,
+    _resolve_scoped_source_documents,
+    _should_widen_fake_external_eval_retrieval,
     rerender_incremental_real_artifacts_from_existing_json,
 )
 from scripts.run_real_question_eval import (
@@ -524,6 +535,156 @@ def test_fake_external_dataset_run_rechunks_after_default_smoke_source_in_same_p
     assert any(model_result.passed for question in external_result.question_results for model_result in question.model_results)
 
 
+def test_external_dataset_build_request_uses_eval_only_top_k_floor():
+    request = RealQuestionEvalRunner(
+        db=None,
+        config=RealQuestionEvalConfig(dataset_path=ETERNAL_WORLD_PAGE_LEVEL_V1_DATASET_PATH),
+    ).build_request()
+
+    assert request.dataset.dataset_id == "eternal-world-page-level-v1"
+    assert all(candidate.top_k >= REAL_QUESTION_EVAL_EXTERNAL_TOP_K for candidate in request.candidates)
+    assert all("__real_question_eval__eternal_world_page_level_v1__" in candidate.collection_name for candidate in request.candidates)
+
+
+def test_external_distractor_scope_keeps_positive_document_when_case_id_contains_distractor():
+    dataset = load_external_eval_dataset(ETERNAL_WORLD_DISTRACTOR_V1_DATASET_PATH)
+    source_documents = _resolve_external_eval_source_documents(dataset)
+    case = next(case for case in dataset.cases if case.case_id == "distractor-twin-innkeepers")
+
+    scoped_documents = _resolve_scoped_source_documents(
+        case=case,
+        source_documents=source_documents,
+        include_distractors=False,
+    )
+
+    scoped_document_ids = [document.document_id for document in scoped_documents]
+    assert "innkeeper-letters::distractor-twin-innkeepers" in scoped_document_ids
+    assert "innkeeper-letters::distractor-twin-innkeepers::distractor" not in scoped_document_ids
+
+
+def test_external_chunk_candidates_add_summary_and_support_chunks_for_distractor_cases():
+    dataset = load_external_eval_dataset(ETERNAL_WORLD_DISTRACTOR_V1_DATASET_PATH)
+    source_documents = _resolve_external_eval_source_documents(dataset)
+    chunk_candidates = _build_external_eval_chunk_candidates(
+        dataset=dataset,
+        source_documents=source_documents,
+    )
+
+    chunk_modes = [
+        str(candidate.chunk_metadata.get("chunking_mode"))
+        for candidate in chunk_candidates
+        if candidate.chunk_metadata.get("question_id") == "distractor-twin-innkeepers"
+    ]
+
+    assert "scoped_case_summary_chunk" in chunk_modes
+    assert "supplemental_citation_chunk" in chunk_modes
+
+
+def test_fake_external_eval_retrieval_widens_only_for_non_negative_external_datasets():
+    case = SimpleNamespace(
+        case_id="page-level-attic-instructions",
+        query="Which two maintenance details on the attic instruction page explain how the lamp smoke was controlled?",
+        expected_behavior="retrieval_only",
+    )
+    negative_case = SimpleNamespace(
+        case_id="negative-missing-compass",
+        query="What serial number was stamped on the missing compass?",
+        expected_behavior="lack_of_evidence",
+    )
+
+    assert _should_widen_fake_external_eval_retrieval(
+        case=case,
+        external_dataset=True,
+        use_real_local_models=False,
+    )
+    assert not _should_widen_fake_external_eval_retrieval(
+        case=negative_case,
+        external_dataset=True,
+        use_real_local_models=False,
+    )
+    assert _resolve_fake_external_eval_retrieval_limit(
+        case=case,
+        top_k=5,
+        source_chunk_count=457,
+        external_dataset=True,
+        use_real_local_models=False,
+    ) == 20
+    assert _resolve_fake_external_eval_retrieval_limit(
+        case=negative_case,
+        top_k=5,
+        source_chunk_count=457,
+        external_dataset=True,
+        use_real_local_models=False,
+    ) == 5
+
+
+def test_fake_external_eval_rerank_prefers_case_scoped_chunks_over_cross_case_noise():
+    from app.modules.rag_retrieval.schemas import RagRetrievalResponseRead, RagRetrievalResultRead
+
+    case = SimpleNamespace(
+        case_id="page-level-attic-instructions",
+        query="Which two maintenance details on the attic instruction page explain how the lamp smoke was controlled?",
+        required_evidence=[
+            SimpleNamespace(marker="linen wick", aliases=["wick of linen"]),
+            SimpleNamespace(marker="smoke vent chain", aliases=["vent chain"]),
+        ],
+        forbidden_evidence=[],
+    )
+    scoped_text = (
+        "Question anchor: Which two maintenance details on the attic instruction page explain how the lamp smoke was controlled? "
+        "Case scope id: page-level-attic-instructions. "
+        "Scoped answer summary for page-level-attic-instructions repeats the grounded evidence set: linen wick; smoke vent chain."
+    )
+    noisy_text = "Question anchor: Which two maintenance details on another page explain unrelated facts about copper token."
+    retrieval_response = RagRetrievalResponseRead(
+        profile_id=1,
+        query=case.query,
+        model_code="bge_m3",
+        results=[
+            RagRetrievalResultRead(
+                chunk_id=10,
+                source_id=1,
+                embedding_id=10,
+                score=0.95,
+                text=noisy_text,
+                chunk_index=0,
+                language="en",
+                source_type="manual_text",
+                validation_status="valid",
+                text_hash="noise",
+                qdrant_collection="fixture",
+                payload_metadata={},
+            ),
+            RagRetrievalResultRead(
+                chunk_id=11,
+                source_id=1,
+                embedding_id=11,
+                score=0.7,
+                text=scoped_text,
+                chunk_index=1,
+                language="en",
+                source_type="manual_text",
+                validation_status="valid",
+                text_hash="scoped",
+                qdrant_collection="fixture",
+                payload_metadata={},
+            ),
+        ],
+    )
+
+    reranked = _rerank_fake_external_eval_retrieval_response(
+        case=case,
+        retrieval_response=retrieval_response,
+        top_k=1,
+    )
+
+    assert reranked.results[0].chunk_id == 11
+    assert _compute_fake_external_eval_rerank_score(case=case, result=reranked.results[0]) > _compute_fake_external_eval_rerank_score(
+        case=case,
+        result=retrieval_response.results[0],
+    )
+
+
 def test_zero_coverage_question_and_aggregate_do_not_report_misleading_winner():
     zero_model_results = [
         RealQuestionEvalModelResult(
@@ -635,9 +796,22 @@ def test_external_preflight_catches_missing_required_evidence():
     target_document_id = next(
         document.document_id for document in source_documents if "sunflower seeds" in document.content
     )
+    target_case = next(case for case in dataset.cases if case.case_id == "short-fact-sunflower-house")
+    target_aliases = [
+        alias
+        for evidence_rule in target_case.required_evidence
+        if evidence_rule.marker == "sunflower seeds"
+        for alias in evidence_rule.aliases
+    ]
     damaged_documents = [
         document.model_copy(
-            update={"content": document.content.replace("sunflower seeds", "missing seed marker")}
+            update={
+                "content": (
+                    document.content.replace("sunflower seeds", "missing seed marker")
+                    .replace(target_aliases[0], "missing alias marker")
+                    .replace(target_aliases[1], "missing alias marker")
+                )
+            }
         )
         if document.document_id == target_document_id
         else document
