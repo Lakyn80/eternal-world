@@ -353,18 +353,26 @@ def test_real_question_eval_compares_both_candidates_writes_report_and_verifies_
     assert result.artifact_paths.latest_json_result is not None
     assert result.artifact_paths.latest_markdown_summary is not None
     assert result.artifact_paths.latest_json_summary is not None
+    assert result.artifact_paths.latest_markdown_full_results is not None
+    assert result.artifact_paths.latest_json_full_results is not None
     assert result.artifact_paths.archived_markdown_report is not None
     assert result.artifact_paths.archived_json_result is not None
     assert result.artifact_paths.archived_markdown_summary is not None
     assert result.artifact_paths.archived_json_summary is not None
+    assert result.artifact_paths.archived_markdown_full_results is not None
+    assert result.artifact_paths.archived_json_full_results is not None
     assert Path(result.artifact_paths.latest_markdown_report).exists()
     assert Path(result.artifact_paths.latest_json_result).exists()
     assert Path(result.artifact_paths.latest_markdown_summary).exists()
     assert Path(result.artifact_paths.latest_json_summary).exists()
+    assert Path(result.artifact_paths.latest_markdown_full_results).exists()
+    assert Path(result.artifact_paths.latest_json_full_results).exists()
     assert Path(result.artifact_paths.archived_markdown_report).exists()
     assert Path(result.artifact_paths.archived_json_result).exists()
     assert Path(result.artifact_paths.archived_markdown_summary).exists()
     assert Path(result.artifact_paths.archived_json_summary).exists()
+    assert Path(result.artifact_paths.archived_markdown_full_results).exists()
+    assert Path(result.artifact_paths.archived_json_full_results).exists()
 
     latest_json_payload = json.loads(Path(result.artifact_paths.latest_json_result).read_text(encoding="utf-8"))
     assert latest_json_payload["run_id"] == result.run_id
@@ -382,9 +390,12 @@ def test_real_question_eval_compares_both_candidates_writes_report_and_verifies_
     assert "latest_fake" in latest_json_payload["artifact_paths"]["latest_json_result"]
     assert "latest_fake" in latest_json_payload["artifact_paths"]["latest_markdown_summary"]
     assert "latest_fake" in latest_json_payload["artifact_paths"]["latest_json_summary"]
+    assert "latest_fake" in latest_json_payload["artifact_paths"]["latest_markdown_full_results"]
+    assert "latest_fake" in latest_json_payload["artifact_paths"]["latest_json_full_results"]
     assert latest_json_payload["artifact_paths"]["latest_markdown_report"] == result.artifact_paths.latest_markdown_report
     assert latest_json_payload["artifact_paths"]["archived_json_result"] == result.artifact_paths.archived_json_result
     assert latest_json_payload["artifact_paths"]["latest_json_summary"] == result.artifact_paths.latest_json_summary
+    assert latest_json_payload["artifact_paths"]["latest_json_full_results"] == result.artifact_paths.latest_json_full_results
     assert latest_json_payload["client_view"]["overall_winner"] == "bge_m3"
     assert latest_json_payload["client_view"]["recommended_active_model"] == "bge_m3"
     assert latest_json_payload["client_view"]["questions"]
@@ -428,6 +439,27 @@ def test_real_question_eval_compares_both_candidates_writes_report_and_verifies_
     assert "- Quality status: `PASS`" in latest_summary_markdown
     assert "- Quality gate: `best_model_pass_rate >= 1.0`" in latest_summary_markdown
     assert "- Preflight validation: `n/a`" in latest_summary_markdown
+
+    latest_full_payload = json.loads(Path(result.artifact_paths.latest_json_full_results).read_text(encoding="utf-8"))
+    assert latest_full_payload["run_id"] == result.run_id
+    assert latest_full_payload["run_status"] == "COMPLETED"
+    assert latest_full_payload["quality_status"] == "PASS"
+    assert latest_full_payload["dataset_name"] == result.dataset_name
+    assert len(latest_full_payload["questions"]) == len(result.question_results)
+    assert len(latest_full_payload["questions"][0]["model_results"]) == 2
+    first_model_result = latest_full_payload["questions"][0]["model_results"][0]
+    assert first_model_result["answer_mode"] == "retrieval_only"
+    assert first_model_result["generated_answer"] is None
+    assert first_model_result["retrieved_chunks"]
+    assert "text" in first_model_result["retrieved_chunks"][0]
+    assert Path(result.artifact_paths.archived_json_full_results).exists()
+
+    latest_full_markdown = Path(result.artifact_paths.latest_markdown_full_results).read_text(encoding="utf-8")
+    assert "# Real Question Eval Full Results" in latest_full_markdown
+    assert "## Question 001:" in latest_full_markdown
+    assert "### Model: bge_m3" in latest_full_markdown
+    assert "#### Retrieved chunks" in latest_full_markdown
+    assert "Generated answer: not available; this eval run is retrieval-only." in latest_full_markdown
     assert "| model | status | passed | total | pass_rate | coverage | missing | distractors | latency_ms | winner |" in latest_summary_markdown
     assert "| question_id | test_type | model | status | coverage | missing | forbidden_hits | distractors | latency_ms |" in latest_summary_markdown
 
@@ -495,6 +527,19 @@ def test_fake_external_dataset_run_uses_synthesized_source_documents_and_passes_
     assert result.source_chunk_count == result.preflight_validation.source_chunk_count
     assert result.source_chunk_count >= result.preflight_validation.source_document_count
     assert any(aggregate_result.passed_questions > 0 for aggregate_result in result.aggregate_results)
+
+    full_payload = json.loads(Path(result.artifact_paths.latest_json_full_results).read_text(encoding="utf-8"))
+    assert len(full_payload["questions"]) == len(result.question_results)
+    short_fact_question = next(
+        item for item in full_payload["questions"] if item["question_id"] == "short-fact-sunflower-house"
+    )
+    assert short_fact_question["required_evidence"][0]["marker"] == "sunflower seeds"
+    assert short_fact_question["required_evidence"][0]["aliases"]
+    assert short_fact_question["source_scope"]["scope_type"] == "document"
+    assert {item["model"] for item in short_fact_question["model_results"]} == {"multilingual_e5_small", "bge_m3"}
+    assert any(item["matched_evidence"] for item in short_fact_question["model_results"])
+    assert any(item["retrieved_chunks"] for item in short_fact_question["model_results"])
+    assert all(item["answer_mode"] == "retrieval_only" for item in short_fact_question["model_results"])
 
     negative_question = next(
         item for item in result.question_results if item.question_id == "negative-missing-compass"

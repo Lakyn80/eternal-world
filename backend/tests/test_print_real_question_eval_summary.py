@@ -223,6 +223,22 @@ def test_print_summary_reads_latest_archived_runs_in_desc_order(tmp_path, capsys
     assert captured.out.index("DATASET: Newer Dataset") < captured.out.index("DATASET: Older Dataset")
 
 
+def test_print_summary_show_full_paths_prints_related_artifact_paths(tmp_path, capsys) -> None:
+    runs_dir = tmp_path / "artifacts" / "real_question_eval" / "runs"
+    run_dir = runs_dir / "20260702_124856Z_fake"
+    _write_json(run_dir / "real_question_eval_summary.json", _build_summary_payload())
+
+    exit_code = main(["--latest", "1", "--runs-dir", str(runs_dir), "--show-full-paths"])
+    captured = capsys.readouterr()
+
+    assert exit_code == 0
+    assert "ARTIFACT FILES" in captured.out
+    assert f"SUMMARY MARKDOWN: {run_dir / 'real_question_eval_summary.md'}" in captured.out
+    assert f"SUMMARY JSON: {run_dir / 'real_question_eval_summary.json'}" in captured.out
+    assert f"FULL RESULTS MARKDOWN: {run_dir / 'real_question_eval_full_results.md'}" in captured.out
+    assert f"FULL RESULTS JSON: {run_dir / 'real_question_eval_full_results.json'}" in captured.out
+
+
 def test_print_summary_prefers_summary_json_over_result_json(tmp_path, capsys) -> None:
     run_dir = tmp_path / "artifacts" / "real_question_eval" / "runs" / "20260702_124856Z_fake"
     _write_json(run_dir / "real_question_eval_result.json", _build_result_payload(dataset_name="Legacy Result Dataset"))

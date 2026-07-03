@@ -65,8 +65,10 @@ class RealQuestionEvalConfig(BaseModel):
 class RealQuestionEvalRetrievedChunk(BaseModel):
     rank: int
     chunk_id: int
+    source_document_id: str | None = None
     score: float
     preview: str
+    text: str = ""
 
 
 class RealQuestionEvalModelResult(BaseModel):
@@ -91,6 +93,10 @@ class RealQuestionEvalQuestionResult(BaseModel):
     question_id: str
     question_text: str
     test_type: str | None = None
+    expected_answer_type: str | None = None
+    source_scope: dict[str, Any] = Field(default_factory=dict)
+    required_evidence: list[dict[str, Any]] = Field(default_factory=list)
+    forbidden_evidence: list[dict[str, Any]] = Field(default_factory=list)
     expected_markers: list[str] = Field(default_factory=list)
     forbidden_markers: list[str] = Field(default_factory=list)
     model_results: list[RealQuestionEvalModelResult] = Field(default_factory=list)
@@ -116,10 +122,14 @@ class RealQuestionEvalArtifactPaths(BaseModel):
     latest_json_result: str | None = None
     latest_markdown_summary: str | None = None
     latest_json_summary: str | None = None
+    latest_markdown_full_results: str | None = None
+    latest_json_full_results: str | None = None
     archived_markdown_report: str | None = None
     archived_json_result: str | None = None
     archived_markdown_summary: str | None = None
     archived_json_summary: str | None = None
+    archived_markdown_full_results: str | None = None
+    archived_json_full_results: str | None = None
 
 
 class RealQuestionEvalQualityGate(BaseModel):

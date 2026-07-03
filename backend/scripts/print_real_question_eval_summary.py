@@ -12,6 +12,9 @@ BACKEND_DIR = Path(__file__).resolve().parents[1]
 DEFAULT_ARTIFACT_ROOT = BACKEND_DIR / "artifacts" / "real_question_eval"
 DEFAULT_RUNS_DIR = DEFAULT_ARTIFACT_ROOT / "runs"
 SUMMARY_FILE_NAME = "real_question_eval_summary.json"
+SUMMARY_MARKDOWN_FILE_NAME = "real_question_eval_summary.md"
+FULL_RESULTS_FILE_NAME = "real_question_eval_full_results.json"
+FULL_RESULTS_MARKDOWN_FILE_NAME = "real_question_eval_full_results.md"
 LEGACY_SUMMARY_FILE_NAME = "summary.json"
 RESULT_FILE_NAME = "real_question_eval_result.json"
 SEPARATOR = "=" * 80
@@ -51,6 +54,11 @@ def _build_parser() -> argparse.ArgumentParser:
         "--runs-dir",
         default=str(DEFAULT_RUNS_DIR),
         help="Directory that contains archived real question eval run folders.",
+    )
+    parser.add_argument(
+        "--show-full-paths",
+        action="store_true",
+        help="Print summary and full-results artifact paths for each run.",
     )
     target_group = parser.add_mutually_exclusive_group(required=True)
     target_group.add_argument("--latest", type=int, help="Print the latest N archived run summaries.")
@@ -370,7 +378,17 @@ def _format_preflight_validation(preflight_validation: dict[str, Any]) -> str:
     )
 
 
-def render_summary(summary: CompactRunSummary) -> str:
+def _format_related_artifact_paths(artifact_path: Path) -> list[str]:
+    artifact_dir = artifact_path.parent
+    return [
+        f"SUMMARY MARKDOWN: {artifact_dir / SUMMARY_MARKDOWN_FILE_NAME}",
+        f"SUMMARY JSON: {artifact_dir / SUMMARY_FILE_NAME}",
+        f"FULL RESULTS MARKDOWN: {artifact_dir / FULL_RESULTS_MARKDOWN_FILE_NAME}",
+        f"FULL RESULTS JSON: {artifact_dir / FULL_RESULTS_FILE_NAME}",
+    ]
+
+
+def render_summary(summary: CompactRunSummary, *, show_full_paths: bool = False) -> str:
     lines = [
         "REAL QUESTION EVAL SUMMARY",
         SEPARATOR,
@@ -390,6 +408,8 @@ def render_summary(summary: CompactRunSummary) -> str:
             f"ARTIFACT PATH: {summary.artifact_path}",
         ]
     )
+    if show_full_paths:
+        lines.extend(["", "ARTIFACT FILES", *_format_related_artifact_paths(summary.artifact_path)])
     if summary.warning is not None:
         lines.extend(["", f"WARNING: {summary.warning}", SEPARATOR])
         return "\n".join(lines)
@@ -478,7 +498,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         print(f"error: {exc}", file=sys.stderr)
         return 2
 
-    output_blocks = [render_summary(summarize_artifact(path)) for path in artifact_paths]
+    output_blocks = [
+        render_summary(summarize_artifact(path), show_full_paths=bool(args.show_full_paths))
+        for path in artifact_paths
+    ]
     print("\n\n".join(output_blocks))
     return 0
 

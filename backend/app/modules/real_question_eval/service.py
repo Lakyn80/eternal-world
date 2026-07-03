@@ -1044,6 +1044,10 @@ class RealQuestionEvalRunner:
                     question_id=case.case_id,
                     question_text=case.query,
                     test_type=getattr(case, "test_type", None),
+                    expected_answer_type=getattr(case, "expected_answer_type", None),
+                    source_scope=dict(getattr(case, "source_scope", {}) or {}),
+                    required_evidence=_build_full_evidence_rules_payload(getattr(case, "required_evidence", [])),
+                    forbidden_evidence=_build_full_evidence_rules_payload(getattr(case, "forbidden_evidence", [])),
                     expected_markers=list(case.expected_markers),
                     forbidden_markers=list(case.forbidden_markers),
                     model_results=model_results,
@@ -1138,8 +1142,10 @@ def _build_model_result(*, model_code: str, collection_name: str, case_evaluatio
             RealQuestionEvalRetrievedChunk(
                 rank=index + 1,
                 chunk_id=result.chunk_id,
+                source_document_id=_resolve_retrieved_chunk_source_document_id(result),
                 score=result.score,
                 preview=_build_chunk_preview(result.text),
+                text=result.text,
             )
             for index, result in enumerate(retrieval_response.results)
         ],
@@ -1156,6 +1162,28 @@ def _build_model_result(*, model_code: str, collection_name: str, case_evaluatio
         hit=case_evaluation.hit,
         reasons=list(case_evaluation.reasons),
     )
+
+
+def _resolve_retrieved_chunk_source_document_id(result) -> str | None:
+    payload_metadata = getattr(result, "payload_metadata", None)
+    if isinstance(payload_metadata, dict):
+        source_document_id = payload_metadata.get("source_document_id")
+        if source_document_id is not None:
+            return str(source_document_id)
+        chunk_metadata = payload_metadata.get("chunk_metadata")
+        if isinstance(chunk_metadata, dict) and chunk_metadata.get("source_document_id") is not None:
+            return str(chunk_metadata["source_document_id"])
+    return None
+
+
+def _build_full_evidence_rules_payload(evidence_rules) -> list[dict[str, object]]:
+    return [
+        {
+            "marker": str(getattr(rule, "marker", "")),
+            "aliases": [str(alias) for alias in list(getattr(rule, "aliases", []) or [])],
+        }
+        for rule in list(evidence_rules or [])
+    ]
 
 
 def _filter_fake_retrieval_response(retrieval_response: RagRetrievalResponseRead) -> RagRetrievalResponseRead:
@@ -1812,8 +1840,14 @@ def _build_historical_model_result(model_payload: dict[str, object]) -> RealQues
         RealQuestionEvalRetrievedChunk(
             rank=int(chunk["rank"]),
             chunk_id=int(chunk["chunk_id"]),
+            source_document_id=(
+                str(chunk["source_document_id"])
+                if chunk.get("source_document_id") is not None
+                else None
+            ),
             score=float(chunk["score"]),
             preview=str(chunk["preview"]),
+            text=str(chunk.get("text") or chunk.get("preview") or ""),
         )
         for chunk in model_payload.get("top_chunks", [])
         if isinstance(chunk, dict)
@@ -2689,6 +2723,11 @@ def _build_batch_d_manual_provider_result(
             RealQuestionEvalQuestionResult(
                 question_id=case.case_id,
                 question_text=case.query,
+                test_type=getattr(case, "test_type", None),
+                expected_answer_type=getattr(case, "expected_answer_type", None),
+                source_scope=dict(getattr(case, "source_scope", {}) or {}),
+                required_evidence=_build_full_evidence_rules_payload(getattr(case, "required_evidence", [])),
+                forbidden_evidence=_build_full_evidence_rules_payload(getattr(case, "forbidden_evidence", [])),
                 expected_markers=list(case.expected_markers),
                 forbidden_markers=list(case.forbidden_markers),
                 model_results=[model_result],

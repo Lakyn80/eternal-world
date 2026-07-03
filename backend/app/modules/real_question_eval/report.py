@@ -623,8 +623,10 @@ def build_real_question_eval_developer_view(result: RealQuestionEvalResult) -> d
                             {
                                 "rank": chunk.rank,
                                 "chunk_id": chunk.chunk_id,
+                                "source_document_id": chunk.source_document_id,
                                 "score": chunk.score,
                                 "preview": chunk.preview,
+                                "text": chunk.text or chunk.preview,
                             }
                             for chunk in model_result.top_chunks
                         ],
@@ -829,6 +831,192 @@ def _build_summary_question_results(result: RealQuestionEvalResult) -> list[dict
     return rows
 
 
+def _build_selected_evidence_text(model_result) -> list[str]:
+    selected_texts: list[str] = []
+    matched_markers = [marker.lower() for marker in model_result.matched_expected_markers]
+    for chunk in model_result.top_chunks:
+        chunk_text = chunk.text or chunk.preview
+        normalized_text = chunk_text.lower()
+        if matched_markers and not any(marker in normalized_text for marker in matched_markers):
+            continue
+        if chunk_text:
+            selected_texts.append(chunk_text)
+    return selected_texts
+
+
+def _build_full_result_chunks(model_result) -> list[dict[str, object]]:
+    return [
+        {
+            "rank": chunk.rank,
+            "chunk_id": str(chunk.chunk_id),
+            "source_document_id": chunk.source_document_id,
+            "score": chunk.score,
+            "text": chunk.text or chunk.preview,
+        }
+        for chunk in model_result.top_chunks
+    ]
+
+
+def _build_full_failure_reason(model_result) -> str | None:
+    if model_result.passed:
+        return None
+    if model_result.reasons:
+        return "; ".join(model_result.reasons)
+    if model_result.missing_expected_markers:
+        return "Missing expected evidence: " + ", ".join(model_result.missing_expected_markers)
+    if model_result.false_positive_markers:
+        return "Forbidden evidence retrieved: " + ", ".join(model_result.false_positive_markers)
+    return model_result.groundedness_verdict or "failed"
+
+
+def build_real_question_eval_full_results_json_payload(result: RealQuestionEvalResult) -> dict[str, object]:
+    return {
+        "run_id": result.run_id,
+        "created_at": result.generated_at,
+        "run_status": _resolve_run_status(result),
+        "quality_status": _resolve_quality_status(result),
+        "dataset_name": result.dataset_name,
+        "dataset_id": result.dataset_id,
+        "dataset_file": result.dataset_file,
+        "models": list(result.compared_models),
+        "questions": [
+            {
+                "question_id": question_result.question_id,
+                "test_type": question_result.test_type,
+                "question": question_result.question_text,
+                "expected_answer_type": question_result.expected_answer_type,
+                "source_scope": dict(question_result.source_scope),
+                "required_evidence": list(question_result.required_evidence),
+                "forbidden_evidence": list(question_result.forbidden_evidence),
+                "model_results": [
+                    {
+                        "model": model_result.model_code,
+                        "status": "PASS" if model_result.passed else "FAIL",
+                        "is_question_winner": model_result.model_code == question_result.winner_model_code,
+                        "evidence_coverage": model_result.evidence_coverage,
+                        "matched_evidence": list(model_result.matched_expected_markers),
+                        "missing_evidence": list(model_result.missing_expected_markers),
+                        "forbidden_evidence_hits": list(model_result.false_positive_markers),
+                        "distractor_hits": list(model_result.false_positive_markers),
+                        "latency_ms": None,
+                        "retrieved_chunks": _build_full_result_chunks(model_result),
+                        "selected_evidence_text": _build_selected_evidence_text(model_result),
+                        "generated_answer": None,
+                        "answer_mode": "retrieval_only",
+                        "failure_reason": _build_full_failure_reason(model_result),
+                    }
+                    for model_result in question_result.model_results
+                ],
+            }
+            for question_result in result.question_results
+        ],
+    }
+
+
+def _truncate_markdown_chunk_text(text: str, *, max_length: int = 1200) -> str:
+    normalized_text = text.rstrip()
+    if len(normalized_text) <= max_length:
+        return normalized_text
+    return normalized_text[: max_length - 80].rstrip() + "\n\n[truncated in Markdown; full text is available in JSON]"
+
+
+def _format_evidence_rules_for_markdown(rules: list[dict[str, object]]) -> list[str]:
+    if not rules:
+        return ["- none"]
+    lines: list[str] = []
+    for rule in rules:
+        marker = str(rule.get("marker") or "")
+        aliases = rule.get("aliases")
+        alias_text = ", ".join(str(alias) for alias in aliases) if isinstance(aliases, list) else ""
+        lines.append(f"- marker `{marker}`")
+        lines.append(f"- aliases `{alias_text or 'none'}`")
+    return lines
+
+
+def build_real_question_eval_full_results_markdown(result: RealQuestionEvalResult) -> str:
+    full_payload = build_real_question_eval_full_results_json_payload(result)
+    lines = [
+        "# Real Question Eval Full Results",
+        "",
+        "## Run",
+        f"- Run ID: `{full_payload['run_id'] or 'unknown'}`",
+        f"- Dataset: `{full_payload['dataset_name'] or 'unknown'}`",
+        f"- Dataset ID: `{full_payload['dataset_id'] or 'unknown'}`",
+        f"- Dataset file: `{full_payload['dataset_file'] or 'n/a'}`",
+        f"- Run status: `{full_payload['run_status']}`",
+        f"- Quality status: `{full_payload['quality_status']}`",
+        f"- Models: `{', '.join(full_payload['models']) if full_payload['models'] else 'unknown'}`",
+        "",
+    ]
+    for question_index, question in enumerate(full_payload["questions"], start=1):
+        lines.extend(
+            [
+                f"## Question {question_index:03d}: {question['question_id']}",
+                "",
+                f"**Question:** {question['question']}",
+                "",
+                "**Expected evidence:**",
+                *_format_evidence_rules_for_markdown(question.get("required_evidence", [])),
+                "",
+                "**Forbidden evidence:**",
+                *_format_evidence_rules_for_markdown(question.get("forbidden_evidence", [])),
+                "",
+            ]
+        )
+        for model_result in question["model_results"]:
+            generated_answer = model_result.get("generated_answer")
+            generated_answer_text = (
+                str(generated_answer)
+                if generated_answer is not None
+                else "not available; this eval run is retrieval-only."
+            )
+            rows = [
+                [
+                    chunk.get("rank"),
+                    chunk.get("chunk_id"),
+                    chunk.get("source_document_id") or "n/a",
+                    _format_optional_float(chunk.get("score"), decimals=4),
+                ]
+                for chunk in model_result.get("retrieved_chunks", [])
+            ]
+            lines.extend(
+                [
+                    f"### Model: {model_result['model']}",
+                    "",
+                    f"- Status: `{model_result['status']}`",
+                    f"- Coverage: `{_format_optional_float(model_result.get('evidence_coverage'), decimals=4)}`",
+                    f"- Matched: `{', '.join(model_result.get('matched_evidence') or []) or 'none'}`",
+                    f"- Missing: `{', '.join(model_result.get('missing_evidence') or []) or 'none'}`",
+                    f"- Forbidden hits: `{', '.join(model_result.get('forbidden_evidence_hits') or []) or 'none'}`",
+                    f"- Distractor hits: `{', '.join(model_result.get('distractor_hits') or []) or 'none'}`",
+                    f"- Latency: `{_format_optional_float(model_result.get('latency_ms'), decimals=1)}`",
+                    f"- Generated answer: {generated_answer_text}",
+                    f"- Answer mode: `{model_result['answer_mode']}`",
+                    f"- Failure reason: `{model_result.get('failure_reason') or 'n/a'}`",
+                    "",
+                    "#### Retrieved chunks",
+                    "",
+                    *_build_markdown_table(
+                        headers=["rank", "chunk_id", "source_document_id", "score"],
+                        rows=rows,
+                    ),
+                    "",
+                ]
+            )
+            for chunk in model_result.get("retrieved_chunks", []):
+                lines.extend(
+                    [
+                        f"Chunk rank {chunk.get('rank')}:",
+                        "",
+                        "```text",
+                        _truncate_markdown_chunk_text(str(chunk.get("text") or "")),
+                        "```",
+                        "",
+                    ]
+                )
+    return "\n".join(lines)
+
+
 def build_real_question_eval_summary_json_payload(result: RealQuestionEvalResult) -> dict[str, object]:
     return {
         "run_id": result.run_id,
@@ -955,10 +1143,14 @@ def build_real_question_eval_artifact_paths_for_result(
         latest_json_result=str(latest_dir / "real_question_eval_result.json"),
         latest_markdown_summary=str(latest_dir / "real_question_eval_summary.md"),
         latest_json_summary=str(latest_dir / "real_question_eval_summary.json"),
+        latest_markdown_full_results=str(latest_dir / "real_question_eval_full_results.md"),
+        latest_json_full_results=str(latest_dir / "real_question_eval_full_results.json"),
         archived_markdown_report=str(archived_dir / "real_question_eval_report.md"),
         archived_json_result=str(archived_dir / "real_question_eval_result.json"),
         archived_markdown_summary=str(archived_dir / "real_question_eval_summary.md"),
         archived_json_summary=str(archived_dir / "real_question_eval_summary.json"),
+        archived_markdown_full_results=str(archived_dir / "real_question_eval_full_results.md"),
+        archived_json_full_results=str(archived_dir / "real_question_eval_full_results.json"),
     )
 
 
@@ -980,10 +1172,14 @@ def write_real_question_eval_artifacts(*, artifact_dir: Path, result: RealQuesti
     latest_json_path = Path(artifact_paths.latest_json_result)
     latest_summary_markdown_path = Path(artifact_paths.latest_markdown_summary)
     latest_summary_json_path = Path(artifact_paths.latest_json_summary)
+    latest_full_results_markdown_path = Path(artifact_paths.latest_markdown_full_results)
+    latest_full_results_json_path = Path(artifact_paths.latest_json_full_results)
     archived_markdown_path = Path(artifact_paths.archived_markdown_report)
     archived_json_path = Path(artifact_paths.archived_json_result)
     archived_summary_markdown_path = Path(artifact_paths.archived_markdown_summary)
     archived_summary_json_path = Path(artifact_paths.archived_json_summary)
+    archived_full_results_markdown_path = Path(artifact_paths.archived_markdown_full_results)
+    archived_full_results_json_path = Path(artifact_paths.archived_json_full_results)
 
     latest_markdown_path.parent.mkdir(parents=True, exist_ok=True)
     archived_markdown_path.parent.mkdir(parents=True, exist_ok=True)
@@ -992,17 +1188,24 @@ def write_real_question_eval_artifacts(*, artifact_dir: Path, result: RealQuesti
     json_payload = build_real_question_eval_json_payload(result)
     summary_markdown_content = build_real_question_eval_summary_markdown(result)
     summary_json_payload = build_real_question_eval_summary_json_payload(result)
+    full_results_markdown_content = build_real_question_eval_full_results_markdown(result)
+    full_results_json_payload = build_real_question_eval_full_results_json_payload(result)
     json_content = json.dumps(json_payload, indent=2, ensure_ascii=False) + "\n"
     summary_json_content = json.dumps(summary_json_payload, indent=2, ensure_ascii=False) + "\n"
+    full_results_json_content = json.dumps(full_results_json_payload, indent=2, ensure_ascii=False) + "\n"
 
     latest_markdown_path.write_text(markdown_content, encoding="utf-8")
     latest_json_path.write_text(json_content, encoding="utf-8")
     latest_summary_markdown_path.write_text(summary_markdown_content, encoding="utf-8")
     latest_summary_json_path.write_text(summary_json_content, encoding="utf-8")
+    latest_full_results_markdown_path.write_text(full_results_markdown_content, encoding="utf-8")
+    latest_full_results_json_path.write_text(full_results_json_content, encoding="utf-8")
     archived_markdown_path.write_text(markdown_content, encoding="utf-8")
     archived_json_path.write_text(json_content, encoding="utf-8")
     archived_summary_markdown_path.write_text(summary_markdown_content, encoding="utf-8")
     archived_summary_json_path.write_text(summary_json_content, encoding="utf-8")
+    archived_full_results_markdown_path.write_text(full_results_markdown_content, encoding="utf-8")
+    archived_full_results_json_path.write_text(full_results_json_content, encoding="utf-8")
     if result.run_type in {"fake", "real"}:
         _ensure_other_latest_variant_preserved(artifact_dir=artifact_dir, current_run_type=result.run_type)
 
@@ -1016,12 +1219,18 @@ def _ensure_other_latest_variant_preserved(*, artifact_dir: Path, current_run_ty
     latest_json_path = latest_dir / "real_question_eval_result.json"
     latest_summary_markdown_path = latest_dir / "real_question_eval_summary.md"
     latest_summary_json_path = latest_dir / "real_question_eval_summary.json"
+    latest_full_results_markdown_path = latest_dir / "real_question_eval_full_results.md"
+    latest_full_results_json_path = latest_dir / "real_question_eval_full_results.json"
 
     source_pair = _find_latest_existing_run_pair(artifact_dir=artifact_dir, run_type=other_run_type)
     if latest_markdown_path.exists() and latest_json_path.exists() and (
         latest_summary_markdown_path.exists() or source_pair is None
     ) and (
         latest_summary_json_path.exists() or source_pair is None
+    ) and (
+        latest_full_results_markdown_path.exists() or source_pair is None
+    ) and (
+        latest_full_results_json_path.exists() or source_pair is None
     ):
         return
     if source_pair is None:
@@ -1039,6 +1248,12 @@ def _ensure_other_latest_variant_preserved(*, artifact_dir: Path, current_run_ty
         shutil.copyfile(source_summary_markdown_path, latest_summary_markdown_path)
     if not latest_summary_json_path.exists() and source_summary_json_path.exists():
         shutil.copyfile(source_summary_json_path, latest_summary_json_path)
+    source_full_results_markdown_path = source_markdown_path.with_name("real_question_eval_full_results.md")
+    source_full_results_json_path = source_json_path.with_name("real_question_eval_full_results.json")
+    if not latest_full_results_markdown_path.exists() and source_full_results_markdown_path.exists():
+        shutil.copyfile(source_full_results_markdown_path, latest_full_results_markdown_path)
+    if not latest_full_results_json_path.exists() and source_full_results_json_path.exists():
+        shutil.copyfile(source_full_results_json_path, latest_full_results_json_path)
 
 
 def _find_latest_existing_run_pair(*, artifact_dir: Path, run_type: str) -> tuple[Path, Path] | None:
