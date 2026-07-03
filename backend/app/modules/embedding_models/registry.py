@@ -271,9 +271,12 @@ EMBEDDING_MODEL_DEFINITIONS: tuple[EmbeddingModelDefinition, ...] = (
         ci_safe_real_inference=False,
         supports_task_adapters=False,
         supports_long_context=True,
-        planning_tags=("qwen3", "manual_only_real_eval", "high_resource", "optional_batch"),
+        planning_tags=("qwen3", "manual_only_real_eval", "high_resource", "benchmark_batch_e"),
         supported_retrieval_modes=("dense",),
-        notes="Disabled high-resource Qwen3 benchmark target reserved for optional later batches only.",
+        notes=(
+            "Qwen3 4B manual-only real benchmark provider for optional Batch E; "
+            "plain-text SentenceTransformers encoding without provider-specific retrieval instructions."
+        ),
     ),
     EmbeddingModelDefinition(
         code="qwen3_embedding_8b",
@@ -295,9 +298,12 @@ EMBEDDING_MODEL_DEFINITIONS: tuple[EmbeddingModelDefinition, ...] = (
         ci_safe_real_inference=False,
         supports_task_adapters=False,
         supports_long_context=True,
-        planning_tags=("qwen3", "manual_only_real_eval", "high_resource", "optional_batch"),
+        planning_tags=("qwen3", "manual_only_real_eval", "high_resource", "benchmark_batch_f"),
         supported_retrieval_modes=("dense",),
-        notes="Disabled highest-cost Qwen3 benchmark target reserved for optional later batches only.",
+        notes=(
+            "Qwen3 8B manual-only real benchmark provider for optional Batch F; "
+            "plain-text SentenceTransformers encoding without provider-specific retrieval instructions."
+        ),
     ),
     EmbeddingModelDefinition(
         code="jina_embeddings_v3",

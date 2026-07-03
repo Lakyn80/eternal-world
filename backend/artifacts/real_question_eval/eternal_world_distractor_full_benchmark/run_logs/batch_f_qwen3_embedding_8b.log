@@ -1,0 +1,10 @@
+[real_question_eval] starting run mode=full_version_batch_f_real_eval run_type=full_version_batch_f candidates=['qwen3_embedding_8b']
+[real_question_eval] request built questions=100 candidates=['qwen3_embedding_8b']
+[real_question_eval] multi-embedding eval job created job_id=164
+[multi_embedding_eval] candidate start model_code=qwen3_embedding_8b collection=eternal_world_rag_chunks__qwen3_embedding_8b__real_question_eval__eternal_world_distractor_v1__d1bea5c7f4
+[sentence_transformers] memory stage=before_model_load model_code=qwen3_embedding_8b model_name=Qwen/Qwen3-Embedding-8B rss_mb=547.66
+[sentence_transformers] load start model_code=qwen3_embedding_8b model_name=Qwen/Qwen3-Embedding-8B device=cpu
+
+
+[benchmark] run aborted after ~70min stuck at model load.
+OutOfMemoryError: Qwen/Qwen3-Embedding-8B not loadable in current Docker CPU runtime (~16GB+ RAM required). 4B already exit_code=137.

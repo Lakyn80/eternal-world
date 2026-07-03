@@ -16,6 +16,8 @@ def build_real_question_eval_markdown(result: RealQuestionEvalResult) -> str:
         "full_version_batch_b_real_eval",
         "full_version_batch_c_real_eval",
         "full_version_batch_d_real_eval",
+        "full_version_batch_e_real_eval",
+        "full_version_batch_f_real_eval",
         "full_version_batch_b_attempted",
     }:
         return build_real_question_eval_benchmark_batch_markdown(result)
@@ -504,6 +506,8 @@ def build_real_question_eval_client_view(result: RealQuestionEvalResult) -> dict
             "full_version_batch_b_real_eval",
             "full_version_batch_c_real_eval",
             "full_version_batch_d_real_eval",
+            "full_version_batch_e_real_eval",
+            "full_version_batch_f_real_eval",
         }:
             batch_label = result.benchmark_batch_label or "benchmark batch"
             baseline_provider = (result.baseline_provider_codes or ["baseline"])[0]
@@ -703,6 +707,10 @@ def _resolve_execution_mode(*, result: RealQuestionEvalResult) -> str:
 def _resolve_artifact_variant(*, result: RealQuestionEvalResult) -> str:
     if result.run_type == "full_version_batch_b_attempted":
         return "full_version_batch_b_attempted"
+    if result.run_type == "full_version_batch_f":
+        return "full_version_batch_f"
+    if result.run_type == "full_version_batch_e":
+        return "full_version_batch_e"
     if result.run_type == "full_version_batch_c":
         return "full_version_batch_c"
     if result.run_type == "full_version_batch_d":

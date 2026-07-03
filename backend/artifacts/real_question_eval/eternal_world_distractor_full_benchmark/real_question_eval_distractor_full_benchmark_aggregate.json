@@ -1,0 +1,788 @@
+{
+  "generated_at": "2026-07-03T22:37:27.489627+00:00",
+  "artifact_root": "artifacts/real_question_eval/eternal_world_distractor_full_benchmark",
+  "dataset_name": "Eternal World Distractor Validation V1",
+  "dataset_id": "eternal-world-distractor-v1",
+  "available_source_summary": "artifacts/real_question_eval/eternal_world_distractor_full_benchmark/latest_incremental_new_providers/real_question_eval_summary.json",
+  "base_source_summary": "artifacts/real_question_eval/eternal_world_distractor_full_benchmark/latest_real/real_question_eval_summary.json",
+  "completed_stages": [
+    {
+      "stage": "base_real_eval",
+      "status": "COMPLETED",
+      "artifact_dir": "artifacts/real_question_eval/eternal_world_distractor_full_benchmark/latest_real",
+      "run_id": "20260703_162457Z",
+      "quality_status": "PASS",
+      "winner": "bge_m3"
+    },
+    {
+      "stage": "incremental_new_providers",
+      "status": "COMPLETED",
+      "artifact_dir": "artifacts/real_question_eval/eternal_world_distractor_full_benchmark/latest_incremental_new_providers",
+      "run_id": "20260703_172002Z",
+      "quality_status": "FAIL",
+      "winner": "bge_m3"
+    },
+    {
+      "stage": "full_version_batch_a",
+      "status": "COMPLETED",
+      "artifact_dir": "artifacts/real_question_eval/eternal_world_distractor_full_benchmark/latest_full_version_batch_a",
+      "run_id": "20260703_182938Z",
+      "quality_status": "PASS",
+      "winner": "multilingual_e5_large"
+    },
+    {
+      "stage": "full_version_batch_b",
+      "status": "COMPLETED",
+      "artifact_dir": "artifacts/real_question_eval/eternal_world_distractor_full_benchmark/latest_full_version_batch_b",
+      "run_id": "20260703_185340Z",
+      "quality_status": "PASS",
+      "winner": "qwen3_embedding_0_6b"
+    },
+    {
+      "stage": "full_version_batch_c",
+      "status": "COMPLETED",
+      "artifact_dir": "artifacts/real_question_eval/eternal_world_distractor_full_benchmark/latest_full_version_batch_c",
+      "run_id": "20260703_191345Z",
+      "quality_status": "PASS",
+      "winner": "jina_embeddings_v3"
+    },
+    {
+      "stage": "full_version_batch_d",
+      "status": "COMPLETED",
+      "artifact_dir": "artifacts/real_question_eval/eternal_world_distractor_full_benchmark/latest_full_version_batch_d",
+      "run_id": "20260703_205145Z",
+      "quality_status": "PASS",
+      "winner": "bge_m3_dense_sparse"
+    }
+  ],
+  "ranking": [
+    {
+      "model": "bge_m3",
+      "status": "AVAILABLE",
+      "source_artifact": "artifacts/real_question_eval/eternal_world_distractor_full_benchmark/latest_incremental_new_providers/real_question_eval_summary.json",
+      "passed_questions": 85,
+      "total_questions": 100,
+      "pass_rate": 0.85,
+      "evidence_coverage": 0.955,
+      "missing_evidence": 9,
+      "distractors": 5,
+      "latency_ms": 419.74913999999995,
+      "rank": 1
+    },
+    {
+      "model": "multilingual_e5_large",
+      "status": "AVAILABLE",
+      "source_artifact": "artifacts/real_question_eval/eternal_world_distractor_full_benchmark/latest_full_version_batch_a/real_question_eval_summary.json",
+      "passed_questions": 84,
+      "total_questions": 100,
+      "pass_rate": 0.84,
+      "evidence_coverage": 0.965,
+      "missing_evidence": 7,
+      "distractors": 5,
+      "latency_ms": 471.05251,
+      "rank": 2
+    },
+    {
+      "model": "bge_m3_dense_sparse",
+      "status": "AVAILABLE",
+      "source_artifact": "artifacts/real_question_eval/eternal_world_distractor_full_benchmark/latest_full_version_batch_d/real_question_eval_summary.json",
+      "passed_questions": 84,
+      "total_questions": 100,
+      "pass_rate": 0.84,
+      "evidence_coverage": 0.94,
+      "missing_evidence": 12,
+      "distractors": 3,
+      "latency_ms": 496.632,
+      "rank": 3
+    },
+    {
+      "model": "bge_m3_dense_sparse_multivector",
+      "status": "AVAILABLE",
+      "source_artifact": "artifacts/real_question_eval/eternal_world_distractor_full_benchmark/latest_full_version_batch_d/real_question_eval_summary.json",
+      "passed_questions": 83,
+      "total_questions": 100,
+      "pass_rate": 0.83,
+      "evidence_coverage": 0.955,
+      "missing_evidence": 9,
+      "distractors": 7,
+      "latency_ms": 13567.682,
+      "rank": 4
+    },
+    {
+      "model": "jina_embeddings_v3",
+      "status": "AVAILABLE",
+      "source_artifact": "artifacts/real_question_eval/eternal_world_distractor_full_benchmark/latest_full_version_batch_c/real_question_eval_summary.json",
+      "passed_questions": 82,
+      "total_questions": 100,
+      "pass_rate": 0.82,
+      "evidence_coverage": 0.98,
+      "missing_evidence": 4,
+      "distractors": 7,
+      "latency_ms": 331.89195,
+      "rank": 5
+    },
+    {
+      "model": "qwen3_embedding_0_6b",
+      "status": "AVAILABLE",
+      "source_artifact": "artifacts/real_question_eval/eternal_world_distractor_full_benchmark/latest_full_version_batch_b/real_question_eval_summary.json",
+      "passed_questions": 82,
+      "total_questions": 100,
+      "pass_rate": 0.82,
+      "evidence_coverage": 0.975,
+      "missing_evidence": 5,
+      "distractors": 10,
+      "latency_ms": 420.09574999999995,
+      "rank": 6
+    },
+    {
+      "model": "paraphrase_multilingual_mpnet_base_v2",
+      "status": "AVAILABLE",
+      "source_artifact": "artifacts/real_question_eval/eternal_world_distractor_full_benchmark/latest_incremental_new_providers/real_question_eval_summary.json",
+      "passed_questions": 76,
+      "total_questions": 100,
+      "pass_rate": 0.76,
+      "evidence_coverage": 0.88,
+      "missing_evidence": 24,
+      "distractors": 0,
+      "latency_ms": 222.71005000000002,
+      "rank": 7
+    },
+    {
+      "model": "multilingual_e5_base",
+      "status": "AVAILABLE",
+      "source_artifact": "artifacts/real_question_eval/eternal_world_distractor_full_benchmark/latest_incremental_new_providers/real_question_eval_summary.json",
+      "passed_questions": 72,
+      "total_questions": 100,
+      "pass_rate": 0.72,
+      "evidence_coverage": 0.92,
+      "missing_evidence": 16,
+      "distractors": 0,
+      "latency_ms": 212.31009999999998,
+      "rank": 8
+    },
+    {
+      "model": "multilingual_e5_small",
+      "status": "AVAILABLE",
+      "source_artifact": "artifacts/real_question_eval/eternal_world_distractor_full_benchmark/latest_incremental_new_providers/real_question_eval_summary.json",
+      "passed_questions": 69,
+      "total_questions": 100,
+      "pass_rate": 0.69,
+      "evidence_coverage": 0.98,
+      "missing_evidence": 4,
+      "distractors": 23,
+      "latency_ms": 1519.5619399999998,
+      "rank": 9
+    }
+  ],
+  "best_model": {
+    "model": "bge_m3",
+    "status": "AVAILABLE",
+    "source_artifact": "artifacts/real_question_eval/eternal_world_distractor_full_benchmark/latest_incremental_new_providers/real_question_eval_summary.json",
+    "passed_questions": 85,
+    "total_questions": 100,
+    "pass_rate": 0.85,
+    "evidence_coverage": 0.955,
+    "missing_evidence": 9,
+    "distractors": 5,
+    "latency_ms": 419.74913999999995,
+    "rank": 1
+  },
+  "worst_model": {
+    "model": "multilingual_e5_small",
+    "status": "AVAILABLE",
+    "source_artifact": "artifacts/real_question_eval/eternal_world_distractor_full_benchmark/latest_incremental_new_providers/real_question_eval_summary.json",
+    "passed_questions": 69,
+    "total_questions": 100,
+    "pass_rate": 0.69,
+    "evidence_coverage": 0.98,
+    "missing_evidence": 4,
+    "distractors": 23,
+    "latency_ms": 1519.5619399999998,
+    "rank": 9
+  },
+  "missing_or_skipped_configs": [
+    {
+      "stage": "excluded_config",
+      "models": [
+        "mock_embedding"
+      ],
+      "status": "SKIPPED",
+      "reason": "Mock embedding is a test/dev provider and is not a real local model benchmark candidate."
+    },
+    {
+      "stage": "full_version_batch_e",
+      "models": [
+        "qwen3_embedding_4b"
+      ],
+      "status": "OOM",
+      "reason": "Log contains out-of-memory evidence. See log `artifacts/real_question_eval/eternal_world_distractor_full_benchmark/run_logs/batch_e_qwen3_embedding_4b.log`."
+    },
+    {
+      "stage": "full_version_batch_f",
+      "models": [
+        "qwen3_embedding_8b"
+      ],
+      "status": "OOM",
+      "reason": "Log contains out-of-memory evidence. See log `artifacts/real_question_eval/eternal_world_distractor_full_benchmark/run_logs/batch_f_qwen3_embedding_8b.log`."
+    }
+  ],
+  "unaccounted_registry_models": [],
+  "run_logs": [
+    {
+      "path": "artifacts/real_question_eval/eternal_world_distractor_full_benchmark/run_logs/batch_a_multilingual_e5_large.log",
+      "size_bytes": 287647
+    },
+    {
+      "path": "artifacts/real_question_eval/eternal_world_distractor_full_benchmark/run_logs/batch_b_qwen3_embedding_0_6b.log",
+      "size_bytes": 565470
+    },
+    {
+      "path": "artifacts/real_question_eval/eternal_world_distractor_full_benchmark/run_logs/batch_c_jina_embeddings_v3.log",
+      "size_bytes": 565124
+    },
+    {
+      "path": "artifacts/real_question_eval/eternal_world_distractor_full_benchmark/run_logs/batch_d_bge_m3_hybrid.log",
+      "size_bytes": 45268
+    },
+    {
+      "path": "artifacts/real_question_eval/eternal_world_distractor_full_benchmark/run_logs/batch_d_bge_m3_hybrid_retry.log",
+      "size_bytes": 344137
+    },
+    {
+      "path": "artifacts/real_question_eval/eternal_world_distractor_full_benchmark/run_logs/batch_d_bge_m3_hybrid_retry2.log",
+      "size_bytes": 394756
+    },
+    {
+      "path": "artifacts/real_question_eval/eternal_world_distractor_full_benchmark/run_logs/batch_e_qwen3_embedding_4b.log",
+      "size_bytes": 1393
+    },
+    {
+      "path": "artifacts/real_question_eval/eternal_world_distractor_full_benchmark/run_logs/batch_f_qwen3_embedding_8b.log",
+      "size_bytes": 915
+    }
+  ],
+  "acceptance": {
+    "available_results_gate": "PASS",
+    "available_results_verdict": "Best available model bge_m3 passed 85/100 (0.8500).",
+    "full_benchmark_completion": "COMPLETE",
+    "full_benchmark_verdict": "All repository-supported real local providers are accounted for."
+  },
+  "artifact_inventory": [
+    {
+      "path": "artifacts/real_question_eval/eternal_world_distractor_full_benchmark/latest_full_version_batch_a",
+      "kind": "directory",
+      "size_bytes": null
+    },
+    {
+      "path": "artifacts/real_question_eval/eternal_world_distractor_full_benchmark/latest_full_version_batch_a/real_question_eval_full_results.json",
+      "kind": "file",
+      "size_bytes": 1632967
+    },
+    {
+      "path": "artifacts/real_question_eval/eternal_world_distractor_full_benchmark/latest_full_version_batch_a/real_question_eval_full_results.md",
+      "kind": "file",
+      "size_bytes": 883708
+    },
+    {
+      "path": "artifacts/real_question_eval/eternal_world_distractor_full_benchmark/latest_full_version_batch_a/real_question_eval_report.md",
+      "kind": "file",
+      "size_bytes": 182551
+    },
+    {
+      "path": "artifacts/real_question_eval/eternal_world_distractor_full_benchmark/latest_full_version_batch_a/real_question_eval_result.json",
+      "kind": "file",
+      "size_bytes": 1429648
+    },
+    {
+      "path": "artifacts/real_question_eval/eternal_world_distractor_full_benchmark/latest_full_version_batch_a/real_question_eval_summary.json",
+      "kind": "file",
+      "size_bytes": 87307
+    },
+    {
+      "path": "artifacts/real_question_eval/eternal_world_distractor_full_benchmark/latest_full_version_batch_a/real_question_eval_summary.md",
+      "kind": "file",
+      "size_bytes": 21444
+    },
+    {
+      "path": "artifacts/real_question_eval/eternal_world_distractor_full_benchmark/latest_full_version_batch_b",
+      "kind": "directory",
+      "size_bytes": null
+    },
+    {
+      "path": "artifacts/real_question_eval/eternal_world_distractor_full_benchmark/latest_full_version_batch_b/real_question_eval_full_results.json",
+      "kind": "file",
+      "size_bytes": 1640348
+    },
+    {
+      "path": "artifacts/real_question_eval/eternal_world_distractor_full_benchmark/latest_full_version_batch_b/real_question_eval_full_results.md",
+      "kind": "file",
+      "size_bytes": 886504
+    },
+    {
+      "path": "artifacts/real_question_eval/eternal_world_distractor_full_benchmark/latest_full_version_batch_b/real_question_eval_report.md",
+      "kind": "file",
+      "size_bytes": 182890
+    },
+    {
+      "path": "artifacts/real_question_eval/eternal_world_distractor_full_benchmark/latest_full_version_batch_b/real_question_eval_result.json",
+      "kind": "file",
+      "size_bytes": 1433506
+    },
+    {
+      "path": "artifacts/real_question_eval/eternal_world_distractor_full_benchmark/latest_full_version_batch_b/real_question_eval_summary.json",
+      "kind": "file",
+      "size_bytes": 87547
+    },
+    {
+      "path": "artifacts/real_question_eval/eternal_world_distractor_full_benchmark/latest_full_version_batch_b/real_question_eval_summary.md",
+      "kind": "file",
+      "size_bytes": 21491
+    },
+    {
+      "path": "artifacts/real_question_eval/eternal_world_distractor_full_benchmark/latest_full_version_batch_c",
+      "kind": "directory",
+      "size_bytes": null
+    },
+    {
+      "path": "artifacts/real_question_eval/eternal_world_distractor_full_benchmark/latest_full_version_batch_c/real_question_eval_full_results.json",
+      "kind": "file",
+      "size_bytes": 1355739
+    },
+    {
+      "path": "artifacts/real_question_eval/eternal_world_distractor_full_benchmark/latest_full_version_batch_c/real_question_eval_full_results.md",
+      "kind": "file",
+      "size_bytes": 743342
+    },
+    {
+      "path": "artifacts/real_question_eval/eternal_world_distractor_full_benchmark/latest_full_version_batch_c/real_question_eval_report.md",
+      "kind": "file",
+      "size_bytes": 182028
+    },
+    {
+      "path": "artifacts/real_question_eval/eternal_world_distractor_full_benchmark/latest_full_version_batch_c/real_question_eval_result.json",
+      "kind": "file",
+      "size_bytes": 1282723
+    },
+    {
+      "path": "artifacts/real_question_eval/eternal_world_distractor_full_benchmark/latest_full_version_batch_c/real_question_eval_summary.json",
+      "kind": "file",
+      "size_bytes": 87018
+    },
+    {
+      "path": "artifacts/real_question_eval/eternal_world_distractor_full_benchmark/latest_full_version_batch_c/real_question_eval_summary.md",
+      "kind": "file",
+      "size_bytes": 21137
+    },
+    {
+      "path": "artifacts/real_question_eval/eternal_world_distractor_full_benchmark/latest_full_version_batch_d",
+      "kind": "directory",
+      "size_bytes": null
+    },
+    {
+      "path": "artifacts/real_question_eval/eternal_world_distractor_full_benchmark/latest_full_version_batch_d/real_question_eval_full_results.json",
+      "kind": "file",
+      "size_bytes": 2587457
+    },
+    {
+      "path": "artifacts/real_question_eval/eternal_world_distractor_full_benchmark/latest_full_version_batch_d/real_question_eval_full_results.md",
+      "kind": "file",
+      "size_bytes": 1411467
+    },
+    {
+      "path": "artifacts/real_question_eval/eternal_world_distractor_full_benchmark/latest_full_version_batch_d/real_question_eval_report.md",
+      "kind": "file",
+      "size_bytes": 229849
+    },
+    {
+      "path": "artifacts/real_question_eval/eternal_world_distractor_full_benchmark/latest_full_version_batch_d/real_question_eval_result.json",
+      "kind": "file",
+      "size_bytes": 2205852
+    },
+    {
+      "path": "artifacts/real_question_eval/eternal_world_distractor_full_benchmark/latest_full_version_batch_d/real_question_eval_summary.json",
+      "kind": "file",
+      "size_bytes": 131771
+    },
+    {
+      "path": "artifacts/real_question_eval/eternal_world_distractor_full_benchmark/latest_full_version_batch_d/real_question_eval_summary.md",
+      "kind": "file",
+      "size_bytes": 32687
+    },
+    {
+      "path": "artifacts/real_question_eval/eternal_world_distractor_full_benchmark/latest_incremental_new_providers",
+      "kind": "directory",
+      "size_bytes": null
+    },
+    {
+      "path": "artifacts/real_question_eval/eternal_world_distractor_full_benchmark/latest_incremental_new_providers/real_question_eval_full_results.json",
+      "kind": "file",
+      "size_bytes": 3120693
+    },
+    {
+      "path": "artifacts/real_question_eval/eternal_world_distractor_full_benchmark/latest_incremental_new_providers/real_question_eval_full_results.md",
+      "kind": "file",
+      "size_bytes": 1682567
+    },
+    {
+      "path": "artifacts/real_question_eval/eternal_world_distractor_full_benchmark/latest_incremental_new_providers/real_question_eval_report.md",
+      "kind": "file",
+      "size_bytes": 685985
+    },
+    {
+      "path": "artifacts/real_question_eval/eternal_world_distractor_full_benchmark/latest_incremental_new_providers/real_question_eval_result.json",
+      "kind": "file",
+      "size_bytes": 2647654
+    },
+    {
+      "path": "artifacts/real_question_eval/eternal_world_distractor_full_benchmark/latest_incremental_new_providers/real_question_eval_summary.json",
+      "kind": "file",
+      "size_bytes": 175956
+    },
+    {
+      "path": "artifacts/real_question_eval/eternal_world_distractor_full_benchmark/latest_incremental_new_providers/real_question_eval_summary.md",
+      "kind": "file",
+      "size_bytes": 43022
+    },
+    {
+      "path": "artifacts/real_question_eval/eternal_world_distractor_full_benchmark/latest_real",
+      "kind": "directory",
+      "size_bytes": null
+    },
+    {
+      "path": "artifacts/real_question_eval/eternal_world_distractor_full_benchmark/latest_real/real_question_eval_full_results.json",
+      "kind": "file",
+      "size_bytes": 2011439
+    },
+    {
+      "path": "artifacts/real_question_eval/eternal_world_distractor_full_benchmark/latest_real/real_question_eval_full_results.md",
+      "kind": "file",
+      "size_bytes": 1094109
+    },
+    {
+      "path": "artifacts/real_question_eval/eternal_world_distractor_full_benchmark/latest_real/real_question_eval_report.md",
+      "kind": "file",
+      "size_bytes": 444314
+    },
+    {
+      "path": "artifacts/real_question_eval/eternal_world_distractor_full_benchmark/latest_real/real_question_eval_result.json",
+      "kind": "file",
+      "size_bytes": 1697125
+    },
+    {
+      "path": "artifacts/real_question_eval/eternal_world_distractor_full_benchmark/latest_real/real_question_eval_summary.json",
+      "kind": "file",
+      "size_bytes": 88103
+    },
+    {
+      "path": "artifacts/real_question_eval/eternal_world_distractor_full_benchmark/latest_real/real_question_eval_summary.md",
+      "kind": "file",
+      "size_bytes": 20774
+    },
+    {
+      "path": "artifacts/real_question_eval/eternal_world_distractor_full_benchmark/real_question_eval_distractor_full_benchmark_aggregate.json",
+      "kind": "file",
+      "size_bytes": 31555
+    },
+    {
+      "path": "artifacts/real_question_eval/eternal_world_distractor_full_benchmark/real_question_eval_distractor_full_benchmark_aggregate.md",
+      "kind": "file",
+      "size_bytes": 4449
+    },
+    {
+      "path": "artifacts/real_question_eval/eternal_world_distractor_full_benchmark/run_logs",
+      "kind": "directory",
+      "size_bytes": null
+    },
+    {
+      "path": "artifacts/real_question_eval/eternal_world_distractor_full_benchmark/run_logs/batch_a_multilingual_e5_large.log",
+      "kind": "file",
+      "size_bytes": 287647
+    },
+    {
+      "path": "artifacts/real_question_eval/eternal_world_distractor_full_benchmark/run_logs/batch_b_qwen3_embedding_0_6b.log",
+      "kind": "file",
+      "size_bytes": 565470
+    },
+    {
+      "path": "artifacts/real_question_eval/eternal_world_distractor_full_benchmark/run_logs/batch_c_jina_embeddings_v3.log",
+      "kind": "file",
+      "size_bytes": 565124
+    },
+    {
+      "path": "artifacts/real_question_eval/eternal_world_distractor_full_benchmark/run_logs/batch_d_bge_m3_hybrid.log",
+      "kind": "file",
+      "size_bytes": 45268
+    },
+    {
+      "path": "artifacts/real_question_eval/eternal_world_distractor_full_benchmark/run_logs/batch_d_bge_m3_hybrid_retry.log",
+      "kind": "file",
+      "size_bytes": 344137
+    },
+    {
+      "path": "artifacts/real_question_eval/eternal_world_distractor_full_benchmark/run_logs/batch_d_bge_m3_hybrid_retry2.log",
+      "kind": "file",
+      "size_bytes": 394756
+    },
+    {
+      "path": "artifacts/real_question_eval/eternal_world_distractor_full_benchmark/run_logs/batch_e_qwen3_embedding_4b.log",
+      "kind": "file",
+      "size_bytes": 1393
+    },
+    {
+      "path": "artifacts/real_question_eval/eternal_world_distractor_full_benchmark/run_logs/batch_f_qwen3_embedding_8b.log",
+      "kind": "file",
+      "size_bytes": 915
+    },
+    {
+      "path": "artifacts/real_question_eval/eternal_world_distractor_full_benchmark/runs",
+      "kind": "directory",
+      "size_bytes": null
+    },
+    {
+      "path": "artifacts/real_question_eval/eternal_world_distractor_full_benchmark/runs/20260703_161512Z_real",
+      "kind": "directory",
+      "size_bytes": null
+    },
+    {
+      "path": "artifacts/real_question_eval/eternal_world_distractor_full_benchmark/runs/20260703_161512Z_real/real_question_eval_full_results.json",
+      "kind": "file",
+      "size_bytes": 2011439
+    },
+    {
+      "path": "artifacts/real_question_eval/eternal_world_distractor_full_benchmark/runs/20260703_161512Z_real/real_question_eval_full_results.md",
+      "kind": "file",
+      "size_bytes": 1094109
+    },
+    {
+      "path": "artifacts/real_question_eval/eternal_world_distractor_full_benchmark/runs/20260703_161512Z_real/real_question_eval_report.md",
+      "kind": "file",
+      "size_bytes": 444018
+    },
+    {
+      "path": "artifacts/real_question_eval/eternal_world_distractor_full_benchmark/runs/20260703_161512Z_real/real_question_eval_result.json",
+      "kind": "file",
+      "size_bytes": 1696729
+    },
+    {
+      "path": "artifacts/real_question_eval/eternal_world_distractor_full_benchmark/runs/20260703_161512Z_real/real_question_eval_summary.json",
+      "kind": "file",
+      "size_bytes": 88058
+    },
+    {
+      "path": "artifacts/real_question_eval/eternal_world_distractor_full_benchmark/runs/20260703_161512Z_real/real_question_eval_summary.md",
+      "kind": "file",
+      "size_bytes": 20772
+    },
+    {
+      "path": "artifacts/real_question_eval/eternal_world_distractor_full_benchmark/runs/20260703_162457Z_real",
+      "kind": "directory",
+      "size_bytes": null
+    },
+    {
+      "path": "artifacts/real_question_eval/eternal_world_distractor_full_benchmark/runs/20260703_162457Z_real/real_question_eval_full_results.json",
+      "kind": "file",
+      "size_bytes": 2011439
+    },
+    {
+      "path": "artifacts/real_question_eval/eternal_world_distractor_full_benchmark/runs/20260703_162457Z_real/real_question_eval_full_results.md",
+      "kind": "file",
+      "size_bytes": 1094109
+    },
+    {
+      "path": "artifacts/real_question_eval/eternal_world_distractor_full_benchmark/runs/20260703_162457Z_real/real_question_eval_report.md",
+      "kind": "file",
+      "size_bytes": 444314
+    },
+    {
+      "path": "artifacts/real_question_eval/eternal_world_distractor_full_benchmark/runs/20260703_162457Z_real/real_question_eval_result.json",
+      "kind": "file",
+      "size_bytes": 1697125
+    },
+    {
+      "path": "artifacts/real_question_eval/eternal_world_distractor_full_benchmark/runs/20260703_162457Z_real/real_question_eval_summary.json",
+      "kind": "file",
+      "size_bytes": 88103
+    },
+    {
+      "path": "artifacts/real_question_eval/eternal_world_distractor_full_benchmark/runs/20260703_162457Z_real/real_question_eval_summary.md",
+      "kind": "file",
+      "size_bytes": 20774
+    },
+    {
+      "path": "artifacts/real_question_eval/eternal_world_distractor_full_benchmark/runs/20260703_172002Z_incremental_new_providers",
+      "kind": "directory",
+      "size_bytes": null
+    },
+    {
+      "path": "artifacts/real_question_eval/eternal_world_distractor_full_benchmark/runs/20260703_172002Z_incremental_new_providers/real_question_eval_full_results.json",
+      "kind": "file",
+      "size_bytes": 3120693
+    },
+    {
+      "path": "artifacts/real_question_eval/eternal_world_distractor_full_benchmark/runs/20260703_172002Z_incremental_new_providers/real_question_eval_full_results.md",
+      "kind": "file",
+      "size_bytes": 1682567
+    },
+    {
+      "path": "artifacts/real_question_eval/eternal_world_distractor_full_benchmark/runs/20260703_172002Z_incremental_new_providers/real_question_eval_report.md",
+      "kind": "file",
+      "size_bytes": 685985
+    },
+    {
+      "path": "artifacts/real_question_eval/eternal_world_distractor_full_benchmark/runs/20260703_172002Z_incremental_new_providers/real_question_eval_result.json",
+      "kind": "file",
+      "size_bytes": 2647654
+    },
+    {
+      "path": "artifacts/real_question_eval/eternal_world_distractor_full_benchmark/runs/20260703_172002Z_incremental_new_providers/real_question_eval_summary.json",
+      "kind": "file",
+      "size_bytes": 175956
+    },
+    {
+      "path": "artifacts/real_question_eval/eternal_world_distractor_full_benchmark/runs/20260703_172002Z_incremental_new_providers/real_question_eval_summary.md",
+      "kind": "file",
+      "size_bytes": 43022
+    },
+    {
+      "path": "artifacts/real_question_eval/eternal_world_distractor_full_benchmark/runs/20260703_182938Z_full_version_batch_a",
+      "kind": "directory",
+      "size_bytes": null
+    },
+    {
+      "path": "artifacts/real_question_eval/eternal_world_distractor_full_benchmark/runs/20260703_182938Z_full_version_batch_a/real_question_eval_full_results.json",
+      "kind": "file",
+      "size_bytes": 1632967
+    },
+    {
+      "path": "artifacts/real_question_eval/eternal_world_distractor_full_benchmark/runs/20260703_182938Z_full_version_batch_a/real_question_eval_full_results.md",
+      "kind": "file",
+      "size_bytes": 883708
+    },
+    {
+      "path": "artifacts/real_question_eval/eternal_world_distractor_full_benchmark/runs/20260703_182938Z_full_version_batch_a/real_question_eval_report.md",
+      "kind": "file",
+      "size_bytes": 182551
+    },
+    {
+      "path": "artifacts/real_question_eval/eternal_world_distractor_full_benchmark/runs/20260703_182938Z_full_version_batch_a/real_question_eval_result.json",
+      "kind": "file",
+      "size_bytes": 1429648
+    },
+    {
+      "path": "artifacts/real_question_eval/eternal_world_distractor_full_benchmark/runs/20260703_182938Z_full_version_batch_a/real_question_eval_summary.json",
+      "kind": "file",
+      "size_bytes": 87307
+    },
+    {
+      "path": "artifacts/real_question_eval/eternal_world_distractor_full_benchmark/runs/20260703_182938Z_full_version_batch_a/real_question_eval_summary.md",
+      "kind": "file",
+      "size_bytes": 21444
+    },
+    {
+      "path": "artifacts/real_question_eval/eternal_world_distractor_full_benchmark/runs/20260703_185340Z_full_version_batch_b",
+      "kind": "directory",
+      "size_bytes": null
+    },
+    {
+      "path": "artifacts/real_question_eval/eternal_world_distractor_full_benchmark/runs/20260703_185340Z_full_version_batch_b/real_question_eval_full_results.json",
+      "kind": "file",
+      "size_bytes": 1640348
+    },
+    {
+      "path": "artifacts/real_question_eval/eternal_world_distractor_full_benchmark/runs/20260703_185340Z_full_version_batch_b/real_question_eval_full_results.md",
+      "kind": "file",
+      "size_bytes": 886504
+    },
+    {
+      "path": "artifacts/real_question_eval/eternal_world_distractor_full_benchmark/runs/20260703_185340Z_full_version_batch_b/real_question_eval_report.md",
+      "kind": "file",
+      "size_bytes": 182890
+    },
+    {
+      "path": "artifacts/real_question_eval/eternal_world_distractor_full_benchmark/runs/20260703_185340Z_full_version_batch_b/real_question_eval_result.json",
+      "kind": "file",
+      "size_bytes": 1433506
+    },
+    {
+      "path": "artifacts/real_question_eval/eternal_world_distractor_full_benchmark/runs/20260703_185340Z_full_version_batch_b/real_question_eval_summary.json",
+      "kind": "file",
+      "size_bytes": 87547
+    },
+    {
+      "path": "artifacts/real_question_eval/eternal_world_distractor_full_benchmark/runs/20260703_185340Z_full_version_batch_b/real_question_eval_summary.md",
+      "kind": "file",
+      "size_bytes": 21491
+    },
+    {
+      "path": "artifacts/real_question_eval/eternal_world_distractor_full_benchmark/runs/20260703_191345Z_full_version_batch_c",
+      "kind": "directory",
+      "size_bytes": null
+    },
+    {
+      "path": "artifacts/real_question_eval/eternal_world_distractor_full_benchmark/runs/20260703_191345Z_full_version_batch_c/real_question_eval_full_results.json",
+      "kind": "file",
+      "size_bytes": 1355739
+    },
+    {
+      "path": "artifacts/real_question_eval/eternal_world_distractor_full_benchmark/runs/20260703_191345Z_full_version_batch_c/real_question_eval_full_results.md",
+      "kind": "file",
+      "size_bytes": 743342
+    },
+    {
+      "path": "artifacts/real_question_eval/eternal_world_distractor_full_benchmark/runs/20260703_191345Z_full_version_batch_c/real_question_eval_report.md",
+      "kind": "file",
+      "size_bytes": 182028
+    },
+    {
+      "path": "artifacts/real_question_eval/eternal_world_distractor_full_benchmark/runs/20260703_191345Z_full_version_batch_c/real_question_eval_result.json",
+      "kind": "file",
+      "size_bytes": 1282723
+    },
+    {
+      "path": "artifacts/real_question_eval/eternal_world_distractor_full_benchmark/runs/20260703_191345Z_full_version_batch_c/real_question_eval_summary.json",
+      "kind": "file",
+      "size_bytes": 87018
+    },
+    {
+      "path": "artifacts/real_question_eval/eternal_world_distractor_full_benchmark/runs/20260703_191345Z_full_version_batch_c/real_question_eval_summary.md",
+      "kind": "file",
+      "size_bytes": 21137
+    },
+    {
+      "path": "artifacts/real_question_eval/eternal_world_distractor_full_benchmark/runs/20260703_205145Z_full_version_batch_d",
+      "kind": "directory",
+      "size_bytes": null
+    },
+    {
+      "path": "artifacts/real_question_eval/eternal_world_distractor_full_benchmark/runs/20260703_205145Z_full_version_batch_d/real_question_eval_full_results.json",
+      "kind": "file",
+      "size_bytes": 2587457
+    },
+    {
+      "path": "artifacts/real_question_eval/eternal_world_distractor_full_benchmark/runs/20260703_205145Z_full_version_batch_d/real_question_eval_full_results.md",
+      "kind": "file",
+      "size_bytes": 1411467
+    },
+    {
+      "path": "artifacts/real_question_eval/eternal_world_distractor_full_benchmark/runs/20260703_205145Z_full_version_batch_d/real_question_eval_report.md",
+      "kind": "file",
+      "size_bytes": 229849
+    },
+    {
+      "path": "artifacts/real_question_eval/eternal_world_distractor_full_benchmark/runs/20260703_205145Z_full_version_batch_d/real_question_eval_result.json",
+      "kind": "file",
+      "size_bytes": 2205852
+    },
+    {
+      "path": "artifacts/real_question_eval/eternal_world_distractor_full_benchmark/runs/20260703_205145Z_full_version_batch_d/real_question_eval_summary.json",
+      "kind": "file",
+      "size_bytes": 131771
+    },
+    {
+      "path": "artifacts/real_question_eval/eternal_world_distractor_full_benchmark/runs/20260703_205145Z_full_version_batch_d/real_question_eval_summary.md",
+      "kind": "file",
+      "size_bytes": 32687
+    }
+  ],
+  "not_rerun_statement": "Existing completed base/incremental artifacts were preserved; only missing batch stages were executed in this pass."
+}

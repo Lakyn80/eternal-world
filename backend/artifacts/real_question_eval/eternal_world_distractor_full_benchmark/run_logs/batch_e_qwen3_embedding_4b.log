@@ -1,0 +1,16 @@
+[real_question_eval] starting run mode=full_version_batch_e_real_eval run_type=full_version_batch_e candidates=['qwen3_embedding_4b']
+[real_question_eval] request built questions=100 candidates=['qwen3_embedding_4b']
+[real_question_eval] multi-embedding eval job created job_id=163
+[multi_embedding_eval] candidate start model_code=qwen3_embedding_4b collection=eternal_world_rag_chunks__qwen3_embedding_4b__real_question_eval__eternal_world_distractor_v1__d1bea5c7f4
+[sentence_transformers] memory stage=before_model_load model_code=qwen3_embedding_4b model_name=Qwen/Qwen3-Embedding-4B rss_mb=549.86
+[sentence_transformers] load start model_code=qwen3_embedding_4b model_name=Qwen/Qwen3-Embedding-4B device=cpu
+
+Fetching 2 files:   0%|          | 0/2 [00:00<?, ?it/s]
+Fetching 2 files:  50%|ÔľłÔľłÔľłÔľłÔľł     | 1/2 [17:56<17:56, 1076.87s/it]
+Fetching 2 files: 100%|ÔľłÔľłÔľłÔľłÔľłÔľłÔľłÔľłÔľłÔľł| 2/2 [19:15<00:00, 489.61s/it] 
+Fetching 2 files: 100%|ÔľłÔľłÔľłÔľłÔľłÔľłÔľłÔľłÔľłÔľł| 2/2 [19:15<00:00, 577.70s/it]
+
+Loading checkpoint shards:   0%|          | 0/2 [00:00<?, ?it/s]
+
+[benchmark] exit_code=137 during Loading checkpoint shards for Qwen/Qwen3-Embedding-4B on CPU (SIGKILL, likely OOM / hardware limit).
+OutOfMemoryError: process killed while loading 4B model weights (~8GB+ RAM required).

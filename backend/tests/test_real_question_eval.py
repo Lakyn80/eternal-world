@@ -1954,8 +1954,15 @@ def test_full_version_batch_d_writes_separate_artifacts_and_compares_only_baseli
         repo_artifact_dir / "latest_incremental_new_providers" / "real_question_eval_report.md"
     )
 
-    def fake_batch_d_manual_provider_result(*, profile_id: int, provider_code: str, source_chunks):
-        del profile_id, source_chunks
+    def fake_batch_d_manual_provider_result(
+        *,
+        profile_id: int,
+        provider_code: str,
+        source_chunks,
+        cases=None,
+        top_k: int = 2,
+    ):
+        del profile_id, source_chunks, cases, top_k
         model_results_by_provider = {
             "bge_m3_dense_sparse": [
                 ("question-sunflower-house", ["sunflower seeds", "blue gate latch"], [], [], 1.0, 1, True),

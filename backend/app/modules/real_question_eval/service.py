@@ -152,6 +152,32 @@ REAL_QUESTION_EVAL_FULL_VERSION_BATCH_D_EXCLUDED_PROVIDERS = (
     "qwen3_embedding_4b",
     "qwen3_embedding_8b",
 )
+REAL_QUESTION_EVAL_FULL_VERSION_BATCH_E_BASELINE_PROVIDER = "multilingual_e5_base"
+REAL_QUESTION_EVAL_FULL_VERSION_BATCH_E_NEW_PROVIDER_CODES = ("qwen3_embedding_4b",)
+REAL_QUESTION_EVAL_FULL_VERSION_BATCH_E_EXCLUDED_PROVIDERS = (
+    "multilingual_e5_small",
+    "bge_m3",
+    "paraphrase_multilingual_mpnet_base_v2",
+    "multilingual_e5_large",
+    "qwen3_embedding_0_6b",
+    "jina_embeddings_v3",
+    "bge_m3_dense_sparse",
+    "bge_m3_dense_sparse_multivector",
+    "qwen3_embedding_8b",
+)
+REAL_QUESTION_EVAL_FULL_VERSION_BATCH_F_BASELINE_PROVIDER = "multilingual_e5_base"
+REAL_QUESTION_EVAL_FULL_VERSION_BATCH_F_NEW_PROVIDER_CODES = ("qwen3_embedding_8b",)
+REAL_QUESTION_EVAL_FULL_VERSION_BATCH_F_EXCLUDED_PROVIDERS = (
+    "multilingual_e5_small",
+    "bge_m3",
+    "paraphrase_multilingual_mpnet_base_v2",
+    "multilingual_e5_large",
+    "qwen3_embedding_0_6b",
+    "jina_embeddings_v3",
+    "bge_m3_dense_sparse",
+    "bge_m3_dense_sparse_multivector",
+    "qwen3_embedding_4b",
+)
 REAL_QUESTION_EVAL_TOP_K = 2
 REAL_QUESTION_EVAL_EXTERNAL_TOP_K = 5
 FAKE_EXTERNAL_EVAL_RETRIEVAL_CANDIDATE_MULTIPLIER = 4
@@ -1793,6 +1819,30 @@ def _validate_full_version_batch_d_provider_codes(provider_codes: list[str]) -> 
     return normalized_codes
 
 
+def _validate_full_version_batch_e_provider_codes(provider_codes: list[str]) -> list[str]:
+    normalized_codes = [item.strip().lower() for item in provider_codes if item.strip()]
+    if not normalized_codes:
+        raise ValueError("Full-version Batch E requires an explicit provider list.")
+    if normalized_codes != list(REAL_QUESTION_EVAL_FULL_VERSION_BATCH_E_NEW_PROVIDER_CODES):
+        raise ValueError(
+            "Full-version Batch E only supports the new provider list: "
+            + ", ".join(REAL_QUESTION_EVAL_FULL_VERSION_BATCH_E_NEW_PROVIDER_CODES)
+        )
+    return normalized_codes
+
+
+def _validate_full_version_batch_f_provider_codes(provider_codes: list[str]) -> list[str]:
+    normalized_codes = [item.strip().lower() for item in provider_codes if item.strip()]
+    if not normalized_codes:
+        raise ValueError("Full-version Batch F requires an explicit provider list.")
+    if normalized_codes != list(REAL_QUESTION_EVAL_FULL_VERSION_BATCH_F_NEW_PROVIDER_CODES):
+        raise ValueError(
+            "Full-version Batch F only supports the new provider list: "
+            + ", ".join(REAL_QUESTION_EVAL_FULL_VERSION_BATCH_F_NEW_PROVIDER_CODES)
+        )
+    return normalized_codes
+
+
 def _find_historical_real_json_path(*, artifact_dir: Path) -> Path:
     preferred_path = artifact_dir / "latest_real" / "real_question_eval_result.json"
     if preferred_path.exists():
@@ -2635,11 +2685,30 @@ def _score_manual_bge_m3_chunks(
     ]
 
 
+def _resolve_eval_top_k_for_dataset(dataset) -> int:
+    effective_top_k = max(
+        REAL_QUESTION_EVAL_TOP_K,
+        max(
+            max(
+                1,
+                len(case.required_evidence),
+                int(getattr(case, "expected_citation_count_min", 0) or 0),
+            )
+            for case in dataset.cases
+        ),
+    )
+    if bool(dataset.metadata.get("external_dataset")) and len(dataset.cases) >= 50:
+        effective_top_k = max(effective_top_k, REAL_QUESTION_EVAL_EXTERNAL_TOP_K)
+    return effective_top_k
+
+
 def _build_batch_d_manual_provider_result(
     *,
     profile_id: int,
     provider_code: str,
     source_chunks,
+    cases: list[RagQualityEvalCase],
+    top_k: int = REAL_QUESTION_EVAL_TOP_K,
 ) -> tuple[list[RealQuestionEvalQuestionResult], RealQuestionEvalAggregateModelResult]:
     rag_quality_service = RagQualityService()
     hybrid_provider = BgeM3HybridEmbeddingProvider(
@@ -2651,7 +2720,7 @@ def _build_batch_d_manual_provider_result(
         config_id=provider_code,
         model_code=provider_code,
         collection_name=collection_name,
-        top_k=REAL_QUESTION_EVAL_TOP_K,
+        top_k=top_k,
         retrieval_mode="hybrid",
         metadata={"manual_local_hybrid_eval": True},
     )
@@ -2667,8 +2736,9 @@ def _build_batch_d_manual_provider_result(
     question_results: list[RealQuestionEvalQuestionResult] = []
     aggregate_trackers: list[RealQuestionEvalModelResult] = []
     latency_ms_values: list[float] = []
+    forbidden_marker_rates: list[float] = []
 
-    for case in _build_question_cases():
+    for case in cases:
         _emit_runtime_log(f"question start question_id={case.case_id} provider_code={provider_code}")
         _emit_runtime_memory_log(stage="before_question", question_id=case.case_id)
         started_at = perf_counter()
@@ -2684,7 +2754,7 @@ def _build_batch_d_manual_provider_result(
             ),
             passage_features=passage_features,
             source_chunks=source_chunks,
-            top_k=REAL_QUESTION_EVAL_TOP_K,
+            top_k=top_k,
         )
         latency_ms = round((perf_counter() - started_at) * 1000, 3)
         latency_ms_values.append(latency_ms)
@@ -2712,6 +2782,7 @@ def _build_batch_d_manual_provider_result(
             case_results=case_results_input,
             config_id=provider_code,
         )
+        forbidden_marker_rates.append(case_evaluation.forbidden_marker_rate)
         model_result = _build_model_result(
             model_code=provider_code,
             collection_name=collection_name,
@@ -2758,9 +2829,9 @@ def _build_batch_d_manual_provider_result(
             "recall_at_k": average_coverage,
             "mrr": round(sum(reciprocal_ranks) / len(aggregate_trackers), 4) if aggregate_trackers else 0.0,
             "forbidden_marker_rate": round(
-                sum(item.false_positive_count for item in aggregate_trackers) / len(aggregate_trackers),
+                sum(forbidden_marker_rates) / len(forbidden_marker_rates),
                 4,
-            ) if aggregate_trackers else 0.0,
+            ) if forbidden_marker_rates else 0.0,
             "average_latency_ms": average_latency_ms,
             "cost_estimate_total": None,
             "evidence_marker_coverage": average_coverage,
@@ -2779,7 +2850,6 @@ def _filter_question_results_to_model_codes(
     *,
     model_codes: list[str],
 ) -> list[RealQuestionEvalQuestionResult]:
-    expected_question_ids = [case.case_id for case in _build_question_cases()]
     filtered_results: list[RealQuestionEvalQuestionResult] = []
     for question_result in question_results:
         filtered_model_results = [
@@ -2796,6 +2866,11 @@ def _filter_question_results_to_model_codes(
             RealQuestionEvalQuestionResult(
                 question_id=question_result.question_id,
                 question_text=question_result.question_text,
+                test_type=question_result.test_type,
+                expected_answer_type=question_result.expected_answer_type,
+                source_scope=dict(question_result.source_scope),
+                required_evidence=list(question_result.required_evidence),
+                forbidden_evidence=list(question_result.forbidden_evidence),
                 expected_markers=list(question_result.expected_markers),
                 forbidden_markers=list(question_result.forbidden_markers),
                 model_results=filtered_model_results,
@@ -2807,8 +2882,8 @@ def _filter_question_results_to_model_codes(
                 ),
             )
         )
-    if [item.question_id for item in filtered_results] != expected_question_ids:
-        raise ValueError("Filtered question results changed the expected core question ordering")
+    if [item.question_id for item in filtered_results] != [item.question_id for item in question_results]:
+        raise ValueError("Filtered question results changed the input question ordering")
     return filtered_results
 
 
@@ -3005,13 +3080,22 @@ def _merge_question_results(
     historical_question_results: list[RealQuestionEvalQuestionResult],
     new_question_results: list[RealQuestionEvalQuestionResult],
     official_best_model_code: str | None,
+    question_order: list[str] | None = None,
 ) -> list[RealQuestionEvalQuestionResult]:
-    question_order = [case.case_id for case in _build_question_cases()]
+    resolved_question_order = (
+        list(question_order)
+        if question_order is not None
+        else _resolve_comparison_question_order(
+            historical_question_results,
+            new_question_results,
+            error_prefix="Incremental comparison",
+        )
+    )
     historical_by_id = {item.question_id: item for item in historical_question_results}
     new_by_id = {item.question_id: item for item in new_question_results}
     merged_results: list[RealQuestionEvalQuestionResult] = []
 
-    for question_id in question_order:
+    for question_id in resolved_question_order:
         historical_question = historical_by_id.get(question_id)
         new_question = new_by_id.get(question_id)
         if historical_question is None or new_question is None:
@@ -3026,6 +3110,11 @@ def _merge_question_results(
             RealQuestionEvalQuestionResult(
                 question_id=historical_question.question_id,
                 question_text=historical_question.question_text,
+                test_type=historical_question.test_type,
+                expected_answer_type=historical_question.expected_answer_type,
+                source_scope=dict(historical_question.source_scope),
+                required_evidence=list(historical_question.required_evidence),
+                forbidden_evidence=list(historical_question.forbidden_evidence),
                 expected_markers=list(historical_question.expected_markers),
                 forbidden_markers=list(historical_question.forbidden_markers),
                 model_results=model_results,
@@ -3035,6 +3124,22 @@ def _merge_question_results(
         )
 
     return merged_results
+
+
+def _resolve_comparison_question_order(
+    *question_result_groups: list[RealQuestionEvalQuestionResult],
+    error_prefix: str,
+) -> list[str]:
+    question_orders = [[item.question_id for item in group] for group in question_result_groups]
+    if not question_orders:
+        return []
+    expected_question_ids = question_orders[0]
+    for question_ids in question_orders[1:]:
+        if question_ids != expected_question_ids:
+            raise ValueError(f"{error_prefix} question IDs changed unexpectedly")
+    if len(set(expected_question_ids)) != len(expected_question_ids):
+        raise ValueError(f"{error_prefix} question IDs contain duplicates")
+    return expected_question_ids
 
 
 def _build_incremental_official_best_config(selection_result) -> dict[str, object]:
@@ -3069,6 +3174,14 @@ def _build_batch_c_official_best_config(selection_result) -> dict[str, object]:
 
 
 def _build_batch_d_official_best_config(selection_result) -> dict[str, object]:
+    return _build_incremental_official_best_config(selection_result)
+
+
+def _build_batch_e_official_best_config(selection_result) -> dict[str, object]:
+    return _build_incremental_official_best_config(selection_result)
+
+
+def _build_batch_f_official_best_config(selection_result) -> dict[str, object]:
     return _build_incremental_official_best_config(selection_result)
 
 
@@ -3162,11 +3275,11 @@ def run_incremental_real_question_eval(
         new_provider_result.historical_overall_winner_model_code = historical_overall_winner
         return new_provider_result
 
-    expected_question_ids = [case.case_id for case in _build_question_cases()]
-    historical_question_ids = [item.question_id for item in historical_question_results]
-    new_question_ids = [item.question_id for item in new_provider_result.question_results]
-    if historical_question_ids != expected_question_ids or new_question_ids != expected_question_ids:
-        raise ValueError("Incremental real evaluation question IDs changed unexpectedly")
+    expected_question_ids = _resolve_comparison_question_order(
+        historical_question_results,
+        new_provider_result.question_results,
+        error_prefix="Incremental real evaluation",
+    )
 
     combined_model_codes = list(REAL_QUESTION_EVAL_HISTORICAL_PROVIDERS) + list(new_provider_codes)
     aggregate_by_model = {
@@ -3187,6 +3300,7 @@ def run_incremental_real_question_eval(
         historical_question_results=historical_question_results,
         new_question_results=new_provider_result.question_results,
         official_best_model_code=selection_result.best_model_code,
+        question_order=expected_question_ids,
     )
     combined_aggregate_results = _recompute_aggregate_question_wins(
         question_results=combined_question_results,
@@ -3228,8 +3342,6 @@ def run_incremental_real_question_eval(
     )
     combined_result.passed = (
         bool(selection_result.best_model_code)
-        and historical_question_ids == expected_question_ids
-        and new_question_ids == expected_question_ids
         and new_provider_result.passed
     )
     artifact_paths = write_real_question_eval_artifacts(
@@ -3302,11 +3414,11 @@ def run_full_version_batch_a_question_eval(
         )
         return new_provider_result
 
-    expected_question_ids = [case.case_id for case in _build_question_cases()]
-    baseline_question_ids = [item.question_id for item in baseline_question_results]
-    new_question_ids = [item.question_id for item in new_provider_result.question_results]
-    if baseline_question_ids != expected_question_ids or new_question_ids != expected_question_ids:
-        raise ValueError("Full-version Batch A question IDs changed unexpectedly")
+    expected_question_ids = _resolve_comparison_question_order(
+        baseline_question_results,
+        new_provider_result.question_results,
+        error_prefix="Full-version Batch A",
+    )
 
     combined_model_codes = [baseline_provider_code, *new_provider_codes]
     aggregate_by_model = {
@@ -3327,6 +3439,7 @@ def run_full_version_batch_a_question_eval(
         historical_question_results=baseline_question_results,
         new_question_results=new_provider_result.question_results,
         official_best_model_code=selection_result.best_model_code,
+        question_order=expected_question_ids,
     )
     combined_aggregate_results = _recompute_aggregate_question_wins(
         question_results=combined_question_results,
@@ -3375,8 +3488,6 @@ def run_full_version_batch_a_question_eval(
     )
     combined_result.passed = (
         bool(selection_result.best_model_code)
-        and baseline_question_ids == expected_question_ids
-        and new_question_ids == expected_question_ids
         and new_provider_result.passed
     )
     artifact_paths = write_real_question_eval_artifacts(
@@ -3468,11 +3579,11 @@ def run_full_version_batch_b_question_eval(
             new_provider_result.json_result_path = artifact_paths.latest_json_result
         return new_provider_result
 
-    expected_question_ids = [case.case_id for case in _build_question_cases()]
-    baseline_question_ids = [item.question_id for item in baseline_question_results]
-    new_question_ids = [item.question_id for item in new_provider_result.question_results]
-    if baseline_question_ids != expected_question_ids or new_question_ids != expected_question_ids:
-        raise ValueError("Full-version Batch B question IDs changed unexpectedly")
+    expected_question_ids = _resolve_comparison_question_order(
+        baseline_question_results,
+        new_provider_result.question_results,
+        error_prefix="Full-version Batch B",
+    )
 
     combined_model_codes = [baseline_provider_code, *new_provider_codes]
     aggregate_by_model = {
@@ -3493,6 +3604,7 @@ def run_full_version_batch_b_question_eval(
         historical_question_results=baseline_question_results,
         new_question_results=new_provider_result.question_results,
         official_best_model_code=selection_result.best_model_code,
+        question_order=expected_question_ids,
     )
     combined_aggregate_results = _recompute_aggregate_question_wins(
         question_results=combined_question_results,
@@ -3545,8 +3657,6 @@ def run_full_version_batch_b_question_eval(
     )
     combined_result.passed = (
         bool(selection_result.best_model_code)
-        and baseline_question_ids == expected_question_ids
-        and new_question_ids == expected_question_ids
         and new_provider_result.passed
     )
     artifact_paths = write_real_question_eval_artifacts(
@@ -3632,11 +3742,11 @@ def run_full_version_batch_c_question_eval(
             new_provider_result.json_result_path = artifact_paths.latest_json_result
         return new_provider_result
 
-    expected_question_ids = [case.case_id for case in _build_question_cases()]
-    baseline_question_ids = [item.question_id for item in baseline_question_results]
-    new_question_ids = [item.question_id for item in new_provider_result.question_results]
-    if baseline_question_ids != expected_question_ids or new_question_ids != expected_question_ids:
-        raise ValueError("Full-version Batch C question IDs changed unexpectedly")
+    expected_question_ids = _resolve_comparison_question_order(
+        baseline_question_results,
+        new_provider_result.question_results,
+        error_prefix="Full-version Batch C",
+    )
 
     combined_model_codes = [baseline_provider_code, *new_provider_codes]
     aggregate_by_model = {
@@ -3657,6 +3767,7 @@ def run_full_version_batch_c_question_eval(
         historical_question_results=baseline_question_results,
         new_question_results=new_provider_result.question_results,
         official_best_model_code=selection_result.best_model_code,
+        question_order=expected_question_ids,
     )
     combined_aggregate_results = _recompute_aggregate_question_wins(
         question_results=combined_question_results,
@@ -3709,8 +3820,6 @@ def run_full_version_batch_c_question_eval(
     )
     combined_result.passed = (
         bool(selection_result.best_model_code)
-        and baseline_question_ids == expected_question_ids
-        and new_question_ids == expected_question_ids
         and new_provider_result.passed
     )
     artifact_paths = write_real_question_eval_artifacts(
@@ -3730,6 +3839,220 @@ def run_full_version_batch_c_question_eval(
         and Path(combined_result.json_result_path).exists()
     )
     return combined_result
+
+
+def _run_full_version_optional_qwen_comparison_batch(
+    db: Session,
+    config: RealQuestionEvalConfig,
+    *,
+    validate_provider_codes,
+    baseline_provider_code: str,
+    excluded_provider_codes: list[str],
+    run_type: str,
+    execution_mode: str,
+    benchmark_batch_label: str,
+    comparison_scope_note: str,
+    non_compared_notes: list[str],
+    error_prefix: str,
+    build_official_best_config,
+) -> RealQuestionEvalResult:
+    new_provider_codes = validate_provider_codes(list(config.candidate_model_codes or []))
+    incremental_payload = _load_incremental_new_provider_payload(artifact_dir=Path(config.artifact_dir))
+    incremental_question_results = _build_historical_question_results(incremental_payload)
+    incremental_aggregate_results = _build_historical_aggregate_results(incremental_payload)
+    baseline_question_results = _filter_question_results_to_model_codes(
+        incremental_question_results,
+        model_codes=[baseline_provider_code],
+    )
+    baseline_aggregate_results = _filter_aggregate_results_to_model_codes(
+        incremental_aggregate_results,
+        model_codes=[baseline_provider_code],
+    )
+    baseline_client_view = (
+        incremental_payload.get("client_view")
+        if isinstance(incremental_payload.get("client_view"), dict)
+        else {}
+    )
+    baseline_overall_winner = (
+        str(baseline_client_view.get("overall_winner"))
+        if baseline_client_view.get("overall_winner") is not None
+        else baseline_provider_code
+    )
+
+    new_run_config = config.model_copy(
+        update={
+            "candidate_model_codes": new_provider_codes,
+            "write_artifacts": False,
+            "run_type_override": run_type,
+            "execution_mode_override": execution_mode,
+        }
+    )
+    new_provider_result = RealQuestionEvalRunner(db, new_run_config).run()
+    if new_provider_result.error:
+        new_provider_result.run_type = run_type
+        new_provider_result.execution_mode = execution_mode
+        new_provider_result.benchmark_batch_label = benchmark_batch_label
+        new_provider_result.benchmark_status = "failed"
+        new_provider_result.incomplete_reason = str(new_provider_result.error)
+        new_provider_result.baseline_provider_codes = [baseline_provider_code]
+        new_provider_result.excluded_provider_codes = excluded_provider_codes
+        new_provider_result.newly_evaluated_provider_codes = list(new_provider_codes)
+        new_provider_result.historical_overall_winner_model_code = baseline_overall_winner
+        new_provider_result.comparison_scope_note = comparison_scope_note
+        new_provider_result.non_compared_notes = list(non_compared_notes)
+        if config.write_artifacts:
+            artifact_paths = write_real_question_eval_artifacts(
+                artifact_dir=Path(config.artifact_dir),
+                result=new_provider_result,
+            )
+            new_provider_result.artifact_paths = artifact_paths
+            new_provider_result.markdown_report_path = artifact_paths.latest_markdown_report
+            new_provider_result.json_result_path = artifact_paths.latest_json_result
+        return new_provider_result
+
+    expected_question_ids = _resolve_comparison_question_order(
+        baseline_question_results,
+        new_provider_result.question_results,
+        error_prefix=error_prefix,
+    )
+
+    combined_model_codes = [baseline_provider_code, *new_provider_codes]
+    aggregate_by_model = {
+        aggregate_result.model_code: aggregate_result
+        for aggregate_result in [*baseline_aggregate_results, *new_provider_result.aggregate_results]
+    }
+    combined_aggregate_results = [aggregate_by_model[model_code] for model_code in combined_model_codes]
+    selection_result = RagQualityService().select_best_config(
+        config_evaluations=[
+            _build_config_evaluation_from_aggregate_result(
+                aggregate_result,
+                total_cases=len(expected_question_ids),
+            )
+            for aggregate_result in combined_aggregate_results
+        ]
+    )
+    combined_question_results = _merge_question_results(
+        historical_question_results=baseline_question_results,
+        new_question_results=new_provider_result.question_results,
+        official_best_model_code=selection_result.best_model_code,
+        question_order=expected_question_ids,
+    )
+    combined_aggregate_results = _recompute_aggregate_question_wins(
+        question_results=combined_question_results,
+        aggregate_results=combined_aggregate_results,
+    )
+    any_new_provider_beat_baseline = (
+        selection_result.best_model_code in new_provider_codes
+        and selection_result.best_model_code != baseline_provider_code
+    )
+
+    combined_result = RealQuestionEvalResult(
+        passed=False,
+        used_fake_models=new_provider_result.used_fake_models,
+        run_type=run_type,
+        execution_mode=execution_mode,
+        benchmark_batch_label=benchmark_batch_label,
+        benchmark_status="completed" if new_provider_result.passed else "failed",
+        baseline_provider_codes=[baseline_provider_code],
+        excluded_provider_codes=excluded_provider_codes,
+        newly_evaluated_provider_codes=list(new_provider_codes),
+        comparison_scope_note=comparison_scope_note,
+        non_compared_notes=list(non_compared_notes),
+        historical_providers=[baseline_provider_code],
+        new_real_providers=list(new_provider_codes),
+        historical_overall_winner_model_code=baseline_overall_winner,
+        any_new_provider_beat_historical_winner=any_new_provider_beat_baseline,
+        generated_at=new_provider_result.generated_at,
+        profile_id=new_provider_result.profile_id,
+        source_id=new_provider_result.source_id,
+        job_id=new_provider_result.job_id,
+        dataset_id=new_provider_result.dataset_id,
+        dataset_name=new_provider_result.dataset_name,
+        dataset_file=new_provider_result.dataset_file,
+        source_chunk_count=new_provider_result.source_chunk_count,
+        compared_models=combined_model_codes,
+        question_results=combined_question_results,
+        aggregate_results=combined_aggregate_results,
+        overall_winner_model_code=selection_result.best_model_code,
+        official_best_config=build_official_best_config(selection_result),
+        activated=False,
+        runtime_verified=False,
+        warnings=[
+            *new_provider_result.warnings,
+            *selection_result.warnings,
+        ],
+    )
+    combined_result.passed = (
+        bool(selection_result.best_model_code)
+        and new_provider_result.passed
+    )
+    artifact_paths = write_real_question_eval_artifacts(
+        artifact_dir=Path(config.artifact_dir),
+        result=combined_result,
+    )
+    combined_result.artifact_paths = artifact_paths
+    if artifact_paths.latest_markdown_report is not None:
+        combined_result.markdown_report_path = artifact_paths.latest_markdown_report
+    if artifact_paths.latest_json_result is not None:
+        combined_result.json_result_path = artifact_paths.latest_json_result
+    combined_result.passed = (
+        combined_result.passed
+        and combined_result.markdown_report_path is not None
+        and Path(combined_result.markdown_report_path).exists()
+        and combined_result.json_result_path is not None
+        and Path(combined_result.json_result_path).exists()
+    )
+    return combined_result
+
+
+def run_full_version_batch_e_question_eval(
+    db: Session,
+    config: RealQuestionEvalConfig,
+) -> RealQuestionEvalResult:
+    return _run_full_version_optional_qwen_comparison_batch(
+        db,
+        config,
+        validate_provider_codes=_validate_full_version_batch_e_provider_codes,
+        baseline_provider_code=REAL_QUESTION_EVAL_FULL_VERSION_BATCH_E_BASELINE_PROVIDER,
+        excluded_provider_codes=list(REAL_QUESTION_EVAL_FULL_VERSION_BATCH_E_EXCLUDED_PROVIDERS),
+        run_type="full_version_batch_e",
+        execution_mode="full_version_batch_e_real_eval",
+        benchmark_batch_label="Batch E",
+        comparison_scope_note=(
+            "Only multilingual_e5_base and qwen3_embedding_4b are included in the final Batch E comparison; "
+            "all other completed benchmark providers are excluded."
+        ),
+        non_compared_notes=[
+            "Qwen3 4B uses plain-text SentenceTransformers encoding without provider-specific retrieval instructions.",
+        ],
+        error_prefix="Full-version Batch E",
+        build_official_best_config=_build_batch_e_official_best_config,
+    )
+
+
+def run_full_version_batch_f_question_eval(
+    db: Session,
+    config: RealQuestionEvalConfig,
+) -> RealQuestionEvalResult:
+    return _run_full_version_optional_qwen_comparison_batch(
+        db,
+        config,
+        validate_provider_codes=_validate_full_version_batch_f_provider_codes,
+        baseline_provider_code=REAL_QUESTION_EVAL_FULL_VERSION_BATCH_F_BASELINE_PROVIDER,
+        excluded_provider_codes=list(REAL_QUESTION_EVAL_FULL_VERSION_BATCH_F_EXCLUDED_PROVIDERS),
+        run_type="full_version_batch_f",
+        execution_mode="full_version_batch_f_real_eval",
+        benchmark_batch_label="Batch F",
+        comparison_scope_note=(
+            "Only multilingual_e5_base and qwen3_embedding_8b are included in the final Batch F comparison; "
+            "all other completed benchmark providers are excluded."
+        ),
+        non_compared_notes=[
+            "Qwen3 8B uses plain-text SentenceTransformers encoding without provider-specific retrieval instructions.",
+        ],
+        error_prefix="Full-version Batch F",
+        build_official_best_config=_build_batch_f_official_best_config,
+    )
 
 
 def run_full_version_batch_d_question_eval(
@@ -3771,16 +4094,14 @@ def run_full_version_batch_d_question_eval(
             }
         ),
     )
+    dataset = runner.resolve_eval_dataset()
+    effective_top_k = _resolve_eval_top_k_for_dataset(dataset)
 
     try:
         user = runner.ensure_user()
         profile = runner.ensure_profile(user)
         source = runner.ensure_source(user, profile)
-        source_chunks = _ensure_question_eval_source_chunks(
-            db,
-            current_user=user,
-            source_id=source.id,
-        )
+        source_chunks = runner.prepare_eval_source_chunks(user=user, source=source)
     except Exception as exc:
         failed_result = RealQuestionEvalResult(
             passed=False,
@@ -3804,8 +4125,8 @@ def run_full_version_batch_d_question_eval(
             new_real_providers=list(new_provider_codes),
             historical_overall_winner_model_code=baseline_overall_winner,
             any_new_provider_beat_historical_winner=False,
-            dataset_id=REAL_QUESTION_EVAL_DATASET_ID,
-            dataset_name=REAL_QUESTION_EVAL_DATASET_NAME,
+            dataset_id=dataset.dataset_id,
+            dataset_name=dataset.name,
             dataset_file=str(config.dataset_path.resolve()) if config.dataset_path is not None else None,
             compared_models=[baseline_provider_code],
             question_results=baseline_question_results,
@@ -3836,6 +4157,8 @@ def run_full_version_batch_d_question_eval(
                     profile_id=profile.id,
                     provider_code=provider_code,
                     source_chunks=source_chunks,
+                    cases=list(dataset.cases),
+                    top_k=effective_top_k,
                 )
             except Exception as exc:
                 reason = f"{provider_code} was not completed in local CPU-only Batch D: {exc}"
@@ -3873,8 +4196,8 @@ def run_full_version_batch_d_question_eval(
             generated_at=datetime.now(timezone.utc).isoformat(),
             profile_id=profile.id,
             source_id=source.id,
-            dataset_id=REAL_QUESTION_EVAL_DATASET_ID,
-            dataset_name=REAL_QUESTION_EVAL_DATASET_NAME,
+            dataset_id=dataset.dataset_id,
+            dataset_name=dataset.name,
             dataset_file=str(config.dataset_path.resolve()) if config.dataset_path is not None else None,
             source_chunk_count=len(source_chunks),
             compared_models=[baseline_provider_code],
@@ -3900,7 +4223,14 @@ def run_full_version_batch_d_question_eval(
         return failed_result
 
     successful_provider_codes = [aggregate_result.model_code for aggregate_result in successful_new_aggregate_results]
-    question_order = [case.case_id for case in _build_question_cases()]
+    question_order = _resolve_comparison_question_order(
+        baseline_question_results,
+        *[
+            successful_new_question_results_by_provider[provider_code]
+            for provider_code in successful_provider_codes
+        ],
+        error_prefix="Full-version Batch D",
+    )
     baseline_by_question_id = {item.question_id: item for item in baseline_question_results}
     new_results_by_provider_and_question = {
         provider_code: {question_result.question_id: question_result for question_result in question_results}
@@ -3925,6 +4255,11 @@ def run_full_version_batch_d_question_eval(
             RealQuestionEvalQuestionResult(
                 question_id=baseline_question.question_id,
                 question_text=baseline_question.question_text,
+                test_type=baseline_question.test_type,
+                expected_answer_type=baseline_question.expected_answer_type,
+                source_scope=dict(baseline_question.source_scope),
+                required_evidence=list(baseline_question.required_evidence),
+                forbidden_evidence=list(baseline_question.forbidden_evidence),
                 expected_markers=list(baseline_question.expected_markers),
                 forbidden_markers=list(baseline_question.forbidden_markers),
                 model_results=merged_model_results,
@@ -3986,8 +4321,8 @@ def run_full_version_batch_d_question_eval(
         generated_at=datetime.now(timezone.utc).isoformat(),
         profile_id=profile.id,
         source_id=source.id,
-        dataset_id=REAL_QUESTION_EVAL_DATASET_ID,
-        dataset_name=REAL_QUESTION_EVAL_DATASET_NAME,
+        dataset_id=dataset.dataset_id,
+        dataset_name=dataset.name,
         dataset_file=str(config.dataset_path.resolve()) if config.dataset_path is not None else None,
         source_chunk_count=len(source_chunks),
         compared_models=combined_model_codes,
@@ -4028,6 +4363,10 @@ def run_real_question_eval(
     config: RealQuestionEvalConfig | None = None,
 ) -> RealQuestionEvalResult:
     resolved_config = config or RealQuestionEvalConfig()
+    if resolved_config.execution_mode_override == "full_version_batch_f_real_eval":
+        return run_full_version_batch_f_question_eval(db, resolved_config)
+    if resolved_config.execution_mode_override == "full_version_batch_e_real_eval":
+        return run_full_version_batch_e_question_eval(db, resolved_config)
     if resolved_config.execution_mode_override == "full_version_batch_d_real_eval":
         return run_full_version_batch_d_question_eval(db, resolved_config)
     if resolved_config.execution_mode_override == "full_version_batch_c_real_eval":
