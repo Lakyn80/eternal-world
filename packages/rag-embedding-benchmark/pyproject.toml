@@ -1,0 +1,43 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "rag-embedding-benchmark"
+version = "0.1.0"
+description = "Compare RAG embedding models against a custom eval dataset using your existing DB and Qdrant stack."
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+  "pydantic>=2.7",
+  "PyYAML>=6.0",
+]
+
+[project.optional-dependencies]
+sql-qdrant = [
+  "sqlalchemy>=2.0",
+  "psycopg[binary]>=3.1",
+  "qdrant-client>=1.9",
+  "sentence-transformers>=3.0",
+  "transformers>=4.40",
+]
+eternal-world = [
+  "sqlalchemy>=2.0",
+  "psycopg[binary]>=3.1",
+  "qdrant-client>=1.9",
+  "sentence-transformers>=3.0",
+  "transformers>=4.40",
+]
+dev = [
+  "pytest>=8.0",
+]
+
+[project.scripts]
+rag-eval = "rag_eval.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["rag_eval*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

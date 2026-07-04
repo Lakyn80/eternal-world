@@ -1,0 +1,41 @@
+{
+  "dataset_id": "my-project-v1",
+  "name": "My Project RAG Eval",
+  "description": "Replace this template with your project-specific eval dataset.",
+  "project_name": "My Project",
+  "metadata": {
+    "external_dataset": true,
+    "version": "v1"
+  },
+  "cases": [
+    {
+      "id": "example-short-fact",
+      "question": "What marker should retrieval find for this case?",
+      "expected_answer_type": "short_fact",
+      "test_type": "short_fact",
+      "source_scope": {
+        "scope_type": "document",
+        "document_ids": ["my-source-document"]
+      },
+      "required_evidence": [
+        {
+          "marker": "verified marker phrase",
+          "aliases": ["alternate marker phrase"]
+        }
+      ],
+      "forbidden_evidence": [
+        {
+          "marker": "distractor marker phrase",
+          "aliases": ["misleading alias"]
+        }
+      ],
+      "minimum_coverage": 1.0,
+      "allow_partial": false,
+      "expected_citation_count_min": 1,
+      "difficulty": "easy",
+      "language": "en",
+      "expected_long_context": false,
+      "minimum_context_chars": 0
+    }
+  ]
+}

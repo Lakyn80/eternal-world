@@ -1,0 +1,27 @@
+device: cpu
+artifact_dir: ./rag_eval_out
+
+backend: eternal_world
+collection_prefix: rag_eval
+
+source_id: 42
+profile_id: 1
+user_email: demo.real.question.eval@example.test
+
+dataset: ../../../backend/app/modules/real_question_eval/datasets/eternal_world_eval_dataset_sample.json
+
+top_k: 5
+
+models:
+  default:
+    - bge_m3
+    - multilingual_e5_large
+    - multilingual_e5_base
+    - multilingual_e5_small
+    - paraphrase_multilingual_mpnet_base_v2
+    - qwen3_embedding_0_6b
+    - jina_embeddings_v3
+  optional_high_ram:
+    - qwen3_embedding_4b
+    - qwen3_embedding_8b
+  include_optional: false
