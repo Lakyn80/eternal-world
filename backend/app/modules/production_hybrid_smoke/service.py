@@ -30,6 +30,8 @@ from app.modules.rag_retrieval.service import retrieve_profile_rag
 from app.modules.rag_sources.repository import list_rag_sources_for_profile
 from app.modules.rag_sources.schemas import RagSourceCreate, RagSourceUpdate
 from app.modules.rag_sources.service import create_rag_source, update_rag_source
+from app.modules.rag_evaluation.evaluator import evaluate_answer_against_case
+from app.modules.rag_evaluation.schemas import RagEvaluationCase, RagEvaluationProfileSetup
 from app.modules.users.repository import get_user_by_email
 
 
@@ -71,6 +73,11 @@ class ProductionHybridSmokeRunner:
             self.verify_hybrid_retrieval(retrieval_response)
             chat_response, assistant_message = self.run_chat(user, profile)
             self.verify_chat_answer(chat_response.ai_response_text, assistant_message.message_metadata or {})
+            self.run_evaluation(
+                chat_response.ai_response_text,
+                assistant_message.message_metadata or {},
+                retrieval_response,
+            )
         except Exception as exc:
             self._add_stage(
                 "final",
@@ -418,18 +425,60 @@ class ProductionHybridSmokeRunner:
         return chat_response, assistant_message
 
     def verify_chat_answer(self, answer_text: str, metadata: dict[str, Any]) -> None:
+        marker_found = PRODUCTION_HYBRID_EXPECTED_MARKER in answer_text.lower()
         grounded = metadata.get("grounding_status") == "grounded"
-        passed = grounded and bool(answer_text.strip())
+        passed = marker_found and grounded and bool(answer_text.strip())
         self._add_stage(
             "chat_grounding",
             passed,
             {
+                "expected_marker": PRODUCTION_HYBRID_EXPECTED_MARKER,
+                "marker_found": marker_found,
                 "grounding_status": metadata.get("grounding_status"),
                 "answer_preview": answer_text[:160],
             },
         )
         if not passed:
             raise RuntimeError("Hybrid smoke chat answer did not satisfy grounding checks")
+
+    def run_evaluation(
+        self,
+        answer_text: str,
+        metadata: dict[str, Any],
+        retrieval_response,
+    ) -> None:
+        case = RagEvaluationCase(
+            case_id="production-hybrid-smoke-grounded-answer",
+            title="Production hybrid smoke grounded answer",
+            profile=RagEvaluationProfileSetup(
+                profile_id=retrieval_response.profile_id,
+                name=self.config.profile_name,
+            ),
+            user_query=PRODUCTION_HYBRID_CHAT_MESSAGE,
+            expected_behavior="grounded_answer",
+            expected_evidence_markers=[PRODUCTION_HYBRID_EXPECTED_MARKER, "Prague"],
+            forbidden_claims=["favorite car", "Berlin"],
+            minimum_required_evidence_count=1,
+        )
+        evaluation_result = evaluate_answer_against_case(
+            case=case,
+            answer_text=answer_text,
+            provider_name=str(metadata.get("provider_name") or "unknown"),
+            response_metadata=metadata,
+            evidence_count=len(retrieval_response.results),
+        )
+        self._add_stage(
+            "evaluation",
+            evaluation_result.passed,
+            {
+                "case_id": evaluation_result.case_id,
+                "actual_behavior": evaluation_result.actual_behavior,
+                "evidence_count": evaluation_result.evidence_count,
+                "reasons": evaluation_result.reasons,
+            },
+        )
+        if not evaluation_result.passed:
+            raise RuntimeError("RAG evaluation harness failed production hybrid smoke answer")
 
 
 def run_production_hybrid_smoke(

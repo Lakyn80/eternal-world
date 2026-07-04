@@ -57,3 +57,27 @@ def build_lack_of_evidence_response(
         provider_name=provider_name,
         metadata=response_metadata,
     )
+
+
+def build_grounded_mock_answer(request: BrainAgentRequest) -> str | None:
+    grounded_context = request.grounded_context
+    if grounded_context is None:
+        return None
+
+    cited_parts: list[str] = []
+    for evidence_item in grounded_context.evidence_items:
+        if evidence_item.content_preview:
+            cited_parts.append(
+                f"[memory:{evidence_item.source_id}] {evidence_item.content_preview}"
+            )
+
+    for evidence_item in grounded_context.retrieved_evidence_items:
+        if evidence_item.content_preview:
+            cited_parts.append(
+                f"[rag:{evidence_item.chunk_id}] {evidence_item.content_preview}"
+            )
+
+    if not cited_parts:
+        return None
+
+    return f"{request.profile.name} mock reply: " + " ".join(cited_parts)

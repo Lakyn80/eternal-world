@@ -1,4 +1,8 @@
-from app.modules.rag_evaluation.cases import FOUNDATION_RAG_EVALUATION_CASES
+from app.modules.rag_evaluation.cases import (
+    ALL_RAG_EVALUATION_CASES,
+    ETERNAL_WORLD_RAG_EVALUATION_CASES,
+    FOUNDATION_RAG_EVALUATION_CASES,
+)
 from app.modules.rag_evaluation.evaluator import evaluate_answer_against_case
 from app.modules.rag_evaluation.exceptions import (
     RagEvaluationCaseExecutionError,
@@ -15,6 +19,8 @@ from app.modules.rag_evaluation.schemas import (
 from app.modules.rag_evaluation.service import RagEvaluationService
 
 __all__ = [
+    "ALL_RAG_EVALUATION_CASES",
+    "ETERNAL_WORLD_RAG_EVALUATION_CASES",
     "FOUNDATION_RAG_EVALUATION_CASES",
     "RagEvaluationCase",
     "RagEvaluationCaseExecutionError",

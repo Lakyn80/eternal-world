@@ -4294,3 +4294,36 @@ Scope confirmation:
 - retrieval runtime was not changed
 - eval dataset expansion deferred to Task 59B/C
 
+## Task 59B/C Eternal World Q&A Eval and Answer Quality Gate
+
+Goal:
+
+- expand grounded Q&A evaluation beyond the two foundation cases
+- make mock Brain answers evidence-aware for deterministic eval/smoke checks
+- add production hybrid smoke answer-quality gate via `rag_evaluation`
+
+What changed:
+
+- `backend/app/modules/rag_evaluation/cases.py`
+  - added `ETERNAL_WORLD_RAG_EVALUATION_CASES` (7 Eternal World cases)
+  - exported `ALL_RAG_EVALUATION_CASES`
+- `backend/app/modules/ai_agents/brain/providers/grounding.py`
+  - added `build_grounded_mock_answer()` for citation-style mock replies
+- `backend/app/modules/ai_agents/brain/providers/mock.py`
+  - mock provider now echoes grounded evidence excerpts when available
+- `backend/app/modules/production_hybrid_smoke/service.py`
+  - chat grounding now checks expected marker
+  - added `run_evaluation()` stage using `rag_evaluation`
+- tests:
+  - `backend/tests/test_rag_evaluation.py`
+  - `backend/tests/test_production_hybrid_smoke.py`
+
+Verification results:
+
+- `python -m pytest tests/test_rag_evaluation.py tests/test_production_hybrid_smoke.py tests/test_demo_smoke.py -q` -> `21 passed`
+
+Scope confirmation:
+
+- retrieval runtime was not changed
+- Celery job audit deferred to Task 60
+

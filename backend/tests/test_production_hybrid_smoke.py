@@ -97,7 +97,9 @@ class PassingFakeProductionHybridSmokeRunner(ProductionHybridSmokeRunner):
     def run_chat(self, user, profile):
         response = SimpleNamespace(
             message_id=99,
-            ai_response_text="Grounded hybrid smoke answer.",
+            ai_response_text=(
+                f"The {PRODUCTION_HYBRID_EXPECTED_MARKER} stayed tied to the cedar drawer in Prague."
+            ),
         )
         assistant_message = SimpleNamespace(
             message_metadata={
@@ -107,6 +109,17 @@ class PassingFakeProductionHybridSmokeRunner(ProductionHybridSmokeRunner):
         )
         self._add_stage("chat/brain_answer", True, {"message_id": response.message_id})
         return response, assistant_message
+
+    def run_evaluation(self, answer_text, metadata, retrieval_response) -> None:
+        self._add_stage(
+            "evaluation",
+            True,
+            {
+                "case_id": "production-hybrid-smoke-grounded-answer",
+                "actual_behavior": "grounded_answer",
+                "evidence_count": len(retrieval_response.results),
+            },
+        )
 
 
 class FailingHybridRetrievalRunner(PassingFakeProductionHybridSmokeRunner):
@@ -147,6 +160,7 @@ def test_production_hybrid_smoke_flow_returns_pass_when_all_required_stages_succ
         "hybrid_retrieval",
         "chat/brain_answer",
         "chat_grounding",
+        "evaluation",
     }
 
 
