@@ -35,6 +35,8 @@ class Settings(BaseSettings):
     ai_brain_timeout_seconds: float = Field(default=30, gt=0)
     ai_brain_temperature: float = Field(default=0.2, ge=0, le=2)
     ai_brain_max_tokens: int | None = Field(default=None, gt=0)
+    ai_brain_memory_evidence_preview_length: int = Field(default=480, gt=0)
+    ai_brain_rag_evidence_preview_length: int = Field(default=1200, gt=0)
     embedding_provider: str = "mock"
     sentence_transformers_device: str = "cpu"
     sentence_transformers_cache_dir: Path | None = None

@@ -5,6 +5,8 @@ from datetime import date, datetime
 
 from pydantic import BaseModel, Field
 
+from app.core.config import settings
+
 
 MAX_MEMORY_EVIDENCE_ITEMS = 10
 MAX_CONTENT_PREVIEW_LENGTH = 240
@@ -61,15 +63,33 @@ def _sanitize_prompt_text(value: str | None) -> str | None:
     return sanitized_value or None
 
 
-def _build_content_preview(content: str | None) -> str | None:
+def _build_content_preview(
+    content: str | None,
+    *,
+    max_length: int = MAX_CONTENT_PREVIEW_LENGTH,
+) -> str | None:
     sanitized_content = _sanitize_prompt_text(content)
     if sanitized_content is None:
         return None
 
-    if len(sanitized_content) <= MAX_CONTENT_PREVIEW_LENGTH:
+    if len(sanitized_content) <= max_length:
         return sanitized_content
 
-    return f"{sanitized_content[: MAX_CONTENT_PREVIEW_LENGTH - 3].rstrip()}..."
+    return f"{sanitized_content[: max_length - 3].rstrip()}..."
+
+
+def _build_memory_content_preview(content: str | None) -> str | None:
+    return _build_content_preview(
+        content,
+        max_length=settings.ai_brain_memory_evidence_preview_length,
+    )
+
+
+def _build_rag_content_preview(content: str | None) -> str | None:
+    return _build_content_preview(
+        content,
+        max_length=settings.ai_brain_rag_evidence_preview_length,
+    )
 
 
 def build_brain_profile_context(profile) -> BrainProfileContext:
@@ -128,7 +148,7 @@ def select_memory_evidence(
                 memory_type=memory.memory_type,
                 occurred_at=memory.occurred_at,
                 occurred_year=memory.occurred_year,
-                content_preview=_build_content_preview(memory.content),
+                content_preview=_build_memory_content_preview(memory.content),
                 selection_reason=f"keyword_overlap:{overlap_count}",
             )
             for overlap_count, memory in selected_memories
@@ -142,7 +162,7 @@ def select_memory_evidence(
             memory_type=memory.memory_type,
             occurred_at=memory.occurred_at,
             occurred_year=memory.occurred_year,
-            content_preview=_build_content_preview(memory.content),
+            content_preview=_build_memory_content_preview(memory.content),
             selection_reason="latest_timeline_fallback",
         )
         for memory in fallback_memories
@@ -179,7 +199,7 @@ def build_rag_evidence_items(results: list) -> list[BrainRagEvidence]:
                 source_document_type=result.source_type,
                 validation_status=result.validation_status,
                 text_hash=result.text_hash,
-                content_preview=_build_content_preview(result.text) or "",
+                content_preview=_build_rag_content_preview(result.text) or "",
             )
         )
 

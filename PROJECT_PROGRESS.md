@@ -4265,3 +4265,32 @@ Scope confirmation:
 - BM25 was not introduced
 - LangChain / LangGraph were not introduced
 
+## Task 59A Grounded Brain Prompt and Evidence Excerpts
+
+Goal:
+
+- improve Brain Agent grounded prompt quality without changing retrieval runtime
+- provide longer RAG evidence excerpts and clearer citation / language / evidence-priority rules
+
+What changed:
+
+- config:
+  - `AI_BRAIN_MEMORY_EVIDENCE_PREVIEW_LENGTH` default `480`
+  - `AI_BRAIN_RAG_EVIDENCE_PREVIEW_LENGTH` default `1200`
+- `backend/app/modules/ai_agents/brain/context.py`
+  - separate memory vs RAG excerpt limits
+- `backend/app/modules/ai_agents/brain/prompt_builder.py`
+  - split evidence into `B1` timeline memories and `B2` RAG archival chunks
+  - add citation, language, and conflict-handling grounding rules
+- tests:
+  - `backend/tests/test_ai_agents.py` extended for prompt sections, citation rules, and longer RAG excerpts
+
+Verification results:
+
+- `python -m pytest tests/test_ai_agents.py -q` -> `27 passed`
+
+Scope confirmation:
+
+- retrieval runtime was not changed
+- eval dataset expansion deferred to Task 59B/C
+

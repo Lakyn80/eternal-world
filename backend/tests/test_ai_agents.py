@@ -367,6 +367,105 @@ def test_factual_grounding_instructions_are_present_in_prompt(client, monkeypatc
     assert "Answer factual questions only from the verified evidence" in prompt
     assert "Do not invent unknown facts, dates, places, people, relationships, or events." in prompt
     assert "it is not available in the stored memories/context" in prompt
+    assert "cite the source inline using [memory:id] or [rag:chunk_id]" in prompt
+    assert "Respond in the same language as the user's current message" in prompt
+    assert "B1. Timeline memory evidence" in prompt or "No verified memory evidence" in prompt
+
+
+def test_brain_prompt_separates_memory_and_rag_evidence_sections(client, monkeypatch):
+    captured = _capture_prompt(monkeypatch)
+    token = _register_and_login(client, "ai-evidence-sections@example.com")
+    profile_id = _create_profile(client, token, name="Section Profile")
+    assert _create_memory(
+        client,
+        token,
+        profile_id,
+        title="Family Dinner",
+        content="We shared soup at the old station in Brno.",
+        occurred_year=1990,
+    ).status_code == 201
+
+    def fake_retrieval_response(db, *, current_user, profile_id, payload):
+        return RagRetrievalResponseRead(
+            profile_id=profile_id,
+            query=payload.query,
+            model_code="bge_m3_dense_sparse",
+            results=[
+                RagRetrievalResultRead(
+                    chunk_id=88,
+                    source_id=44,
+                    embedding_id=22,
+                    score=0.95,
+                    text="The archival note confirms the station dinner tradition in Brno.",
+                    chunk_index=0,
+                    language="en",
+                    source_type="document_text",
+                    validation_status="valid",
+                    text_hash="hash-88",
+                    qdrant_collection="eternal_world_rag_chunks__bge_m3_dense_sparse",
+                    payload_metadata={},
+                )
+            ],
+        )
+
+    monkeypatch.setattr("app.modules.chat.service.retrieve_profile_rag", fake_retrieval_response)
+
+    response = client.post(
+        f"/api/chat/{profile_id}/messages",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"message": "Tell me about Brno"},
+    )
+
+    assert response.status_code == 200
+    prompt = captured["prompt"]
+    assert "B1. Timeline memory evidence" in prompt
+    assert "B2. Retrieved archival RAG evidence" in prompt
+    assert "[memory:" in prompt
+    assert "[rag:88]" in prompt
+    assert prompt.index("B1.") < prompt.index("B2.")
+
+
+def test_rag_evidence_preview_uses_longer_excerpt_limit(client, monkeypatch):
+    captured = _capture_prompt(monkeypatch)
+    token = _register_and_login(client, "ai-rag-excerpt@example.com")
+    profile_id = _create_profile(client, token, name="RAG Excerpt Profile")
+    long_rag_text = "A" * 400 + " unique-marker-tail"
+
+    def fake_retrieval_response(db, *, current_user, profile_id, payload):
+        return RagRetrievalResponseRead(
+            profile_id=profile_id,
+            query=payload.query,
+            model_code="bge_m3_dense_sparse",
+            results=[
+                RagRetrievalResultRead(
+                    chunk_id=99,
+                    source_id=55,
+                    embedding_id=33,
+                    score=0.91,
+                    text=long_rag_text,
+                    chunk_index=0,
+                    language="en",
+                    source_type="document_text",
+                    validation_status="valid",
+                    text_hash="hash-99",
+                    qdrant_collection="eternal_world_rag_chunks__bge_m3_dense_sparse",
+                    payload_metadata={},
+                )
+            ],
+        )
+
+    monkeypatch.setattr("app.modules.chat.service.retrieve_profile_rag", fake_retrieval_response)
+
+    response = client.post(
+        f"/api/chat/{profile_id}/messages",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"message": "Tell me about the archive"},
+    )
+
+    assert response.status_code == 200
+    prompt = captured["prompt"]
+    assert "unique-marker-tail" in prompt
+    assert "Excerpt:" in prompt
 
 
 def test_only_selected_profiles_memories_are_included(client, monkeypatch):
@@ -465,7 +564,7 @@ def test_memory_evidence_count_is_capped_at_10(client, monkeypatch):
     )
 
     assert response.status_code == 200
-    assert captured["prompt"].count("[memory:") == MAX_MEMORY_EVIDENCE_ITEMS
+    assert captured["prompt"].count("- [memory:") == MAX_MEMORY_EVIDENCE_ITEMS
 
 
 def test_memory_evidence_is_deterministic_and_timeline_ordered_for_fallback(client, monkeypatch):
