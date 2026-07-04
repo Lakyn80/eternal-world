@@ -1,0 +1,72 @@
+{
+  "run_id": "20260704_101403Z",
+  "dataset_id": "eternal-world-external-eval-sample",
+  "dataset_name": "Eternal World External Eval Sample",
+  "preflight_passed": true,
+  "preflight_issue_count": 0,
+  "failed_models": [],
+  "winner": {
+    "config_id": "paraphrase_multilingual_mpnet_base_v2__dense",
+    "model_code": "paraphrase_multilingual_mpnet_base_v2",
+    "collection_name": "rag_eval_smoke__paraphrase_multilingual_mpnet_base_v2__rag_eval__eternal_world_external_eval_sample__5ecf3f8d69",
+    "metrics": {
+      "hit_rate": 0.8,
+      "recall_at_k": 1.0,
+      "mrr": 1.0,
+      "forbidden_marker_rate": 0.12000000000000002,
+      "average_latency_ms": 215.5468,
+      "cost_estimate_total": null,
+      "evidence_marker_coverage": 1.0,
+      "missing_expected_marker_count": 0,
+      "false_positive_count": 15
+    }
+  },
+  "ranking": [
+    {
+      "config_id": "paraphrase_multilingual_mpnet_base_v2__dense",
+      "model_code": "paraphrase_multilingual_mpnet_base_v2",
+      "collection_name": "rag_eval_smoke__paraphrase_multilingual_mpnet_base_v2__rag_eval__eternal_world_external_eval_sample__5ecf3f8d69",
+      "metrics": {
+        "hit_rate": 0.8,
+        "recall_at_k": 1.0,
+        "mrr": 1.0,
+        "forbidden_marker_rate": 0.12000000000000002,
+        "average_latency_ms": 215.5468,
+        "cost_estimate_total": null,
+        "evidence_marker_coverage": 1.0,
+        "missing_expected_marker_count": 0,
+        "false_positive_count": 15
+      },
+      "reasons": [
+        "hit_rate=0.800",
+        "evidence_marker_coverage=1.000",
+        "recall_at_k=1.000",
+        "mrr=1.000",
+        "forbidden_marker_rate=0.120"
+      ]
+    },
+    {
+      "config_id": "multilingual_e5_small__dense",
+      "model_code": "multilingual_e5_small",
+      "collection_name": "rag_eval_smoke__multilingual_e5_small__rag_eval__eternal_world_external_eval_sample__5ecf3f8d69",
+      "metrics": {
+        "hit_rate": 0.8,
+        "recall_at_k": 1.0,
+        "mrr": 1.0,
+        "forbidden_marker_rate": 0.12000000000000002,
+        "average_latency_ms": 284.1496,
+        "cost_estimate_total": null,
+        "evidence_marker_coverage": 1.0,
+        "missing_expected_marker_count": 0,
+        "false_positive_count": 15
+      },
+      "reasons": [
+        "hit_rate=0.800",
+        "evidence_marker_coverage=1.000",
+        "recall_at_k=1.000",
+        "mrr=1.000",
+        "forbidden_marker_rate=0.120"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,19 @@
+{
+  "run_id": "20260704_100438Z",
+  "dataset_id": "eternal-world-external-eval-sample",
+  "dataset_name": "Eternal World External Eval Sample",
+  "preflight_passed": true,
+  "preflight_issue_count": 0,
+  "failed_models": [
+    {
+      "model_code": "multilingual_e5_small",
+      "status": "FAILED",
+      "error": "'QdrantClient' object has no attribute 'search'"
+    },
+    {
+      "model_code": "paraphrase_multilingual_mpnet_base_v2",
+      "status": "FAILED",
+      "error": "'QdrantClient' object has no attribute 'search'"
+    }
+  ]
+}

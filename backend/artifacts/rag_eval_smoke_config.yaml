@@ -1,0 +1,25 @@
+device: cpu
+artifact_dir: /app/artifacts/rag_eval_smoke
+backend: sql_qdrant
+database_url: postgresql+psycopg://eternal_user:eternal_password@db:5432/eternal_world
+qdrant_url: http://qdrant:6333
+collection_prefix: rag_eval_smoke
+source_id: 3
+profile_id: 6
+dataset: /app/app/modules/real_question_eval/datasets/eternal_world_eval_dataset_sample.json
+top_k: 5
+models:
+  default:
+  - multilingual_e5_small
+  - paraphrase_multilingual_mpnet_base_v2
+  include_optional: false
+sql_qdrant:
+  chunks_table: rag_chunks
+  columns:
+    id: id
+    source_id: source_id
+    chunk_text: chunk_text
+    chunk_metadata: chunk_metadata
+    validation_status: validation_status
+  invalid_statuses:
+  - invalid
