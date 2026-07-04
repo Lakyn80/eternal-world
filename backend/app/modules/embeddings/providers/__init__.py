@@ -1,7 +1,11 @@
 from __future__ import annotations
 
 from app.core.config import settings
-from app.modules.embedding_models.registry import SENTENCE_TRANSFORMERS_ADAPTER, get_embedding_model_definition
+from app.modules.embedding_models.registry import (
+    BGE_M3_HYBRID_ADAPTER,
+    SENTENCE_TRANSFORMERS_ADAPTER,
+    get_embedding_model_definition,
+)
 from app.modules.embeddings.providers.base import BaseEmbeddingProvider
 from app.modules.embeddings.providers.mock import MockEmbeddingProvider
 from app.modules.embeddings.providers.sentence_transformers import (
@@ -19,6 +23,12 @@ def build_embedding_provider(*, model_code: str) -> BaseEmbeddingProvider:
         return MockEmbeddingProvider()
 
     model_definition = get_embedding_model_definition(normalized_model_code)
+    if (
+        model_definition is not None
+        and model_definition.runtime_adapter == BGE_M3_HYBRID_ADAPTER
+    ):
+        return MockEmbeddingProvider()
+
     if (
         model_definition is not None
         and model_definition.runtime_adapter == SENTENCE_TRANSFORMERS_ADAPTER

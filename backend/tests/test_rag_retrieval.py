@@ -322,7 +322,7 @@ def test_retrieval_is_scoped_to_owner_user_id_and_profile_id(client, monkeypatch
     response = client.post(
         f"/api/memory-profiles/{profile_id}/rag/retrieve",
         headers=_auth_headers(token),
-        json={"query": "alpha profile retrieval text", "limit": 5},
+        json={"query": "alpha profile retrieval text", "limit": 5, "model_code": "multilingual_e5_base"},
     )
 
     assert response.status_code == 200
@@ -385,7 +385,10 @@ def test_query_embedding_is_generated_but_not_persisted_as_rag_embedding(client,
     response = client.post(
         f"/api/memory-profiles/{profile_id}/rag/retrieve",
         headers=_auth_headers(token),
-        json={"query": "deterministic query embedding test"},
+        json={
+            "query": "deterministic query embedding test",
+            "model_code": "multilingual_e5_base",
+        },
     )
 
     db, session_generator = _get_test_db_session()
@@ -425,7 +428,7 @@ def test_query_embedding_can_use_sentence_transformers_without_persisting_query_
     response = client.post(
         f"/api/memory-profiles/{profile_id}/rag/retrieve",
         headers=_auth_headers(token),
-        json={"query": "prague retrieval query"},
+        json={"query": "prague retrieval query", "model_code": "multilingual_e5_base"},
     )
 
     db, session_generator = _get_test_db_session()
@@ -509,6 +512,7 @@ def test_qdrant_search_receives_owner_and_profile_filters(client, monkeypatch):
             "query": "filter scoped retrieval",
             "language": "en",
             "source_type": "manual_text",
+            "model_code": "multilingual_e5_base",
         },
     )
 
@@ -552,7 +556,7 @@ def test_existing_indexed_chunk_can_be_returned_as_evidence(client, monkeypatch)
     response = client.post(
         f"/api/memory-profiles/{profile_id}/rag/retrieve",
         headers=_auth_headers(token),
-        json={"query": "prague family memory archive", "limit": 3},
+        json={"query": "prague family memory archive", "limit": 3, "model_code": "multilingual_e5_base"},
     )
 
     assert response.status_code == 200
@@ -581,7 +585,7 @@ def test_retrieval_does_not_call_brain_agent(client, monkeypatch):
     response = client.post(
         f"/api/memory-profiles/{profile_id}/rag/retrieve",
         headers=_auth_headers(token),
-        json={"query": "brain agent must stay unused"},
+        json={"query": "brain agent must stay unused", "model_code": "multilingual_e5_base"},
     )
 
     assert response.status_code == 200
@@ -604,7 +608,7 @@ def test_retrieval_does_not_create_new_stored_chunk_embeddings(client, monkeypat
     response = client.post(
         f"/api/memory-profiles/{profile_id}/rag/retrieve",
         headers=_auth_headers(token),
-        json={"query": "stored embedding count must stay stable"},
+        json={"query": "stored embedding count must stay stable", "model_code": "multilingual_e5_base"},
     )
 
     db, session_generator = _get_test_db_session()
@@ -618,6 +622,31 @@ def test_retrieval_does_not_create_new_stored_chunk_embeddings(client, monkeypat
 
     assert response.status_code == 200
     assert before_count == after_count
+
+
+def test_bge_m3_dense_sparse_retrieval_uses_hybrid_candidate_pool_and_fusion(client, monkeypatch):
+    fake_qdrant_client = _install_fake_qdrant_client(monkeypatch)
+    token = _register_and_login(client, "rag-hybrid-retrieval@example.com")
+    profile_id, _, _, _ = _create_indexed_embedding(
+        client,
+        token,
+        "Hybrid Retrieval Profile",
+        model_code="bge_m3_dense_sparse",
+    )
+
+    response = client.post(
+        f"/api/memory-profiles/{profile_id}/rag/retrieve",
+        headers=_auth_headers(token),
+        json={"query": "Prague family archive", "model_code": "bge_m3_dense_sparse", "limit": 3},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["model_code"] == "bge_m3_dense_sparse"
+    assert body["results"]
+    assert fake_qdrant_client.search_calls[-1]["collection_name"] == "eternal_world_rag_chunks__bge_m3_dense_sparse"
+    assert fake_qdrant_client.search_calls[-1]["limit"] == 20
+    assert body["results"][0]["payload_metadata"]["hybrid_retrieval"] is True
 
 
 def test_project_progress_is_updated_for_hybrid_retrieval_foundation():
@@ -634,3 +663,4 @@ def test_project_progress_is_updated_for_hybrid_retrieval_foundation():
     content = project_progress_path.read_text(encoding="utf-8")
 
     assert "Hybrid Retrieval Foundation" in content
+    assert "Task 57" in content

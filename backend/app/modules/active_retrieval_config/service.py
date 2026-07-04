@@ -24,6 +24,7 @@ from app.modules.embedding_models.registry import (
 )
 from app.modules.embedding_models.service import is_embedding_model_runtime_available
 from app.modules.memory_profiles.service import MemoryProfileNotFoundError, get_memory_profile
+from app.modules.rag_retrieval.hybrid import is_bge_m3_dense_sparse_model
 from app.modules.multi_embedding_eval.schemas import MultiEmbeddingEvalRequest
 from app.modules.rag_sources.service import RagSourceNotFoundError, get_rag_source
 
@@ -106,15 +107,19 @@ def _build_fallback_runtime_selection(
 
 
 def _get_runtime_rejection_reason(candidate: RuntimeActiveRetrievalSelection) -> str | None:
-    if candidate.model_code == PRODUCTION_ACTIVE_RETRIEVAL_MODEL_CODE:
-        return (
-            "BGE-M3 dense+sparse remains behind a guarded benchmark-only path while the "
-            "current production Qdrant runtime is still dense-only."
-        )
     if candidate.retrieval_mode == BGE_M3_DENSE_SPARSE_MULTIVECTOR_RETRIEVAL_MODE:
         return (
             "BGE-M3 multivector retrieval stays benchmark-only and is not enabled as a "
             "production runtime default."
+        )
+    if is_bge_m3_dense_sparse_model(candidate.model_code) and candidate.retrieval_mode not in (
+        None,
+        "",
+        BGE_M3_DENSE_SPARSE_RETRIEVAL_MODE,
+    ):
+        return (
+            f"Configured retrieval mode `{candidate.retrieval_mode}` is not supported for "
+            f"`{candidate.model_code}`."
         )
 
     try:

@@ -18,6 +18,11 @@ from app.modules.qdrant_indexing.exceptions import (
     RagVectorIndexSourceNotFoundError,
 )
 from app.modules.qdrant_indexing.schemas import RagSourceIndexingSummaryRead
+from app.modules.rag_retrieval.hybrid import (
+    SPARSE_VECTOR_PAYLOAD_KEY,
+    is_bge_m3_dense_sparse_model,
+    resolve_passage_sparse_vector,
+)
 from app.modules.rag_sources.service import RagSourceNotFoundError, get_rag_source
 
 
@@ -78,8 +83,13 @@ def _build_point_id(*, collection_name: str, embedding_id: int) -> str:
     return str(uuid5(NAMESPACE_URL, f"{collection_name}:{embedding_id}"))
 
 
-def _build_qdrant_payload(*, rag_embedding: RagEmbedding, indexed_at: datetime) -> dict[str, object]:
-    return {
+def _build_qdrant_payload(
+    *,
+    rag_embedding: RagEmbedding,
+    indexed_at: datetime,
+    sparse_vector: dict[str, float] | None = None,
+) -> dict[str, object]:
+    payload = {
         "owner_user_id": rag_embedding.owner_user_id,
         "profile_id": rag_embedding.profile_id,
         "source_id": rag_embedding.source_id,
@@ -93,6 +103,10 @@ def _build_qdrant_payload(*, rag_embedding: RagEmbedding, indexed_at: datetime) 
         "chunk_index": rag_embedding.chunk.chunk_index,
         "indexed_at": indexed_at.isoformat(),
     }
+    if sparse_vector:
+        payload[SPARSE_VECTOR_PAYLOAD_KEY] = sparse_vector
+
+    return payload
 
 
 def _upsert_vector_index_record(
@@ -164,6 +178,13 @@ def _index_embedding_record(
     )
     indexed_at = datetime.now(timezone.utc)
     qdrant_client = build_qdrant_client()
+    sparse_vector = None
+    if is_bge_m3_dense_sparse_model(rag_embedding.model_code):
+        sparse_vector = resolve_passage_sparse_vector(
+            chunk_text=rag_embedding.chunk.chunk_text,
+            model_code=rag_embedding.model_code,
+            embedding_metadata=rag_embedding.embedding_metadata,
+        )
 
     try:
         qdrant_client.ensure_collection(
@@ -177,6 +198,7 @@ def _index_embedding_record(
             payload=_build_qdrant_payload(
                 rag_embedding=rag_embedding,
                 indexed_at=indexed_at,
+                sparse_vector=sparse_vector,
             ),
         )
         rag_vector_index = _upsert_vector_index_record(

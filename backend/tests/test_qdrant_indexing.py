@@ -496,6 +496,33 @@ def test_qdrant_indexing_accepts_sentence_transformers_bge_m3_embeddings(client,
     assert fake_qdrant_client.collections["eternal_world_rag_chunks__bge_m3"] == 1024
 
 
+def test_qdrant_indexing_stores_sparse_vector_payload_for_bge_m3_dense_sparse(client, monkeypatch):
+    fake_qdrant_client = _install_fake_qdrant_client(monkeypatch)
+    token = _register_and_login(client, "qdrant-hybrid-sparse@example.com")
+    profile_id = _create_profile(client, token, "Hybrid Sparse Profile")
+    source_id = _create_rag_source(client, token, profile_id).json()["id"]
+    assert _chunk_source(client, token, source_id).status_code == 200
+    chunk_id = _list_chunks(client, token, source_id).json()[0]["id"]
+    embed_response = client.post(
+        f"/api/rag-chunks/{chunk_id}/embed",
+        headers=_auth_headers(token),
+        json={"model_code": "bge_m3_dense_sparse"},
+    )
+    assert embed_response.status_code == 200
+    embedding_id = embed_response.json()["id"]
+
+    response = client.post(
+        f"/api/rag-embeddings/{embedding_id}/index",
+        headers=_auth_headers(token),
+    )
+
+    assert response.status_code == 200
+    payload = next(iter(fake_qdrant_client.points.values()))["payload"]
+    assert payload["model_code"] == "bge_m3_dense_sparse"
+    assert isinstance(payload["sparse_vector"], dict)
+    assert payload["sparse_vector"]
+
+
 def test_collection_dimension_mismatch_returns_safe_error(client, monkeypatch):
     fake_qdrant_client = _install_fake_qdrant_client(monkeypatch)
     fake_qdrant_client.collections["eternal_world_rag_chunks__multilingual_e5_small"] = 8

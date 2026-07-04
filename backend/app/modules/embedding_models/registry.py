@@ -9,6 +9,7 @@ MOCK_PROVIDER_TYPE = "mock"
 MULTILINGUAL_LANGUAGE = "multilingual"
 DEFAULT_EMBEDDING_MODEL_CODE = "multilingual_e5_small"
 SENTENCE_TRANSFORMERS_ADAPTER = "sentence_transformers"
+BGE_M3_HYBRID_ADAPTER = "bge_m3_hybrid"
 PLANNED_MANUAL_ONLY_ADAPTER = "planned_manual_only"
 
 BGE_M3_DENSE_RETRIEVAL_MODE = "bge_m3_dense"
@@ -105,23 +106,22 @@ EMBEDDING_MODEL_DEFINITIONS: tuple[EmbeddingModelDefinition, ...] = (
         max_input_tokens=8192,
         normalized_vectors=True,
         supports_batching=True,
-        enabled=False,
+        enabled=True,
         is_default=False,
-        recommended_for="manual benchmark batch for full BGE-M3 dense+sparse retrieval",
+        recommended_for="production hybrid multilingual retrieval",
         provider_model_name="BAAI/bge-m3",
-        runtime_adapter=PLANNED_MANUAL_ONLY_ADAPTER,
-        manual_only_real_eval=True,
+        runtime_adapter=BGE_M3_HYBRID_ADAPTER,
+        manual_only_real_eval=False,
         high_resource=True,
-        real_benchmark_only=True,
+        real_benchmark_only=False,
         ci_safe_real_inference=False,
         supports_task_adapters=False,
         supports_long_context=True,
-        planning_tags=("bge_m3", "dense_sparse", "manual_only_real_eval", "batch_d"),
+        planning_tags=("bge_m3", "dense_sparse", "production_hybrid"),
         supported_retrieval_modes=(BGE_M3_DENSE_SPARSE_RETRIEVAL_MODE,),
         notes=(
-            "Manual-only full-hybrid benchmark target for local Batch D evaluation. "
-            "Uses dense embeddings plus sparse lexical weights in a local manual reranking path; "
-            "it is intentionally disabled outside guarded benchmark execution."
+            "Production BGE-M3 dense+sparse hybrid retrieval. Dense vectors are indexed in Qdrant and "
+            "sparse lexical weights are stored in point payload for deterministic fusion at query time."
         ),
     ),
     EmbeddingModelDefinition(

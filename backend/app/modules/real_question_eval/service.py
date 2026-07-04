@@ -2495,24 +2495,11 @@ def _build_external_eval_preflight_validation(
     )
 
 
-def _normalize_score_map(raw_scores: dict[int, float]) -> dict[int, float]:
-    if not raw_scores:
-        return {}
-
-    score_values = list(raw_scores.values())
-    min_score = min(score_values)
-    max_score = max(score_values)
-    if max_score == min_score:
-        return {chunk_id: 1.0 for chunk_id in raw_scores}
-
-    return {
-        chunk_id: (score - min_score) / (max_score - min_score)
-        for chunk_id, score in raw_scores.items()
-    }
-
-
-def _dot_product(left: list[float], right: list[float]) -> float:
-    return sum(left_item * right_item for left_item, right_item in zip(left, right, strict=True))
+from app.modules.rag_retrieval.hybrid import (
+    compute_sparse_overlap_score as _compute_sparse_overlap_score,
+    dot_product as _dot_product,
+    normalize_score_map as _normalize_score_map,
+)
 
 
 def _l2_normalize(values: list[float]) -> list[float]:
@@ -2522,19 +2509,6 @@ def _l2_normalize(values: list[float]) -> list[float]:
 
     norm = squared_norm ** 0.5
     return [value / norm for value in values]
-
-
-def _compute_sparse_overlap_score(
-    query_sparse_vector: dict[str, float],
-    passage_sparse_vector: dict[str, float],
-) -> float:
-    if not query_sparse_vector or not passage_sparse_vector:
-        return 0.0
-
-    return sum(
-        query_sparse_vector[token] * passage_sparse_vector[token]
-        for token in query_sparse_vector.keys() & passage_sparse_vector.keys()
-    )
 
 
 def _compute_multivector_score(

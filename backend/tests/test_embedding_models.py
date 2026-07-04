@@ -22,6 +22,7 @@ def test_list_endpoint_returns_enabled_models_by_default(client):
     assert [model["code"] for model in response.json()] == [
         "multilingual_e5_small",
         "bge_m3",
+        "bge_m3_dense_sparse",
         "paraphrase_multilingual_mpnet_base_v2",
         "multilingual_e5_base",
         "multilingual_e5_large",
@@ -35,7 +36,7 @@ def test_disabled_manual_only_models_are_hidden_unless_include_disabled_true(cli
 
     assert enabled_response.status_code == 200
     assert all_response.status_code == 200
-    assert "bge_m3_dense_sparse" not in [model["code"] for model in enabled_response.json()]
+    assert "bge_m3_dense_sparse" in [model["code"] for model in enabled_response.json()]
     assert "bge_m3_dense_sparse" in [model["code"] for model in all_response.json()]
     assert "bge_m3_dense_sparse_multivector" not in [model["code"] for model in enabled_response.json()]
     assert "bge_m3_dense_sparse_multivector" in [model["code"] for model in all_response.json()]
@@ -118,19 +119,19 @@ def test_get_by_code_returns_disabled_qwen3_registry_foundation(client):
     assert "not verified in this environment" in body["notes"]
 
 
-def test_get_by_code_returns_disabled_bge_m3_dense_sparse_registry_foundation(client):
+def test_get_by_code_returns_enabled_bge_m3_dense_sparse_production_hybrid_model(client):
     response = client.get("/api/embedding-models/bge_m3_dense_sparse")
 
     assert response.status_code == 200
     body = response.json()
     assert body["code"] == "bge_m3_dense_sparse"
-    assert body["enabled"] is False
+    assert body["enabled"] is True
     assert body["provider_model_name"] == "BAAI/bge-m3"
-    assert body["runtime_adapter"] == "planned_manual_only"
-    assert body["manual_only_real_eval"] is True
-    assert body["real_benchmark_only"] is True
+    assert body["runtime_adapter"] == "bge_m3_hybrid"
+    assert body["manual_only_real_eval"] is False
+    assert body["real_benchmark_only"] is False
     assert body["supported_retrieval_modes"] == ["bge_m3_dense_sparse"]
-    assert "Manual-only" in body["notes"]
+    assert "Production BGE-M3 dense+sparse hybrid retrieval" in body["notes"]
 
 
 def test_get_by_code_returns_disabled_bge_m3_dense_sparse_multivector_registry_foundation(client):
@@ -204,6 +205,7 @@ def test_candidate_selection_for_ru_includes_multilingual_capable_models():
     assert [model.code for model in candidates] == [
         "multilingual_e5_small",
         "bge_m3",
+        "bge_m3_dense_sparse",
         "paraphrase_multilingual_mpnet_base_v2",
         "multilingual_e5_base",
         "multilingual_e5_large",
@@ -216,6 +218,7 @@ def test_candidate_selection_for_cs_includes_multilingual_capable_models():
     assert [model.code for model in candidates] == [
         "multilingual_e5_small",
         "bge_m3",
+        "bge_m3_dense_sparse",
         "paraphrase_multilingual_mpnet_base_v2",
         "multilingual_e5_base",
         "multilingual_e5_large",
@@ -228,6 +231,7 @@ def test_candidate_selection_for_unknown_language_returns_multilingual_default_c
     assert [model.code for model in candidates] == [
         "multilingual_e5_small",
         "bge_m3",
+        "bge_m3_dense_sparse",
         "paraphrase_multilingual_mpnet_base_v2",
         "multilingual_e5_base",
         "multilingual_e5_large",
@@ -250,6 +254,7 @@ def test_enabled_models_helper_hides_disabled_external_models():
     assert [model.code for model in get_enabled_embedding_models()] == [
         "multilingual_e5_small",
         "bge_m3",
+        "bge_m3_dense_sparse",
         "paraphrase_multilingual_mpnet_base_v2",
         "multilingual_e5_base",
         "multilingual_e5_large",
@@ -257,22 +262,21 @@ def test_enabled_models_helper_hides_disabled_external_models():
     ]
 
 
-def test_disabled_qwen_runtime_is_blocked_by_default_and_allowed_only_inside_manual_context():
+def test_disabled_multivector_runtime_is_blocked_by_default_and_bge_dense_sparse_is_enabled():
     assert is_embedding_model_runtime_available("multilingual_e5_base") is True
-    assert is_embedding_model_runtime_available("bge_m3_dense_sparse") is False
+    assert is_embedding_model_runtime_available("bge_m3_dense_sparse") is True
     assert is_embedding_model_runtime_available("bge_m3_dense_sparse_multivector") is False
     assert is_embedding_model_runtime_available("qwen3_embedding_0_6b") is False
 
     with allow_disabled_runtime_embedding_models(
-        ["bge_m3_dense_sparse", "bge_m3_dense_sparse_multivector"]
+        ["bge_m3_dense_sparse_multivector"]
     ):
-        assert is_embedding_model_runtime_available("bge_m3_dense_sparse") is True
         assert is_embedding_model_runtime_available("bge_m3_dense_sparse_multivector") is True
 
     with allow_disabled_runtime_embedding_models(["qwen3_embedding_0_6b"]):
         assert is_embedding_model_runtime_available("qwen3_embedding_0_6b") is True
 
-    assert is_embedding_model_runtime_available("bge_m3_dense_sparse") is False
+    assert is_embedding_model_runtime_available("bge_m3_dense_sparse") is True
     assert is_embedding_model_runtime_available("bge_m3_dense_sparse_multivector") is False
     assert is_embedding_model_runtime_available("qwen3_embedding_0_6b") is False
 

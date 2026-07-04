@@ -4148,3 +4148,72 @@ Next task recommendation:
 
 - optional hardening: reduce the remaining 7 `distractor` `bge_m3` case misses without touching production retrieval
 - consider committing the combined Task 55 + Task 56 eval-only changes as one reviewable unit
+
+## Task 57 Production BGE-M3 Hybrid Retrieval Runtime
+
+Goal:
+
+- implement real production hybrid retrieval for promoted winner `bge_m3_dense_sparse`
+- remove the Task 50 guarded fallback that forced `multilingual_e5_base` whenever production recommendation was selected
+- keep dense-only retrieval unchanged for other embedding models
+
+Architecture decision:
+
+- MVP stores dense vectors in Qdrant and sparse lexical weights in point payload (`sparse_vector`)
+- native Qdrant sparse vectors were intentionally deferred to keep the slice backward compatible with the existing dense REST client
+- query path widens dense candidate pool (`max(top_k * 4, 20)`), then fuses normalized dense + normalized sparse scores using the same Batch D semantics as manual eval
+
+What was added/changed:
+
+- shared production fusion module:
+  - `backend/app/modules/rag_retrieval/hybrid.py`
+- production hybrid retrieval path:
+  - `backend/app/modules/rag_retrieval/service.py`
+- hybrid indexing payload support:
+  - `backend/app/modules/qdrant_indexing/service.py`
+- promoted model enabled for runtime:
+  - `backend/app/modules/embedding_models/registry.py`
+- guarded fallback removed for production recommendation:
+  - `backend/app/modules/active_retrieval_config/service.py`
+- hybrid mock provider routing for chunk embeddings in CI:
+  - `backend/app/modules/embeddings/providers/__init__.py`
+- eval shared fusion helpers now imported from production module:
+  - `backend/app/modules/real_question_eval/service.py`
+- tests:
+  - `backend/tests/test_rag_retrieval_hybrid.py`
+  - updates in `backend/tests/test_rag_retrieval.py`
+  - updates in `backend/tests/test_active_retrieval_config.py`
+  - updates in `backend/tests/test_embedding_models.py`
+  - updates in `backend/tests/test_qdrant_indexing.py`
+
+Production runtime behavior after Task 57:
+
+- default runtime selection resolves to `bge_m3_dense_sparse` without forced dense fallback
+- chat/retrieval execute hybrid dense+sparse fusion when active config or explicit model resolves to `bge_m3_dense_sparse`
+- fallback to `multilingual_e5_base` remains only for unsupported configs (for example multivector benchmark mode) or genuinely unavailable models
+
+Scope confirmation:
+
+- frontend was not changed
+- billing/tariffs were not changed
+- eval-only external dataset rerank tuning behavior was not changed except shared fusion helper extraction
+- `bge_m3_dense_sparse_multivector` was not enabled for production
+- LangChain / LangGraph were not introduced
+- pip package work was not changed
+
+Backlog note:
+
+- `packages/rag-embedding-benchmark` v0.1 release/pilot history is still missing from earlier progress sections and should be documented separately
+
+Verification commands:
+
+- `python -m pytest tests/test_active_retrieval_config.py tests/test_rag_retrieval.py tests/test_production_retrieval_runtime_smoke.py tests/test_rag_retrieval_hybrid.py -q`
+- `python -m pytest tests/test_qdrant_indexing.py tests/test_embeddings.py -q`
+- `python -m pytest -q --durations=20`
+
+Verification results:
+
+- `python -m pytest tests/test_active_retrieval_config.py tests/test_rag_retrieval.py tests/test_production_retrieval_runtime_smoke.py tests/test_rag_retrieval_hybrid.py tests/test_qdrant_indexing.py tests/test_embedding_models.py -q` -> `passed`
+- `python -m pytest tests/test_embeddings.py tests/test_multi_embedding_eval.py tests/test_real_question_eval.py -q` -> `passed`
+- `python -m pytest -q --durations=20` -> `passed`
+
