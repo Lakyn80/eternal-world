@@ -3,6 +3,7 @@ __pycache__/
 .pytest_cache/
 pytest-cache-files-*/
 *.egg-info/
+*.egg-info/
 dist/
 build/
 .rag_eval_out/

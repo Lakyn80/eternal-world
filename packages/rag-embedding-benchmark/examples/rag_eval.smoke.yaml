@@ -1,0 +1,32 @@
+device: cpu
+artifact_dir: ./rag_eval_smoke
+
+backend: sql_qdrant
+database_url: ${DATABASE_URL}
+qdrant_url: ${QDRANT_URL}
+collection_prefix: rag_eval_smoke
+
+# Fill source_id/profile_id after running backend/scripts/run_rag_eval_smoke.py preparation step.
+source_id: 1
+profile_id: 1
+
+dataset: ../../../backend/app/modules/real_question_eval/datasets/eternal_world_eval_dataset_sample.json
+
+top_k: 5
+
+models:
+  default:
+    - multilingual_e5_small
+    - paraphrase_multilingual_mpnet_base_v2
+  include_optional: false
+
+sql_qdrant:
+  chunks_table: rag_chunks
+  columns:
+    id: id
+    source_id: source_id
+    chunk_text: chunk_text
+    chunk_metadata: chunk_metadata
+    validation_status: validation_status
+  invalid_statuses:
+    - invalid

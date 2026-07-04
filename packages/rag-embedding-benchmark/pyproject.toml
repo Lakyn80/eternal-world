@@ -17,14 +17,14 @@ dependencies = [
 sql-qdrant = [
   "sqlalchemy>=2.0",
   "psycopg[binary]>=3.1",
-  "qdrant-client>=1.9",
+  "qdrant-client>=1.9,<1.14",
   "sentence-transformers>=3.0",
   "transformers>=4.40",
 ]
 eternal-world = [
   "sqlalchemy>=2.0",
   "psycopg[binary]>=3.1",
-  "qdrant-client>=1.9",
+  "qdrant-client>=1.9,<1.14",
   "sentence-transformers>=3.0",
   "transformers>=4.40",
 ]

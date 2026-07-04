@@ -64,6 +64,7 @@ services:
       - qdrant
     volumes:
       - ./backend:/app
+      - ./packages/rag-embedding-benchmark:/packages/rag-embedding-benchmark
 
   celery_worker:
     build:

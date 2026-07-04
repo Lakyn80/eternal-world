@@ -90,11 +90,32 @@ Your eval JSON must align with the corpus already chunked in DB:
 
 Use `rag-eval validate` before a long benchmark run.
 
-## Build wheel
+## Internal Docker smoke test
+
+From repo root:
 
 ```bash
-python -m pip install build
-python -m build
+docker compose exec backend python scripts/run_rag_eval_smoke.py
+```
+
+Uses `sql_qdrant` against the sample eval dataset with two lightweight models.
+
+See [`docs/CLIENT_HANDOFF.md`](docs/CLIENT_HANDOFF.md) for the full client checklist.
+
+## Build wheel
+
+From repo root (recommended when host pip/build has network issues):
+
+```bash
+docker compose exec backend bash -lc "pip install -q build && cd /packages/rag-embedding-benchmark && python -m build"
+```
+
+Wheel output: `packages/rag-embedding-benchmark/dist/rag_embedding_benchmark-0.1.0-py3-none-any.whl`
+
+On host:
+
+```powershell
+packages/rag-embedding-benchmark/scripts/build_wheel.ps1
 ```
 
 ## Tests

@@ -36,8 +36,38 @@ class SqlQdrantRagEvalBackend(RagEvalBackend):
         if self._qdrant_client is None:
             from qdrant_client import QdrantClient
 
-            self._qdrant_client = QdrantClient(url=self._config.qdrant_url)
+            self._qdrant_client = QdrantClient(
+                url=self._config.qdrant_url,
+                check_compatibility=False,
+            )
         return self._qdrant_client
+
+    def _search_points(
+        self,
+        *,
+        collection_name: str,
+        query_vector: list[float],
+        top_k: int,
+        score_threshold: float | None,
+    ):
+        client = self._get_qdrant_client()
+        if hasattr(client, "query_points"):
+            query_kwargs: dict[str, Any] = {
+                "collection_name": collection_name,
+                "query": query_vector,
+                "limit": top_k,
+            }
+            if score_threshold is not None:
+                query_kwargs["score_threshold"] = score_threshold
+            response = client.query_points(**query_kwargs)
+            return response.points
+
+        return client.search(
+            collection_name=collection_name,
+            query_vector=query_vector,
+            limit=top_k,
+            score_threshold=score_threshold,
+        )
 
     def _get_embedding_model(self, model_code: str):
         if model_code in self._embedding_models:
@@ -176,11 +206,10 @@ class SqlQdrantRagEvalBackend(RagEvalBackend):
         score_threshold: float | None = None,
     ) -> RagEvalRetrievalResponse:
         query_vector = self._encode_query(model_code=model_code, query=query)
-        client = self._get_qdrant_client()
-        hits = client.search(
+        hits = self._search_points(
             collection_name=collection_name,
             query_vector=query_vector,
-            limit=top_k,
+            top_k=top_k,
             score_threshold=score_threshold,
         )
 
