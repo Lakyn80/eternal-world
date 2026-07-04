@@ -4217,3 +4217,51 @@ Verification results:
 - `python -m pytest tests/test_embeddings.py tests/test_multi_embedding_eval.py tests/test_real_question_eval.py -q` -> `passed`
 - `python -m pytest -q --durations=20` -> `passed`
 
+## Task 58 Production Hybrid Retrieval Smoke
+
+Goal:
+
+- add a synchronous Docker-friendly smoke flow that verifies the full Eternal World production hybrid path:
+  - source -> chunk -> embed `bge_m3_dense_sparse` -> index -> hybrid retrieve -> grounded chat
+- confirm Task 57 runtime behavior end-to-end without Celery or external AI calls
+
+What was added:
+
+- production smoke module:
+  - `backend/app/modules/production_hybrid_smoke/schemas.py`
+  - `backend/app/modules/production_hybrid_smoke/service.py`
+  - `backend/app/modules/production_hybrid_smoke/__init__.py`
+- CLI entrypoint:
+  - `backend/scripts/run_production_hybrid_smoke.py`
+  - `backend/scripts/run_production_hybrid_smoke.ps1`
+- fake-safe tests:
+  - `backend/tests/test_production_hybrid_smoke.py`
+
+Smoke stages:
+
+- user/profile seed
+- fictional source seed
+- production recommendation check for `bge_m3_dense_sparse`
+- chunk
+- embed with `bge_m3_dense_sparse`
+- index into `eternal_world_rag_chunks__bge_m3_dense_sparse`
+- hybrid retrieval marker + `hybrid_retrieval` metadata check
+- mock Brain chat with `grounding_status=grounded`
+
+Docker command:
+
+- `docker compose exec backend python scripts/run_production_hybrid_smoke.py`
+
+Verification results:
+
+- `python -m pytest tests/test_production_hybrid_smoke.py tests/test_rag_retrieval_hybrid.py -q` -> `6 passed`
+- `docker compose exec backend python scripts/run_production_hybrid_smoke.py` -> `PASS`
+
+Scope confirmation:
+
+- billing was not changed
+- frontend was not changed
+- pip package was not changed
+- BM25 was not introduced
+- LangChain / LangGraph were not introduced
+
