@@ -10,6 +10,7 @@ from app.modules.embeddings.exceptions import RagEmbeddingGenerationError, RagEm
 from app.modules.embeddings.service import embed_source_chunks
 from app.modules.job_tracking.enums import BackgroundJobType
 from app.modules.job_tracking.service import (
+    append_job_event,
     attach_celery_task_id,
     create_job,
     mark_failed,
@@ -257,6 +258,13 @@ def process_rag_source_job(
             job_id=job_id,
             celery_task_id=celery_task_id,
         )
+        append_job_event(
+            db,
+            job_id=job_id,
+            stage=STEP_SOURCE_VALIDATION,
+            status="running",
+            details={"source_id": source_id, "model_code": model_code},
+        )
 
         if not isinstance(source_id, int):
             raise RagPipelineSourceNotFoundError("RAG source not found")
@@ -290,6 +298,18 @@ def process_rag_source_job(
                 current_user=owner,
                 source_id=rag_source.id,
             )
+        append_job_event(
+            db,
+            job_id=job_id,
+            stage=STEP_CHUNKING,
+            status="ok",
+            details={
+                "chunk_count": chunk_summary.chunk_count,
+                "valid_count": chunk_summary.valid_count,
+                "warning_count": chunk_summary.warning_count,
+                "invalid_count": chunk_summary.invalid_count,
+            },
+        )
         update_progress(
             db,
             job_id=job_id,
@@ -303,6 +323,18 @@ def process_rag_source_job(
             source_id=rag_source.id,
             model_code=model_code,
         )
+        append_job_event(
+            db,
+            job_id=job_id,
+            stage=STEP_EMBEDDING_GENERATION,
+            status="ok",
+            details={
+                "model_code": embedding_summary.model_code,
+                "embedded_count": embedding_summary.embedded_count,
+                "skipped_count": embedding_summary.skipped_count,
+                "failed_count": embedding_summary.failed_count,
+            },
+        )
         update_progress(
             db,
             job_id=job_id,
@@ -315,6 +347,18 @@ def process_rag_source_job(
             current_user=owner,
             source_id=rag_source.id,
             model_code=embedding_summary.model_code,
+        )
+        append_job_event(
+            db,
+            job_id=job_id,
+            stage=STEP_QDRANT_INDEXING,
+            status="ok",
+            details={
+                "model_code": embedding_summary.model_code,
+                "indexed_count": indexing_summary.indexed_count,
+                "skipped_count": indexing_summary.skipped_count,
+                "failed_count": indexing_summary.failed_count,
+            },
         )
         update_progress(
             db,
@@ -343,6 +387,13 @@ def process_rag_source_job(
             job_id=job_id,
             result_payload=result_payload,
         )
+        append_job_event(
+            db,
+            job_id=job_id,
+            stage="job_completed",
+            status="succeeded",
+            details={"result_summary": result_payload},
+        )
         return {
             "job_id": job_id,
             "status": "succeeded",
@@ -361,6 +412,13 @@ def process_rag_source_job(
                 "source_id": source_id,
                 "exception_type": exc.__class__.__name__,
             },
+        )
+        append_job_event(
+            db,
+            job_id=job_id,
+            stage=error_step or "job_failed",
+            status="failed",
+            details=error_payload,
         )
         mark_failed(
             db,

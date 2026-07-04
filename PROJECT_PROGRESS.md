@@ -4327,3 +4327,43 @@ Scope confirmation:
 - retrieval runtime was not changed
 - Celery job audit deferred to Task 60
 
+## Task 60 Background Job Event Log JSON Audit
+
+Goal:
+
+- provide step-by-step JSON audit trail for background jobs so each task can be inspected via API
+
+What changed:
+
+- Alembic migration:
+  - `backend/alembic/versions/20260704_0014_add_background_job_event_log.py`
+- `background_jobs.event_log` JSON column on ORM model
+- `append_job_event()` in `backend/app/modules/job_tracking/service.py`
+- `GET /api/jobs/{job_id}` now returns `event_log`
+- RAG Celery pipeline writes stage events:
+  - source validation, chunking, embedding, indexing, completion/failure
+- Celery smoke test writes running/succeeded/failed events
+- tests:
+  - `backend/tests/test_job_tracking.py`
+  - `backend/tests/test_rag_pipeline.py`
+
+Event shape:
+
+```json
+{
+  "ts": "2026-07-04T18:30:00+00:00",
+  "stage": "chunking",
+  "status": "ok",
+  "details": {"chunk_count": 3}
+}
+```
+
+Verification results:
+
+- `python -m pytest tests/test_job_tracking.py tests/test_rag_pipeline.py -q` -> passed
+
+Scope confirmation:
+
+- chat/retrieve sync flows still do not create background jobs
+- separate `background_job_events` table was not introduced; audit lives in `event_log`
+

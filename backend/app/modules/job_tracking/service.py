@@ -79,6 +79,7 @@ def create_job(
         input_payload=input_payload or {},
         result_payload=None,
         error_payload=None,
+        event_log=[],
         error_message=None,
         started_at=None,
         finished_at=None,
@@ -136,6 +137,32 @@ def update_progress(
 
     background_job.progress_current = progress_current
     background_job.progress_total = progress_total
+    db.commit()
+    db.refresh(background_job)
+    return background_job
+
+
+def append_job_event(
+    db: Session,
+    *,
+    job_id: int,
+    stage: str,
+    status: str,
+    details: dict[str, object] | None = None,
+) -> BackgroundJob:
+    background_job = repository.get_background_job_by_id(db, job_id=job_id)
+    if background_job is None:
+        raise BackgroundJobNotFoundError("Background job not found")
+
+    event_entry = {
+        "ts": datetime.now(timezone.utc).isoformat(),
+        "stage": stage,
+        "status": status,
+        "details": details or {},
+    }
+    current_event_log = list(background_job.event_log or [])
+    current_event_log.append(event_entry)
+    background_job.event_log = current_event_log
     db.commit()
     db.refresh(background_job)
     return background_job
@@ -289,6 +316,7 @@ def backfill_known_milestones(
                 "status": BackgroundJobStatus.SUCCEEDED.value,
             },
             error_payload=None,
+            event_log=[],
             error_message=None,
             started_at=None,
             finished_at=None,

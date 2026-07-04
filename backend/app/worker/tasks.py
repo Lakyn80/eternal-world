@@ -3,7 +3,7 @@ from __future__ import annotations
 from celery.utils.log import get_task_logger
 
 from app.db.session import SessionLocal
-from app.modules.job_tracking.service import mark_failed, mark_running, mark_succeeded, update_progress
+from app.modules.job_tracking.service import append_job_event, mark_failed, mark_running, mark_succeeded, update_progress
 from app.modules.multi_embedding_eval.service import process_multi_embedding_eval_job
 from app.modules.rag_pipeline.service import process_rag_source_job
 from app.worker.celery_app import celery_app
@@ -25,6 +25,13 @@ def run_job_smoke_test(self, job_id: int) -> dict[str, object]:
             db,
             job_id=job_id,
             celery_task_id=self.request.id,
+        )
+        append_job_event(
+            db,
+            job_id=job_id,
+            stage="smoke_test",
+            status="running",
+            details={"celery_task_id": self.request.id},
         )
         update_progress(
             db,
@@ -52,12 +59,26 @@ def run_job_smoke_test(self, job_id: int) -> dict[str, object]:
                 "message": "Celery smoke test completed successfully.",
             },
         )
+        append_job_event(
+            db,
+            job_id=job_id,
+            stage="smoke_test",
+            status="succeeded",
+            details={"progress_total": 3},
+        )
         return {
             "job_id": job_id,
             "status": "succeeded",
         }
     except Exception as exc:
         logger.exception("celery_smoke_test_failed", extra={"job_id": job_id})
+        append_job_event(
+            db,
+            job_id=job_id,
+            stage="smoke_test",
+            status="failed",
+            details={"exception_type": exc.__class__.__name__},
+        )
         mark_failed(
             db,
             job_id=job_id,

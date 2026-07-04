@@ -525,6 +525,12 @@ class BackgroundJob(TimestampMixin, Base):
     input_payload: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
     result_payload: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
     error_payload: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
+    event_log: Mapped[list[dict[str, Any]]] = mapped_column(
+        JSON,
+        nullable=False,
+        default=list,
+        server_default=text("'[]'"),
+    )
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

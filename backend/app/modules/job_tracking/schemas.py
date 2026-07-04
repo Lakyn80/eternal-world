@@ -18,6 +18,7 @@ class BackgroundJobRead(BaseModel):
     input_payload: dict[str, Any]
     result_payload: dict[str, Any] | None
     error_payload: dict[str, Any] | None
+    event_log: list[dict[str, Any]] = Field(default_factory=list)
     error_message: str | None
     started_at: datetime | None
     finished_at: datetime | None
@@ -48,6 +49,7 @@ def build_background_job_read(background_job) -> BackgroundJobRead:
         input_payload=background_job.input_payload,
         result_payload=background_job.result_payload,
         error_payload=background_job.error_payload,
+        event_log=list(background_job.event_log or []),
         error_message=background_job.error_message,
         started_at=background_job.started_at,
         finished_at=background_job.finished_at,

@@ -6,6 +6,7 @@ from app.db.session import get_db
 from app.main import app
 from app.modules.job_tracking.enums import BackgroundJobStatus, BackgroundJobType
 from app.modules.job_tracking.service import (
+    append_job_event,
     backfill_known_milestones,
     create_job,
     mark_failed,
@@ -123,6 +124,51 @@ def test_user_can_read_own_job(client):
 
     assert response.status_code == 200
     assert response.json()["id"] == background_job.id
+    assert response.json()["event_log"] == []
+
+
+def test_append_job_event_persists_structured_json_entries(client):
+    token = _register_and_login(client, "jobs-event-log@example.com")
+
+    db, session_generator = _get_test_db_session()
+    try:
+        background_job = create_job(
+            db,
+            owner_user_id=1,
+            job_type=BackgroundJobType.RAG_SOURCE_INGESTION,
+            input_payload={"source_id": 42},
+        )
+        append_job_event(
+            db,
+            job_id=background_job.id,
+            stage="chunking",
+            status="ok",
+            details={"chunk_count": 3},
+        )
+        append_job_event(
+            db,
+            job_id=background_job.id,
+            stage="embedding_generation",
+            status="ok",
+            details={"embedded_count": 3},
+        )
+        db.refresh(background_job)
+    finally:
+        try:
+            next(session_generator)
+        except StopIteration:
+            pass
+
+    response = client.get(f"/api/jobs/{background_job.id}", headers=_auth_headers(token))
+
+    assert response.status_code == 200
+    body = response.json()
+    assert len(body["event_log"]) == 2
+    assert body["event_log"][0]["stage"] == "chunking"
+    assert body["event_log"][0]["status"] == "ok"
+    assert body["event_log"][0]["details"] == {"chunk_count": 3}
+    assert body["event_log"][1]["stage"] == "embedding_generation"
+    assert "ts" in body["event_log"][0]
 
 
 def test_cross_user_job_access_returns_404(client):

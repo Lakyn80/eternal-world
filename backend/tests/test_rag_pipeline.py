@@ -269,6 +269,13 @@ def test_pipeline_marks_job_running_updates_progress_and_succeeds(client, monkey
     assert background_job.result_payload["embeddings_created"] == 3
     assert background_job.result_payload["embeddings_indexed"] == 3
     assert background_job.result_payload["qdrant_collection"] == "eternal_world_rag_chunks__mock-embedding-small"
+    assert len(background_job.event_log) >= 5
+    event_stages = [entry["stage"] for entry in background_job.event_log]
+    assert "source_validation" in event_stages
+    assert "chunking" in event_stages
+    assert "embedding_generation" in event_stages
+    assert "qdrant_indexing" in event_stages
+    assert "job_completed" in event_stages
 
 
 def test_failed_pipeline_marks_job_failed_with_structured_error_payload(client, monkeypatch):
@@ -305,6 +312,7 @@ def test_failed_pipeline_marks_job_failed_with_structured_error_payload(client, 
 
     assert background_job.status == BackgroundJobStatus.FAILED.value
     assert background_job.error_message == "Chunking failed"
+    assert any(entry["status"] == "failed" for entry in background_job.event_log)
     assert background_job.error_payload == {
         "code": "rag_chunking_failed",
         "message": "Chunking failed",
