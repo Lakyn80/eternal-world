@@ -5,9 +5,9 @@ Use this when delivering `rag-embedding-benchmark` to an external client.
 ## 1. Install
 
 ```bash
-pip install rag_embedding_benchmark-0.1.0-py3-none-any.whl
+pip install "rag-embedding-benchmark[sql-qdrant] @ ./rag_embedding_benchmark-0.1.0-py3-none-any.whl"
 # or
-pip install "rag-embedding-benchmark[sql-qdrant] @ git+https://github.com/<org>/eternal-world.git@v0.1.0#subdirectory=packages/rag-embedding-benchmark"
+pip install "rag-embedding-benchmark[sql-qdrant] @ git+https://github.com/Lakyn80/eternal-world.git@v0.1.0#subdirectory=packages/rag-embedding-benchmark"
 ```
 
 ## 2. Client prerequisites

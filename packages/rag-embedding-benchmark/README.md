@@ -25,9 +25,19 @@ pip install -e ".[eternal-world,dev]"
 Distribution for clients:
 
 ```bash
-pip install git+https://github.com/you/rag-embedding-benchmark.git@v0.1.0
-# or
-pip install rag_embedding_benchmark-0.1.0-py3-none-any.whl
+pip install "rag-embedding-benchmark[sql-qdrant] @ git+https://github.com/Lakyn80/eternal-world.git@v0.1.0#subdirectory=packages/rag-embedding-benchmark"
+```
+
+Without optional extras (base package only):
+
+```bash
+pip install "rag-embedding-benchmark @ git+https://github.com/Lakyn80/eternal-world.git@v0.1.0#subdirectory=packages/rag-embedding-benchmark"
+```
+
+Wheel handoff:
+
+```bash
+pip install "rag-embedding-benchmark[sql-qdrant] @ ./rag_embedding_benchmark-0.1.0-py3-none-any.whl"
 ```
 
 ## Quick start for external clients (recommended)

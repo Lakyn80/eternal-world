@@ -21,7 +21,7 @@ Use this checklist before offering or running a client benchmark.
 ## Recommended client flow
 
 ```bash
-pip install "rag-embedding-benchmark[sql-qdrant]"
+pip install "rag-embedding-benchmark[sql-qdrant] @ git+https://github.com/Lakyn80/eternal-world.git@v0.1.0#subdirectory=packages/rag-embedding-benchmark"
 
 export DATABASE_URL=postgresql+psycopg://...
 export QDRANT_URL=http://localhost:6333
@@ -53,9 +53,9 @@ Run `rag-eval validate` before any long benchmark. Fix all preflight issues firs
 
 | Channel | Command |
 |---------|---------|
-| Private git | `pip install git+https://github.com/you/rag-embedding-benchmark.git@v0.1.0` |
-| Wheel handoff | `pip install rag_embedding_benchmark-0.1.0-py3-none-any.whl` |
-| Editable monorepo dev | `pip install -e packages/rag-embedding-benchmark[sql-qdrant,dev]` |
+| Private git | `pip install "rag-embedding-benchmark[sql-qdrant] @ git+https://github.com/Lakyn80/eternal-world.git@v0.1.0#subdirectory=packages/rag-embedding-benchmark"` |
+| Wheel handoff | `pip install "rag-embedding-benchmark[sql-qdrant] @ ./rag_embedding_benchmark-0.1.0-py3-none-any.whl"` |
+| Editable monorepo dev | `pip install -e "./packages/rag-embedding-benchmark[sql-qdrant,dev]"` |
 
 ## Commercial handoff package
 
