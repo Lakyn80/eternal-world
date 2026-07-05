@@ -25,15 +25,20 @@ from app.modules.ai_agents.schemas import BrainAgentRequest, MemoryProfileContex
 def _build_request(
     *,
     user_message: str = "Tell me about Prague",
-    prompt: str = "Grounded prompt payload",
+    system_prompt: str = "System prompt from prompt builder",
+    user_prompt: str = "User prompt from prompt builder",
+    prompt: str | None = None,
     grounded_context: BrainGroundedContext | None = None,
 ) -> BrainAgentRequest:
+    resolved_prompt = prompt if prompt is not None else f"{system_prompt}\n\n---\n\n{user_prompt}"
     return BrainAgentRequest(
         profile=MemoryProfileContext(id=1, name="Ada"),
         user_message=user_message,
         recent_history=[],
         grounded_context=grounded_context,
-        prompt=prompt,
+        system_prompt=system_prompt,
+        user_prompt=user_prompt,
+        prompt=resolved_prompt,
     )
 
 
@@ -156,7 +161,7 @@ def test_from_settings_uses_configured_model_base_url_api_key_timeout_and_genera
     assert provider.max_tokens == 256
 
 
-def test_build_request_uses_grounded_prompt_and_normalized_chat_completions_url():
+def test_build_request_uses_system_and_user_prompt_messages_and_normalized_chat_completions_url():
     provider = OpenAICompatibleBrainAgentProvider(
         model="brain-model",
         api_key="super-secret",
@@ -166,7 +171,12 @@ def test_build_request_uses_grounded_prompt_and_normalized_chat_completions_url(
         max_tokens=128,
     )
 
-    prepared_request = provider.build_request(_build_request(prompt="Prompt from prompt builder"))
+    prepared_request = provider.build_request(
+        _build_request(
+            system_prompt="System prompt from prompt builder",
+            user_prompt="User prompt from prompt builder",
+        )
+    )
 
     assert prepared_request.url == "https://example.test/v1/chat/completions"
     assert prepared_request.headers == {
@@ -175,7 +185,10 @@ def test_build_request_uses_grounded_prompt_and_normalized_chat_completions_url(
     }
     assert prepared_request.payload == {
         "model": "brain-model",
-        "messages": [{"role": "user", "content": "Prompt from prompt builder"}],
+        "messages": [
+            {"role": "system", "content": "System prompt from prompt builder"},
+            {"role": "user", "content": "User prompt from prompt builder"},
+        ],
         "temperature": 0.2,
         "max_tokens": 128,
     }

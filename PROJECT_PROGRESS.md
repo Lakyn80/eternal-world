@@ -4428,3 +4428,36 @@ Scope confirmation:
 - billing/frontend were not changed
 - pytest does not call real external AI APIs
 
+## Task 62A Brain Prompt Production v2
+
+Goal:
+
+- upgrade Brain Agent prompt to memorial avatar Production v2 rules
+- split static system rules from dynamic user turn context (evidence + history)
+- send system + user messages to OpenAI-compatible providers
+
+What changed:
+
+- `backend/app/modules/ai_agents/brain/prompt_builder.py`
+  - `BrainPromptMessages` with `system_prompt` and `user_prompt`
+  - Production v2 sections: PRODUCT ROLE, IDENTITY, VOICE AND PERSPECTIVE, EVIDENCE HIERARCHY, WHEN EVIDENCE IS MISSING, LANGUAGE, CONVERSATION STYLE, OUTPUT RULES
+  - user turn context keeps B1/B2 evidence blocks with existing excerpt/metadata format
+- `backend/app/modules/ai_agents/schemas.py`
+  - `BrainAgentRequest` now carries `system_prompt`, `user_prompt`, and combined `prompt`
+- `backend/app/modules/ai_agents/brain/providers/openai_compatible.py`
+  - chat-completions payload uses `system` + `user` messages instead of one user blob
+- tests:
+  - `backend/tests/test_ai_agents.py`
+  - `backend/tests/test_ai_brain_openai_provider.py`
+  - `backend/tests/test_brain_rag_eval.py`
+
+Verification results:
+
+- `python -m pytest tests/test_ai_agents.py tests/test_ai_brain_openai_provider.py tests/test_brain_rag_eval.py tests/test_rag_evaluation.py -q` -> passed
+
+Scope confirmation:
+
+- retrieval runtime was not changed
+- mock/default chat behavior was not changed
+- fictional eval dataset expansion deferred to Task 62B
+

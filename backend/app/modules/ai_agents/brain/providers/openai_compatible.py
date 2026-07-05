@@ -153,9 +153,13 @@ class OpenAICompatibleBrainAgentProvider:
             "model": self.model,
             "messages": [
                 {
+                    "role": "system",
+                    "content": request.system_prompt,
+                },
+                {
                     "role": "user",
-                    "content": request.prompt,
-                }
+                    "content": request.user_prompt,
+                },
             ],
             "temperature": self.temperature,
         }

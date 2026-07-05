@@ -30,6 +30,8 @@ class BrainAgentRequest(BaseModel):
     user_message: str
     recent_history: list[ChatHistoryEntry] = Field(default_factory=list)
     grounded_context: BrainGroundedContext | None = None
+    system_prompt: str
+    user_prompt: str
     prompt: str
 
 

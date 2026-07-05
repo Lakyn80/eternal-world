@@ -85,6 +85,8 @@ def _create_memory(
 
 def _capture_prompt(monkeypatch):
     captured: dict[str, str] = {}
+    monkeypatch.setattr(settings, "ai_brain_provider", "mock")
+    get_agent_orchestrator.cache_clear()
 
     def capture_generate_response(self, request: BrainAgentRequest) -> BrainAgentResponse:
         captured["prompt"] = request.prompt
@@ -126,7 +128,9 @@ def test_brain_agent_mock_provider_is_deterministic():
         profile=MemoryProfileContext(id=1, name="Ada"),
         user_message="Hello",
         recent_history=[],
-        prompt="test-prompt",
+        system_prompt="System prompt",
+        user_prompt="User prompt",
+        prompt="System prompt\n\n---\n\nUser prompt",
     )
 
     first_response = provider.generate_response(request)
@@ -290,7 +294,7 @@ def test_chat_response_generation_still_works_with_no_memories(client, monkeypat
         "No Memory Profile mock reply: I heard 'Hello there'. "
         "Recent messages considered: 0."
     )
-    assert "No verified memory evidence is currently available" in captured["prompt"]
+    assert "- None available." in captured["prompt"]
 
 
 def test_generated_brain_prompt_includes_profile_context(client, monkeypatch):
@@ -315,11 +319,11 @@ def test_generated_brain_prompt_includes_profile_context(client, monkeypatch):
 
     assert response.status_code == 200
     prompt = captured["prompt"]
-    assert "A. Avatar identity and style" in prompt
+    assert "SYSTEM — Eternal World Brain Agent (Production v2)" in prompt
     assert "- Name: Grounded Ada" in prompt
-    assert "- Biography: Pioneer of analytical engines" in prompt
-    assert "- Personality style hint: Warm and curious" in prompt
-    assert "- Catchphrases style hint: Let's think carefully" in prompt
+    assert "- Biography summary: Pioneer of analytical engines" in prompt
+    assert "- Personality style: Warm and curious" in prompt
+    assert "- Catchphrases style: Let's think carefully" in prompt
 
 
 def test_generated_brain_prompt_includes_selected_memory_evidence_when_memories_exist(client, monkeypatch):
@@ -344,7 +348,7 @@ def test_generated_brain_prompt_includes_selected_memory_evidence_when_memories_
 
     assert response.status_code == 200
     prompt = captured["prompt"]
-    assert "B. Verified memory evidence" in prompt
+    assert "B1. Timeline memory evidence:" in prompt
     assert "[memory:" in prompt
     assert "Paris Trip" in prompt
     assert "visited Paris in the spring" in prompt
@@ -363,13 +367,13 @@ def test_factual_grounding_instructions_are_present_in_prompt(client, monkeypatc
 
     assert response.status_code == 200
     prompt = captured["prompt"]
-    assert "C. Grounding instructions" in prompt
-    assert "Answer factual questions only from the verified evidence" in prompt
-    assert "Do not invent unknown facts, dates, places, people, relationships, or events." in prompt
-    assert "it is not available in the stored memories/context" in prompt
-    assert "cite the source inline using [memory:id] or [rag:chunk_id]" in prompt
+    assert "EVIDENCE HIERARCHY (strict)" in prompt
+    assert "Answer factual questions ONLY from B1, B2, and explicit profile fields above." in prompt
+    assert "Do not guess, fill gaps, or use world knowledge to invent personal history." in prompt
+    assert "the information is not available in the stored memories/context." in prompt
+    assert "cite inline: [memory:id] or [rag:chunk_id]" in prompt
     assert "Respond in the same language as the user's current message" in prompt
-    assert "B1. Timeline memory evidence" in prompt or "No verified memory evidence" in prompt
+    assert "B1. Timeline memory evidence:" in prompt
 
 
 def test_brain_prompt_separates_memory_and_rag_evidence_sections(client, monkeypatch):
@@ -418,8 +422,8 @@ def test_brain_prompt_separates_memory_and_rag_evidence_sections(client, monkeyp
 
     assert response.status_code == 200
     prompt = captured["prompt"]
-    assert "B1. Timeline memory evidence" in prompt
-    assert "B2. Retrieved archival RAG evidence" in prompt
+    assert "B1. Timeline memory evidence:" in prompt
+    assert "B2. Retrieved archival RAG evidence:" in prompt
     assert "[memory:" in prompt
     assert "[rag:88]" in prompt
     assert prompt.index("B1.") < prompt.index("B2.")
@@ -810,6 +814,8 @@ def test_no_retrieval_results_return_safe_lack_of_evidence_answer(client, monkey
         )
 
     monkeypatch.setattr("app.modules.chat.service.retrieve_profile_rag", no_results)
+    monkeypatch.setattr(settings, "ai_brain_provider", "mock")
+    get_agent_orchestrator.cache_clear()
 
     response = client.post(
         f"/api/chat/{profile_id}/messages",

@@ -165,8 +165,11 @@ def test_run_brain_rag_eval_uses_openai_compatible_provider_with_mocked_http():
     assert result.provider_name == "openai_compatible"
     assert result.suite_result.failed_cases == 0
     assert len(clients) == 1
-    assert clients[0].calls[0]["json"]["messages"][0]["role"] == "user"
-    assert "B2. Retrieved archival RAG evidence" in clients[0].calls[0]["json"]["messages"][0]["content"]
+    messages = clients[0].calls[0]["json"]["messages"]
+    assert messages[0]["role"] == "system"
+    assert messages[1]["role"] == "user"
+    assert "EVIDENCE HIERARCHY (strict)" in messages[0]["content"]
+    assert "B2. Retrieved archival RAG evidence:" in messages[1]["content"]
 
 
 def test_build_brain_rag_eval_provider_rejects_unsupported_provider():
