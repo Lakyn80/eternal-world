@@ -24,6 +24,60 @@ OPTIONAL_HIGH_RAM_MODEL_CODES = (
 )
 
 
+BM25_MODEL_CODE = "bm25"
+
+ALLOWED_RETRIEVAL_MODES = frozenset({"dense", "bm25", "dense_plus_bm25"})
+DEFAULT_RETRIEVAL_MODES = ("dense",)
+
+
+class BenchmarkRetrievalConfig(BaseModel):
+    modes: list[str] = Field(default_factory=lambda: list(DEFAULT_RETRIEVAL_MODES))
+    fusion: str = "rrf"
+    rrf_k: int = Field(default=60, ge=1)
+    bm25_k1: float = Field(default=1.5, gt=0)
+    bm25_b: float = Field(default=0.75, ge=0, le=1)
+
+    @field_validator("modes")
+    @classmethod
+    def normalize_modes(cls, value: list[str]) -> list[str]:
+        normalized: list[str] = []
+        seen: set[str] = set()
+        for item in value:
+            normalized_item = item.strip().lower()
+            if not normalized_item or normalized_item in seen:
+                continue
+            if normalized_item not in ALLOWED_RETRIEVAL_MODES:
+                raise ValueError(
+                    f"Unknown retrieval mode '{normalized_item}'. "
+                    f"Allowed modes: {', '.join(sorted(ALLOWED_RETRIEVAL_MODES))}."
+                )
+            seen.add(normalized_item)
+            normalized.append(normalized_item)
+        if not normalized:
+            raise ValueError("retrieval.modes must include at least one mode.")
+        return normalized
+
+    @field_validator("fusion")
+    @classmethod
+    def normalize_fusion(cls, value: str) -> str:
+        normalized = value.strip().lower()
+        if normalized != "rrf":
+            raise ValueError("Only retrieval.fusion='rrf' is supported.")
+        return normalized
+
+    def resolved_modes(self) -> tuple[str, ...]:
+        return tuple(self.modes)
+
+    def requires_bm25(self) -> bool:
+        return any(mode in {"bm25", "dense_plus_bm25"} for mode in self.modes)
+
+    def validate_optional_dependencies(self) -> None:
+        if self.requires_bm25():
+            from rag_eval.retrieval.bm25 import require_bm25s
+
+            require_bm25s()
+
+
 class BenchmarkModelsConfig(BaseModel):
     default: list[str] = Field(default_factory=lambda: list(DEFAULT_MODEL_CODES))
     optional_high_ram: list[str] = Field(default_factory=lambda: list(OPTIONAL_HIGH_RAM_MODEL_CODES))
@@ -77,6 +131,7 @@ class BenchmarkConfig(BaseModel):
     user_email: str = "demo.real.question.eval@example.test"
     dataset: Path
     models: BenchmarkModelsConfig = Field(default_factory=BenchmarkModelsConfig)
+    retrieval: BenchmarkRetrievalConfig = Field(default_factory=BenchmarkRetrievalConfig)
     top_k: int = Field(default=5, ge=1, le=100)
     score_threshold: float | None = None
     max_average_latency_ms: float | None = None
@@ -114,8 +169,12 @@ class BenchmarkConfig(BaseModel):
             model_codes.extend(self.models.optional_high_ram)
         return model_codes
 
+    def resolved_retrieval_modes(self) -> tuple[str, ...]:
+        return self.retrieval.resolved_modes()
+
     def apply_runtime_env(self) -> None:
         os.environ.setdefault("SENTENCE_TRANSFORMERS_DEVICE", self.device)
+        self.retrieval.validate_optional_dependencies()
 
 
 def _expand_env(value: Any) -> Any:

@@ -59,5 +59,6 @@ class RagEvalBackend(Protocol):
         collection_name: str,
         top_k: int,
         score_threshold: float | None = None,
+        retrieval_mode: str = "dense",
     ) -> RagEvalRetrievalResponse:
         ...

@@ -4461,3 +4461,36 @@ Scope confirmation:
 - mock/default chat behavior was not changed
 - fictional eval dataset expansion deferred to Task 62B
 
+## rag-embedding-benchmark v0.2.0 BM25 and Hybrid Retrieval
+
+Goal:
+
+- extend the client eval pip package with BM25-only and dense+BM25 hybrid retrieval modes
+- keep dense-only baseline behavior from v0.1 intact
+
+What changed:
+
+- version bump to `0.2.0` in `packages/rag-embedding-benchmark/pyproject.toml`
+- new retrieval modules:
+  - `packages/rag-embedding-benchmark/rag_eval/retrieval/bm25.py`
+  - `packages/rag-embedding-benchmark/rag_eval/retrieval/candidates.py`
+  - `packages/rag-embedding-benchmark/rag_eval/retrieval/fusion.py`
+- adapter updates for BM25/hybrid candidate loading in:
+  - `packages/rag-embedding-benchmark/rag_eval/adapters/sql_qdrant.py`
+  - `packages/rag-embedding-benchmark/rag_eval/adapters/eternal_world.py`
+  - `packages/rag-embedding-benchmark/rag_eval/adapters/memory.py`
+- runner/config support for retrieval mode selection
+- example config:
+  - `packages/rag-embedding-benchmark/examples/nalus_bm25_eval.yaml`
+- tests:
+  - `packages/rag-embedding-benchmark/tests/test_bm25.py`
+
+Verification results:
+
+- `python -m pytest tests/test_bm25.py tests/test_config.py -q` -> `8 passed, 3 skipped`
+
+Scope confirmation:
+
+- Eternal World backend runtime was not changed in this package release
+- wheel artifacts remain local under `dist/` and are gitignored
+

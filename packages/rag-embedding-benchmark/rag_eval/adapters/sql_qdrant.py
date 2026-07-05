@@ -7,6 +7,8 @@ from uuid import NAMESPACE_URL, uuid5
 from rag_eval.adapters.base import RagEvalBackend, RagEvalChunk, RagEvalRetrievalResponse, RagEvalRetrievalResult
 from rag_eval.config import BenchmarkConfig, SqlQdrantConfig
 from rag_eval.models.registry import get_embedding_model_definition
+from rag_eval.retrieval.bm25 import Bm25IndexStore
+from rag_eval.retrieval.fusion import reciprocal_rank_fusion
 
 
 class SqlQdrantRagEvalBackend(RagEvalBackend):
@@ -24,6 +26,7 @@ class SqlQdrantRagEvalBackend(RagEvalBackend):
         self._qdrant_client = None
         self._embedding_models: dict[str, Any] = {}
         self._chunk_cache: dict[int, RagEvalChunk] = {}
+        self._bm25_store = Bm25IndexStore(retrieval_config=config.retrieval)
 
     def _get_engine(self):
         if self._engine is None:
@@ -194,16 +197,15 @@ class SqlQdrantRagEvalBackend(RagEvalBackend):
         ]
         client.upsert(collection_name=collection_name, points=points)
 
-    def retrieve(
+    def _retrieve_dense(
         self,
         *,
-        profile_id: int,
         source_id: int,
         query: str,
         model_code: str,
         collection_name: str,
         top_k: int,
-        score_threshold: float | None = None,
+        score_threshold: float | None,
     ) -> RagEvalRetrievalResponse:
         query_vector = self._encode_query(model_code=model_code, query=query)
         hits = self._search_points(
@@ -214,7 +216,7 @@ class SqlQdrantRagEvalBackend(RagEvalBackend):
         )
 
         results: list[RagEvalRetrievalResult] = []
-        for index, hit in enumerate(hits, start=1):
+        for hit in hits:
             payload = hit.payload or {}
             chunk_id = payload.get("chunk_id")
             cached_chunk = self._chunk_cache.get(int(chunk_id)) if chunk_id is not None else None
@@ -230,3 +232,67 @@ class SqlQdrantRagEvalBackend(RagEvalBackend):
                 )
             )
         return RagEvalRetrievalResponse(results=results)
+
+    def _retrieve_bm25(
+        self,
+        *,
+        source_id: int,
+        query: str,
+        collection_name: str,
+        top_k: int,
+    ) -> RagEvalRetrievalResponse:
+        chunks = self.get_source_chunks(source_id=source_id)
+        index = self._bm25_store.get_index(source_id=source_id, chunks=chunks)
+        return index.retrieve(
+            query=query,
+            source_id=source_id,
+            top_k=top_k,
+            collection_name=collection_name,
+        )
+
+    def retrieve(
+        self,
+        *,
+        profile_id: int,
+        source_id: int,
+        query: str,
+        model_code: str,
+        collection_name: str,
+        top_k: int,
+        score_threshold: float | None = None,
+        retrieval_mode: str = "dense",
+    ) -> RagEvalRetrievalResponse:
+        if retrieval_mode == "bm25":
+            return self._retrieve_bm25(
+                source_id=source_id,
+                query=query,
+                collection_name=collection_name,
+                top_k=top_k,
+            )
+
+        dense_response = self._retrieve_dense(
+            source_id=source_id,
+            query=query,
+            model_code=model_code,
+            collection_name=collection_name,
+            top_k=top_k,
+            score_threshold=score_threshold,
+        )
+
+        if retrieval_mode == "dense":
+            return dense_response
+
+        if retrieval_mode == "dense_plus_bm25":
+            bm25_response = self._retrieve_bm25(
+                source_id=source_id,
+                query=query,
+                collection_name=collection_name,
+                top_k=top_k,
+            )
+            return reciprocal_rank_fusion(
+                [dense_response.results, bm25_response.results],
+                top_k=top_k,
+                rrf_k=self._config.retrieval.rrf_k,
+            )
+
+        raise ValueError(f"Unsupported retrieval_mode: {retrieval_mode}")

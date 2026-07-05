@@ -18,6 +18,7 @@ def test_load_example_config_resolves_dataset_path():
     assert config.dataset.exists()
     assert "multilingual_e5_large" in config.resolved_model_codes()
     assert "qwen3_embedding_4b" not in config.resolved_model_codes()
+    assert config.resolved_retrieval_modes() == ("dense",)
 
 
 def test_optional_models_are_included_when_enabled(tmp_path: Path):

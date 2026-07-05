@@ -16,6 +16,14 @@ cd packages/rag-embedding-benchmark
 pip install -e ".[sql-qdrant,dev]"
 ```
 
+For BM25 / hybrid retrieval:
+
+```bash
+pip install -e ".[sql-qdrant,bm25,dev]"
+# or combined extra:
+pip install -e ".[sql-qdrant-bm25,dev]"
+```
+
 For Eternal World internal development:
 
 ```bash
@@ -25,19 +33,19 @@ pip install -e ".[eternal-world,dev]"
 Distribution for clients:
 
 ```bash
-pip install "rag-embedding-benchmark[sql-qdrant] @ git+https://github.com/Lakyn80/eternal-world.git@v0.1.0#subdirectory=packages/rag-embedding-benchmark"
+pip install "rag-embedding-benchmark[sql-qdrant] @ git+https://github.com/Lakyn80/eternal-world.git@v0.2.0#subdirectory=packages/rag-embedding-benchmark"
 ```
 
 Without optional extras (base package only):
 
 ```bash
-pip install "rag-embedding-benchmark @ git+https://github.com/Lakyn80/eternal-world.git@v0.1.0#subdirectory=packages/rag-embedding-benchmark"
+pip install "rag-embedding-benchmark @ git+https://github.com/Lakyn80/eternal-world.git@v0.2.0#subdirectory=packages/rag-embedding-benchmark"
 ```
 
 Wheel handoff:
 
 ```bash
-pip install "rag-embedding-benchmark[sql-qdrant] @ ./rag_embedding_benchmark-0.1.0-py3-none-any.whl"
+pip install "rag-embedding-benchmark[sql-qdrant] @ ./rag_embedding_benchmark-0.2.0-py3-none-any.whl"
 ```
 
 ## Quick start for external clients (recommended)
@@ -100,6 +108,60 @@ Your eval JSON must align with the corpus already chunked in DB:
 
 Use `rag-eval validate` before a long benchmark run.
 
+## Retrieval modes (v0.2)
+
+By default, configs without a `retrieval:` section run **dense-only** (backward compatible).
+
+```yaml
+retrieval:
+  modes: [dense]   # default when section is omitted
+  fusion: rrf      # used for dense_plus_bm25
+  rrf_k: 60
+  bm25_k1: 1.5
+  bm25_b: 0.75
+```
+
+| Mode | Candidate id pattern | Description |
+|------|---------------------|-------------|
+| `dense` | `{model}__dense` | SentenceTransformers + Qdrant (existing behavior) |
+| `bm25` | `bm25__bm25` | Lexical BM25 over loaded chunks (once per run, not per model) |
+| `dense_plus_bm25` | `{model}__dense_plus_bm25` | Dense + BM25 fused with RRF |
+
+Install the BM25 extra before using `bm25` or `dense_plus_bm25`:
+
+```bash
+pip install "rag-embedding-benchmark[bm25]"
+```
+
+**BM25-only eval** ([`examples/nalus_bm25_eval.yaml`](examples/nalus_bm25_eval.yaml)):
+
+```yaml
+retrieval:
+  modes: [bm25]
+models:
+  default: [bge_m3]   # ignored for indexing; bm25 uses chunks only
+```
+
+**Dense + BM25 hybrid eval**:
+
+```yaml
+retrieval:
+  modes: [dense_plus_bm25]
+  fusion: rrf
+  rrf_k: 60
+models:
+  default: [bge_m3, multilingual_e5_base]
+```
+
+**All modes at once** (5 models → 11 candidates: 5 dense + 1 bm25 + 5 hybrid):
+
+```yaml
+retrieval:
+  modes: [dense, bm25, dense_plus_bm25]
+models:
+  default: [m1, m2, m3, m4, m5]
+```
+
 ## Internal Docker smoke test
 
 From repo root:
@@ -120,7 +182,7 @@ From repo root (recommended when host pip/build has network issues):
 docker compose exec backend bash -lc "pip install -q build && cd /packages/rag-embedding-benchmark && python -m build"
 ```
 
-Wheel output: `packages/rag-embedding-benchmark/dist/rag_embedding_benchmark-0.1.0-py3-none-any.whl`
+Wheel output: `packages/rag-embedding-benchmark/dist/rag_embedding_benchmark-0.2.0-py3-none-any.whl`
 
 On host:
 
@@ -131,24 +193,31 @@ packages/rag-embedding-benchmark/scripts/build_wheel.ps1
 ## Tests
 
 ```bash
+pip install -e ".[dev,bm25]"
 pytest
 ```
 
-The in-memory adapter tests run without Docker, DB, or Qdrant.
+The in-memory adapter tests run without Docker, DB, or Qdrant. BM25 tests require the `bm25` extra.
 
 ## MVP scope
 
-Included in v0.1:
+Included in v0.2:
 
 - `sql_qdrant` generic adapter
 - custom adapter plugin loading
 - Eternal World adapter for internal dev
 - dense SentenceTransformers models from the shared registry
+- **BM25 lexical retrieval (`bm25` extra)**
+- **dense + BM25 hybrid via RRF fusion**
 - dataset JSON loader + preflight validation
 - ranking report and failed-model capture (OOM/load errors do not abort the whole run)
 
-Planned for v2:
+Included in v0.1:
 
-- BGE hybrid Batch D modes
+- dense-only retrieval baseline
+
+Planned for v2.1:
+
+- BGE hybrid Batch D modes in pip package
 - async/Celery execution
 - eval JSON generator from corpus

@@ -12,7 +12,6 @@ from rag_eval.config import BenchmarkConfig
 from rag_eval.datasets.loader import ExternalEvalDataset, load_external_eval_dataset
 from rag_eval.datasets.validate import (
     PreflightValidation,
-    build_collection_name,
     validate_dataset_against_chunks,
     validate_dataset_schema,
 )
@@ -26,6 +25,8 @@ from rag_eval.metrics.schemas import (
 from rag_eval.metrics.service import RagQualityService
 from rag_eval.models.registry import get_embedding_model_definition
 from rag_eval.report import write_ranking_artifacts
+from rag_eval.retrieval.bm25 import BM25_MODEL_CODE
+from rag_eval.retrieval.candidates import expand_retrieval_candidates
 
 
 @dataclass
@@ -33,6 +34,7 @@ class ModelRunFailure:
     model_code: str
     status: str
     error: str
+    config_id: str | None = None
 
 
 @dataclass
@@ -73,42 +75,47 @@ def run_benchmark(*, config: BenchmarkConfig, backend: RagEvalBackend) -> Benchm
     case_results_inputs: list[RagQualityCaseResultsInput] = []
     failed_models: list[ModelRunFailure] = []
     config_evaluations: list[RagQualityConfigEvaluation] = []
+    candidate_specs = expand_retrieval_candidates(config=config, dataset=dataset)
+    indexed_collections: set[tuple[str, str]] = set()
 
-    for model_code in config.resolved_model_codes():
-        model_definition = get_embedding_model_definition(model_code)
-        if model_definition is None:
-            failed_models.append(
-                ModelRunFailure(
-                    model_code=model_code,
-                    status="UNKNOWN_MODEL",
-                    error=f"Unknown embedding model code: {model_code}",
+    for candidate_spec in candidate_specs:
+        if candidate_spec.model_code != BM25_MODEL_CODE:
+            model_definition = get_embedding_model_definition(candidate_spec.model_code)
+            if model_definition is None:
+                failed_models.append(
+                    ModelRunFailure(
+                        model_code=candidate_spec.model_code,
+                        config_id=candidate_spec.config_id,
+                        status="UNKNOWN_MODEL",
+                        error=f"Unknown embedding model code: {candidate_spec.model_code}",
+                    )
                 )
-            )
-            continue
+                continue
 
-        config_id = f"{model_code}__dense"
-        collection_name = build_collection_name(
-            collection_prefix=config.collection_prefix,
-            model_code=model_code,
-            dataset=dataset,
-        )
         candidate = RagQualityRetrievalConfigCandidate(
-            config_id=config_id,
-            model_code=model_code,
-            collection_name=collection_name,
+            config_id=candidate_spec.config_id,
+            model_code=candidate_spec.model_code,
+            collection_name=candidate_spec.collection_name,
             top_k=config.top_k,
             score_threshold=config.score_threshold,
-            retrieval_mode="dense",
-            metadata={"device": config.device},
+            retrieval_mode=candidate_spec.retrieval_mode,
+            metadata=_candidate_metadata(config, candidate_spec.retrieval_mode),
         )
 
         try:
-            backend.embed_source(source_id=config.source_id, model_code=model_code)
-            backend.index_source(
-                source_id=config.source_id,
-                model_code=model_code,
-                collection_name=collection_name,
-            )
+            if candidate_spec.retrieval_mode in {"dense", "dense_plus_bm25"}:
+                index_key = (candidate_spec.model_code, candidate_spec.collection_name)
+                if index_key not in indexed_collections:
+                    backend.embed_source(
+                        source_id=config.source_id,
+                        model_code=candidate_spec.model_code,
+                    )
+                    backend.index_source(
+                        source_id=config.source_id,
+                        model_code=candidate_spec.model_code,
+                        collection_name=candidate_spec.collection_name,
+                    )
+                    indexed_collections.add(index_key)
 
             model_case_inputs: list[RagQualityCaseResultsInput] = []
             for case in rag_quality_dataset.cases:
@@ -117,10 +124,11 @@ def run_benchmark(*, config: BenchmarkConfig, backend: RagEvalBackend) -> Benchm
                     profile_id=config.profile_id,
                     source_id=config.source_id,
                     query=case.query,
-                    model_code=model_code,
-                    collection_name=collection_name,
+                    model_code=candidate_spec.model_code,
+                    collection_name=candidate_spec.collection_name,
                     top_k=config.top_k,
                     score_threshold=config.score_threshold,
+                    retrieval_mode=candidate_spec.retrieval_mode,
                 )
                 latency_ms = round((perf_counter() - started_at) * 1000, 3)
                 model_case_inputs.append(
@@ -144,7 +152,8 @@ def run_benchmark(*, config: BenchmarkConfig, backend: RagEvalBackend) -> Benchm
         except Exception as exc:
             failed_models.append(
                 ModelRunFailure(
-                    model_code=model_code,
+                    model_code=candidate_spec.model_code,
+                    config_id=candidate_spec.config_id,
                     status=_classify_failure(exc),
                     error=str(exc),
                 )
@@ -185,6 +194,14 @@ def run_benchmark(*, config: BenchmarkConfig, backend: RagEvalBackend) -> Benchm
         preflight_validation=preflight_validation,
         artifact_paths=artifact_paths,
     )
+
+
+def _candidate_metadata(config: BenchmarkConfig, retrieval_mode: str) -> dict[str, object]:
+    metadata: dict[str, object] = {"device": config.device}
+    if retrieval_mode == "dense_plus_bm25":
+        metadata["fusion"] = config.retrieval.fusion
+        metadata["rrf_k"] = config.retrieval.rrf_k
+    return metadata
 
 
 def _adapt_retrieval_response(
@@ -247,7 +264,12 @@ def write_benchmark_artifacts(
         "preflight_passed": preflight_validation.passed,
         "preflight_issue_count": preflight_validation.issue_count,
         "failed_models": [
-            {"model_code": item.model_code, "status": item.status, "error": item.error}
+            {
+                "model_code": item.model_code,
+                "config_id": item.config_id,
+                "status": item.status,
+                "error": item.error,
+            }
             for item in failed_models
         ],
     }

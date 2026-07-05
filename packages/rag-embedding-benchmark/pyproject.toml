@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "rag-embedding-benchmark"
-version = "0.1.0"
+version = "0.2.0"
 description = "Compare RAG embedding models against a custom eval dataset using your existing DB and Qdrant stack."
 readme = "README.md"
 requires-python = ">=3.11"
@@ -20,6 +20,17 @@ sql-qdrant = [
   "qdrant-client>=1.9,<1.14",
   "sentence-transformers>=3.0",
   "transformers>=4.40",
+]
+bm25 = [
+  "bm25s>=0.2",
+]
+sql-qdrant-bm25 = [
+  "sqlalchemy>=2.0",
+  "psycopg[binary]>=3.1",
+  "qdrant-client>=1.9,<1.14",
+  "sentence-transformers>=3.0",
+  "transformers>=4.40",
+  "bm25s>=0.2",
 ]
 eternal-world = [
   "sqlalchemy>=2.0",
