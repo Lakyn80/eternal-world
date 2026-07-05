@@ -109,6 +109,9 @@ class SqlQdrantConfig(BaseModel):
     chunks_table: str = "rag_chunks"
     columns: SqlQdrantColumnMapping = Field(default_factory=SqlQdrantColumnMapping)
     invalid_statuses: list[str] = Field(default_factory=lambda: ["invalid"])
+    qdrant_timeout_sec: int = Field(default=7200, ge=60, le=86400)
+    embed_batch_size: int = Field(default=32, ge=1, le=512)
+    upsert_batch_size: int = Field(default=128, ge=1, le=1000)
 
 
 class CustomAdapterConfig(BaseModel):

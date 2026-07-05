@@ -41,6 +41,7 @@ class SqlQdrantRagEvalBackend(RagEvalBackend):
 
             self._qdrant_client = QdrantClient(
                 url=self._config.qdrant_url,
+                timeout=self._sql_config.qdrant_timeout_sec,
                 check_compatibility=False,
             )
         return self._qdrant_client
@@ -88,8 +89,13 @@ class SqlQdrantRagEvalBackend(RagEvalBackend):
 
     def _encode_texts(self, *, model_code: str, texts: list[str]) -> list[list[float]]:
         model = self._get_embedding_model(model_code)
-        vectors = model.encode(texts, normalize_embeddings=True, show_progress_bar=False)
-        return [vector.tolist() for vector in vectors]
+        batch_size = self._sql_config.embed_batch_size
+        vectors: list[list[float]] = []
+        for start in range(0, len(texts), batch_size):
+            batch = texts[start : start + batch_size]
+            encoded = model.encode(batch, normalize_embeddings=True, show_progress_bar=False)
+            vectors.extend(vector.tolist() for vector in encoded)
+        return vectors
 
     def _encode_query(self, *, model_code: str, query: str) -> list[float]:
         return self._encode_texts(model_code=model_code, texts=[query])[0]
@@ -195,7 +201,9 @@ class SqlQdrantRagEvalBackend(RagEvalBackend):
             )
             for chunk, vector in zip(chunks, vectors, strict=True)
         ]
-        client.upsert(collection_name=collection_name, points=points)
+        upsert_batch_size = self._sql_config.upsert_batch_size
+        for start in range(0, len(points), upsert_batch_size):
+            client.upsert(collection_name=collection_name, points=points[start : start + upsert_batch_size])
 
     def _retrieve_dense(
         self,
