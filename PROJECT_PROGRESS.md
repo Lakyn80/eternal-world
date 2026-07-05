@@ -4367,3 +4367,64 @@ Scope confirmation:
 - chat/retrieve sync flows still do not create background jobs
 - separate `background_job_events` table was not introduced; audit lives in `event_log`
 
+## Task 61 Real Brain Provider RAG Q&A Evaluation
+
+Goal:
+
+- run the Task 59 Q&A eval cases against the real `openai_compatible` Brain provider
+- keep mock/default runtime unchanged; real provider eval is opt-in via CLI
+- produce JSON/Markdown artifacts for manual quality review
+
+What changed:
+
+- `backend/app/modules/rag_evaluation/brain_eval_runner.py`
+  - case set resolution (`foundation`, `eternal_world`, `all`)
+  - preflight validation for `AI_BRAIN_MODEL`, `AI_BRAIN_API_KEY`, `AI_BRAIN_BASE_URL`
+  - `run_brain_rag_eval()` orchestration over existing `RagEvaluationService`
+- `backend/app/modules/rag_evaluation/brain_eval_report.py`
+  - JSON + Markdown artifact writer
+- `backend/app/modules/rag_evaluation/schemas.py`
+  - `BrainRagEvalConfig`, `BrainRagEvalPreflightResult`, `BrainRagEvalRunResult`
+- CLI:
+  - `backend/scripts/run_brain_rag_eval.py`
+  - `backend/scripts/run_brain_rag_eval.ps1`
+- tests:
+  - `backend/tests/test_brain_rag_eval.py`
+
+CLI usage:
+
+```bash
+# Preflight only (no external API calls)
+docker compose exec backend python scripts/run_brain_rag_eval.py --preflight
+
+# Foundation gate (2 cases) against configured real provider
+docker compose exec backend python scripts/run_brain_rag_eval.py --case-set foundation
+
+# Full Eternal World Q&A suite
+docker compose exec backend python scripts/run_brain_rag_eval.py --case-set all
+```
+
+Required env for real runs:
+
+- `AI_BRAIN_PROVIDER=openai_compatible`
+- `AI_BRAIN_MODEL=<provider model>`
+- `AI_BRAIN_API_KEY=<secret>`
+- `AI_BRAIN_BASE_URL=<provider base URL>`
+
+Artifacts:
+
+- `backend/artifacts/brain_rag_eval/brain_rag_eval_result.json`
+- `backend/artifacts/brain_rag_eval/report.md`
+- `backend/artifacts/brain_rag_eval/runs/<timestamp>/...`
+
+Verification results:
+
+- `python -m pytest tests/test_brain_rag_eval.py tests/test_rag_evaluation.py tests/test_ai_brain_openai_provider.py -q` -> `31 passed`
+
+Scope confirmation:
+
+- default `AI_BRAIN_PROVIDER=mock` chat behavior was not changed
+- retrieval runtime was not changed
+- billing/frontend were not changed
+- pytest does not call real external AI APIs
+

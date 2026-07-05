@@ -9,6 +9,7 @@ from app.modules.rag_evaluation.cases import (
     ETERNAL_WORLD_RAG_EVALUATION_CASES,
     FOUNDATION_RAG_EVALUATION_CASES,
 )
+from app.modules.rag_evaluation.evaluator import detect_actual_behavior, evaluate_answer_against_case
 from app.modules.rag_evaluation.service import RagEvaluationService
 from app.modules.rag_evaluation.schemas import (
     RagEvaluationCase,
@@ -156,7 +157,7 @@ def test_rag_evaluation_harness_does_not_call_real_external_ai_apis(monkeypatch)
         raise AssertionError("External AI HTTP client should not be created for RAG evaluation tests")
 
     monkeypatch.setattr(openai_compatible.httpx, "Client", fail_http_client)
-    service = RagEvaluationService()
+    service = RagEvaluationService(brain_service=BrainAgentService(MockBrainAgentProvider()))
 
     result = service.run_eval_case(FOUNDATION_RAG_EVALUATION_CASES[1])
 
@@ -237,3 +238,54 @@ def test_foundation_grounded_case_passes_with_mock_brain_using_evidence_citation
 def test_eternal_world_eval_case_count_is_at_least_eight():
     assert len(ETERNAL_WORLD_RAG_EVALUATION_CASES) >= 7
     assert len(ALL_RAG_EVALUATION_CASES) >= 9
+
+
+def test_hedged_but_substantively_grounded_answer_counts_as_grounded():
+    combined_case = next(
+        case
+        for case in ETERNAL_WORLD_RAG_EVALUATION_CASES
+        if case.case_id == "combined-memory-and-rag-grounding"
+    )
+    deepseek_style_answer = (
+        "Based on the available evidence, Eva worked as a literature teacher in Brno. "
+        "This is confirmed by both a personal memory [memory:111] and an archival document [rag:704]."
+    )
+
+    result = evaluate_answer_against_case(
+        case=combined_case,
+        answer_text=deepseek_style_answer,
+        provider_name="openai_compatible",
+        response_metadata={"grounding_status": "grounded"},
+        evidence_count=2,
+    )
+
+    assert result.passed is True
+    assert result.actual_behavior == "grounded_answer"
+
+
+def test_uncertainty_phrase_without_markers_or_citations_stays_partial():
+    combined_case = next(
+        case
+        for case in ETERNAL_WORLD_RAG_EVALUATION_CASES
+        if case.case_id == "combined-memory-and-rag-grounding"
+    )
+    uncertain_answer = "Based on the available evidence, I am not sure about her work."
+
+    behavior = detect_actual_behavior(
+        answer_text=uncertain_answer,
+        response_metadata={"grounding_status": "grounded"},
+        expected_evidence_markers=combined_case.expected_evidence_markers,
+    )
+
+    assert behavior == "partial_answer_with_uncertainty"
+
+    result = evaluate_answer_against_case(
+        case=combined_case,
+        answer_text=uncertain_answer,
+        provider_name="openai_compatible",
+        response_metadata={"grounding_status": "grounded"},
+        evidence_count=2,
+    )
+
+    assert result.passed is False
+    assert result.actual_behavior == "partial_answer_with_uncertainty"

@@ -24,6 +24,8 @@ UNCERTAINTY_MARKERS = (
     "possibly",
 )
 
+EVIDENCE_CITATION_PREFIXES = ("[memory:", "[rag:")
+
 
 def _normalize_text(value: str) -> str:
     return " ".join(value.lower().split())
@@ -34,17 +36,46 @@ def _contains_any_marker(text: str, markers: Iterable[str]) -> bool:
     return any(_normalize_text(marker) in normalized_text for marker in markers)
 
 
+def _missing_expected_markers(
+    *,
+    answer_text: str,
+    expected_evidence_markers: Iterable[str],
+) -> list[str]:
+    normalized_answer = _normalize_text(answer_text)
+    return [
+        marker
+        for marker in expected_evidence_markers
+        if _normalize_text(marker) not in normalized_answer
+    ]
+
+
+def _has_evidence_citations(answer_text: str) -> bool:
+    normalized_answer = _normalize_text(answer_text)
+    return any(prefix in normalized_answer for prefix in EVIDENCE_CITATION_PREFIXES)
+
+
 def detect_actual_behavior(
     *,
     answer_text: str,
     response_metadata: dict[str, object] | None,
+    expected_evidence_markers: Iterable[str] | None = None,
 ) -> RagEvaluationBehavior:
     grounding_status = str((response_metadata or {}).get("grounding_status") or "").strip().lower()
     if grounding_status == "no_evidence" or _contains_any_marker(answer_text, LACK_OF_EVIDENCE_MARKERS):
         return "lack_of_evidence"
 
-    if grounding_status == "partial" or _contains_any_marker(answer_text, UNCERTAINTY_MARKERS):
+    if grounding_status == "partial":
         return "partial_answer_with_uncertainty"
+
+    if _contains_any_marker(answer_text, UNCERTAINTY_MARKERS):
+        markers = list(expected_evidence_markers or [])
+        missing_markers = _missing_expected_markers(
+            answer_text=answer_text,
+            expected_evidence_markers=markers,
+        )
+        substantively_grounded = not missing_markers and _has_evidence_citations(answer_text)
+        if not substantively_grounded:
+            return "partial_answer_with_uncertainty"
 
     return "grounded_answer"
 
@@ -69,12 +100,12 @@ def evaluate_answer_against_case(
     actual_behavior = detect_actual_behavior(
         answer_text=answer_text,
         response_metadata=response_metadata,
+        expected_evidence_markers=case.expected_evidence_markers,
     )
-    missing_expected_markers = [
-        marker
-        for marker in case.expected_evidence_markers
-        if _normalize_text(marker) not in normalized_answer
-    ]
+    missing_expected_markers = _missing_expected_markers(
+        answer_text=answer_text,
+        expected_evidence_markers=case.expected_evidence_markers,
+    )
     forbidden_claims_found = [
         claim
         for claim in case.forbidden_claims

@@ -1,0 +1,248 @@
+{
+  "run_id": "20260704_235904Z",
+  "passed": true,
+  "case_set": "all",
+  "provider_name": "openai_compatible",
+  "model": "deepseek-chat",
+  "suite_result": {
+    "total_cases": 9,
+    "passed_cases": 9,
+    "failed_cases": 0,
+    "results": [
+      {
+        "case_id": "grounded-context-available",
+        "title": "Grounded answer when verified evidence exists",
+        "passed": true,
+        "expected_behavior": "grounded_answer",
+        "actual_behavior": "grounded_answer",
+        "reasons": [
+          "Answer satisfies the expected groundedness checks."
+        ],
+        "evidence_count": 2,
+        "missing_expected_markers": [],
+        "forbidden_claims_found": [],
+        "answer_preview": "The wedding took place in Brno. [memory:101] [rag:501]",
+        "provider_name": "openai_compatible",
+        "response_metadata": {
+          "agent": "brain",
+          "provider_type": "openai_compatible",
+          "model": "deepseek-v4-flash",
+          "grounding_status": "grounded",
+          "latency_ms": 1495,
+          "usage": {
+            "prompt_tokens": 437,
+            "completion_tokens": 18,
+            "total_tokens": 455
+          }
+        }
+      },
+      {
+        "case_id": "lack-of-evidence-required",
+        "title": "Lack-of-evidence answer when no stored evidence exists",
+        "passed": true,
+        "expected_behavior": "lack_of_evidence",
+        "actual_behavior": "lack_of_evidence",
+        "reasons": [
+          "Answer satisfies the expected groundedness checks."
+        ],
+        "evidence_count": 0,
+        "missing_expected_markers": [],
+        "forbidden_claims_found": [],
+        "answer_preview": "That information is not available in the stored memories/context.",
+        "provider_name": "openai_compatible",
+        "response_metadata": {
+          "agent": "brain",
+          "grounding_status": "no_evidence",
+          "provider_type": "openai_compatible",
+          "model": "deepseek-chat",
+          "latency_ms": 0
+        }
+      },
+      {
+        "case_id": "production-hybrid-lantern-archive",
+        "title": "Production hybrid smoke grounded answer for lantern archive",
+        "passed": true,
+        "expected_behavior": "grounded_answer",
+        "actual_behavior": "grounded_answer",
+        "reasons": [
+          "Answer satisfies the expected groundedness checks."
+        ],
+        "evidence_count": 1,
+        "missing_expected_markers": [],
+        "forbidden_claims_found": [],
+        "answer_preview": "The lantern archive that stayed tied to the cedar drawer in Prague is referenced in the archival evidence [rag:701].",
+        "provider_name": "openai_compatible",
+        "response_metadata": {
+          "agent": "brain",
+          "provider_type": "openai_compatible",
+          "model": "deepseek-v4-flash",
+          "grounding_status": "grounded",
+          "latency_ms": 1144,
+          "usage": {
+            "prompt_tokens": 393,
+            "completion_tokens": 23,
+            "total_tokens": 416
+          }
+        }
+      },
+      {
+        "case_id": "demo-smoke-sunflower",
+        "title": "Demo smoke grounded answer for sunflower memory",
+        "passed": true,
+        "expected_behavior": "grounded_answer",
+        "actual_behavior": "grounded_answer",
+        "reasons": [
+          "Answer satisfies the expected groundedness checks."
+        ],
+        "evidence_count": 1,
+        "missing_expected_markers": [],
+        "forbidden_claims_found": [],
+        "answer_preview": "His favorite flower was sunflower. [rag:702]",
+        "provider_name": "openai_compatible",
+        "response_metadata": {
+          "agent": "brain",
+          "provider_type": "openai_compatible",
+          "model": "deepseek-v4-flash",
+          "grounding_status": "grounded",
+          "latency_ms": 1032,
+          "usage": {
+            "prompt_tokens": 380,
+            "completion_tokens": 11,
+            "total_tokens": 391
+          }
+        }
+      },
+      {
+        "case_id": "rag-only-archival-note",
+        "title": "Grounded answer from RAG evidence without timeline memories",
+        "passed": true,
+        "expected_behavior": "grounded_answer",
+        "actual_behavior": "grounded_answer",
+        "reasons": [
+          "Answer satisfies the expected groundedness checks."
+        ],
+        "evidence_count": 1,
+        "missing_expected_markers": [],
+        "forbidden_claims_found": [],
+        "answer_preview": "The brass tag remained on the archive cart for deterministic checks. [rag:703]",
+        "provider_name": "openai_compatible",
+        "response_metadata": {
+          "agent": "brain",
+          "provider_type": "openai_compatible",
+          "model": "deepseek-v4-flash",
+          "grounding_status": "grounded",
+          "latency_ms": 983,
+          "usage": {
+            "prompt_tokens": 379,
+            "completion_tokens": 17,
+            "total_tokens": 396
+          }
+        }
+      },
+      {
+        "case_id": "memory-only-timeline-recollection",
+        "title": "Grounded answer from timeline memory without RAG chunks",
+        "passed": true,
+        "expected_behavior": "grounded_answer",
+        "actual_behavior": "grounded_answer",
+        "reasons": [
+          "Answer satisfies the expected groundedness checks."
+        ],
+        "evidence_count": 1,
+        "missing_expected_markers": [],
+        "forbidden_claims_found": [],
+        "answer_preview": "Yes, I remember that. We shared soup at the old station in Brno after the choir eve. [memory:110]",
+        "provider_name": "openai_compatible",
+        "response_metadata": {
+          "agent": "brain",
+          "provider_type": "openai_compatible",
+          "model": "deepseek-v4-flash",
+          "grounding_status": "grounded",
+          "latency_ms": 993,
+          "usage": {
+            "prompt_tokens": 365,
+            "completion_tokens": 26,
+            "total_tokens": 391
+          }
+        }
+      },
+      {
+        "case_id": "combined-memory-and-rag-grounding",
+        "title": "Grounded answer when both memory and RAG evidence support the fact",
+        "passed": true,
+        "expected_behavior": "grounded_answer",
+        "actual_behavior": "grounded_answer",
+        "reasons": [
+          "Answer satisfies the expected groundedness checks."
+        ],
+        "evidence_count": 2,
+        "missing_expected_markers": [],
+        "forbidden_claims_found": [],
+        "answer_preview": "Based on the available evidence, Eva worked as a literature teacher in Brno. This is confirmed by both a personal memory [memory:111] and an archival document [rag:704].",
+        "provider_name": "openai_compatible",
+        "response_metadata": {
+          "agent": "brain",
+          "provider_type": "openai_compatible",
+          "model": "deepseek-v4-flash",
+          "grounding_status": "grounded",
+          "latency_ms": 1122,
+          "usage": {
+            "prompt_tokens": 441,
+            "completion_tokens": 38,
+            "total_tokens": 479
+          }
+        }
+      },
+      {
+        "case_id": "czech-language-wedding-query",
+        "title": "Grounded answer for Czech-language user query",
+        "passed": true,
+        "expected_behavior": "grounded_answer",
+        "actual_behavior": "grounded_answer",
+        "reasons": [
+          "Answer satisfies the expected groundedness checks."
+        ],
+        "evidence_count": 1,
+        "missing_expected_markers": [],
+        "forbidden_claims_found": [],
+        "answer_preview": "Podle archivních záznamů svatební obřad proběhl v Brně. [rag:705]",
+        "provider_name": "openai_compatible",
+        "response_metadata": {
+          "agent": "brain",
+          "provider_type": "openai_compatible",
+          "model": "deepseek-v4-flash",
+          "grounding_status": "grounded",
+          "latency_ms": 1325,
+          "usage": {
+            "prompt_tokens": 399,
+            "completion_tokens": 27,
+            "total_tokens": 426
+          }
+        }
+      },
+      {
+        "case_id": "lack-of-evidence-with-forbidden-invention",
+        "title": "Lack-of-evidence must not invent unsupported birthplace",
+        "passed": true,
+        "expected_behavior": "lack_of_evidence",
+        "actual_behavior": "lack_of_evidence",
+        "reasons": [
+          "Answer satisfies the expected groundedness checks."
+        ],
+        "evidence_count": 0,
+        "missing_expected_markers": [],
+        "forbidden_claims_found": [],
+        "answer_preview": "That information is not available in the stored memories/context.",
+        "provider_name": "openai_compatible",
+        "response_metadata": {
+          "agent": "brain",
+          "grounding_status": "no_evidence",
+          "provider_type": "openai_compatible",
+          "model": "deepseek-chat",
+          "latency_ms": 0
+        }
+      }
+    ]
+  },
+  "artifact_paths": {}
+}

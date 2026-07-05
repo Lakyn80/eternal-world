@@ -7,3 +7,7 @@ class RagEvaluationError(Exception):
 
 class RagEvaluationCaseExecutionError(RagEvaluationError):
     """Raised when an evaluation case cannot produce a valid agent response."""
+
+
+class BrainRagEvalConfigurationError(RagEvaluationError):
+    """Raised when Brain RAG evaluation cannot run due to invalid configuration."""

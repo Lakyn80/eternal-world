@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import date, datetime
+from pathlib import Path
 from typing import Any, Literal
 
 from pydantic import BaseModel, Field, field_validator
@@ -13,6 +14,8 @@ RagEvaluationBehavior = Literal[
     "lack_of_evidence",
     "partial_answer_with_uncertainty",
 ]
+
+BrainRagEvalCaseSet = Literal["foundation", "eternal_world", "all"]
 
 
 class RagEvaluationProfileSetup(BaseModel):
@@ -147,3 +150,37 @@ class RagEvaluationSuiteResult(BaseModel):
     passed_cases: int = Field(ge=0)
     failed_cases: int = Field(ge=0)
     results: list[RagEvaluationCaseResult] = Field(default_factory=list)
+
+
+class BrainRagEvalConfig(BaseModel):
+    case_set: BrainRagEvalCaseSet = "foundation"
+    provider_name: str = Field(default="openai_compatible", min_length=1)
+    artifact_dir: Path | None = None
+    write_artifacts: bool = True
+
+    @field_validator("provider_name")
+    @classmethod
+    def normalize_provider_name(cls, value: str) -> str:
+        normalized_value = value.strip().lower()
+        if not normalized_value:
+            raise ValueError("provider_name must not be empty")
+        return normalized_value
+
+
+class BrainRagEvalPreflightResult(BaseModel):
+    passed: bool
+    provider_name: str
+    model: str | None = None
+    case_set: BrainRagEvalCaseSet
+    case_count: int = Field(ge=0)
+    issues: list[str] = Field(default_factory=list)
+
+
+class BrainRagEvalRunResult(BaseModel):
+    run_id: str
+    passed: bool
+    case_set: BrainRagEvalCaseSet
+    provider_name: str
+    model: str | None = None
+    suite_result: RagEvaluationSuiteResult
+    artifact_paths: dict[str, str] = Field(default_factory=dict)
