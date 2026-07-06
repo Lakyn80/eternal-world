@@ -14,6 +14,12 @@ from app.modules.rag_evaluation.brain_eval_report import write_brain_rag_eval_ar
 from app.modules.rag_evaluation.cases import (
     ALL_RAG_EVALUATION_CASES,
     ETERNAL_WORLD_RAG_EVALUATION_CASES,
+    FAMILY_AVATAR_CS_EVALUATION_CASES,
+    FAMILY_AVATAR_EN_EVALUATION_CASES,
+    FAMILY_AVATAR_ES_EVALUATION_CASES,
+    FAMILY_AVATAR_EVALUATION_CASES,
+    FAMILY_AVATAR_FR_EVALUATION_CASES,
+    FAMILY_AVATAR_RU_EVALUATION_CASES,
     FOUNDATION_RAG_EVALUATION_CASES,
 )
 from app.modules.rag_evaluation.exceptions import BrainRagEvalConfigurationError
@@ -35,6 +41,18 @@ def resolve_brain_rag_eval_cases(case_set: BrainRagEvalCaseSet) -> tuple[RagEval
         return FOUNDATION_RAG_EVALUATION_CASES
     if case_set == "eternal_world":
         return ETERNAL_WORLD_RAG_EVALUATION_CASES
+    if case_set == "family_avatar":
+        return FAMILY_AVATAR_EVALUATION_CASES
+    if case_set == "family_avatar_cs":
+        return FAMILY_AVATAR_CS_EVALUATION_CASES
+    if case_set == "family_avatar_ru":
+        return FAMILY_AVATAR_RU_EVALUATION_CASES
+    if case_set == "family_avatar_en":
+        return FAMILY_AVATAR_EN_EVALUATION_CASES
+    if case_set == "family_avatar_es":
+        return FAMILY_AVATAR_ES_EVALUATION_CASES
+    if case_set == "family_avatar_fr":
+        return FAMILY_AVATAR_FR_EVALUATION_CASES
     if case_set == "all":
         return ALL_RAG_EVALUATION_CASES
 

@@ -371,6 +371,7 @@ def test_factual_grounding_instructions_are_present_in_prompt(client, monkeypatc
     assert "Answer factual questions ONLY from B1, B2, and explicit profile fields above." in prompt
     assert "Do not guess, fill gaps, or use world knowledge to invent personal history." in prompt
     assert "the information is not available in the stored memories/context." in prompt
+    assert "Na to bohužel nemám vzpomínku." in prompt
     assert "cite inline: [memory:id] or [rag:chunk_id]" in prompt
     assert "Respond in the same language as the user's current message" in prompt
     assert "B1. Timeline memory evidence:" in prompt

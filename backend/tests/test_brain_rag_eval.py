@@ -11,6 +11,7 @@ from app.modules.ai_agents.brain.providers.openai_compatible import (
 from app.modules.ai_agents.brain.service import BrainAgentService
 from app.modules.rag_evaluation.brain_eval_report import (
     build_brain_rag_eval_markdown,
+    build_brain_rag_eval_qa_markdown,
     write_brain_rag_eval_artifacts,
 )
 from app.modules.rag_evaluation.brain_eval_runner import (
@@ -172,9 +173,47 @@ def test_run_brain_rag_eval_uses_openai_compatible_provider_with_mocked_http():
     assert "B2. Retrieved archival RAG evidence:" in messages[1]["content"]
 
 
+def test_resolve_brain_rag_eval_cases_family_avatar():
+    cases = resolve_brain_rag_eval_cases("family_avatar")
+    assert len(cases) >= 25
+    assert cases[0].case_id.startswith("family-")
+
+
 def test_build_brain_rag_eval_provider_rejects_unsupported_provider():
     with pytest.raises(BrainRagEvalConfigurationError, match="does not support provider"):
         build_brain_rag_eval_provider(provider_name="mock")
+
+
+def test_brain_rag_eval_qa_markdown_contains_question_and_full_answer():
+    config = BrainRagEvalConfig(
+        case_set="foundation",
+        write_artifacts=False,
+        artifact_dir=None,
+    )
+    result = run_brain_rag_eval(
+        config,
+        provider_settings=_openai_compatible_settings(),
+        brain_service=BrainAgentService(
+            provider=OpenAICompatibleBrainAgentProvider(
+                model="deepseek-chat",
+                api_key="test-api-key",
+                base_url="https://api.deepseek.com/v1",
+                timeout_seconds=5,
+                http_client_factory=lambda _timeout: FakeHttpClient(
+                    response_text="The wedding ceremony took place in Brno."
+                ),
+            )
+        ),
+        cases=[FOUNDATION_RAG_EVALUATION_CASES[0]],
+    )
+
+    qa_markdown = build_brain_rag_eval_qa_markdown(result)
+    case_result = result.suite_result.results[0]
+
+    assert "**Q:**" in qa_markdown
+    assert case_result.user_query in qa_markdown
+    assert case_result.answer_text in qa_markdown
+    assert "Brain RAG Evaluation Q&A" in qa_markdown
 
 
 def test_write_brain_rag_eval_artifacts_creates_json_and_markdown(tmp_path):
@@ -205,7 +244,14 @@ def test_write_brain_rag_eval_artifacts_creates_json_and_markdown(tmp_path):
 
     assert (tmp_path / "brain_rag_eval_result.json").exists()
     assert (tmp_path / "report.md").exists()
+    assert (tmp_path / "qa_report.md").exists()
     assert (tmp_path / "runs" / result.run_id / "brain_rag_eval_result.json").exists()
+    assert (tmp_path / "runs" / result.run_id / "qa_report.md").exists()
     markdown = build_brain_rag_eval_markdown(result)
     assert "Brain RAG Evaluation Report" in markdown
+    assert "**Q:**" not in markdown
+    assert "Question:" in markdown
+    assert result.suite_result.results[0].user_query
+    assert result.suite_result.results[0].answer_text
+    assert artifact_paths["latest_qa_report_md"].endswith("qa_report.md")
     assert artifact_paths["latest_result_json"].endswith("brain_rag_eval_result.json")

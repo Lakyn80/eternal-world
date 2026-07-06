@@ -7,9 +7,14 @@ from app.modules.ai_agents.schemas import BrainAgentResponse
 from app.modules.rag_evaluation.cases import (
     ALL_RAG_EVALUATION_CASES,
     ETERNAL_WORLD_RAG_EVALUATION_CASES,
+    FAMILY_AVATAR_EVALUATION_CASES,
     FOUNDATION_RAG_EVALUATION_CASES,
 )
-from app.modules.rag_evaluation.evaluator import detect_actual_behavior, evaluate_answer_against_case
+from app.modules.rag_evaluation.evaluator import (
+    detect_actual_behavior,
+    evaluate_answer_against_case,
+    _missing_expected_markers,
+)
 from app.modules.rag_evaluation.service import RagEvaluationService
 from app.modules.rag_evaluation.schemas import (
     RagEvaluationCase,
@@ -66,11 +71,12 @@ def _build_grounded_case() -> RagEvaluationCase:
 def test_eval_case_with_evidence_passes_when_answer_uses_evidence():
     service = RagEvaluationService(brain_service=BrainAgentService(MockBrainAgentProvider()))
     case = _build_grounded_case()
+    answer_text = "You grew up in Brno and later worked as a literature teacher."
 
     result = service.run_eval_case(
         case,
         answer_generator=lambda case, request: BrainAgentResponse(
-            text="You grew up in Brno and later worked as a literature teacher.",
+            text=answer_text,
             provider_name="mock-eval",
             metadata={"grounding_status": "grounded"},
         ),
@@ -79,6 +85,8 @@ def test_eval_case_with_evidence_passes_when_answer_uses_evidence():
     assert result.passed is True
     assert result.actual_behavior == "grounded_answer"
     assert result.evidence_count == 2
+    assert result.user_query == case.user_query
+    assert result.answer_text == answer_text
     assert result.missing_expected_markers == []
     assert result.forbidden_claims_found == []
 
@@ -215,12 +223,65 @@ def test_run_eval_suite_returns_summary_counts():
 
 def test_eternal_world_eval_cases_pass_with_grounded_mock_brain():
     service = RagEvaluationService(brain_service=BrainAgentService(MockBrainAgentProvider()))
+    legacy_cases = (
+        *FOUNDATION_RAG_EVALUATION_CASES,
+        *ETERNAL_WORLD_RAG_EVALUATION_CASES,
+    )
 
-    suite_result = service.run_eval_suite(ALL_RAG_EVALUATION_CASES)
+    suite_result = service.run_eval_suite(legacy_cases)
 
-    assert suite_result.total_cases == len(ALL_RAG_EVALUATION_CASES)
+    assert suite_result.total_cases == len(legacy_cases)
     assert suite_result.failed_cases == 0
     assert suite_result.passed_cases == suite_result.total_cases
+
+
+def _family_avatar_mock_answer_generator(
+    case: RagEvaluationCase,
+    request,
+) -> BrainAgentResponse:
+    if case.expected_behavior == "lack_of_evidence":
+        return BrainAgentResponse(
+            text="Na to bohužel nemám vzpomínku.",
+            provider_name="mock-eval",
+            metadata={"grounding_status": "no_evidence"},
+        )
+
+    cited_parts: list[str] = []
+    for evidence_item in case.memory_evidence_items:
+        cited_parts.append(
+            f"[memory:{evidence_item.source_id}] {evidence_item.content_preview}"
+        )
+    for evidence_item in case.retrieved_evidence_items:
+        cited_parts.append(
+            f"[rag:{evidence_item.chunk_id}] {evidence_item.content_preview}"
+        )
+    marker_text = " ".join(case.expected_evidence_markers)
+    return BrainAgentResponse(
+        text=" ".join([*cited_parts, marker_text]),
+        provider_name="mock-eval",
+        metadata={"grounding_status": "grounded"},
+    )
+
+
+def test_family_avatar_eval_cases_pass_with_marker_aware_mock_brain():
+    service = RagEvaluationService(brain_service=BrainAgentService(MockBrainAgentProvider()))
+
+    suite_result = service.run_eval_suite(
+        FAMILY_AVATAR_EVALUATION_CASES,
+        answer_generator=_family_avatar_mock_answer_generator,
+    )
+
+    assert suite_result.total_cases == len(FAMILY_AVATAR_EVALUATION_CASES)
+    assert suite_result.failed_cases == 0
+    assert suite_result.passed_cases == suite_result.total_cases
+
+
+def test_human_czech_lack_of_evidence_markers_are_detected():
+    behavior = detect_actual_behavior(
+        answer_text="Tam jsem nebyla a o tom bohužel nevím.",
+        response_metadata={"grounding_status": "no_evidence"},
+    )
+    assert behavior == "lack_of_evidence"
 
 
 def test_foundation_grounded_case_passes_with_mock_brain_using_evidence_citations():
@@ -237,7 +298,8 @@ def test_foundation_grounded_case_passes_with_mock_brain_using_evidence_citation
 
 def test_eternal_world_eval_case_count_is_at_least_eight():
     assert len(ETERNAL_WORLD_RAG_EVALUATION_CASES) >= 7
-    assert len(ALL_RAG_EVALUATION_CASES) >= 9
+    assert len(FAMILY_AVATAR_EVALUATION_CASES) >= 25
+    assert len(ALL_RAG_EVALUATION_CASES) >= 60
 
 
 def test_hedged_but_substantively_grounded_answer_counts_as_grounded():
@@ -289,3 +351,200 @@ def test_uncertainty_phrase_without_markers_or_citations_stays_partial():
 
     assert result.passed is False
     assert result.actual_behavior == "partial_answer_with_uncertainty"
+
+
+def _build_lack_case(**updates) -> RagEvaluationCase:
+    case = next(
+        case for case in FAMILY_AVATAR_EVALUATION_CASES if case.case_id == "family-lack-paris-1968"
+    )
+    return case.model_copy(update=updates)
+
+
+def test_czech_morphology_marker_matching_accepts_inflected_forms():
+    audit_cases = [
+        (
+            "pero, učitelk",
+            "Ano, dostala jsem pero s nápisem Děkujeme paní učitelce. [memory:1031]",
+        ),
+        (
+            "Pavel, 1981",
+            "Stavební plán nesl razítko projektanta Pavla Nováka ze dne 12. května 1981. [rag:2009]",
+        ),
+        (
+            "únava, tlak",
+            "V květnu 2018 jsem měla pobyt na interně kvůli únavě a nízkému tlaku. [rag:2011]",
+        ),
+        (
+            "trpěliv, kroužek",
+            "Byla popisována jako trpělivá vedoucí čtenářského kroužku. [rag:2013]",
+        ),
+    ]
+    for markers, answer_text in audit_cases:
+        missing = _missing_expected_markers(
+            answer_text=answer_text,
+            expected_evidence_markers=markers.split(", "),
+        )
+        assert missing == [], answer_text
+
+
+def test_english_marker_aliases_accept_czech_equivalents_for_vienna_trip():
+    missing = _missing_expected_markers(
+        answer_text=(
+            "Ano, v roce 1985 jsem jela autobusem do Vídně na výstavě knih. [memory:1016]"
+        ),
+        expected_evidence_markers=["Vienna", "book"],
+    )
+    assert missing == []
+
+
+def test_lack_denial_with_question_echo_does_not_trigger_forbidden_claim():
+    case = _build_lack_case()
+    answer_text = (
+        "Milá otázko, ale na to bohužel nemám vzpomínku. "
+        "V uložených vzpomínkách ani v dostupných materiálech o Paříži v roce 1968 nic není."
+    )
+
+    result = evaluate_answer_against_case(
+        case=case,
+        answer_text=answer_text,
+        provider_name="mock-eval",
+        response_metadata={"grounding_status": "no_evidence"},
+        evidence_count=0,
+    )
+
+    assert result.actual_behavior == "lack_of_evidence"
+    assert result.forbidden_claims_found == []
+    assert result.passed is True
+
+
+def test_lack_denial_echo_patterns_from_audit_cases_pass_evaluator():
+    audit_answers = {
+        "family-lack-dog-azor": (
+            "Milý příteli, na to bohužel nemám vzpomínku. "
+            "V uložených vzpomínkách o prvním psovi ani o Azorovi nic není."
+        ),
+        "family-lack-vietnam": (
+            "Na to bohužel nemám vzpomínku. "
+            "O Pavlově službě ve Vietnamu mi nejsou známy žádné podrobnosti."
+        ),
+        "family-lack-famous-actor": (
+            "Milá otázko, ale bohužel na to nemám vzpomínku. "
+            "V uložených vzpomínkách nemám žádnou zmínku o setkání se slavným hercem v Brně."
+        ),
+    }
+    for case_id, answer_text in audit_answers.items():
+        case = next(item for item in FAMILY_AVATAR_EVALUATION_CASES if item.case_id == case_id)
+        result = evaluate_answer_against_case(
+            case=case,
+            answer_text=answer_text,
+            provider_name="mock-eval",
+            response_metadata={"grounding_status": "no_evidence"},
+            evidence_count=0,
+        )
+        assert result.forbidden_claims_found == [], case_id
+        assert result.passed is True, case_id
+
+
+def test_affirmative_unsupported_claim_still_fails_in_lack_case():
+    case = next(
+        item for item in FAMILY_AVATAR_EVALUATION_CASES if item.case_id == "family-lack-dog-azor"
+    )
+
+    result = evaluate_answer_against_case(
+        case=case,
+        answer_text="Ano, můj první pes se jmenoval Azor a byl to kříženec.",
+        provider_name="mock-eval",
+        response_metadata={"grounding_status": "grounded"},
+        evidence_count=0,
+    )
+
+    assert result.passed is False
+    assert "Azor" in result.forbidden_claims_found
+
+
+def test_nevybavuji_is_detected_as_lack_of_evidence():
+    behavior = detect_actual_behavior(
+        answer_text=(
+            "Milá vzpomínko, ale bohužel na plavání v moři u Itálie si "
+            "v uložených vzpomínkách nevybavuji."
+        ),
+        response_metadata={"grounding_status": "general"},
+    )
+    assert behavior == "lack_of_evidence"
+
+    case = next(
+        item for item in FAMILY_AVATAR_EVALUATION_CASES if item.case_id == "family-lack-italy-sea"
+    )
+    result = evaluate_answer_against_case(
+        case=case,
+        answer_text=(
+            "Milá vzpomínko, ale bohužel na plavání v moři u Itálie si "
+            "v uložených vzpomínkách nevybavuji."
+        ),
+        provider_name="mock-eval",
+        response_metadata={"grounding_status": "general"},
+        evidence_count=0,
+    )
+    assert result.actual_behavior == "lack_of_evidence"
+    assert result.forbidden_claims_found == []
+    assert result.passed is True
+
+
+def test_zero_evidence_grounded_biography_assertion_fails_lack_case():
+    case = next(
+        item for item in FAMILY_AVATAR_EVALUATION_CASES if item.case_id == "family-lack-prague-birth"
+    )
+
+    result = evaluate_answer_against_case(
+        case=case,
+        answer_text="Kdepak, narodila jsem se v Brně. Celý život jsem byla Moravanka.",
+        provider_name="mock-eval",
+        response_metadata={"grounding_status": "general"},
+        evidence_count=0,
+    )
+
+    assert result.passed is False
+    assert result.actual_behavior == "grounded_answer"
+    assert any("lack-of-evidence" in reason.lower() for reason in result.reasons)
+
+
+def test_mixed_lack_preface_with_grounded_citation_counts_as_grounded():
+    case = next(
+        item for item in FAMILY_AVATAR_EVALUATION_CASES if item.case_id == "family-rag-diploma"
+    )
+    answer_text = (
+        "To v uložených vzpomínkách nemám. Z dostupných materiálů vím, že diplom z pedagogické "
+        "fakulty jsem získala v červnu 1972 s tématem venkovské školní knihovny [rag:2002]."
+    )
+
+    result = evaluate_answer_against_case(
+        case=case,
+        answer_text=answer_text,
+        provider_name="mock-eval",
+        response_metadata={"grounding_status": "grounded"},
+        evidence_count=1,
+    )
+
+    assert result.actual_behavior == "grounded_answer"
+    assert result.passed is True
+
+
+def test_grounded_marker_can_be_satisfied_from_user_query_context():
+    missing = _missing_expected_markers(
+        answer_text="Pod hvězdami. [rag:2005]",
+        expected_evidence_markers=["Pod hvězdami", "kroužek"],
+        user_query="Jak se jmenoval tvůj čtenářský kroužek?",
+    )
+    assert missing == []
+
+
+def test_shorter_lack_phrases_are_detected():
+    for answer_text in (
+        "To bohužel v uložených vzpomínkách nemám.",
+        "Omlouvám se, ale v uložených vzpomínkách ani dokumentech nemám žádné informace o tom. Tuto zkušenost nemám.",
+    ):
+        behavior = detect_actual_behavior(
+            answer_text=answer_text,
+            response_metadata={"grounding_status": "general"},
+        )
+        assert behavior == "lack_of_evidence", answer_text

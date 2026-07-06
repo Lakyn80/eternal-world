@@ -15,7 +15,17 @@ RagEvaluationBehavior = Literal[
     "partial_answer_with_uncertainty",
 ]
 
-BrainRagEvalCaseSet = Literal["foundation", "eternal_world", "all"]
+BrainRagEvalCaseSet = Literal[
+    "foundation",
+    "eternal_world",
+    "family_avatar",
+    "family_avatar_cs",
+    "family_avatar_ru",
+    "family_avatar_en",
+    "family_avatar_es",
+    "family_avatar_fr",
+    "all",
+]
 
 
 class RagEvaluationProfileSetup(BaseModel):
@@ -103,6 +113,7 @@ class RagEvaluationCase(BaseModel):
     memory_evidence_items: list[RagEvaluationMemoryEvidenceSetup] = Field(default_factory=list)
     retrieved_evidence_items: list[RagEvaluationRetrievedEvidenceSetup] = Field(default_factory=list)
     user_query: str = Field(min_length=1, max_length=5000)
+    reference_queries: dict[str, str] = Field(default_factory=dict)
     expected_behavior: RagEvaluationBehavior
     expected_evidence_markers: list[str] = Field(default_factory=list)
     forbidden_claims: list[str] = Field(default_factory=list)
@@ -140,7 +151,10 @@ class RagEvaluationCaseResult(BaseModel):
     evidence_count: int = Field(ge=0)
     missing_expected_markers: list[str] = Field(default_factory=list)
     forbidden_claims_found: list[str] = Field(default_factory=list)
+    user_query: str
+    answer_text: str
     answer_preview: str
+    reference_queries: dict[str, str] = Field(default_factory=dict)
     provider_name: str
     response_metadata: dict[str, Any] = Field(default_factory=dict)
 

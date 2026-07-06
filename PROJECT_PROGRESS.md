@@ -4461,6 +4461,72 @@ Scope confirmation:
 - mock/default chat behavior was not changed
 - fictional eval dataset expansion deferred to Task 62B
 
+## Task 62B Family Avatar Eval Dataset
+
+Goal:
+
+- add a large fictional Czech family biography corpus for Eva Nováková (~4 A4 pages)
+- ensure each fact appears only once across memories, RAG chunks, and corpus text
+- expand Brain RAG eval with grounded and human lack-of-evidence cases
+
+What changed:
+
+- new fixtures:
+  - `backend/app/modules/rag_evaluation/fixtures/family_novak_facts.py`
+  - `backend/app/modules/rag_evaluation/fixtures/family_novak.py`
+  - `backend/app/modules/rag_evaluation/fixtures/family_avatar_cases.py`
+  - `backend/app/modules/rag_evaluation/fixtures/data/family_novak_corpus.cs.txt`
+- `FAMILY_AVATAR_EVALUATION_CASES` (~50 cases): cs/en grounded, distractors, multi-turn, human lack-of-evidence
+- `BrainRagEvalCaseSet` extended with `family_avatar`
+- CLI: `run_brain_rag_eval.py --case-set family_avatar`
+- human lack-of-evidence markers in `evaluator.py` (cs/en)
+- Production v2 prompt WHEN EVIDENCE IS MISSING clarified for natural first-person Czech answers
+- tests:
+  - `backend/tests/test_family_novak_corpus.py`
+  - updates in `test_rag_evaluation.py`, `test_brain_rag_eval.py`, `test_ai_agents.py`
+
+Verification results:
+
+- `python -m pytest tests/test_family_novak_corpus.py tests/test_rag_evaluation.py tests/test_brain_rag_eval.py -q` -> passed
+
+Scope confirmation:
+
+- live Celery ingest of the corpus deferred to Task 63
+- avatar narration style tuning deferred to later task
+
+## Task 62C Native Russian Family Avatar Eval Dataset
+
+Goal:
+
+- add a native Russian (Cyrillic) Eva Nováková eval corpus (~4 A4, 124 facts, 57 cases)
+- wire `family_avatar_ru` case set with parallel `reference_queries` for operator QA export
+- tune evaluator for Cyrillic markers, lack phrases, and Latin/Cyrillic alias matching
+
+What changed:
+
+- native RU fixtures:
+  - `backend/app/modules/rag_evaluation/fixtures/family_novak_facts_ru.py`
+  - `backend/app/modules/rag_evaluation/fixtures/family_novak_ru.py`
+  - `backend/app/modules/rag_evaluation/fixtures/data/family_novak_corpus.ru.txt`
+- multilingual case wiring:
+  - `backend/app/modules/rag_evaluation/fixtures/family_avatar_i18n.py`
+  - `backend/app/modules/rag_evaluation/fixtures/family_avatar_i18n_specs.py`
+  - `backend/app/modules/rag_evaluation/fixtures/family_novak_locale.py` (`locale=="ru"` uses native RU corpus)
+- evaluator RU pack in `evaluator_language.py`; Cyrillic marker aliases in `evaluator.py`
+- CLI/runner: `family_avatar_ru` (+ `family_avatar_cs/en/es/fr` aliases)
+- tests: `test_family_novak_corpus_ru.py`, `test_family_avatar_i18n.py`
+
+Verification results:
+
+- `python -m pytest tests/test_family_novak_corpus_ru.py tests/test_family_avatar_i18n.py tests/test_rag_evaluation.py -q` -> `34 passed`
+- `docker compose exec backend python scripts/run_brain_rag_eval.py --case-set family_avatar_ru` -> `57/57 PASS` (`20260706_212756Z`); prior overlay run was `41/57`
+- `family-rag-house-plan` RU markers use `Павел`/`Новак` (year `1981` not required for "who" questions)
+
+Scope confirmation:
+
+- EN/ES/FR still use translation overlay (native corpora deferred)
+- retrieval, Qdrant, embeddings, BM25, and Czech `family_avatar` backward compat unchanged
+
 ## rag-embedding-benchmark v0.2.0 BM25 and Hybrid Retrieval
 
 Goal:

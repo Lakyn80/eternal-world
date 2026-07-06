@@ -24,7 +24,17 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--case-set",
-        choices=("foundation", "eternal_world", "all"),
+        choices=(
+            "foundation",
+            "eternal_world",
+            "family_avatar",
+            "family_avatar_cs",
+            "family_avatar_ru",
+            "family_avatar_en",
+            "family_avatar_es",
+            "family_avatar_fr",
+            "all",
+        ),
         default="foundation",
         help="Evaluation case set to run (default: foundation).",
     )

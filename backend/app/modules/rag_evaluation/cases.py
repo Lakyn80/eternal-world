@@ -1,5 +1,16 @@
 from __future__ import annotations
 
+from app.modules.rag_evaluation.fixtures.family_avatar_cases import (
+    FAMILY_AVATAR_EVALUATION_CASES,
+)
+from app.modules.rag_evaluation.fixtures.family_avatar_i18n import (
+    FAMILY_AVATAR_CS_EVALUATION_CASES,
+    FAMILY_AVATAR_EN_EVALUATION_CASES,
+    FAMILY_AVATAR_ES_EVALUATION_CASES,
+    FAMILY_AVATAR_FR_EVALUATION_CASES,
+    FAMILY_AVATAR_I18N_CASES_BY_LOCALE,
+    FAMILY_AVATAR_RU_EVALUATION_CASES,
+)
 from app.modules.rag_evaluation.schemas import (
     RagEvaluationCase,
     RagEvaluationMemoryEvidenceSetup,
@@ -244,4 +255,5 @@ ETERNAL_WORLD_RAG_EVALUATION_CASES: tuple[RagEvaluationCase, ...] = (
 ALL_RAG_EVALUATION_CASES: tuple[RagEvaluationCase, ...] = (
     *FOUNDATION_RAG_EVALUATION_CASES,
     *ETERNAL_WORLD_RAG_EVALUATION_CASES,
+    *FAMILY_AVATAR_EVALUATION_CASES,
 )

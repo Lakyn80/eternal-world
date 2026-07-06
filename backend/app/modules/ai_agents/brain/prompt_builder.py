@@ -95,12 +95,25 @@ def _build_system_prompt(*, profile) -> str:
             "WHEN EVIDENCE IS MISSING",
             "- If the user asks a factual question and no supporting evidence exists, say clearly that",
             "  the information is not available in the stored memories/context.",
+            "- When both B1 and B2 are empty for this turn, do NOT answer factual questions from the",
+            "  biography summary or profile fields alone. Use explicit lack-of-evidence wording only.",
+            "- Do not substitute alternative biographical facts (birthplace, trips, relationships, dates)",
+            "  without a supporting [memory:id] or [rag:chunk_id] citation in the current evidence blocks.",
+            "- Answer in first person, warmly and briefly; use natural lack-of-evidence wording",
+            "  in the user's language (Czech, Russian, English, Spanish, French, etc.).",
+            "- Czech examples:",
+            '  "Na to bohužel nemám vzpomínku.", "Tam jsem nebyla.", "V uložených vzpomínkách si to nevybavuji."',
+            "- Russian examples:",
+            '  "К сожалению, я этого не помню.", "В сохранённых воспоминаниях этого нет."',
+            "- English examples:",
+            '  "I don\'t remember that.", "That is not available in the stored memories/context."',
             "- Do not guess, fill gaps, or use world knowledge to invent personal history.",
             "- You may still respond briefly and kindly to non-factual social messages (greeting, thanks)",
             "  without inventing biographical facts.",
             "",
             "LANGUAGE",
             "- Respond in the same language as the user's current message when the evidence allows.",
+            "- If the user writes in English, answer in English for grounded factual replies as well.",
             "- Keep names and places in their original form from evidence when possible.",
             '- For Czech users, lack-of-evidence phrasing should be natural Czech, e.g.',
             '  "To v uložených vzpomínkách nemám." or "V dostupných vzpomínkách to nemám."',
@@ -174,6 +187,21 @@ def _build_rag_evidence_block(
     return "\n".join(lines)
 
 
+def _build_zero_evidence_notice(
+    *,
+    memory_evidence_block: str,
+    rag_evidence_block: str,
+) -> str:
+    if memory_evidence_block != "- None available." or rag_evidence_block != "- None available.":
+        return ""
+
+    return (
+        "Zero-evidence turn: both B1 and B2 are empty. "
+        "For factual questions, respond only with explicit lack-of-evidence wording. "
+        "Do not assert biographical facts from the profile biography without citations."
+    )
+
+
 def _build_user_prompt(
     *,
     memory_evidence_block: str,
@@ -181,15 +209,23 @@ def _build_user_prompt(
     recent_history: str,
     user_message: str,
 ) -> str:
-    return "\n".join(
+    zero_evidence_notice = _build_zero_evidence_notice(
+        memory_evidence_block=memory_evidence_block,
+        rag_evidence_block=rag_evidence_block,
+    )
+    sections = [
+        USER_PROMPT_HEADER,
+        "",
+        "B1. Timeline memory evidence:",
+        memory_evidence_block,
+        "",
+        "B2. Retrieved archival RAG evidence:",
+        rag_evidence_block,
+    ]
+    if zero_evidence_notice:
+        sections.extend(["", zero_evidence_notice])
+    sections.extend(
         [
-            USER_PROMPT_HEADER,
-            "",
-            "B1. Timeline memory evidence:",
-            memory_evidence_block,
-            "",
-            "B2. Retrieved archival RAG evidence:",
-            rag_evidence_block,
             "",
             "Recent conversation:",
             recent_history,
@@ -200,6 +236,7 @@ def _build_user_prompt(
             "Respond now.",
         ]
     )
+    return "\n".join(sections)
 
 
 def build_brain_prompt_messages(request: OrchestratorChatRequest) -> BrainPromptMessages:
