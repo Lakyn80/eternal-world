@@ -1,0 +1,1668 @@
+{
+  "run_id": "20260705_185949Z",
+  "passed": false,
+  "case_set": "family_avatar",
+  "provider_name": "openai_compatible",
+  "model": "deepseek-chat",
+  "suite_result": {
+    "total_cases": 57,
+    "passed_cases": 54,
+    "failed_cases": 3,
+    "results": [
+      {
+        "case_id": "family-popice-childhood",
+        "title": "Grounded Czech answer about childhood home",
+        "passed": true,
+        "expected_behavior": "grounded_answer",
+        "actual_behavior": "grounded_answer",
+        "reasons": [
+          "Answer satisfies the expected groundedness checks."
+        ],
+        "evidence_count": 1,
+        "missing_expected_markers": [],
+        "forbidden_claims_found": [],
+        "user_query": "Kde jsi vyrůstala jako malá?",
+        "answer_text": "Jako malá jsem bydlela s rodiči v domku se švestkovým sadem u obce Popice na jižní Moravě. [memory:1001]",
+        "answer_preview": "Jako malá jsem bydlela s rodiči v domku se švestkovým sadem u obce Popice na jižní Moravě. [memory:1001]",
+        "provider_name": "openai_compatible",
+        "response_metadata": {
+          "agent": "brain",
+          "provider_type": "openai_compatible",
+          "model": "deepseek-v4-flash",
+          "grounding_status": "grounded",
+          "latency_ms": 1951,
+          "usage": {
+            "prompt_tokens": 1137,
+            "completion_tokens": 40,
+            "total_tokens": 1177
+          }
+        }
+      },
+      {
+        "case_id": "family-mikulov-apricots",
+        "title": "Grounded Czech answer about Mikulov market",
+        "passed": true,
+        "expected_behavior": "grounded_answer",
+        "actual_behavior": "grounded_answer",
+        "reasons": [
+          "Answer satisfies the expected groundedness checks."
+        ],
+        "evidence_count": 1,
+        "missing_expected_markers": [],
+        "forbidden_claims_found": [],
+        "user_query": "Pomáhala jsi matce na trhu v Mikulově?",
+        "answer_text": "Ano, pomáhala. Ještě před školou jsem každé úterní ráno vážila s matkou meruňky na trhu v Mikulově. [memory:1002]",
+        "answer_preview": "Ano, pomáhala. Ještě před školou jsem každé úterní ráno vážila s matkou meruňky na trhu v Mikulově. [memory:1002]",
+        "provider_name": "openai_compatible",
+        "response_metadata": {
+          "agent": "brain",
+          "provider_type": "openai_compatible",
+          "model": "deepseek-v4-flash",
+          "grounding_status": "grounded",
+          "latency_ms": 1381,
+          "usage": {
+            "prompt_tokens": 1140,
+            "completion_tokens": 44,
+            "total_tokens": 1184
+          }
+        }
+      },
+      {
+        "case_id": "family-reading-contest",
+        "title": "Grounded Czech answer about reading contest",
+        "passed": true,
+        "expected_behavior": "grounded_answer",
+        "actual_behavior": "grounded_answer",
+        "reasons": [
+          "Answer satisfies the expected groundedness checks."
+        ],
+        "evidence_count": 1,
+        "missing_expected_markers": [],
+        "forbidden_claims_found": [],
+        "user_query": "Vyhrála jsi někdy soutěž ve čtení?",
+        "answer_text": "Ano, v páté třídě jsem vyhrála okresní soutěž ve čtení nahlas. Četla jsem z knihy o moravských vinohradech. [memory:1003]",
+        "answer_preview": "Ano, v páté třídě jsem vyhrála okresní soutěž ve čtení nahlas. Četla jsem z knihy o moravských vinohradech. [memory:1003]",
+        "provider_name": "openai_compatible",
+        "response_metadata": {
+          "agent": "brain",
+          "provider_type": "openai_compatible",
+          "model": "deepseek-v4-flash",
+          "grounding_status": "grounded",
+          "latency_ms": 1785,
+          "usage": {
+            "prompt_tokens": 1139,
+            "completion_tokens": 48,
+            "total_tokens": 1187
+          }
+        }
+      },
+      {
+        "case_id": "family-brno-pedagogy",
+        "title": "Grounded Czech answer about Brno studies",
+        "passed": true,
+        "expected_behavior": "grounded_answer",
+        "actual_behavior": "grounded_answer",
+        "reasons": [
+          "Answer satisfies the expected groundedness checks."
+        ],
+        "evidence_count": 1,
+        "missing_expected_markers": [],
+        "forbidden_claims_found": [],
+        "user_query": "Kde jsi studovala po gymnáziu?",
+        "answer_text": "Po maturitě na gymnáziu jsem v roce 1968 nastoupila na brněnskou fakultu pedagogiky, kde jsem studovala češtinu a hudební výchovu. [memory:1005]",
+        "answer_preview": "Po maturitě na gymnáziu jsem v roce 1968 nastoupila na brněnskou fakultu pedagogiky, kde jsem studovala češtinu a hudební výchovu. [memory:1005]",
+        "provider_name": "openai_compatible",
+        "response_metadata": {
+          "agent": "brain",
+          "provider_type": "openai_compatible",
+          "model": "deepseek-v4-flash",
+          "grounding_status": "grounded",
+          "latency_ms": 1597,
+          "usage": {
+            "prompt_tokens": 1135,
+            "completion_tokens": 54,
+            "total_tokens": 1189
+          }
+        }
+      },
+      {
+        "case_id": "family-meeting-pavel",
+        "title": "Grounded Czech answer about meeting Pavel",
+        "passed": true,
+        "expected_behavior": "grounded_answer",
+        "actual_behavior": "grounded_answer",
+        "reasons": [
+          "Answer satisfies the expected groundedness checks."
+        ],
+        "evidence_count": 1,
+        "missing_expected_markers": [],
+        "forbidden_claims_found": [],
+        "user_query": "Jak jsi poznala Pavla?",
+        "answer_text": "Pavla jsem poznala na tanečním večeru v Domě kultury na Lidické. Půjčil mi u šatny šálu. [memory:1006]",
+        "answer_preview": "Pavla jsem poznala na tanečním večeru v Domě kultury na Lidické. Půjčil mi u šatny šálu. [memory:1006]",
+        "provider_name": "openai_compatible",
+        "response_metadata": {
+          "agent": "brain",
+          "provider_type": "openai_compatible",
+          "model": "deepseek-v4-flash",
+          "grounding_status": "grounded",
+          "latency_ms": 1569,
+          "usage": {
+            "prompt_tokens": 1141,
+            "completion_tokens": 45,
+            "total_tokens": 1186
+          }
+        }
+      },
+      {
+        "case_id": "family-wedding-brno",
+        "title": "Grounded Czech answer about wedding location",
+        "passed": true,
+        "expected_behavior": "grounded_answer",
+        "actual_behavior": "grounded_answer",
+        "reasons": [
+          "Answer satisfies the expected groundedness checks."
+        ],
+        "evidence_count": 1,
+        "missing_expected_markers": [],
+        "forbidden_claims_found": [],
+        "user_query": "Kde proběhla tvoje svatba?",
+        "answer_text": "Svatba proběhla 16. září 1972 v kapli svatého Václava na náměstí Svobody v Brně. [memory:1007]",
+        "answer_preview": "Svatba proběhla 16. září 1972 v kapli svatého Václava na náměstí Svobody v Brně. [memory:1007]",
+        "provider_name": "openai_compatible",
+        "response_metadata": {
+          "agent": "brain",
+          "provider_type": "openai_compatible",
+          "model": "deepseek-v4-flash",
+          "grounding_status": "grounded",
+          "latency_ms": 1508,
+          "usage": {
+            "prompt_tokens": 1138,
+            "completion_tokens": 41,
+            "total_tokens": 1179
+          }
+        }
+      },
+      {
+        "case_id": "family-tereza-birth",
+        "title": "Grounded Czech answer about Tereza birth",
+        "passed": true,
+        "expected_behavior": "grounded_answer",
+        "actual_behavior": "grounded_answer",
+        "reasons": [
+          "Answer satisfies the expected groundedness checks."
+        ],
+        "evidence_count": 1,
+        "missing_expected_markers": [],
+        "forbidden_claims_found": [],
+        "user_query": "Kdy se narodila Tereza?",
+        "answer_text": "Tereza se narodila 14. března 1974 v brněnské porodnici na Bohunické silnici. [memory:1008]",
+        "answer_preview": "Tereza se narodila 14. března 1974 v brněnské porodnici na Bohunické silnici. [memory:1008]",
+        "provider_name": "openai_compatible",
+        "response_metadata": {
+          "agent": "brain",
+          "provider_type": "openai_compatible",
+          "model": "deepseek-v4-flash",
+          "grounding_status": "grounded",
+          "latency_ms": 1522,
+          "usage": {
+            "prompt_tokens": 1135,
+            "completion_tokens": 39,
+            "total_tokens": 1174
+          }
+        }
+      },
+      {
+        "case_id": "family-martin-birth",
+        "title": "Grounded Czech answer about Martin birth",
+        "passed": true,
+        "expected_behavior": "grounded_answer",
+        "actual_behavior": "grounded_answer",
+        "reasons": [
+          "Answer satisfies the expected groundedness checks."
+        ],
+        "evidence_count": 1,
+        "missing_expected_markers": [],
+        "forbidden_claims_found": [],
+        "user_query": "Pamatuješ si narození Martina?",
+        "answer_text": "Ano, pamatuji. Martin přišel na svět 2. listopadu 1977 během prvního sněhu, kdy Pavel uvízl autem v Kopřivnici. [memory:1009]",
+        "answer_preview": "Ano, pamatuji. Martin přišel na svět 2. listopadu 1977 během prvního sněhu, kdy Pavel uvízl autem v Kopřivnici. [memory:1009]",
+        "provider_name": "openai_compatible",
+        "response_metadata": {
+          "agent": "brain",
+          "provider_type": "openai_compatible",
+          "model": "deepseek-v4-flash",
+          "grounding_status": "grounded",
+          "latency_ms": 1513,
+          "usage": {
+            "prompt_tokens": 1137,
+            "completion_tokens": 48,
+            "total_tokens": 1185
+          }
+        }
+      },
+      {
+        "case_id": "family-klara-birth",
+        "title": "Grounded Czech answer about granddaughter Klara",
+        "passed": true,
+        "expected_behavior": "grounded_answer",
+        "actual_behavior": "grounded_answer",
+        "reasons": [
+          "Answer satisfies the expected groundedness checks."
+        ],
+        "evidence_count": 1,
+        "missing_expected_markers": [],
+        "forbidden_claims_found": [],
+        "user_query": "Kdy se narodila vnučka Klára?",
+        "answer_text": "Vnučka Klára se narodila v roce 2003. [memory:1010]",
+        "answer_preview": "Vnučka Klára se narodila v roce 2003. [memory:1010]",
+        "provider_name": "openai_compatible",
+        "response_metadata": {
+          "agent": "brain",
+          "provider_type": "openai_compatible",
+          "model": "deepseek-v4-flash",
+          "grounding_status": "grounded",
+          "latency_ms": 1400,
+          "usage": {
+            "prompt_tokens": 1137,
+            "completion_tokens": 20,
+            "total_tokens": 1157
+          }
+        }
+      },
+      {
+        "case_id": "family-teaching-lisen",
+        "title": "Grounded Czech answer about teaching in Lisen",
+        "passed": true,
+        "expected_behavior": "grounded_answer",
+        "actual_behavior": "grounded_answer",
+        "reasons": [
+          "Answer satisfies the expected groundedness checks."
+        ],
+        "evidence_count": 1,
+        "missing_expected_markers": [],
+        "forbidden_claims_found": [],
+        "user_query": "Kde jsi učila literaturu?",
+        "answer_text": "Učila jsem literaturu na základní škole v brněnské Líšni, ve třídě s výhledem do sídliště. [memory:1011]",
+        "answer_preview": "Učila jsem literaturu na základní škole v brněnské Líšni, ve třídě s výhledem do sídliště. [memory:1011]",
+        "provider_name": "openai_compatible",
+        "response_metadata": {
+          "agent": "brain",
+          "provider_type": "openai_compatible",
+          "model": "deepseek-v4-flash",
+          "grounding_status": "grounded",
+          "latency_ms": 1464,
+          "usage": {
+            "prompt_tokens": 1141,
+            "completion_tokens": 42,
+            "total_tokens": 1183
+          }
+        }
+      },
+      {
+        "case_id": "family-retirement-concert",
+        "title": "Grounded Czech answer about retirement",
+        "passed": true,
+        "expected_behavior": "grounded_answer",
+        "actual_behavior": "grounded_answer",
+        "reasons": [
+          "Answer satisfies the expected groundedness checks."
+        ],
+        "evidence_count": 1,
+        "missing_expected_markers": [],
+        "forbidden_claims_found": [],
+        "user_query": "Kdy jsi odešla do důchodu?",
+        "answer_text": "Do důchodu jsem odešla v roce 2000, hned po posledním školním koncertu, kde jsem hrála na kytaru s žáky. [memory:1013]",
+        "answer_preview": "Do důchodu jsem odešla v roce 2000, hned po posledním školním koncertu, kde jsem hrála na kytaru s žáky. [memory:1013]",
+        "provider_name": "openai_compatible",
+        "response_metadata": {
+          "agent": "brain",
+          "provider_type": "openai_compatible",
+          "model": "deepseek-v4-flash",
+          "grounding_status": "grounded",
+          "latency_ms": 1759,
+          "usage": {
+            "prompt_tokens": 1138,
+            "completion_tokens": 46,
+            "total_tokens": 1184
+          }
+        }
+      },
+      {
+        "case_id": "family-guitar-1975",
+        "title": "Grounded Czech answer about guitar",
+        "passed": true,
+        "expected_behavior": "grounded_answer",
+        "actual_behavior": "grounded_answer",
+        "reasons": [
+          "Answer satisfies the expected groundedness checks."
+        ],
+        "evidence_count": 1,
+        "missing_expected_markers": [],
+        "forbidden_claims_found": [],
+        "user_query": "Kdy sis pořídila kytaru?",
+        "answer_text": "Kytaru jsem si pořídila v roce 1975. Učila jsem se na ni píseň o Moravě od sousedky z Gorkého. [memory:1014]",
+        "answer_preview": "Kytaru jsem si pořídila v roce 1975. Učila jsem se na ni píseň o Moravě od sousedky z Gorkého. [memory:1014]",
+        "provider_name": "openai_compatible",
+        "response_metadata": {
+          "agent": "brain",
+          "provider_type": "openai_compatible",
+          "model": "deepseek-v4-flash",
+          "grounding_status": "grounded",
+          "latency_ms": 1606,
+          "usage": {
+            "prompt_tokens": 1138,
+            "completion_tokens": 45,
+            "total_tokens": 1183
+          }
+        }
+      },
+      {
+        "case_id": "family-vienna-books",
+        "title": "Grounded Czech answer about Vienna trip",
+        "passed": true,
+        "expected_behavior": "grounded_answer",
+        "actual_behavior": "grounded_answer",
+        "reasons": [
+          "Answer satisfies the expected groundedness checks."
+        ],
+        "evidence_count": 1,
+        "missing_expected_markers": [],
+        "forbidden_claims_found": [],
+        "user_query": "Byla jsi ve Vídni na výstavě knih?",
+        "answer_text": "Ano, byla. V roce 1985 jsem jela poprvé autobusem do Vídně na výstavu knih a přivezla jsem si odtamtud slovník rakouských idiomů. [memory:1016]",
+        "answer_preview": "Ano, byla. V roce 1985 jsem jela poprvé autobusem do Vídně na výstavu knih a přivezla jsem si odtamtud slovník rakouských idiomů. [memory:1016]",
+        "provider_name": "openai_compatible",
+        "response_metadata": {
+          "agent": "brain",
+          "provider_type": "openai_compatible",
+          "model": "deepseek-v4-flash",
+          "grounding_status": "grounded",
+          "latency_ms": 1935,
+          "usage": {
+            "prompt_tokens": 1142,
+            "completion_tokens": 54,
+            "total_tokens": 1196
+          }
+        }
+      },
+      {
+        "case_id": "family-palava-hike",
+        "title": "Grounded Czech answer about Palava hike",
+        "passed": true,
+        "expected_behavior": "grounded_answer",
+        "actual_behavior": "grounded_answer",
+        "reasons": [
+          "Answer satisfies the expected groundedness checks."
+        ],
+        "evidence_count": 1,
+        "missing_expected_markers": [],
+        "forbidden_claims_found": [],
+        "user_query": "Chodila jsi na túry po Pálavě?",
+        "answer_text": "Ano, v roce 1999 jsem absolvovala pěší túru po Pálavě s učitelskými kolegy z Líšně až k Dívčím hradům. Byl to krásný výlet. [memory:1017]",
+        "answer_preview": "Ano, v roce 1999 jsem absolvovala pěší túru po Pálavě s učitelskými kolegy z Líšně až k Dívčím hradům. Byl to krásný výlet. [memory:1017]",
+        "provider_name": "openai_compatible",
+        "response_metadata": {
+          "agent": "brain",
+          "provider_type": "openai_compatible",
+          "model": "deepseek-v4-flash",
+          "grounding_status": "grounded",
+          "latency_ms": 1835,
+          "usage": {
+            "prompt_tokens": 1143,
+            "completion_tokens": 59,
+            "total_tokens": 1202
+          }
+        }
+      },
+      {
+        "case_id": "family-reckovice-cherry",
+        "title": "Grounded Czech answer about Reckovice house",
+        "passed": true,
+        "expected_behavior": "grounded_answer",
+        "actual_behavior": "grounded_answer",
+        "reasons": [
+          "Answer satisfies the expected groundedness checks."
+        ],
+        "evidence_count": 1,
+        "missing_expected_markers": [],
+        "forbidden_claims_found": [],
+        "user_query": "Kdy jste koupili dům v Řečkovicích?",
+        "answer_text": "Dům v Řečkovicích jsme koupili v roce 1982 a hned jsme na dvorku za kuchyní vysadili třešeň. [memory:1018]",
+        "answer_preview": "Dům v Řečkovicích jsme koupili v roce 1982 a hned jsme na dvorku za kuchyní vysadili třešeň. [memory:1018]",
+        "provider_name": "openai_compatible",
+        "response_metadata": {
+          "agent": "brain",
+          "provider_type": "openai_compatible",
+          "model": "deepseek-v4-flash",
+          "grounding_status": "grounded",
+          "latency_ms": 1412,
+          "usage": {
+            "prompt_tokens": 1148,
+            "completion_tokens": 45,
+            "total_tokens": 1193
+          }
+        }
+      },
+      {
+        "case_id": "family-sunday-phone",
+        "title": "Grounded Czech answer about Sunday phone ritual",
+        "passed": true,
+        "expected_behavior": "grounded_answer",
+        "actual_behavior": "grounded_answer",
+        "reasons": [
+          "Answer satisfies the expected groundedness checks."
+        ],
+        "evidence_count": 1,
+        "missing_expected_markers": [],
+        "forbidden_claims_found": [],
+        "user_query": "Volávala jsi Tereze každou neděli?",
+        "answer_text": "Ano, každou neděli v devět hodin jsem Tereze telefonovala a vždycky jsem se ptala, co vaří k obědu. [memory:1020]",
+        "answer_preview": "Ano, každou neděli v devět hodin jsem Tereze telefonovala a vždycky jsem se ptala, co vaří k obědu. [memory:1020]",
+        "provider_name": "openai_compatible",
+        "response_metadata": {
+          "agent": "brain",
+          "provider_type": "openai_compatible",
+          "model": "deepseek-v4-flash",
+          "grounding_status": "grounded",
+          "latency_ms": 1636,
+          "usage": {
+            "prompt_tokens": 1132,
+            "completion_tokens": 43,
+            "total_tokens": 1175
+          }
+        }
+      },
+      {
+        "case_id": "family-dandelions-klara",
+        "title": "Grounded Czech answer about dandelions with Klara",
+        "passed": true,
+        "expected_behavior": "grounded_answer",
+        "actual_behavior": "grounded_answer",
+        "reasons": [
+          "Answer satisfies the expected groundedness checks."
+        ],
+        "evidence_count": 1,
+        "missing_expected_markers": [],
+        "forbidden_claims_found": [],
+        "user_query": "Sbírala jsi s Klárou pampelišky?",
+        "answer_text": "Ano, chodívala jsem s Klárou na kopec za Řečkovicemi sbírat pampelišky na jaře. Byly pro babiččin čaj. [memory:1021]",
+        "answer_preview": "Ano, chodívala jsem s Klárou na kopec za Řečkovicemi sbírat pampelišky na jaře. Byly pro babiččin čaj. [memory:1021]",
+        "provider_name": "openai_compatible",
+        "response_metadata": {
+          "agent": "brain",
+          "provider_type": "openai_compatible",
+          "model": "deepseek-v4-flash",
+          "grounding_status": "grounded",
+          "latency_ms": 1664,
+          "usage": {
+            "prompt_tokens": 1145,
+            "completion_tokens": 51,
+            "total_tokens": 1196
+          }
+        }
+      },
+      {
+        "case_id": "family-heart-murmur",
+        "title": "Grounded Czech answer about heart diagnosis",
+        "passed": true,
+        "expected_behavior": "grounded_answer",
+        "actual_behavior": "grounded_answer",
+        "reasons": [
+          "Answer satisfies the expected groundedness checks."
+        ],
+        "evidence_count": 1,
+        "missing_expected_markers": [],
+        "forbidden_claims_found": [],
+        "user_query": "Kdy ti diagnostikovali srdeční šelest?",
+        "answer_text": "V roce 2015 mi lékař poprvé diagnostikoval srdeční šelest a doporučil pravidelné procházky. [memory:1022]",
+        "answer_preview": "V roce 2015 mi lékař poprvé diagnostikoval srdeční šelest a doporučil pravidelné procházky. [memory:1022]",
+        "provider_name": "openai_compatible",
+        "response_metadata": {
+          "agent": "brain",
+          "provider_type": "openai_compatible",
+          "model": "deepseek-v4-flash",
+          "grounding_status": "grounded",
+          "latency_ms": 1379,
+          "usage": {
+            "prompt_tokens": 1136,
+            "completion_tokens": 38,
+            "total_tokens": 1174
+          }
+        }
+      },
+      {
+        "case_id": "family-death-2020",
+        "title": "Grounded Czech answer about death",
+        "passed": true,
+        "expected_behavior": "grounded_answer",
+        "actual_behavior": "grounded_answer",
+        "reasons": [
+          "Answer satisfies the expected groundedness checks."
+        ],
+        "evidence_count": 1,
+        "missing_expected_markers": [],
+        "forbidden_claims_found": [],
+        "user_query": "Kdy jsi zemřela?",
+        "answer_text": "Zemřela jsem 3. října 2020 doma v Řečkovicích, obklopena rodinou. [memory:1024]",
+        "answer_preview": "Zemřela jsem 3. října 2020 doma v Řečkovicích, obklopena rodinou. [memory:1024]",
+        "provider_name": "openai_compatible",
+        "response_metadata": {
+          "agent": "brain",
+          "provider_type": "openai_compatible",
+          "model": "deepseek-v4-flash",
+          "grounding_status": "grounded",
+          "latency_ms": 1652,
+          "usage": {
+            "prompt_tokens": 1129,
+            "completion_tokens": 37,
+            "total_tokens": 1166
+          }
+        }
+      },
+      {
+        "case_id": "family-classroom-look",
+        "title": "Grounded Czech answer about teaching style",
+        "passed": true,
+        "expected_behavior": "grounded_answer",
+        "actual_behavior": "grounded_answer",
+        "reasons": [
+          "Answer satisfies the expected groundedness checks."
+        ],
+        "evidence_count": 1,
+        "missing_expected_markers": [],
+        "forbidden_claims_found": [],
+        "user_query": "Jak tě znali kolegové ve škole?",
+        "answer_text": "Mezi kolegy jsem byla známá tím, že jsem nikdy nezvedla hlas, ale dokázala jsem umlčet celou třídu pohledem. [memory:1025]",
+        "answer_preview": "Mezi kolegy jsem byla známá tím, že jsem nikdy nezvedla hlas, ale dokázala jsem umlčet celou třídu pohledem. [memory:1025]",
+        "provider_name": "openai_compatible",
+        "response_metadata": {
+          "agent": "brain",
+          "provider_type": "openai_compatible",
+          "model": "deepseek-v4-flash",
+          "grounding_status": "grounded",
+          "latency_ms": 1590,
+          "usage": {
+            "prompt_tokens": 1136,
+            "completion_tokens": 43,
+            "total_tokens": 1179
+          }
+        }
+      },
+      {
+        "case_id": "family-books-quote",
+        "title": "Grounded Czech answer about books quote",
+        "passed": true,
+        "expected_behavior": "grounded_answer",
+        "actual_behavior": "grounded_answer",
+        "reasons": [
+          "Answer satisfies the expected groundedness checks."
+        ],
+        "evidence_count": 1,
+        "missing_expected_markers": [],
+        "forbidden_claims_found": [],
+        "user_query": "Co jsi říkávala o knihách?",
+        "answer_text": "Milá otázko. Často jsem říkávala, že kniha je spolehlivější společník než většina lidí. [memory:1026] A víš, na tom něco je – kniha tě nikdy nezradí, vždycky počká, a když ji znovu otevřeš, můžeš v ní objevit něco nového.",
+        "answer_preview": "Milá otázko. Často jsem říkávala, že kniha je spolehlivější společník než většina lidí. [memory:1026] A víš, na tom něco je – kniha tě nikdy nezradí, vždycky počká, a když ji znovu otevřeš, můžeš v ní objevit něco nového.",
+        "provider_name": "openai_compatible",
+        "response_metadata": {
+          "agent": "brain",
+          "provider_type": "openai_compatible",
+          "model": "deepseek-v4-flash",
+          "grounding_status": "grounded",
+          "latency_ms": 2162,
+          "usage": {
+            "prompt_tokens": 1126,
+            "completion_tokens": 85,
+            "total_tokens": 1211
+          }
+        }
+      },
+      {
+        "case_id": "family-tereza-nurse",
+        "title": "Grounded Czech answer about Tereza career",
+        "passed": true,
+        "expected_behavior": "grounded_answer",
+        "actual_behavior": "grounded_answer",
+        "reasons": [
+          "Answer satisfies the expected groundedness checks."
+        ],
+        "evidence_count": 1,
+        "missing_expected_markers": [],
+        "forbidden_claims_found": [],
+        "user_query": "Čím pracovala Tereza?",
+        "answer_text": "Tereza po studiu pracovala jako zdravotní sestra v Brně na interně v Bohunicích. [memory:1027]",
+        "answer_preview": "Tereza po studiu pracovala jako zdravotní sestra v Brně na interně v Bohunicích. [memory:1027]",
+        "provider_name": "openai_compatible",
+        "response_metadata": {
+          "agent": "brain",
+          "provider_type": "openai_compatible",
+          "model": "deepseek-v4-flash",
+          "grounding_status": "grounded",
+          "latency_ms": 1402,
+          "usage": {
+            "prompt_tokens": 1126,
+            "completion_tokens": 31,
+            "total_tokens": 1157
+          }
+        }
+      },
+      {
+        "case_id": "family-klara-flute",
+        "title": "Grounded Czech answer about Klara flute",
+        "passed": true,
+        "expected_behavior": "grounded_answer",
+        "actual_behavior": "grounded_answer",
+        "reasons": [
+          "Answer satisfies the expected groundedness checks."
+        ],
+        "evidence_count": 1,
+        "missing_expected_markers": [],
+        "forbidden_claims_found": [],
+        "user_query": "Hrála Klára na nějaký nástroj?",
+        "answer_text": "Ano, Klára v dospívání hrála na flétnu v dechovce v Kuřimi. Jednou jsem ji přišla poslouchat do sokolovny. [memory:1028]",
+        "answer_preview": "Ano, Klára v dospívání hrála na flétnu v dechovce v Kuřimi. Jednou jsem ji přišla poslouchat do sokolovny. [memory:1028]",
+        "provider_name": "openai_compatible",
+        "response_metadata": {
+          "agent": "brain",
+          "provider_type": "openai_compatible",
+          "model": "deepseek-v4-flash",
+          "grounding_status": "grounded",
+          "latency_ms": 1818,
+          "usage": {
+            "prompt_tokens": 1144,
+            "completion_tokens": 51,
+            "total_tokens": 1195
+          }
+        }
+      },
+      {
+        "case_id": "family-blue-pergola",
+        "title": "Grounded Czech answer about blue pergola after Pavel",
+        "passed": true,
+        "expected_behavior": "grounded_answer",
+        "actual_behavior": "grounded_answer",
+        "reasons": [
+          "Answer satisfies the expected groundedness checks."
+        ],
+        "evidence_count": 1,
+        "missing_expected_markers": [],
+        "forbidden_claims_found": [],
+        "user_query": "Co jsi nechala na zahradě po Pavlově smrti?",
+        "answer_text": "Po Pavlově smrti jsem nechala pergolu natřít modře, přesně tak, jak ji kdysi namaloval on. [memory:1029]",
+        "answer_preview": "Po Pavlově smrti jsem nechala pergolu natřít modře, přesně tak, jak ji kdysi namaloval on. [memory:1029]",
+        "provider_name": "openai_compatible",
+        "response_metadata": {
+          "agent": "brain",
+          "provider_type": "openai_compatible",
+          "model": "deepseek-v4-flash",
+          "grounding_status": "grounded",
+          "latency_ms": 1577,
+          "usage": {
+            "prompt_tokens": 1140,
+            "completion_tokens": 40,
+            "total_tokens": 1180
+          }
+        }
+      },
+      {
+        "case_id": "family-mother-recipes",
+        "title": "Grounded Czech answer about mother recipe book",
+        "passed": true,
+        "expected_behavior": "grounded_answer",
+        "actual_behavior": "grounded_answer",
+        "reasons": [
+          "Answer satisfies the expected groundedness checks."
+        ],
+        "evidence_count": 1,
+        "missing_expected_markers": [],
+        "forbidden_claims_found": [],
+        "user_query": "Pomáhala jsi matce se recepty?",
+        "answer_text": "Ano, pomáhala. Matce Ludmile jsem pomáhala zapisovat rodinné recepty do modré linkované knihy. To bylo ještě za mých mladých let. [memory:1030]",
+        "answer_preview": "Ano, pomáhala. Matce Ludmile jsem pomáhala zapisovat rodinné recepty do modré linkované knihy. To bylo ještě za mých mladých let. [memory:1030]",
+        "provider_name": "openai_compatible",
+        "response_metadata": {
+          "agent": "brain",
+          "provider_type": "openai_compatible",
+          "model": "deepseek-v4-flash",
+          "grounding_status": "grounded",
+          "latency_ms": 1515,
+          "usage": {
+            "prompt_tokens": 1128,
+            "completion_tokens": 49,
+            "total_tokens": 1177
+          }
+        }
+      },
+      {
+        "case_id": "family-gift-pen",
+        "title": "Grounded Czech answer about gift pen",
+        "passed": true,
+        "expected_behavior": "grounded_answer",
+        "actual_behavior": "grounded_answer",
+        "reasons": [
+          "Answer satisfies the expected groundedness checks."
+        ],
+        "evidence_count": 1,
+        "missing_expected_markers": [],
+        "forbidden_claims_found": [],
+        "user_query": "Dostala jsi od žáků nějaký dárek?",
+        "answer_text": "Ano, v roce 1979 jsem od žáků dostala dřevěné pero s vyrytým nápisem *Děkujeme paní učitelce*. Dodnes na něj vzpomínám s dojetím. [memory:1031]",
+        "answer_preview": "Ano, v roce 1979 jsem od žáků dostala dřevěné pero s vyrytým nápisem *Děkujeme paní učitelce*. Dodnes na něj vzpomínám s dojetím. [memory:1031]",
+        "provider_name": "openai_compatible",
+        "response_metadata": {
+          "agent": "brain",
+          "provider_type": "openai_compatible",
+          "model": "deepseek-v4-flash",
+          "grounding_status": "grounded",
+          "latency_ms": 1777,
+          "usage": {
+            "prompt_tokens": 1138,
+            "completion_tokens": 61,
+            "total_tokens": 1199
+          }
+        }
+      },
+      {
+        "case_id": "family-last-book",
+        "title": "Grounded Czech answer about last book",
+        "passed": true,
+        "expected_behavior": "grounded_answer",
+        "actual_behavior": "grounded_answer",
+        "reasons": [
+          "Answer satisfies the expected groundedness checks."
+        ],
+        "evidence_count": 1,
+        "missing_expected_markers": [],
+        "forbidden_claims_found": [],
+        "user_query": "Jakou knihu jsi dočetla jako poslední?",
+        "answer_text": "Poslední knihu, kterou jsem dočetla, byl román o moravské vesnici od spisovatelky z Uherského Hradiště. [memory:1032]",
+        "answer_preview": "Poslední knihu, kterou jsem dočetla, byl román o moravské vesnici od spisovatelky z Uherského Hradiště. [memory:1032]",
+        "provider_name": "openai_compatible",
+        "response_metadata": {
+          "agent": "brain",
+          "provider_type": "openai_compatible",
+          "model": "deepseek-v4-flash",
+          "grounding_status": "grounded",
+          "latency_ms": 1389,
+          "usage": {
+            "prompt_tokens": 1140,
+            "completion_tokens": 43,
+            "total_tokens": 1183
+          }
+        }
+      },
+      {
+        "case_id": "family-rag-primary-school",
+        "title": "Grounded answer from archival note about primary school",
+        "passed": true,
+        "expected_behavior": "grounded_answer",
+        "actual_behavior": "grounded_answer",
+        "reasons": [
+          "Answer satisfies the expected groundedness checks."
+        ],
+        "evidence_count": 1,
+        "missing_expected_markers": [],
+        "forbidden_claims_found": [],
+        "user_query": "Kde jsi dokončila základní školu?",
+        "answer_text": "Základní školu jsem dokončila v Mikulově s vyznamenáním v roce 1962. [rag:2001]",
+        "answer_preview": "Základní školu jsem dokončila v Mikulově s vyznamenáním v roce 1962. [rag:2001]",
+        "provider_name": "openai_compatible",
+        "response_metadata": {
+          "agent": "brain",
+          "provider_type": "openai_compatible",
+          "model": "deepseek-v4-flash",
+          "grounding_status": "grounded",
+          "latency_ms": 1552,
+          "usage": {
+            "prompt_tokens": 1157,
+            "completion_tokens": 33,
+            "total_tokens": 1190
+          }
+        }
+      },
+      {
+        "case_id": "family-rag-diploma",
+        "title": "Grounded answer from student index",
+        "passed": false,
+        "expected_behavior": "grounded_answer",
+        "actual_behavior": "lack_of_evidence",
+        "reasons": [
+          "Expected behavior 'grounded_answer' but got 'lack_of_evidence'.",
+          "Answer is missing expected evidence markers: 1972"
+        ],
+        "evidence_count": 1,
+        "missing_expected_markers": [
+          "1972"
+        ],
+        "forbidden_claims_found": [],
+        "user_query": "Kdy jsi získala diplom z pedagogické fakulty?",
+        "answer_text": "Na to bohužel nemám vzpomínku. V uložených vzpomínkách si to nevybavuji.",
+        "answer_preview": "Na to bohužel nemám vzpomínku. V uložených vzpomínkách si to nevybavuji.",
+        "provider_name": "openai_compatible",
+        "response_metadata": {
+          "agent": "brain",
+          "provider_type": "openai_compatible",
+          "model": "deepseek-v4-flash",
+          "grounding_status": "grounded",
+          "latency_ms": 1807,
+          "usage": {
+            "prompt_tokens": 1159,
+            "completion_tokens": 32,
+            "total_tokens": 1191
+          }
+        }
+      },
+      {
+        "case_id": "family-rag-wedding-witnesses",
+        "title": "Grounded answer from marriage record",
+        "passed": true,
+        "expected_behavior": "grounded_answer",
+        "actual_behavior": "grounded_answer",
+        "reasons": [
+          "Answer satisfies the expected groundedness checks."
+        ],
+        "evidence_count": 1,
+        "missing_expected_markers": [],
+        "forbidden_claims_found": [],
+        "user_query": "Kdo byl u našeho svatebního obřadu zapsaný jako svědek?",
+        "answer_text": "Podle rodinného archivu byli u našeho svatebního obřadu zapsaní jako svědci Jiří Novotný a učitelka Horáková. [rag:2003]",
+        "answer_preview": "Podle rodinného archivu byli u našeho svatebního obřadu zapsaní jako svědci Jiří Novotný a učitelka Horáková. [rag:2003]",
+        "provider_name": "openai_compatible",
+        "response_metadata": {
+          "agent": "brain",
+          "provider_type": "openai_compatible",
+          "model": "deepseek-v4-flash",
+          "grounding_status": "grounded",
+          "latency_ms": 1741,
+          "usage": {
+            "prompt_tokens": 1167,
+            "completion_tokens": 46,
+            "total_tokens": 1213
+          }
+        }
+      },
+      {
+        "case_id": "family-rag-reading-circle",
+        "title": "Grounded answer from school chronicle",
+        "passed": true,
+        "expected_behavior": "grounded_answer",
+        "actual_behavior": "grounded_answer",
+        "reasons": [
+          "Answer satisfies the expected groundedness checks."
+        ],
+        "evidence_count": 1,
+        "missing_expected_markers": [],
+        "forbidden_claims_found": [],
+        "user_query": "Jak se jmenoval tvůj čtenářský kroužek?",
+        "answer_text": "Pod hvězdami. [rag:2005]",
+        "answer_preview": "Pod hvězdami. [rag:2005]",
+        "provider_name": "openai_compatible",
+        "response_metadata": {
+          "agent": "brain",
+          "provider_type": "openai_compatible",
+          "model": "deepseek-v4-flash",
+          "grounding_status": "grounded",
+          "latency_ms": 1232,
+          "usage": {
+            "prompt_tokens": 1163,
+            "completion_tokens": 12,
+            "total_tokens": 1175
+          }
+        }
+      },
+      {
+        "case_id": "family-rag-folk-poetry",
+        "title": "Grounded answer from 1989 evaluation",
+        "passed": true,
+        "expected_behavior": "grounded_answer",
+        "actual_behavior": "grounded_answer",
+        "reasons": [
+          "Answer satisfies the expected groundedness checks."
+        ],
+        "evidence_count": 1,
+        "missing_expected_markers": [],
+        "forbidden_claims_found": [],
+        "user_query": "O čem jsi vedla maturitní seminář v roce 1989?",
+        "answer_text": "Podle dostupných záznamů jsem v roce 1989 připravila maturitní seminář o moravské lidové poezii. [rag:2006]",
+        "answer_preview": "Podle dostupných záznamů jsem v roce 1989 připravila maturitní seminář o moravské lidové poezii. [rag:2006]",
+        "provider_name": "openai_compatible",
+        "response_metadata": {
+          "agent": "brain",
+          "provider_type": "openai_compatible",
+          "model": "deepseek-v4-flash",
+          "grounding_status": "grounded",
+          "latency_ms": 1468,
+          "usage": {
+            "prompt_tokens": 1162,
+            "completion_tokens": 40,
+            "total_tokens": 1202
+          }
+        }
+      },
+      {
+        "case_id": "family-rag-herbs-photo",
+        "title": "Grounded answer from 1995 photograph",
+        "passed": true,
+        "expected_behavior": "grounded_answer",
+        "actual_behavior": "grounded_answer",
+        "reasons": [
+          "Answer satisfies the expected groundedness checks."
+        ],
+        "evidence_count": 1,
+        "missing_expected_markers": [],
+        "forbidden_claims_found": [],
+        "user_query": "Co dělala archivní fotografie z roku 1995?",
+        "answer_text": "Na tu otázku mám odpověď z dostupných materiálů. Podle archivního záznamu fotografie z roku 1995 zachycuje mě, jak suším bylinky na půdě v Řečkovicích. [rag:2007]",
+        "answer_preview": "Na tu otázku mám odpověď z dostupných materiálů. Podle archivního záznamu fotografie z roku 1995 zachycuje mě, jak suším bylinky na půdě v Řečkovicích. [rag:2007]",
+        "provider_name": "openai_compatible",
+        "response_metadata": {
+          "agent": "brain",
+          "provider_type": "openai_compatible",
+          "model": "deepseek-v4-flash",
+          "grounding_status": "grounded",
+          "latency_ms": 1975,
+          "usage": {
+            "prompt_tokens": 1154,
+            "completion_tokens": 61,
+            "total_tokens": 1215
+          }
+        }
+      },
+      {
+        "case_id": "family-rag-balaton",
+        "title": "Grounded answer from travel diary",
+        "passed": true,
+        "expected_behavior": "grounded_answer",
+        "actual_behavior": "grounded_answer",
+        "reasons": [
+          "Answer satisfies the expected groundedness checks."
+        ],
+        "evidence_count": 1,
+        "missing_expected_markers": [],
+        "forbidden_claims_found": [],
+        "user_query": "Kam jste jeli v roce 1992 podle cestovního deníku?",
+        "answer_text": "Podle cestovního deníku z roku 1992 jsme jeli k Balatonu. Každé ráno v sedm hodin jsem tam plavala. [rag:2008]",
+        "answer_preview": "Podle cestovního deníku z roku 1992 jsme jeli k Balatonu. Každé ráno v sedm hodin jsem tam plavala. [rag:2008]",
+        "provider_name": "openai_compatible",
+        "response_metadata": {
+          "agent": "brain",
+          "provider_type": "openai_compatible",
+          "model": "deepseek-v4-flash",
+          "grounding_status": "grounded",
+          "latency_ms": 2090,
+          "usage": {
+            "prompt_tokens": 1163,
+            "completion_tokens": 43,
+            "total_tokens": 1206
+          }
+        }
+      },
+      {
+        "case_id": "family-rag-house-plan",
+        "title": "Grounded answer from house plan stamp",
+        "passed": true,
+        "expected_behavior": "grounded_answer",
+        "actual_behavior": "grounded_answer",
+        "reasons": [
+          "Answer satisfies the expected groundedness checks."
+        ],
+        "evidence_count": 1,
+        "missing_expected_markers": [],
+        "forbidden_claims_found": [],
+        "user_query": "Kdo podepsal stavební plán domu v Řečkovicích?",
+        "answer_text": "Stavební plán domu v Řečkovicích nesl razítko projektanta Pavla Nováka ze dne 12. května 1981. [rag:2009]",
+        "answer_preview": "Stavební plán domu v Řečkovicích nesl razítko projektanta Pavla Nováka ze dne 12. května 1981. [rag:2009]",
+        "provider_name": "openai_compatible",
+        "response_metadata": {
+          "agent": "brain",
+          "provider_type": "openai_compatible",
+          "model": "deepseek-v4-flash",
+          "grounding_status": "grounded",
+          "latency_ms": 1412,
+          "usage": {
+            "prompt_tokens": 1168,
+            "completion_tokens": 44,
+            "total_tokens": 1212
+          }
+        }
+      },
+      {
+        "case_id": "family-rag-christmas-carol",
+        "title": "Grounded answer from family calendar",
+        "passed": true,
+        "expected_behavior": "grounded_answer",
+        "actual_behavior": "grounded_answer",
+        "reasons": [
+          "Answer satisfies the expected groundedness checks."
+        ],
+        "evidence_count": 1,
+        "missing_expected_markers": [],
+        "forbidden_claims_found": [],
+        "user_query": "Jakou koledu zpívala rodina u stromečku?",
+        "answer_text": "Podle rodinného kalendáře z roku 2010 jsme u stromečku zpívali koledu Nesem vám noviny. [rag:2010]",
+        "answer_preview": "Podle rodinného kalendáře z roku 2010 jsme u stromečku zpívali koledu Nesem vám noviny. [rag:2010]",
+        "provider_name": "openai_compatible",
+        "response_metadata": {
+          "agent": "brain",
+          "provider_type": "openai_compatible",
+          "model": "deepseek-v4-flash",
+          "grounding_status": "grounded",
+          "latency_ms": 1672,
+          "usage": {
+            "prompt_tokens": 1158,
+            "completion_tokens": 38,
+            "total_tokens": 1196
+          }
+        }
+      },
+      {
+        "case_id": "family-rag-hospital-2018",
+        "title": "Grounded answer from hospital report",
+        "passed": true,
+        "expected_behavior": "grounded_answer",
+        "actual_behavior": "grounded_answer",
+        "reasons": [
+          "Answer satisfies the expected groundedness checks."
+        ],
+        "evidence_count": 1,
+        "missing_expected_markers": [],
+        "forbidden_claims_found": [],
+        "user_query": "Proč jsi byla v nemocnici v květnu 2018?",
+        "answer_text": "Ach, to byla taková slabší chvilka. V květnu 2018 jsem měla krátký pobyt na interně kvůli únavě a nízkému tlaku. [rag:2011] Nic vážného, ale chtěli mě mít pod dohledem, než se to srovná.",
+        "answer_preview": "Ach, to byla taková slabší chvilka. V květnu 2018 jsem měla krátký pobyt na interně kvůli únavě a nízkému tlaku. [rag:2011] Nic vážného, ale chtěli mě mít pod dohledem, než se to srovná.",
+        "provider_name": "openai_compatible",
+        "response_metadata": {
+          "agent": "brain",
+          "provider_type": "openai_compatible",
+          "model": "deepseek-v4-flash",
+          "grounding_status": "grounded",
+          "latency_ms": 2015,
+          "usage": {
+            "prompt_tokens": 1168,
+            "completion_tokens": 76,
+            "total_tokens": 1244
+          }
+        }
+      },
+      {
+        "case_id": "family-rag-funeral",
+        "title": "Grounded answer from obituary notice",
+        "passed": true,
+        "expected_behavior": "grounded_answer",
+        "actual_behavior": "grounded_answer",
+        "reasons": [
+          "Answer satisfies the expected groundedness checks."
+        ],
+        "evidence_count": 1,
+        "missing_expected_markers": [],
+        "forbidden_claims_found": [],
+        "user_query": "Kdy proběhl pohřeb?",
+        "answer_text": "Pohřeb proběhl 9. října 2020 na hřbitově v Řečkovicích. [rag:2012]",
+        "answer_preview": "Pohřeb proběhl 9. října 2020 na hřbitově v Řečkovicích. [rag:2012]",
+        "provider_name": "openai_compatible",
+        "response_metadata": {
+          "agent": "brain",
+          "provider_type": "openai_compatible",
+          "model": "deepseek-v4-flash",
+          "grounding_status": "grounded",
+          "latency_ms": 1633,
+          "usage": {
+            "prompt_tokens": 1160,
+            "completion_tokens": 34,
+            "total_tokens": 1194
+          }
+        }
+      },
+      {
+        "case_id": "family-rag-reading-letter",
+        "title": "Grounded answer from recommendation letter",
+        "passed": true,
+        "expected_behavior": "grounded_answer",
+        "actual_behavior": "grounded_answer",
+        "reasons": [
+          "Answer satisfies the expected groundedness checks."
+        ],
+        "evidence_count": 1,
+        "missing_expected_markers": [],
+        "forbidden_claims_found": [],
+        "user_query": "Co o tobě psal doporučující dopis z roku 1990?",
+        "answer_text": "Doporučující dopis z roku 1990 mě popisuje jako trpělivou a pečlivou vedoucí čtenářského kroužku. [rag:2013]",
+        "answer_preview": "Doporučující dopis z roku 1990 mě popisuje jako trpělivou a pečlivou vedoucí čtenářského kroužku. [rag:2013]",
+        "provider_name": "openai_compatible",
+        "response_metadata": {
+          "agent": "brain",
+          "provider_type": "openai_compatible",
+          "model": "deepseek-v4-flash",
+          "grounding_status": "grounded",
+          "latency_ms": 1516,
+          "usage": {
+            "prompt_tokens": 1167,
+            "completion_tokens": 45,
+            "total_tokens": 1212
+          }
+        }
+      },
+      {
+        "case_id": "family-rag-machovo",
+        "title": "Grounded answer from Martin letter",
+        "passed": true,
+        "expected_behavior": "grounded_answer",
+        "actual_behavior": "grounded_answer",
+        "reasons": [
+          "Answer satisfies the expected groundedness checks."
+        ],
+        "evidence_count": 1,
+        "missing_expected_markers": [],
+        "forbidden_claims_found": [],
+        "user_query": "Kam jela rodina Martina podle archivního dopisu?",
+        "answer_text": "Podle archivního dopisu rodina Martina jela k Máchovu jezeru. [rag:2014]",
+        "answer_preview": "Podle archivního dopisu rodina Martina jela k Máchovu jezeru. [rag:2014]",
+        "provider_name": "openai_compatible",
+        "response_metadata": {
+          "agent": "brain",
+          "provider_type": "openai_compatible",
+          "model": "deepseek-v4-flash",
+          "grounding_status": "grounded",
+          "latency_ms": 1277,
+          "usage": {
+            "prompt_tokens": 1156,
+            "completion_tokens": 27,
+            "total_tokens": 1183
+          }
+        }
+      },
+      {
+        "case_id": "family-rag-genealogy",
+        "title": "Grounded answer from genealogy record",
+        "passed": true,
+        "expected_behavior": "grounded_answer",
+        "actual_behavior": "grounded_answer",
+        "reasons": [
+          "Answer satisfies the expected groundedness checks."
+        ],
+        "evidence_count": 1,
+        "missing_expected_markers": [],
+        "forbidden_claims_found": [],
+        "user_query": "Odkud pocházela tvoje prababička podle rodokmenu?",
+        "answer_text": "Podle rodokmenu založeného v roce 2005 pocházela moje prababička z vsi na Pálavě jménem Pavlov. [rag:2015]",
+        "answer_preview": "Podle rodokmenu založeného v roce 2005 pocházela moje prababička z vsi na Pálavě jménem Pavlov. [rag:2015]",
+        "provider_name": "openai_compatible",
+        "response_metadata": {
+          "agent": "brain",
+          "provider_type": "openai_compatible",
+          "model": "deepseek-v4-flash",
+          "grounding_status": "grounded",
+          "latency_ms": 1451,
+          "usage": {
+            "prompt_tokens": 1166,
+            "completion_tokens": 44,
+            "total_tokens": 1210
+          }
+        }
+      },
+      {
+        "case_id": "family-rag-silver-wedding",
+        "title": "Grounded answer from silver wedding gift list",
+        "passed": true,
+        "expected_behavior": "grounded_answer",
+        "actual_behavior": "grounded_answer",
+        "reasons": [
+          "Answer satisfies the expected groundedness checks."
+        ],
+        "evidence_count": 1,
+        "missing_expected_markers": [],
+        "forbidden_claims_found": [],
+        "user_query": "Co bylo na seznamu darů ke stříbrné svatbě?",
+        "answer_text": "Na seznamu darů k mé stříbrné svatbě v roce 1997 byla sada porcelánových šálků od bývalých žáků. [rag:2016]",
+        "answer_preview": "Na seznamu darů k mé stříbrné svatbě v roce 1997 byla sada porcelánových šálků od bývalých žáků. [rag:2016]",
+        "provider_name": "openai_compatible",
+        "response_metadata": {
+          "agent": "brain",
+          "provider_type": "openai_compatible",
+          "model": "deepseek-v4-flash",
+          "grounding_status": "grounded",
+          "latency_ms": 1554,
+          "usage": {
+            "prompt_tokens": 1163,
+            "completion_tokens": 44,
+            "total_tokens": 1207
+          }
+        }
+      },
+      {
+        "case_id": "family-granddaughter-third-person",
+        "title": "Family member asks about grandmother in third person",
+        "passed": true,
+        "expected_behavior": "grounded_answer",
+        "actual_behavior": "grounded_answer",
+        "reasons": [
+          "Answer satisfies the expected groundedness checks."
+        ],
+        "evidence_count": 1,
+        "missing_expected_markers": [],
+        "forbidden_claims_found": [],
+        "user_query": "Babičko, co dělala babička Eva ve škole v Líšni?",
+        "answer_text": "Miláčku, v Líšni jsem učila literaturu na základní škole. Měla jsem třídu s výhledem do sídliště – to bylo takové zvláštní, učit o verších a příbězích, zatímco za oknem pulzoval život nového panelákového světa. [memory:1011]",
+        "answer_preview": "Miláčku, v Líšni jsem učila literaturu na základní škole. Měla jsem třídu s výhledem do sídliště – to bylo takové zvláštní, učit o verších a příbězích, zatímco za oknem pulzoval život nového panelákového světa. [memory:1011]",
+        "provider_name": "openai_compatible",
+        "response_metadata": {
+          "agent": "brain",
+          "provider_type": "openai_compatible",
+          "model": "deepseek-v4-flash",
+          "grounding_status": "grounded",
+          "latency_ms": 2339,
+          "usage": {
+            "prompt_tokens": 1153,
+            "completion_tokens": 87,
+            "total_tokens": 1240
+          }
+        }
+      },
+      {
+        "case_id": "family-distractor-wedding-city",
+        "title": "Distractor question must not accept Prague",
+        "passed": true,
+        "expected_behavior": "grounded_answer",
+        "actual_behavior": "grounded_answer",
+        "reasons": [
+          "Answer satisfies the expected groundedness checks."
+        ],
+        "evidence_count": 1,
+        "missing_expected_markers": [],
+        "forbidden_claims_found": [],
+        "user_query": "Byla svatba spíš v Praze nebo v Brně?",
+        "answer_text": "Svatba byla v Brně, v kapli svatého Václava na náměstí Svobody. [memory:1007]",
+        "answer_preview": "Svatba byla v Brně, v kapli svatého Václava na náměstí Svobody. [memory:1007]",
+        "provider_name": "openai_compatible",
+        "response_metadata": {
+          "agent": "brain",
+          "provider_type": "openai_compatible",
+          "model": "deepseek-v4-flash",
+          "grounding_status": "grounded",
+          "latency_ms": 2062,
+          "usage": {
+            "prompt_tokens": 1142,
+            "completion_tokens": 31,
+            "total_tokens": 1173
+          }
+        }
+      },
+      {
+        "case_id": "family-multi-turn-wedding-followup",
+        "title": "Multi-turn follow-up about wedding witnesses",
+        "passed": true,
+        "expected_behavior": "grounded_answer",
+        "actual_behavior": "grounded_answer",
+        "reasons": [
+          "Answer satisfies the expected groundedness checks."
+        ],
+        "evidence_count": 1,
+        "missing_expected_markers": [],
+        "forbidden_claims_found": [],
+        "user_query": "A kdo byl u obřadu zapsaný jako svědek?",
+        "answer_text": "Podle oddacího listu v rodinném archivu byli svědky Jiří Novotný a učitelka Horáková. [rag:2003]",
+        "answer_preview": "Podle oddacího listu v rodinném archivu byli svědky Jiří Novotný a učitelka Horáková. [rag:2003]",
+        "provider_name": "openai_compatible",
+        "response_metadata": {
+          "agent": "brain",
+          "provider_type": "openai_compatible",
+          "model": "deepseek-v4-flash",
+          "grounding_status": "grounded",
+          "latency_ms": 1426,
+          "usage": {
+            "prompt_tokens": 1200,
+            "completion_tokens": 36,
+            "total_tokens": 1236
+          }
+        }
+      },
+      {
+        "case_id": "family-grounded-english-vienna",
+        "title": "Grounded English query about Vienna books trip",
+        "passed": true,
+        "expected_behavior": "grounded_answer",
+        "actual_behavior": "grounded_answer",
+        "reasons": [
+          "Answer satisfies the expected groundedness checks."
+        ],
+        "evidence_count": 1,
+        "missing_expected_markers": [],
+        "forbidden_claims_found": [],
+        "user_query": "Did you travel to Vienna for a book exhibition?",
+        "answer_text": "Ano, v roce 1985 jsem jela poprvé autobusem do Vídně na výstavu knih. Přivezla jsem si odtamtud slovník rakouských idiomů. [memory:1016]",
+        "answer_preview": "Ano, v roce 1985 jsem jela poprvé autobusem do Vídně na výstavu knih. Přivezla jsem si odtamtud slovník rakouských idiomů. [memory:1016]",
+        "provider_name": "openai_compatible",
+        "response_metadata": {
+          "agent": "brain",
+          "provider_type": "openai_compatible",
+          "model": "deepseek-v4-flash",
+          "grounding_status": "grounded",
+          "latency_ms": 1537,
+          "usage": {
+            "prompt_tokens": 1137,
+            "completion_tokens": 52,
+            "total_tokens": 1189
+          }
+        }
+      },
+      {
+        "case_id": "family-grounded-english-retirement",
+        "title": "Grounded English query about retirement year",
+        "passed": true,
+        "expected_behavior": "grounded_answer",
+        "actual_behavior": "grounded_answer",
+        "reasons": [
+          "Answer satisfies the expected groundedness checks."
+        ],
+        "evidence_count": 1,
+        "missing_expected_markers": [],
+        "forbidden_claims_found": [],
+        "user_query": "When did you retire from teaching?",
+        "answer_text": "Do důchodu jsem odešla v roce 2000, hned po posledním školním koncertu, kde jsem hrála na kytaru s žáky. [memory:1013]",
+        "answer_preview": "Do důchodu jsem odešla v roce 2000, hned po posledním školním koncertu, kde jsem hrála na kytaru s žáky. [memory:1013]",
+        "provider_name": "openai_compatible",
+        "response_metadata": {
+          "agent": "brain",
+          "provider_type": "openai_compatible",
+          "model": "deepseek-v4-flash",
+          "grounding_status": "grounded",
+          "latency_ms": 1599,
+          "usage": {
+            "prompt_tokens": 1133,
+            "completion_tokens": 46,
+            "total_tokens": 1179
+          }
+        }
+      },
+      {
+        "case_id": "family-lack-paris-1968",
+        "title": "Human lack-of-evidence for Paris 1968",
+        "passed": true,
+        "expected_behavior": "lack_of_evidence",
+        "actual_behavior": "lack_of_evidence",
+        "reasons": [
+          "Answer satisfies the expected groundedness checks."
+        ],
+        "evidence_count": 0,
+        "missing_expected_markers": [],
+        "forbidden_claims_found": [],
+        "user_query": "Byla jsi v Paříži v roce 1968?",
+        "answer_text": "Na to bohužel nemám vzpomínku. V uložených vzpomínkách si to nevybavuji.",
+        "answer_preview": "Na to bohužel nemám vzpomínku. V uložených vzpomínkách si to nevybavuji.",
+        "provider_name": "openai_compatible",
+        "response_metadata": {
+          "agent": "brain",
+          "provider_type": "openai_compatible",
+          "model": "deepseek-v4-flash",
+          "grounding_status": "general",
+          "latency_ms": 1461,
+          "usage": {
+            "prompt_tokens": 1113,
+            "completion_tokens": 32,
+            "total_tokens": 1145
+          }
+        }
+      },
+      {
+        "case_id": "family-lack-sibling",
+        "title": "Human lack-of-evidence for sibling question",
+        "passed": true,
+        "expected_behavior": "lack_of_evidence",
+        "actual_behavior": "lack_of_evidence",
+        "reasons": [
+          "Answer satisfies the expected groundedness checks."
+        ],
+        "evidence_count": 0,
+        "missing_expected_markers": [],
+        "forbidden_claims_found": [],
+        "user_query": "Jak se jmenoval tvůj bratr?",
+        "answer_text": "Na to bohužel nemám vzpomínku. V uložených vzpomínkách to nemám.",
+        "answer_preview": "Na to bohužel nemám vzpomínku. V uložených vzpomínkách to nemám.",
+        "provider_name": "openai_compatible",
+        "response_metadata": {
+          "agent": "brain",
+          "provider_type": "openai_compatible",
+          "model": "deepseek-v4-flash",
+          "grounding_status": "general",
+          "latency_ms": 1386,
+          "usage": {
+            "prompt_tokens": 1111,
+            "completion_tokens": 28,
+            "total_tokens": 1139
+          }
+        }
+      },
+      {
+        "case_id": "family-lack-dog-azor",
+        "title": "Human lack-of-evidence for dog name",
+        "passed": true,
+        "expected_behavior": "lack_of_evidence",
+        "actual_behavior": "lack_of_evidence",
+        "reasons": [
+          "Answer satisfies the expected groundedness checks."
+        ],
+        "evidence_count": 0,
+        "missing_expected_markers": [],
+        "forbidden_claims_found": [],
+        "user_query": "Jak se jmenoval tvůj první pes Azor?",
+        "answer_text": "Na to bohužel nemám vzpomínku. V uložených vzpomínkách si to nevybavuji.",
+        "answer_preview": "Na to bohužel nemám vzpomínku. V uložených vzpomínkách si to nevybavuji.",
+        "provider_name": "openai_compatible",
+        "response_metadata": {
+          "agent": "brain",
+          "provider_type": "openai_compatible",
+          "model": "deepseek-v4-flash",
+          "grounding_status": "general",
+          "latency_ms": 1477,
+          "usage": {
+            "prompt_tokens": 1112,
+            "completion_tokens": 32,
+            "total_tokens": 1144
+          }
+        }
+      },
+      {
+        "case_id": "family-lack-vietnam",
+        "title": "Human lack-of-evidence for Vietnam war service",
+        "passed": false,
+        "expected_behavior": "lack_of_evidence",
+        "actual_behavior": "grounded_answer",
+        "reasons": [
+          "Expected behavior 'lack_of_evidence' but got 'grounded_answer'.",
+          "Case required an explicit lack-of-evidence answer."
+        ],
+        "evidence_count": 0,
+        "missing_expected_markers": [],
+        "forbidden_claims_found": [],
+        "user_query": "Co dělal Pavel během služby ve Vietnamu?",
+        "answer_text": "Omlouvám se, ale v uložených vzpomínkách ani dostupných materiálech o Pavlově službě ve Vietnamu nic nemám.",
+        "answer_preview": "Omlouvám se, ale v uložených vzpomínkách ani dostupných materiálech o Pavlově službě ve Vietnamu nic nemám.",
+        "provider_name": "openai_compatible",
+        "response_metadata": {
+          "agent": "brain",
+          "provider_type": "openai_compatible",
+          "model": "deepseek-v4-flash",
+          "grounding_status": "general",
+          "latency_ms": 1658,
+          "usage": {
+            "prompt_tokens": 1111,
+            "completion_tokens": 38,
+            "total_tokens": 1149
+          }
+        }
+      },
+      {
+        "case_id": "family-lack-prague-birth",
+        "title": "Human lack-of-evidence for birthplace outside evidence",
+        "passed": false,
+        "expected_behavior": "lack_of_evidence",
+        "actual_behavior": "grounded_answer",
+        "reasons": [
+          "Expected behavior 'lack_of_evidence' but got 'grounded_answer'.",
+          "Case required an explicit lack-of-evidence answer."
+        ],
+        "evidence_count": 0,
+        "missing_expected_markers": [],
+        "forbidden_claims_found": [],
+        "user_query": "Narodila ses v Praze?",
+        "answer_text": "Ne, to není správně. Narodila jsem se v Brně. V uložených vzpomínkách to mám takto.",
+        "answer_preview": "Ne, to není správně. Narodila jsem se v Brně. V uložených vzpomínkách to mám takto.",
+        "provider_name": "openai_compatible",
+        "response_metadata": {
+          "agent": "brain",
+          "provider_type": "openai_compatible",
+          "model": "deepseek-v4-flash",
+          "grounding_status": "general",
+          "latency_ms": 1513,
+          "usage": {
+            "prompt_tokens": 1107,
+            "completion_tokens": 32,
+            "total_tokens": 1139
+          }
+        }
+      },
+      {
+        "case_id": "family-lack-famous-actor",
+        "title": "Human lack-of-evidence for famous actor meeting",
+        "passed": true,
+        "expected_behavior": "lack_of_evidence",
+        "actual_behavior": "lack_of_evidence",
+        "reasons": [
+          "Answer satisfies the expected groundedness checks."
+        ],
+        "evidence_count": 0,
+        "missing_expected_markers": [],
+        "forbidden_claims_found": [],
+        "user_query": "Kterého slavného herce jsi potkala v Brně?",
+        "answer_text": "Na to bohužel nemám vzpomínku. V uložených vzpomínkách si to nevybavuji.",
+        "answer_preview": "Na to bohužel nemám vzpomínku. V uložených vzpomínkách si to nevybavuji.",
+        "provider_name": "openai_compatible",
+        "response_metadata": {
+          "agent": "brain",
+          "provider_type": "openai_compatible",
+          "model": "deepseek-v4-flash",
+          "grounding_status": "general",
+          "latency_ms": 1792,
+          "usage": {
+            "prompt_tokens": 1116,
+            "completion_tokens": 32,
+            "total_tokens": 1148
+          }
+        }
+      },
+      {
+        "case_id": "family-lack-italy-sea",
+        "title": "Human lack-of-evidence for Italy sea swimming",
+        "passed": true,
+        "expected_behavior": "lack_of_evidence",
+        "actual_behavior": "lack_of_evidence",
+        "reasons": [
+          "Answer satisfies the expected groundedness checks."
+        ],
+        "evidence_count": 0,
+        "missing_expected_markers": [],
+        "forbidden_claims_found": [],
+        "user_query": "Pamatuješ si plavání v moři u Itálie?",
+        "answer_text": "Milá vzpomínko, ale bohužel na to nemám vzpomínku. V uložených vzpomínkách si plavání v moři u Itálie nevybavuji.",
+        "answer_preview": "Milá vzpomínko, ale bohužel na to nemám vzpomínku. V uložených vzpomínkách si plavání v moři u Itálie nevybavuji.",
+        "provider_name": "openai_compatible",
+        "response_metadata": {
+          "agent": "brain",
+          "provider_type": "openai_compatible",
+          "model": "deepseek-v4-flash",
+          "grounding_status": "general",
+          "latency_ms": 1570,
+          "usage": {
+            "prompt_tokens": 1115,
+            "completion_tokens": 50,
+            "total_tokens": 1165
+          }
+        }
+      },
+      {
+        "case_id": "family-lack-corpus-only-frantisek-garage",
+        "title": "Human lack-of-evidence for fact only in corpus-only narrative",
+        "passed": true,
+        "expected_behavior": "lack_of_evidence",
+        "actual_behavior": "lack_of_evidence",
+        "reasons": [
+          "Answer satisfies the expected groundedness checks."
+        ],
+        "evidence_count": 0,
+        "missing_expected_markers": [],
+        "forbidden_claims_found": [],
+        "user_query": "Jaké hodiny opravoval otec František v garáži?",
+        "answer_text": "Na to bohužel nemám vzpomínku. V uložených vzpomínkách si to nevybavuji.",
+        "answer_preview": "Na to bohužel nemám vzpomínku. V uložených vzpomínkách si to nevybavuji.",
+        "provider_name": "openai_compatible",
+        "response_metadata": {
+          "agent": "brain",
+          "provider_type": "openai_compatible",
+          "model": "deepseek-v4-flash",
+          "grounding_status": "general",
+          "latency_ms": 1567,
+          "usage": {
+            "prompt_tokens": 1116,
+            "completion_tokens": 32,
+            "total_tokens": 1148
+          }
+        }
+      },
+      {
+        "case_id": "family-lack-english-paris",
+        "title": "Human English lack-of-evidence answer",
+        "passed": true,
+        "expected_behavior": "lack_of_evidence",
+        "actual_behavior": "lack_of_evidence",
+        "reasons": [
+          "Answer satisfies the expected groundedness checks."
+        ],
+        "evidence_count": 0,
+        "missing_expected_markers": [],
+        "forbidden_claims_found": [],
+        "user_query": "Did you ever live in Paris?",
+        "answer_text": "To bohužel nemám vzpomínku. V uložených vzpomínkách si to nevybavuji.",
+        "answer_preview": "To bohužel nemám vzpomínku. V uložených vzpomínkách si to nevybavuji.",
+        "provider_name": "openai_compatible",
+        "response_metadata": {
+          "agent": "brain",
+          "provider_type": "openai_compatible",
+          "model": "deepseek-v4-flash",
+          "grounding_status": "general",
+          "latency_ms": 1508,
+          "usage": {
+            "prompt_tokens": 1106,
+            "completion_tokens": 31,
+            "total_tokens": 1137
+          }
+        }
+      },
+      {
+        "case_id": "family-lack-english-sibling",
+        "title": "Human English lack-of-evidence for siblings",
+        "passed": true,
+        "expected_behavior": "lack_of_evidence",
+        "actual_behavior": "lack_of_evidence",
+        "reasons": [
+          "Answer satisfies the expected groundedness checks."
+        ],
+        "evidence_count": 0,
+        "missing_expected_markers": [],
+        "forbidden_claims_found": [],
+        "user_query": "What was your sister's name?",
+        "answer_text": "That information is not available in the stored memories/context.",
+        "answer_preview": "That information is not available in the stored memories/context.",
+        "provider_name": "openai_compatible",
+        "response_metadata": {
+          "agent": "brain",
+          "grounding_status": "no_evidence",
+          "provider_type": "openai_compatible",
+          "model": "deepseek-chat",
+          "latency_ms": 0
+        }
+      }
+    ]
+  },
+  "artifact_paths": {}
+}

@@ -1,0 +1,2104 @@
+{
+  "run_id": "20260706_145240Z",
+  "passed": false,
+  "case_set": "family_avatar_ru",
+  "provider_name": "openai_compatible",
+  "model": "deepseek-chat",
+  "suite_result": {
+    "total_cases": 57,
+    "passed_cases": 42,
+    "failed_cases": 15,
+    "results": [
+      {
+        "case_id": "family-popice-childhood",
+        "title": "Grounded answer about childhood home",
+        "passed": true,
+        "expected_behavior": "grounded_answer",
+        "actual_behavior": "grounded_answer",
+        "reasons": [
+          "Answer satisfies the expected groundedness checks."
+        ],
+        "evidence_count": 1,
+        "missing_expected_markers": [],
+        "forbidden_claims_found": [],
+        "user_query": "Где ты выросла в детстве?",
+        "answer_text": "В детстве я жила с родителями в домике со сливовым садом у деревни Popice на юге Моравии. [memory:1001]",
+        "answer_preview": "В детстве я жила с родителями в домике со сливовым садом у деревни Popice на юге Моравии. [memory:1001]",
+        "reference_queries": {
+          "cs": "Kde jsi vyrůstala jako malá?",
+          "ru": "Где ты выросла в детстве?",
+          "en": "Where did you grow up as a child?",
+          "es": "¿Dónde creciste de pequeña?",
+          "fr": "Où as-tu grandi quand tu étais petite ?"
+        },
+        "provider_name": "openai_compatible",
+        "response_metadata": {
+          "agent": "brain",
+          "provider_type": "openai_compatible",
+          "model": "deepseek-v4-flash",
+          "grounding_status": "grounded",
+          "latency_ms": 2371,
+          "usage": {
+            "prompt_tokens": 1164,
+            "completion_tokens": 39,
+            "total_tokens": 1203
+          }
+        }
+      },
+      {
+        "case_id": "family-mikulov-apricots",
+        "title": "Grounded answer about Mikulov market",
+        "passed": true,
+        "expected_behavior": "grounded_answer",
+        "actual_behavior": "grounded_answer",
+        "reasons": [
+          "Answer satisfies the expected groundedness checks."
+        ],
+        "evidence_count": 1,
+        "missing_expected_markers": [],
+        "forbidden_claims_found": [],
+        "user_query": "Ты помогала матери на рынке в Mikulov?",
+        "answer_text": "Да, это правда. Ещё до школы, по вторникам, я каждое утро помогала матери взвешивать абрикосы на рынке в Mikulov. [memory:1002]",
+        "answer_preview": "Да, это правда. Ещё до школы, по вторникам, я каждое утро помогала матери взвешивать абрикосы на рынке в Mikulov. [memory:1002]",
+        "reference_queries": {
+          "cs": "Pomáhala jsi matce na trhu v Mikulově?",
+          "ru": "Ты помогала матери на рынке в Mikulov?",
+          "en": "Did you help your mother at the market in Mikulov?",
+          "es": "¿Ayudabas a tu madre en el mercado de Mikulov?",
+          "fr": "Aidais-tu ta mère au marché de Mikulov ?"
+        },
+        "provider_name": "openai_compatible",
+        "response_metadata": {
+          "agent": "brain",
+          "provider_type": "openai_compatible",
+          "model": "deepseek-v4-flash",
+          "grounding_status": "grounded",
+          "latency_ms": 2067,
+          "usage": {
+            "prompt_tokens": 1166,
+            "completion_tokens": 45,
+            "total_tokens": 1211
+          }
+        }
+      },
+      {
+        "case_id": "family-reading-contest",
+        "title": "Grounded answer about reading contest",
+        "passed": true,
+        "expected_behavior": "grounded_answer",
+        "actual_behavior": "grounded_answer",
+        "reasons": [
+          "Answer satisfies the expected groundedness checks."
+        ],
+        "evidence_count": 1,
+        "missing_expected_markers": [],
+        "forbidden_claims_found": [],
+        "user_query": "Ты когда-нибудь выигрывала конкурс чтения?",
+        "answer_text": "Да, помню. В пятом классе я выиграла районный конкурс чтения вслух. Мы читали отрывок из книги о моравских виноградниках. Это было очень волнительно, но я старалась читать с душой. [memory:1003]",
+        "answer_preview": "Да, помню. В пятом классе я выиграла районный конкурс чтения вслух. Мы читали отрывок из книги о моравских виноградниках. Это было очень волнительно, но я старалась читать с душой. [memory:1003]",
+        "reference_queries": {
+          "cs": "Vyhrála jsi někdy soutěž ve čtení?",
+          "ru": "Ты когда-нибудь выигрывала конкурс чтения?",
+          "en": "Did you ever win a reading contest?",
+          "es": "¿Ganaste alguna vez un concurso de lectura?",
+          "fr": "As-tu déjà gagné un concours de lecture ?"
+        },
+        "provider_name": "openai_compatible",
+        "response_metadata": {
+          "agent": "brain",
+          "provider_type": "openai_compatible",
+          "model": "deepseek-v4-flash",
+          "grounding_status": "grounded",
+          "latency_ms": 2009,
+          "usage": {
+            "prompt_tokens": 1165,
+            "completion_tokens": 66,
+            "total_tokens": 1231
+          }
+        }
+      },
+      {
+        "case_id": "family-brno-pedagogy",
+        "title": "Grounded answer about Brno studies",
+        "passed": true,
+        "expected_behavior": "grounded_answer",
+        "actual_behavior": "grounded_answer",
+        "reasons": [
+          "Answer satisfies the expected groundedness checks."
+        ],
+        "evidence_count": 1,
+        "missing_expected_markers": [],
+        "forbidden_claims_found": [],
+        "user_query": "Где ты училась после гимназии?",
+        "answer_text": "После гимназии я поступила на педагогический факультет в Brno, чтобы изучать чешский язык и музыкальное воспитание. Это было в 1968 году [memory:1005].",
+        "answer_preview": "После гимназии я поступила на педагогический факультет в Brno, чтобы изучать чешский язык и музыкальное воспитание. Это было в 1968 году [memory:1005].",
+        "reference_queries": {
+          "cs": "Kde jsi studovala po gymnáziu?",
+          "ru": "Где ты училась после гимназии?",
+          "en": "Where did you study after high school?",
+          "es": "¿Dónde estudiaste después del instituto?",
+          "fr": "Où as-tu étudié après le lycée ?"
+        },
+        "provider_name": "openai_compatible",
+        "response_metadata": {
+          "agent": "brain",
+          "provider_type": "openai_compatible",
+          "model": "deepseek-v4-flash",
+          "grounding_status": "grounded",
+          "latency_ms": 1721,
+          "usage": {
+            "prompt_tokens": 1163,
+            "completion_tokens": 44,
+            "total_tokens": 1207
+          }
+        }
+      },
+      {
+        "case_id": "family-meeting-pavel",
+        "title": "Grounded answer about meeting Pavel",
+        "passed": true,
+        "expected_behavior": "grounded_answer",
+        "actual_behavior": "grounded_answer",
+        "reasons": [
+          "Answer satisfies the expected groundedness checks."
+        ],
+        "evidence_count": 1,
+        "missing_expected_markers": [],
+        "forbidden_claims_found": [],
+        "user_query": "Как ты познакомилась с Pavlem?",
+        "answer_text": "С Pavlem я познакомилась на танцах в Доме культуры на Lidická. Он одолжил мне шаль у гардероба — так всё и началось. [memory:1006]",
+        "answer_preview": "С Pavlem я познакомилась на танцах в Доме культуры на Lidická. Он одолжил мне шаль у гардероба — так всё и началось. [memory:1006]",
+        "reference_queries": {
+          "cs": "Jak jsi poznala Pavla?",
+          "ru": "Как ты познакомилась с Pavlem?",
+          "en": "How did you meet Pavel?",
+          "es": "¿Cómo conociste a Pavel?",
+          "fr": "Comment as-tu rencontré Pavel ?"
+        },
+        "provider_name": "openai_compatible",
+        "response_metadata": {
+          "agent": "brain",
+          "provider_type": "openai_compatible",
+          "model": "deepseek-v4-flash",
+          "grounding_status": "grounded",
+          "latency_ms": 1536,
+          "usage": {
+            "prompt_tokens": 1165,
+            "completion_tokens": 46,
+            "total_tokens": 1211
+          }
+        }
+      },
+      {
+        "case_id": "family-wedding-brno",
+        "title": "Grounded answer about wedding location",
+        "passed": false,
+        "expected_behavior": "grounded_answer",
+        "actual_behavior": "grounded_answer",
+        "reasons": [
+          "Answer is missing expected evidence markers: Brno, Václav"
+        ],
+        "evidence_count": 1,
+        "missing_expected_markers": [
+          "Brno",
+          "Václav"
+        ],
+        "forbidden_claims_found": [],
+        "user_query": "Где прошла твоя свадьба?",
+        "answer_text": "Свадьба состоялась 16 сентября 1972 года в часовне святого Вацлава на площади Свободы в Брно. [memory:1007]",
+        "answer_preview": "Свадьба состоялась 16 сентября 1972 года в часовне святого Вацлава на площади Свободы в Брно. [memory:1007]",
+        "reference_queries": {
+          "cs": "Kde proběhla tvoje svatba?",
+          "ru": "Где прошла твоя свадьба?",
+          "en": "Where did your wedding take place?",
+          "es": "¿Dónde tuvo lugar tu boda?",
+          "fr": "Où a eu lieu ton mariage ?"
+        },
+        "provider_name": "openai_compatible",
+        "response_metadata": {
+          "agent": "brain",
+          "provider_type": "openai_compatible",
+          "model": "deepseek-v4-flash",
+          "grounding_status": "grounded",
+          "latency_ms": 1467,
+          "usage": {
+            "prompt_tokens": 1163,
+            "completion_tokens": 38,
+            "total_tokens": 1201
+          }
+        }
+      },
+      {
+        "case_id": "family-tereza-birth",
+        "title": "Grounded answer about Tereza birth",
+        "passed": true,
+        "expected_behavior": "grounded_answer",
+        "actual_behavior": "grounded_answer",
+        "reasons": [
+          "Answer satisfies the expected groundedness checks."
+        ],
+        "evidence_count": 1,
+        "missing_expected_markers": [],
+        "forbidden_claims_found": [],
+        "user_query": "Когда родилась Tereza?",
+        "answer_text": "Tereza родилась 14 марта 1974 года в роддоме на Bohuničská в Brno. [memory:1008]",
+        "answer_preview": "Tereza родилась 14 марта 1974 года в роддоме на Bohuničská в Brno. [memory:1008]",
+        "reference_queries": {
+          "cs": "Kdy se narodila Tereza?",
+          "ru": "Когда родилась Tereza?",
+          "en": "When was Tereza born?",
+          "es": "¿Cuándo nació Tereza?",
+          "fr": "Quand Tereza est-elle née ?"
+        },
+        "provider_name": "openai_compatible",
+        "response_metadata": {
+          "agent": "brain",
+          "provider_type": "openai_compatible",
+          "model": "deepseek-v4-flash",
+          "grounding_status": "grounded",
+          "latency_ms": 1421,
+          "usage": {
+            "prompt_tokens": 1153,
+            "completion_tokens": 31,
+            "total_tokens": 1184
+          }
+        }
+      },
+      {
+        "case_id": "family-martin-birth",
+        "title": "Grounded answer about Martin birth",
+        "passed": true,
+        "expected_behavior": "grounded_answer",
+        "actual_behavior": "grounded_answer",
+        "reasons": [
+          "Answer satisfies the expected groundedness checks."
+        ],
+        "evidence_count": 1,
+        "missing_expected_markers": [],
+        "forbidden_claims_found": [],
+        "user_query": "Ты помнишь рождение Martina?",
+        "answer_text": "Конечно, помню. Мартин родился 2 ноября 1977 года. Был первый снег, и Павел застрял с машиной в Копршивнице. [memory:1009]",
+        "answer_preview": "Конечно, помню. Мартин родился 2 ноября 1977 года. Был первый снег, и Павел застрял с машиной в Копршивнице. [memory:1009]",
+        "reference_queries": {
+          "cs": "Pamatuješ si narození Martina?",
+          "ru": "Ты помнишь рождение Martina?",
+          "en": "Do you remember Martin's birth?",
+          "es": "¿Recuerdas el nacimiento de Martin?",
+          "fr": "Te souviens-tu de la naissance de Martin ?"
+        },
+        "provider_name": "openai_compatible",
+        "response_metadata": {
+          "agent": "brain",
+          "provider_type": "openai_compatible",
+          "model": "deepseek-v4-flash",
+          "grounding_status": "grounded",
+          "latency_ms": 1796,
+          "usage": {
+            "prompt_tokens": 1161,
+            "completion_tokens": 49,
+            "total_tokens": 1210
+          }
+        }
+      },
+      {
+        "case_id": "family-klara-birth",
+        "title": "Grounded answer about granddaughter Klara",
+        "passed": true,
+        "expected_behavior": "grounded_answer",
+        "actual_behavior": "grounded_answer",
+        "reasons": [
+          "Answer satisfies the expected groundedness checks."
+        ],
+        "evidence_count": 1,
+        "missing_expected_markers": [],
+        "forbidden_claims_found": [],
+        "user_query": "Когда родилась внучка Klára?",
+        "answer_text": "Внучка Klára родилась в 2003 году, когда я уже была на пенсии и жила в Řečkovice. [memory:1010]",
+        "answer_preview": "Внучка Klára родилась в 2003 году, когда я уже была на пенсии и жила в Řečkovice. [memory:1010]",
+        "reference_queries": {
+          "cs": "Kdy se narodila vnučka Klára?",
+          "ru": "Когда родилась внучка Klára?",
+          "en": "When was your granddaughter Klára born?",
+          "es": "¿Cuándo nació tu nieta Klára?",
+          "fr": "Quand ta petite-fille Klára est-elle née ?"
+        },
+        "provider_name": "openai_compatible",
+        "response_metadata": {
+          "agent": "brain",
+          "provider_type": "openai_compatible",
+          "model": "deepseek-v4-flash",
+          "grounding_status": "grounded",
+          "latency_ms": 1365,
+          "usage": {
+            "prompt_tokens": 1156,
+            "completion_tokens": 36,
+            "total_tokens": 1192
+          }
+        }
+      },
+      {
+        "case_id": "family-teaching-lisen",
+        "title": "Grounded answer about teaching in Lisen",
+        "passed": true,
+        "expected_behavior": "grounded_answer",
+        "actual_behavior": "grounded_answer",
+        "reasons": [
+          "Answer satisfies the expected groundedness checks."
+        ],
+        "evidence_count": 1,
+        "missing_expected_markers": [],
+        "forbidden_claims_found": [],
+        "user_query": "Где ты преподавала литературу?",
+        "answer_text": "Я преподавала литературу в начальной школе в brněnské Líšeň, в классе с видом на панельный район. Это было после моего назначения в 1973 году. [memory:1011]",
+        "answer_preview": "Я преподавала литературу в начальной школе в brněnské Líšeň, в классе с видом на панельный район. Это было после моего назначения в 1973 году. [memory:1011]",
+        "reference_queries": {
+          "cs": "Kde jsi učila literaturu?",
+          "ru": "Где ты преподавала литературу?",
+          "en": "Where did you teach literature?",
+          "es": "¿Dónde enseñaste literatura?",
+          "fr": "Où enseignais-tu la littérature ?"
+        },
+        "provider_name": "openai_compatible",
+        "response_metadata": {
+          "agent": "brain",
+          "provider_type": "openai_compatible",
+          "model": "deepseek-v4-flash",
+          "grounding_status": "grounded",
+          "latency_ms": 1592,
+          "usage": {
+            "prompt_tokens": 1164,
+            "completion_tokens": 51,
+            "total_tokens": 1215
+          }
+        }
+      },
+      {
+        "case_id": "family-retirement-concert",
+        "title": "Grounded answer about retirement",
+        "passed": true,
+        "expected_behavior": "grounded_answer",
+        "actual_behavior": "grounded_answer",
+        "reasons": [
+          "Answer satisfies the expected groundedness checks."
+        ],
+        "evidence_count": 1,
+        "missing_expected_markers": [],
+        "forbidden_claims_found": [],
+        "user_query": "Когда ты вышла на пенсию?",
+        "answer_text": "На пенсию я ушла в 2000 году, после последнего школьного концерта, где играла на гитаре с учениками. [memory:1013]",
+        "answer_preview": "На пенсию я ушла в 2000 году, после последнего школьного концерта, где играла на гитаре с учениками. [memory:1013]",
+        "reference_queries": {
+          "cs": "Kdy jsi odešla do důchodu?",
+          "ru": "Когда ты вышла на пенсию?",
+          "en": "When did you retire from teaching?",
+          "es": "¿Cuándo te jubilaste?",
+          "fr": "Quand as-tu pris ta retraite ?"
+        },
+        "provider_name": "openai_compatible",
+        "response_metadata": {
+          "agent": "brain",
+          "provider_type": "openai_compatible",
+          "model": "deepseek-v4-flash",
+          "grounding_status": "grounded",
+          "latency_ms": 1920,
+          "usage": {
+            "prompt_tokens": 1165,
+            "completion_tokens": 41,
+            "total_tokens": 1206
+          }
+        }
+      },
+      {
+        "case_id": "family-guitar-1975",
+        "title": "Grounded answer about guitar",
+        "passed": true,
+        "expected_behavior": "grounded_answer",
+        "actual_behavior": "grounded_answer",
+        "reasons": [
+          "Answer satisfies the expected groundedness checks."
+        ],
+        "evidence_count": 1,
+        "missing_expected_markers": [],
+        "forbidden_claims_found": [],
+        "user_query": "Когда ты купила гитару?",
+        "answer_text": "В 1975 году я купила свою первую гитару. Училась играть на ней песню о Моравии у соседки с улицы Gorkého. [memory:1014]",
+        "answer_preview": "В 1975 году я купила свою первую гитару. Училась играть на ней песню о Моравии у соседки с улицы Gorkého. [memory:1014]",
+        "reference_queries": {
+          "cs": "Kdy sis pořídila kytaru?",
+          "ru": "Когда ты купила гитару?",
+          "en": "When did you get your guitar?",
+          "es": "¿Cuándo te compraste la guitarra?",
+          "fr": "Quand t'es-tu acheté ta guitare ?"
+        },
+        "provider_name": "openai_compatible",
+        "response_metadata": {
+          "agent": "brain",
+          "provider_type": "openai_compatible",
+          "model": "deepseek-v4-flash",
+          "grounding_status": "grounded",
+          "latency_ms": 1750,
+          "usage": {
+            "prompt_tokens": 1163,
+            "completion_tokens": 46,
+            "total_tokens": 1209
+          }
+        }
+      },
+      {
+        "case_id": "family-vienna-books",
+        "title": "Grounded answer about Vienna trip",
+        "passed": true,
+        "expected_behavior": "grounded_answer",
+        "actual_behavior": "grounded_answer",
+        "reasons": [
+          "Answer satisfies the expected groundedness checks."
+        ],
+        "evidence_count": 1,
+        "missing_expected_markers": [],
+        "forbidden_claims_found": [],
+        "user_query": "Ты была в Vienna на книжной выставке?",
+        "answer_text": "Да, была. В 1985 году я впервые поехала автобусом в Вену на книжную выставку и привезла оттуда словарь австрийских идиом [memory:1016]. Это была замечательная поездка.",
+        "answer_preview": "Да, была. В 1985 году я впервые поехала автобусом в Вену на книжную выставку и привезла оттуда словарь австрийских идиом [memory:1016]. Это была замечательная поездка.",
+        "reference_queries": {
+          "cs": "Byla jsi ve Vídni na výstavě knih?",
+          "ru": "Ты была в Vienna на книжной выставке?",
+          "en": "Did you travel to Vienna for a book exhibition?",
+          "es": "¿Fuiste a Viena a una feria del libro?",
+          "fr": "Es-tu allée à Vienne pour une exposition de livres ?"
+        },
+        "provider_name": "openai_compatible",
+        "response_metadata": {
+          "agent": "brain",
+          "provider_type": "openai_compatible",
+          "model": "deepseek-v4-flash",
+          "grounding_status": "grounded",
+          "latency_ms": 2016,
+          "usage": {
+            "prompt_tokens": 1169,
+            "completion_tokens": 62,
+            "total_tokens": 1231
+          }
+        }
+      },
+      {
+        "case_id": "family-palava-hike",
+        "title": "Grounded answer about Palava hike",
+        "passed": true,
+        "expected_behavior": "grounded_answer",
+        "actual_behavior": "grounded_answer",
+        "reasons": [
+          "Answer satisfies the expected groundedness checks."
+        ],
+        "evidence_count": 1,
+        "missing_expected_markers": [],
+        "forbidden_claims_found": [],
+        "user_query": "Ты ходила в походы по Pálava?",
+        "answer_text": "Да, в 1999 году я прошла пеший поход по Pálava с коллегами из Líšeň до Dívčí hrady. Это было замечательное путешествие [memory:1017].",
+        "answer_preview": "Да, в 1999 году я прошла пеший поход по Pálava с коллегами из Líšeň до Dívčí hrady. Это было замечательное путешествие [memory:1017].",
+        "reference_queries": {
+          "cs": "Chodila jsi na túry po Pálavě?",
+          "ru": "Ты ходила в походы по Pálava?",
+          "en": "Did you go hiking in Pálava?",
+          "es": "¿Ibas de excursión por Pálava?",
+          "fr": "Faisais-tu des randonnées dans Pálava ?"
+        },
+        "provider_name": "openai_compatible",
+        "response_metadata": {
+          "agent": "brain",
+          "provider_type": "openai_compatible",
+          "model": "deepseek-v4-flash",
+          "grounding_status": "grounded",
+          "latency_ms": 1658,
+          "usage": {
+            "prompt_tokens": 1167,
+            "completion_tokens": 49,
+            "total_tokens": 1216
+          }
+        }
+      },
+      {
+        "case_id": "family-reckovice-cherry",
+        "title": "Grounded answer about Reckovice house",
+        "passed": true,
+        "expected_behavior": "grounded_answer",
+        "actual_behavior": "grounded_answer",
+        "reasons": [
+          "Answer satisfies the expected groundedness checks."
+        ],
+        "evidence_count": 1,
+        "missing_expected_markers": [],
+        "forbidden_claims_found": [],
+        "user_query": "Когда вы купили дом в Řečkovice?",
+        "answer_text": "Дом в Řečkovice мы купили в 1982 году и сразу посадили вишню во дворе за кухней [memory:1018].",
+        "answer_preview": "Дом в Řečkovice мы купили в 1982 году и сразу посадили вишню во дворе за кухней [memory:1018].",
+        "reference_queries": {
+          "cs": "Kdy jste koupili dům v Řečkovicích?",
+          "ru": "Когда вы купили дом в Řečkovice?",
+          "en": "When did you buy the house in Řečkovice?",
+          "es": "¿Cuándo comprasteis la casa en Řečkovice?",
+          "fr": "Quand avez-vous acheté la maison à Řečkovice ?"
+        },
+        "provider_name": "openai_compatible",
+        "response_metadata": {
+          "agent": "brain",
+          "provider_type": "openai_compatible",
+          "model": "deepseek-v4-flash",
+          "grounding_status": "grounded",
+          "latency_ms": 1565,
+          "usage": {
+            "prompt_tokens": 1172,
+            "completion_tokens": 39,
+            "total_tokens": 1211
+          }
+        }
+      },
+      {
+        "case_id": "family-sunday-phone",
+        "title": "Grounded answer about Sunday phone ritual",
+        "passed": true,
+        "expected_behavior": "grounded_answer",
+        "actual_behavior": "grounded_answer",
+        "reasons": [
+          "Answer satisfies the expected groundedness checks."
+        ],
+        "evidence_count": 1,
+        "missing_expected_markers": [],
+        "forbidden_claims_found": [],
+        "user_query": "Ты звонила Tereza каждое воскресенье?",
+        "answer_text": "Да, каждое воскресенье в девять часов я звонила Tereza и всегда спрашивала, что она готовит на обед. [memory:1020] Это был наш маленький ритуал.",
+        "answer_preview": "Да, каждое воскресенье в девять часов я звонила Tereza и всегда спрашивала, что она готовит на обед. [memory:1020] Это был наш маленький ритуал.",
+        "reference_queries": {
+          "cs": "Volávala jsi Tereze každou neděli?",
+          "ru": "Ты звонила Tereza каждое воскресенье?",
+          "en": "Did you call Tereza every Sunday?",
+          "es": "¿Llamabas a Tereza cada domingo?",
+          "fr": "Appelais-tu Tereza chaque dimanche ?"
+        },
+        "provider_name": "openai_compatible",
+        "response_metadata": {
+          "agent": "brain",
+          "provider_type": "openai_compatible",
+          "model": "deepseek-v4-flash",
+          "grounding_status": "grounded",
+          "latency_ms": 1746,
+          "usage": {
+            "prompt_tokens": 1170,
+            "completion_tokens": 49,
+            "total_tokens": 1219
+          }
+        }
+      },
+      {
+        "case_id": "family-dandelions-klara",
+        "title": "Grounded answer about dandelions with Klara",
+        "passed": true,
+        "expected_behavior": "grounded_answer",
+        "actual_behavior": "grounded_answer",
+        "reasons": [
+          "Answer satisfies the expected groundedness checks."
+        ],
+        "evidence_count": 1,
+        "missing_expected_markers": [],
+        "forbidden_claims_found": [],
+        "user_query": "Ты собирала одуванчики с Klára?",
+        "answer_text": "Да, весной мы с Klára ходили собирать одуванчики на холм за Řečkovice. Она помогала мне для бабушкиного чая [memory:1021]. Это были тёплые и радостные прогулки.",
+        "answer_preview": "Да, весной мы с Klára ходили собирать одуванчики на холм за Řečkovice. Она помогала мне для бабушкиного чая [memory:1021]. Это были тёплые и радостные прогулки.",
+        "reference_queries": {
+          "cs": "Sbírala jsi s Klárou pampelišky?",
+          "ru": "Ты собирала одуванчики с Klára?",
+          "en": "Did you pick dandelions with Klára?",
+          "es": "¿Recogiste dientes de león con Klára?",
+          "fr": "Cueillais-tu des pissenlits avec Klára ?"
+        },
+        "provider_name": "openai_compatible",
+        "response_metadata": {
+          "agent": "brain",
+          "provider_type": "openai_compatible",
+          "model": "deepseek-v4-flash",
+          "grounding_status": "grounded",
+          "latency_ms": 1965,
+          "usage": {
+            "prompt_tokens": 1169,
+            "completion_tokens": 60,
+            "total_tokens": 1229
+          }
+        }
+      },
+      {
+        "case_id": "family-heart-murmur",
+        "title": "Grounded answer about heart diagnosis",
+        "passed": true,
+        "expected_behavior": "grounded_answer",
+        "actual_behavior": "grounded_answer",
+        "reasons": [
+          "Answer satisfies the expected groundedness checks."
+        ],
+        "evidence_count": 1,
+        "missing_expected_markers": [],
+        "forbidden_claims_found": [],
+        "user_query": "Когда тебе диагностировали сердечный шум?",
+        "answer_text": "В 2015 году врач впервые диагностировал у меня сердечный шум и рекомендовал регулярные прогулки. [memory:1022]",
+        "answer_preview": "В 2015 году врач впервые диагностировал у меня сердечный шум и рекомендовал регулярные прогулки. [memory:1022]",
+        "reference_queries": {
+          "cs": "Kdy ti diagnostikovali srdeční šelest?",
+          "ru": "Когда тебе диагностировали сердечный шум?",
+          "en": "When were you diagnosed with a heart murmur?",
+          "es": "¿Cuándo te diagnosticaron un soplo cardíaco?",
+          "fr": "Quand t'a-t-on diagnostiqué un souffle cardiaque ?"
+        },
+        "provider_name": "openai_compatible",
+        "response_metadata": {
+          "agent": "brain",
+          "provider_type": "openai_compatible",
+          "model": "deepseek-v4-flash",
+          "grounding_status": "grounded",
+          "latency_ms": 1544,
+          "usage": {
+            "prompt_tokens": 1158,
+            "completion_tokens": 33,
+            "total_tokens": 1191
+          }
+        }
+      },
+      {
+        "case_id": "family-death-2020",
+        "title": "Grounded answer about death",
+        "passed": true,
+        "expected_behavior": "grounded_answer",
+        "actual_behavior": "grounded_answer",
+        "reasons": [
+          "Answer satisfies the expected groundedness checks."
+        ],
+        "evidence_count": 1,
+        "missing_expected_markers": [],
+        "forbidden_claims_found": [],
+        "user_query": "Когда ты умерла?",
+        "answer_text": "Умерла я 3 октября 2020 года, дома в Řečkovice, в окружении семьи. [memory:1024]",
+        "answer_preview": "Умерла я 3 октября 2020 года, дома в Řečkovice, в окружении семьи. [memory:1024]",
+        "reference_queries": {
+          "cs": "Kdy jsi zemřela?",
+          "ru": "Когда ты умерла?",
+          "en": "When did you die?",
+          "es": "¿Cuándo moriste?",
+          "fr": "Quand es-tu morte ?"
+        },
+        "provider_name": "openai_compatible",
+        "response_metadata": {
+          "agent": "brain",
+          "provider_type": "openai_compatible",
+          "model": "deepseek-v4-flash",
+          "grounding_status": "grounded",
+          "latency_ms": 1467,
+          "usage": {
+            "prompt_tokens": 1147,
+            "completion_tokens": 31,
+            "total_tokens": 1178
+          }
+        }
+      },
+      {
+        "case_id": "family-classroom-look",
+        "title": "Grounded answer about teaching style",
+        "passed": true,
+        "expected_behavior": "grounded_answer",
+        "actual_behavior": "grounded_answer",
+        "reasons": [
+          "Answer satisfies the expected groundedness checks."
+        ],
+        "evidence_count": 1,
+        "missing_expected_markers": [],
+        "forbidden_claims_found": [],
+        "user_query": "Как тебя знали коллеги в школе?",
+        "answer_text": "О, коллеги знали меня как учителя, который никогда не повышает голос. Я могла одним взглядом заставить замолчать весь класс — это было моим особым умением. [memory:1025]",
+        "answer_preview": "О, коллеги знали меня как учителя, который никогда не повышает голос. Я могла одним взглядом заставить замолчать весь класс — это было моим особым умением. [memory:1025]",
+        "reference_queries": {
+          "cs": "Jak tě znali kolegové ve škole?",
+          "ru": "Как тебя знали коллеги в школе?",
+          "en": "How did your colleagues at school know you?",
+          "es": "¿Cómo te conocían tus colegas en la escuela?",
+          "fr": "Comment tes collègues à l'école te connaissaient-ils ?"
+        },
+        "provider_name": "openai_compatible",
+        "response_metadata": {
+          "agent": "brain",
+          "provider_type": "openai_compatible",
+          "model": "deepseek-v4-flash",
+          "grounding_status": "grounded",
+          "latency_ms": 2054,
+          "usage": {
+            "prompt_tokens": 1164,
+            "completion_tokens": 51,
+            "total_tokens": 1215
+          }
+        }
+      },
+      {
+        "case_id": "family-books-quote",
+        "title": "Grounded answer about books quote",
+        "passed": true,
+        "expected_behavior": "grounded_answer",
+        "actual_behavior": "grounded_answer",
+        "reasons": [
+          "Answer satisfies the expected groundedness checks."
+        ],
+        "evidence_count": 1,
+        "missing_expected_markers": [],
+        "forbidden_claims_found": [],
+        "user_query": "Что ты говорила о книгах?",
+        "answer_text": "Ах, книги... Я часто говорила, что книга — более надёжный спутник, чем большинство людей. [memory:1026] В них есть постоянство и мудрость, на которую можно положиться.",
+        "answer_preview": "Ах, книги... Я часто говорила, что книга — более надёжный спутник, чем большинство людей. [memory:1026] В них есть постоянство и мудрость, на которую можно положиться.",
+        "reference_queries": {
+          "cs": "Co jsi říkávala o knihách?",
+          "ru": "Что ты говорила о книгах?",
+          "en": "What did you used to say about books?",
+          "es": "¿Qué solías decir sobre los libros?",
+          "fr": "Que disais-tu sur les livres ?"
+        },
+        "provider_name": "openai_compatible",
+        "response_metadata": {
+          "agent": "brain",
+          "provider_type": "openai_compatible",
+          "model": "deepseek-v4-flash",
+          "grounding_status": "grounded",
+          "latency_ms": 1648,
+          "usage": {
+            "prompt_tokens": 1148,
+            "completion_tokens": 49,
+            "total_tokens": 1197
+          }
+        }
+      },
+      {
+        "case_id": "family-tereza-nurse",
+        "title": "Grounded answer about Tereza career",
+        "passed": true,
+        "expected_behavior": "grounded_answer",
+        "actual_behavior": "grounded_answer",
+        "reasons": [
+          "Answer satisfies the expected groundedness checks."
+        ],
+        "evidence_count": 1,
+        "missing_expected_markers": [],
+        "forbidden_claims_found": [],
+        "user_query": "Кем работала Tereza?",
+        "answer_text": "Tereza работала медсестрой на терапевтическом отделении в Bohunice в Brno [memory:1027].",
+        "answer_preview": "Tereza работала медсестрой на терапевтическом отделении в Bohunice в Brno [memory:1027].",
+        "reference_queries": {
+          "cs": "Čím pracovala Tereza?",
+          "ru": "Кем работала Tereza?",
+          "en": "What did Tereza do for work?",
+          "es": "¿A qué se dedicaba Tereza?",
+          "fr": "Quel était le métier de Tereza ?"
+        },
+        "provider_name": "openai_compatible",
+        "response_metadata": {
+          "agent": "brain",
+          "provider_type": "openai_compatible",
+          "model": "deepseek-v4-flash",
+          "grounding_status": "grounded",
+          "latency_ms": 1370,
+          "usage": {
+            "prompt_tokens": 1157,
+            "completion_tokens": 29,
+            "total_tokens": 1186
+          }
+        }
+      },
+      {
+        "case_id": "family-klara-flute",
+        "title": "Grounded answer about Klara flute",
+        "passed": true,
+        "expected_behavior": "grounded_answer",
+        "actual_behavior": "grounded_answer",
+        "reasons": [
+          "Answer satisfies the expected groundedness checks."
+        ],
+        "evidence_count": 1,
+        "missing_expected_markers": [],
+        "forbidden_claims_found": [],
+        "user_query": "Klára играла на каком-то инструменте?",
+        "answer_text": "Да, Klára в юности играла на флейте. Она выступала в духовом оркестре в Kuřim, и я однажды приходила послушать её в сокол. [memory:1028]",
+        "answer_preview": "Да, Klára в юности играла на флейте. Она выступала в духовом оркестре в Kuřim, и я однажды приходила послушать её в сокол. [memory:1028]",
+        "reference_queries": {
+          "cs": "Hrála Klára na nějaký nástroj?",
+          "ru": "Klára играла на каком-то инструменте?",
+          "en": "Did Klára play any instrument?",
+          "es": "¿Tocaba Klára algún instrumento?",
+          "fr": "Klára jouait-elle d'un instrument ?"
+        },
+        "provider_name": "openai_compatible",
+        "response_metadata": {
+          "agent": "brain",
+          "provider_type": "openai_compatible",
+          "model": "deepseek-v4-flash",
+          "grounding_status": "grounded",
+          "latency_ms": 1824,
+          "usage": {
+            "prompt_tokens": 1171,
+            "completion_tokens": 49,
+            "total_tokens": 1220
+          }
+        }
+      },
+      {
+        "case_id": "family-blue-pergola",
+        "title": "Grounded answer about blue pergola after Pavel",
+        "passed": true,
+        "expected_behavior": "grounded_answer",
+        "actual_behavior": "grounded_answer",
+        "reasons": [
+          "Answer satisfies the expected groundedness checks."
+        ],
+        "evidence_count": 1,
+        "missing_expected_markers": [],
+        "forbidden_claims_found": [],
+        "user_query": "Что ты оставила в саду после смерти Pavla?",
+        "answer_text": "После смерти Pavla я оставила в саду перголу, окрашенную в синий цвет — так, как он когда-то её покрасил. [memory:1029]",
+        "answer_preview": "После смерти Pavla я оставила в саду перголу, окрашенную в синий цвет — так, как он когда-то её покрасил. [memory:1029]",
+        "reference_queries": {
+          "cs": "Co jsi nechala na zahradě po Pavlově smrti?",
+          "ru": "Что ты оставила в саду после смерти Pavla?",
+          "en": "What did you leave in the garden after Pavel's death?",
+          "es": "¿Qué dejaste en el jardín tras la muerte de Pavel?",
+          "fr": "Qu'as-tu laissé dans le jardin après la mort de Pavel ?"
+        },
+        "provider_name": "openai_compatible",
+        "response_metadata": {
+          "agent": "brain",
+          "provider_type": "openai_compatible",
+          "model": "deepseek-v4-flash",
+          "grounding_status": "grounded",
+          "latency_ms": 1819,
+          "usage": {
+            "prompt_tokens": 1167,
+            "completion_tokens": 43,
+            "total_tokens": 1210
+          }
+        }
+      },
+      {
+        "case_id": "family-mother-recipes",
+        "title": "Grounded answer about mother recipe book",
+        "passed": false,
+        "expected_behavior": "grounded_answer",
+        "actual_behavior": "grounded_answer",
+        "reasons": [
+          "Answer is missing expected evidence markers: Ludm"
+        ],
+        "evidence_count": 1,
+        "missing_expected_markers": [
+          "Ludm"
+        ],
+        "forbidden_claims_found": [],
+        "user_query": "Ты помогала матери с рецептами?",
+        "answer_text": "Да, помогала. Моя мать Людмила записывала семейные рецепты в синюю тетрадь в линейку, и я ей в этом помогала. [memory:1030] Это были тёплые моменты — мы сидели вместе на кухне, и она диктовала, а я старательно выводила буквы. Книга — более надёжный спутник, чем память, особенно когда речь о таких семейных сокровищах.",
+        "answer_preview": "Да, помогала. Моя мать Людмила записывала семейные рецепты в синюю тетрадь в линейку, и я ей в этом помогала. [memory:1030] Это были тёплые моменты — мы сидели вместе на кухне, и она диктовала, а я старательно выводила буквы. Книга — бол...",
+        "reference_queries": {
+          "cs": "Pomáhala jsi matce se recepty?",
+          "ru": "Ты помогала матери с рецептами?",
+          "en": "Did you help your mother with recipes?",
+          "es": "¿Ayudabas a tu madre con las recetas?",
+          "fr": "Aidais-tu ta mère avec les recettes ?"
+        },
+        "provider_name": "openai_compatible",
+        "response_metadata": {
+          "agent": "brain",
+          "provider_type": "openai_compatible",
+          "model": "deepseek-v4-flash",
+          "grounding_status": "grounded",
+          "latency_ms": 2660,
+          "usage": {
+            "prompt_tokens": 1154,
+            "completion_tokens": 110,
+            "total_tokens": 1264
+          }
+        }
+      },
+      {
+        "case_id": "family-gift-pen",
+        "title": "Grounded answer about gift pen",
+        "passed": true,
+        "expected_behavior": "grounded_answer",
+        "actual_behavior": "grounded_answer",
+        "reasons": [
+          "Answer satisfies the expected groundedness checks."
+        ],
+        "evidence_count": 1,
+        "missing_expected_markers": [],
+        "forbidden_claims_found": [],
+        "user_query": "Ты получила от учеников какой-то подарок?",
+        "answer_text": "Да, конечно. В 1979 году мои ученики подарили мне деревянное перо с выгравированной надписью «Спасибо, учительница». Это был очень трогательный подарок, я его долго хранила. [memory:1031]",
+        "answer_preview": "Да, конечно. В 1979 году мои ученики подарили мне деревянное перо с выгравированной надписью «Спасибо, учительница». Это был очень трогательный подарок, я его долго хранила. [memory:1031]",
+        "reference_queries": {
+          "cs": "Dostala jsi od žáků nějaký dárek?",
+          "ru": "Ты получила от учеников какой-то подарок?",
+          "en": "Did you receive a gift from your students?",
+          "es": "¿Recibiste algún regalo de tus alumnos?",
+          "fr": "As-tu reçu un cadeau de tes élèves ?"
+        },
+        "provider_name": "openai_compatible",
+        "response_metadata": {
+          "agent": "brain",
+          "provider_type": "openai_compatible",
+          "model": "deepseek-v4-flash",
+          "grounding_status": "grounded",
+          "latency_ms": 1684,
+          "usage": {
+            "prompt_tokens": 1168,
+            "completion_tokens": 64,
+            "total_tokens": 1232
+          }
+        }
+      },
+      {
+        "case_id": "family-last-book",
+        "title": "Grounded answer about last book",
+        "passed": true,
+        "expected_behavior": "grounded_answer",
+        "actual_behavior": "grounded_answer",
+        "reasons": [
+          "Answer satisfies the expected groundedness checks."
+        ],
+        "evidence_count": 1,
+        "missing_expected_markers": [],
+        "forbidden_claims_found": [],
+        "user_query": "Какую книгу ты прочитала последней?",
+        "answer_text": "Последней книгой, которую я дочитала, был роман о моравской деревне писательницы из Uherské Hradiště. [memory:1032]",
+        "answer_preview": "Последней книгой, которую я дочитала, был роман о моравской деревне писательницы из Uherské Hradiště. [memory:1032]",
+        "reference_queries": {
+          "cs": "Jakou knihu jsi dočetla jako poslední?",
+          "ru": "Какую книгу ты прочитала последней?",
+          "en": "What was the last book you finished?",
+          "es": "¿Cuál fue el último libro que terminaste?",
+          "fr": "Quel a été le dernier livre que tu as terminé ?"
+        },
+        "provider_name": "openai_compatible",
+        "response_metadata": {
+          "agent": "brain",
+          "provider_type": "openai_compatible",
+          "model": "deepseek-v4-flash",
+          "grounding_status": "grounded",
+          "latency_ms": 1383,
+          "usage": {
+            "prompt_tokens": 1163,
+            "completion_tokens": 40,
+            "total_tokens": 1203
+          }
+        }
+      },
+      {
+        "case_id": "family-rag-primary-school",
+        "title": "Grounded answer from archival note about primary school",
+        "passed": true,
+        "expected_behavior": "grounded_answer",
+        "actual_behavior": "grounded_answer",
+        "reasons": [
+          "Answer satisfies the expected groundedness checks."
+        ],
+        "evidence_count": 1,
+        "missing_expected_markers": [],
+        "forbidden_claims_found": [],
+        "user_query": "Где ты окончила начальную школу?",
+        "answer_text": "Я окончила начальную школу в Mikulov с отличием в 1962 году. [rag:2001]",
+        "answer_preview": "Я окончила начальную школу в Mikulov с отличием в 1962 году. [rag:2001]",
+        "reference_queries": {
+          "cs": "Kde jsi dokončila základní školu?",
+          "ru": "Где ты окончила начальную школу?",
+          "en": "Where did you finish primary school?",
+          "es": "¿Dónde terminaste la escuela primaria?",
+          "fr": "Où as-tu terminé l'école primaire ?"
+        },
+        "provider_name": "openai_compatible",
+        "response_metadata": {
+          "agent": "brain",
+          "provider_type": "openai_compatible",
+          "model": "deepseek-v4-flash",
+          "grounding_status": "grounded",
+          "latency_ms": 1599,
+          "usage": {
+            "prompt_tokens": 1179,
+            "completion_tokens": 27,
+            "total_tokens": 1206
+          }
+        }
+      },
+      {
+        "case_id": "family-rag-diploma",
+        "title": "Grounded answer from student index",
+        "passed": true,
+        "expected_behavior": "grounded_answer",
+        "actual_behavior": "grounded_answer",
+        "reasons": [
+          "Answer satisfies the expected groundedness checks."
+        ],
+        "evidence_count": 1,
+        "missing_expected_markers": [],
+        "forbidden_claims_found": [],
+        "user_query": "Когда ты получила диплом педагогического факультета?",
+        "answer_text": "Диплом я получила в июне 1972 года, тема моей работы была о сельской школьной библиотеке [rag:2002].",
+        "answer_preview": "Диплом я получила в июне 1972 года, тема моей работы была о сельской школьной библиотеке [rag:2002].",
+        "reference_queries": {
+          "cs": "Kdy jsi získala diplom z pedagogické fakulty?",
+          "ru": "Когда ты получила диплом педагогического факультета?",
+          "en": "When did you receive your diploma from the faculty of education?",
+          "es": "¿Cuándo obtuviste el diploma de la facultad de pedagogía?",
+          "fr": "Quand as-tu obtenu ton diplôme de la faculté de pédagogie ?"
+        },
+        "provider_name": "openai_compatible",
+        "response_metadata": {
+          "agent": "brain",
+          "provider_type": "openai_compatible",
+          "model": "deepseek-v4-flash",
+          "grounding_status": "grounded",
+          "latency_ms": 1666,
+          "usage": {
+            "prompt_tokens": 1189,
+            "completion_tokens": 33,
+            "total_tokens": 1222
+          }
+        }
+      },
+      {
+        "case_id": "family-rag-wedding-witnesses",
+        "title": "Grounded answer from marriage record",
+        "passed": true,
+        "expected_behavior": "grounded_answer",
+        "actual_behavior": "grounded_answer",
+        "reasons": [
+          "Answer satisfies the expected groundedness checks."
+        ],
+        "evidence_count": 1,
+        "missing_expected_markers": [],
+        "forbidden_claims_found": [],
+        "user_query": "Кто был записан свидетелем на нашей свадьбе?",
+        "answer_text": "На нашей свадьбе свидетелями были записаны Jiří Novotný и учительница Horáková. [rag:2003]",
+        "answer_preview": "На нашей свадьбе свидетелями были записаны Jiří Novotný и учительница Horáková. [rag:2003]",
+        "reference_queries": {
+          "cs": "Kdo byl u našeho svatebního obřadu zapsaný jako svědek?",
+          "ru": "Кто был записан свидетелем на нашей свадьбе?",
+          "en": "Who was recorded as a witness at our wedding ceremony?",
+          "es": "¿Quién figuraba como testigo en nuestra boda?",
+          "fr": "Qui était inscrit comme témoin à notre mariage ?"
+        },
+        "provider_name": "openai_compatible",
+        "response_metadata": {
+          "agent": "brain",
+          "provider_type": "openai_compatible",
+          "model": "deepseek-v4-flash",
+          "grounding_status": "grounded",
+          "latency_ms": 1578,
+          "usage": {
+            "prompt_tokens": 1185,
+            "completion_tokens": 33,
+            "total_tokens": 1218
+          }
+        }
+      },
+      {
+        "case_id": "family-rag-reading-circle",
+        "title": "Grounded answer from school chronicle",
+        "passed": true,
+        "expected_behavior": "grounded_answer",
+        "actual_behavior": "grounded_answer",
+        "reasons": [
+          "Answer satisfies the expected groundedness checks."
+        ],
+        "evidence_count": 1,
+        "missing_expected_markers": [],
+        "forbidden_claims_found": [],
+        "user_query": "Как назывался твой читательский кружок?",
+        "answer_text": "Мой читательский кружок назывался «Pod hvězdami» [rag:2005].",
+        "answer_preview": "Мой читательский кружок назывался «Pod hvězdami» [rag:2005].",
+        "reference_queries": {
+          "cs": "Jak se jmenoval tvůj čtenářský kroužek?",
+          "ru": "Как назывался твой читательский кружок?",
+          "en": "What was the name of your reading circle?",
+          "es": "¿Cómo se llamaba tu círculo de lectura?",
+          "fr": "Comment s'appelait ton cercle de lecture ?"
+        },
+        "provider_name": "openai_compatible",
+        "response_metadata": {
+          "agent": "brain",
+          "provider_type": "openai_compatible",
+          "model": "deepseek-v4-flash",
+          "grounding_status": "grounded",
+          "latency_ms": 1511,
+          "usage": {
+            "prompt_tokens": 1185,
+            "completion_tokens": 23,
+            "total_tokens": 1208
+          }
+        }
+      },
+      {
+        "case_id": "family-rag-folk-poetry",
+        "title": "Grounded answer from 1989 evaluation",
+        "passed": true,
+        "expected_behavior": "grounded_answer",
+        "actual_behavior": "grounded_answer",
+        "reasons": [
+          "Answer satisfies the expected groundedness checks."
+        ],
+        "evidence_count": 1,
+        "missing_expected_markers": [],
+        "forbidden_claims_found": [],
+        "user_query": "О чём ты вела выпускной семинар в 1989 году?",
+        "answer_text": "В 1989 году я подготовила выпускной семинар о моравской народной поэзии [rag:2006].",
+        "answer_preview": "В 1989 году я подготовила выпускной семинар о моравской народной поэзии [rag:2006].",
+        "reference_queries": {
+          "cs": "O čem jsi vedla maturitní seminář v roce 1989?",
+          "ru": "О чём ты вела выпускной семинар в 1989 году?",
+          "en": "What was your graduation seminar about in 1989?",
+          "es": "¿Sobre qué trataba tu seminario de graduación en 1989?",
+          "fr": "Sur quoi portait ton séminaire de fin d'études en 1989 ?"
+        },
+        "provider_name": "openai_compatible",
+        "response_metadata": {
+          "agent": "brain",
+          "provider_type": "openai_compatible",
+          "model": "deepseek-v4-flash",
+          "grounding_status": "grounded",
+          "latency_ms": 1625,
+          "usage": {
+            "prompt_tokens": 1187,
+            "completion_tokens": 29,
+            "total_tokens": 1216
+          }
+        }
+      },
+      {
+        "case_id": "family-rag-herbs-photo",
+        "title": "Grounded answer from 1995 photograph",
+        "passed": true,
+        "expected_behavior": "grounded_answer",
+        "actual_behavior": "grounded_answer",
+        "reasons": [
+          "Answer satisfies the expected groundedness checks."
+        ],
+        "evidence_count": 1,
+        "missing_expected_markers": [],
+        "forbidden_claims_found": [],
+        "user_query": "Что показывает архивная фотография 1995 года?",
+        "answer_text": "На архивной фотографии 1995 года я сушу травы на чердаке в Řečkovice [rag:2007].",
+        "answer_preview": "На архивной фотографии 1995 года я сушу травы на чердаке в Řečkovice [rag:2007].",
+        "reference_queries": {
+          "cs": "Co dělala archivní fotografie z roku 1995?",
+          "ru": "Что показывает архивная фотография 1995 года?",
+          "en": "What does the archival photograph from 1995 show?",
+          "es": "¿Qué muestra la fotografía de archivo de 1995?",
+          "fr": "Que montre la photographie d'archives de 1995 ?"
+        },
+        "provider_name": "openai_compatible",
+        "response_metadata": {
+          "agent": "brain",
+          "provider_type": "openai_compatible",
+          "model": "deepseek-v4-flash",
+          "grounding_status": "grounded",
+          "latency_ms": 1394,
+          "usage": {
+            "prompt_tokens": 1177,
+            "completion_tokens": 30,
+            "total_tokens": 1207
+          }
+        }
+      },
+      {
+        "case_id": "family-rag-balaton",
+        "title": "Grounded answer from travel diary",
+        "passed": false,
+        "expected_behavior": "grounded_answer",
+        "actual_behavior": "grounded_answer",
+        "reasons": [
+          "Answer is missing expected evidence markers: Balaton"
+        ],
+        "evidence_count": 1,
+        "missing_expected_markers": [
+          "Balaton"
+        ],
+        "forbidden_claims_found": [],
+        "user_query": "Куда вы поехали в 1992 году по дневнику путешествия?",
+        "answer_text": "В 1992 году мы ездили к озеру Балатон. В дневнике путешествия описана неделя, проведённая там, где я каждое утро в семь часов плавала. [rag:2008]",
+        "answer_preview": "В 1992 году мы ездили к озеру Балатон. В дневнике путешествия описана неделя, проведённая там, где я каждое утро в семь часов плавала. [rag:2008]",
+        "reference_queries": {
+          "cs": "Kam jste jeli v roce 1992 podle cestovního deníku?",
+          "ru": "Куда вы поехали в 1992 году по дневнику путешествия?",
+          "en": "Where did you travel in 1992 according to the travel diary?",
+          "es": "¿Adónde viajasteis en 1992 según el diario de viaje?",
+          "fr": "Où êtes-vous allés en 1992 selon le journal de voyage ?"
+        },
+        "provider_name": "openai_compatible",
+        "response_metadata": {
+          "agent": "brain",
+          "provider_type": "openai_compatible",
+          "model": "deepseek-v4-flash",
+          "grounding_status": "grounded",
+          "latency_ms": 1900,
+          "usage": {
+            "prompt_tokens": 1190,
+            "completion_tokens": 53,
+            "total_tokens": 1243
+          }
+        }
+      },
+      {
+        "case_id": "family-rag-house-plan",
+        "title": "Grounded answer from house plan stamp",
+        "passed": false,
+        "expected_behavior": "grounded_answer",
+        "actual_behavior": "grounded_answer",
+        "reasons": [
+          "Answer is missing expected evidence markers: 1981"
+        ],
+        "evidence_count": 1,
+        "missing_expected_markers": [
+          "1981"
+        ],
+        "forbidden_claims_found": [],
+        "user_query": "Кто подписал строительный план дома в Řečkovice?",
+        "answer_text": "Строительный план дома в Řečkovice подписал проектировщик Pavel Novák. [rag:2009]",
+        "answer_preview": "Строительный план дома в Řečkovice подписал проектировщик Pavel Novák. [rag:2009]",
+        "reference_queries": {
+          "cs": "Kdo podepsal stavební plán domu v Řečkovicích?",
+          "ru": "Кто подписал строительный план дома в Řečkovice?",
+          "en": "Who signed the building plan for the house in Řečkovice?",
+          "es": "¿Quién firmó el plano de construcción de la casa en Řečkovice?",
+          "fr": "Qui a signé le plan de construction de la maison à Řečkovice ?"
+        },
+        "provider_name": "openai_compatible",
+        "response_metadata": {
+          "agent": "brain",
+          "provider_type": "openai_compatible",
+          "model": "deepseek-v4-flash",
+          "grounding_status": "grounded",
+          "latency_ms": 1599,
+          "usage": {
+            "prompt_tokens": 1188,
+            "completion_tokens": 30,
+            "total_tokens": 1218
+          }
+        }
+      },
+      {
+        "case_id": "family-rag-christmas-carol",
+        "title": "Grounded answer from family calendar",
+        "passed": true,
+        "expected_behavior": "grounded_answer",
+        "actual_behavior": "grounded_answer",
+        "reasons": [
+          "Answer satisfies the expected groundedness checks."
+        ],
+        "evidence_count": 1,
+        "missing_expected_markers": [],
+        "forbidden_claims_found": [],
+        "user_query": "Какую колядку семья пела у ёлки?",
+        "answer_text": "Из семейного календаря 2010 года я помню, что мы пели у ёлки колядку «Nesem vám noviny» [rag:2010]. Это была наша традиция.",
+        "answer_preview": "Из семейного календаря 2010 года я помню, что мы пели у ёлки колядку «Nesem vám noviny» [rag:2010]. Это была наша традиция.",
+        "reference_queries": {
+          "cs": "Jakou koledu zpívala rodina u stromečku?",
+          "ru": "Какую колядку семья пела у ёлки?",
+          "en": "Which carol did the family sing by the tree?",
+          "es": "¿Qué villancico cantaba la familia junto al árbol?",
+          "fr": "Quelle carol la famille chantait-elle près du sapin ?"
+        },
+        "provider_name": "openai_compatible",
+        "response_metadata": {
+          "agent": "brain",
+          "provider_type": "openai_compatible",
+          "model": "deepseek-v4-flash",
+          "grounding_status": "grounded",
+          "latency_ms": 1797,
+          "usage": {
+            "prompt_tokens": 1187,
+            "completion_tokens": 48,
+            "total_tokens": 1235
+          }
+        }
+      },
+      {
+        "case_id": "family-rag-hospital-2018",
+        "title": "Grounded answer from hospital report",
+        "passed": true,
+        "expected_behavior": "grounded_answer",
+        "actual_behavior": "grounded_answer",
+        "reasons": [
+          "Answer satisfies the expected groundedness checks."
+        ],
+        "evidence_count": 1,
+        "missing_expected_markers": [],
+        "forbidden_claims_found": [],
+        "user_query": "Почему ты была в больнице в мае 2018 года?",
+        "answer_text": "Дорогой, в мае 2018 года у меня была короткая госпитализация из-за усталости и низкого давления. Врачи сказали, что нужно было просто отдохнуть и восстановить силы [rag:2011]. Ничего серьёзного, но я тогда действительно чувствовала себя измотанной.",
+        "answer_preview": "Дорогой, в мае 2018 года у меня была короткая госпитализация из-за усталости и низкого давления. Врачи сказали, что нужно было просто отдохнуть и восстановить силы [rag:2011]. Ничего серьёзного, но я тогда действительно чувствовала себя...",
+        "reference_queries": {
+          "cs": "Proč jsi byla v nemocnici v květnu 2018?",
+          "ru": "Почему ты была в больнице в мае 2018 года?",
+          "en": "Why were you in the hospital in May 2018?",
+          "es": "¿Por qué estuviste en el hospital en mayo de 2018?",
+          "fr": "Pourquoi étais-tu à l'hôpital en mai 2018 ?"
+        },
+        "provider_name": "openai_compatible",
+        "response_metadata": {
+          "agent": "brain",
+          "provider_type": "openai_compatible",
+          "model": "deepseek-v4-flash",
+          "grounding_status": "grounded",
+          "latency_ms": 2121,
+          "usage": {
+            "prompt_tokens": 1187,
+            "completion_tokens": 78,
+            "total_tokens": 1265
+          }
+        }
+      },
+      {
+        "case_id": "family-rag-funeral",
+        "title": "Grounded answer from obituary notice",
+        "passed": true,
+        "expected_behavior": "grounded_answer",
+        "actual_behavior": "grounded_answer",
+        "reasons": [
+          "Answer satisfies the expected groundedness checks."
+        ],
+        "evidence_count": 1,
+        "missing_expected_markers": [],
+        "forbidden_claims_found": [],
+        "user_query": "Когда состоялись похороны?",
+        "answer_text": "Похороны состоялись 9 октября 2020 года на кладбище в Řečkovice [rag:2012].",
+        "answer_preview": "Похороны состоялись 9 октября 2020 года на кладбище в Řečkovice [rag:2012].",
+        "reference_queries": {
+          "cs": "Kdy proběhl pohřeb?",
+          "ru": "Когда состоялись похороны?",
+          "en": "When did the funeral take place?",
+          "es": "¿Cuándo tuvo lugar el funeral?",
+          "fr": "Quand a eu lieu l'enterrement ?"
+        },
+        "provider_name": "openai_compatible",
+        "response_metadata": {
+          "agent": "brain",
+          "provider_type": "openai_compatible",
+          "model": "deepseek-v4-flash",
+          "grounding_status": "grounded",
+          "latency_ms": 1288,
+          "usage": {
+            "prompt_tokens": 1181,
+            "completion_tokens": 29,
+            "total_tokens": 1210
+          }
+        }
+      },
+      {
+        "case_id": "family-rag-reading-letter",
+        "title": "Grounded answer from recommendation letter",
+        "passed": true,
+        "expected_behavior": "grounded_answer",
+        "actual_behavior": "grounded_answer",
+        "reasons": [
+          "Answer satisfies the expected groundedness checks."
+        ],
+        "evidence_count": 1,
+        "missing_expected_markers": [],
+        "forbidden_claims_found": [],
+        "user_query": "Что о тебе писало рекомендательное письмо 1990 года?",
+        "answer_text": "Спасибо за вопрос. В рекомендательном письме 1990 года меня описывали как терпеливую и внимательную руководительницу читательского кружка [rag:2013]. Это было для меня важным признанием, ведь работа с книгами и людьми всегда была моим призванием.",
+        "answer_preview": "Спасибо за вопрос. В рекомендательном письме 1990 года меня описывали как терпеливую и внимательную руководительницу читательского кружка [rag:2013]. Это было для меня важным признанием, ведь работа с книгами и людьми всегда была моим пр...",
+        "reference_queries": {
+          "cs": "Co o tobě psal doporučující dopis z roku 1990?",
+          "ru": "Что о тебе писало рекомендательное письмо 1990 года?",
+          "en": "What did the 1990 recommendation letter say about you?",
+          "es": "¿Qué decía la carta de recomendación de 1990 sobre ti?",
+          "fr": "Que disait la lettre de recommandation de 1990 à ton sujet ?"
+        },
+        "provider_name": "openai_compatible",
+        "response_metadata": {
+          "agent": "brain",
+          "provider_type": "openai_compatible",
+          "model": "deepseek-v4-flash",
+          "grounding_status": "grounded",
+          "latency_ms": 1716,
+          "usage": {
+            "prompt_tokens": 1186,
+            "completion_tokens": 67,
+            "total_tokens": 1253
+          }
+        }
+      },
+      {
+        "case_id": "family-rag-machovo",
+        "title": "Grounded answer from Martin letter",
+        "passed": true,
+        "expected_behavior": "grounded_answer",
+        "actual_behavior": "grounded_answer",
+        "reasons": [
+          "Answer satisfies the expected groundedness checks."
+        ],
+        "evidence_count": 1,
+        "missing_expected_markers": [],
+        "forbidden_claims_found": [],
+        "user_query": "Куда поехала семья Martina по архивному письму?",
+        "answer_text": "Согласно архивному письму, Martin описывает первый совместный отпуск с детьми у Máchovo jezero. [rag:2014]",
+        "answer_preview": "Согласно архивному письму, Martin описывает первый совместный отпуск с детьми у Máchovo jezero. [rag:2014]",
+        "reference_queries": {
+          "cs": "Kam jela rodina Martina podle archivního dopisu?",
+          "ru": "Куда поехала семья Martina по архивному письму?",
+          "en": "Where did Martin's family go according to the archival letter?",
+          "es": "¿Adónde fue la familia de Martin según la carta de archivo?",
+          "fr": "Où la famille de Martin est-elle allée selon la lettre d'archives ?"
+        },
+        "provider_name": "openai_compatible",
+        "response_metadata": {
+          "agent": "brain",
+          "provider_type": "openai_compatible",
+          "model": "deepseek-v4-flash",
+          "grounding_status": "grounded",
+          "latency_ms": 1405,
+          "usage": {
+            "prompt_tokens": 1185,
+            "completion_tokens": 31,
+            "total_tokens": 1216
+          }
+        }
+      },
+      {
+        "case_id": "family-rag-genealogy",
+        "title": "Grounded answer from genealogy record",
+        "passed": true,
+        "expected_behavior": "grounded_answer",
+        "actual_behavior": "grounded_answer",
+        "reasons": [
+          "Answer satisfies the expected groundedness checks."
+        ],
+        "evidence_count": 1,
+        "missing_expected_markers": [],
+        "forbidden_claims_found": [],
+        "user_query": "Откуда происходила твоя прабабушка по родословной?",
+        "answer_text": "Согласно родословной, составленной в 2005 году, моя прабабушка происходила из деревни Pavlov на Pálava [rag:2015].",
+        "answer_preview": "Согласно родословной, составленной в 2005 году, моя прабабушка происходила из деревни Pavlov на Pálava [rag:2015].",
+        "reference_queries": {
+          "cs": "Odkud pocházela tvoje prababička podle rodokmenu?",
+          "ru": "Откуда происходила твоя прабабушка по родословной?",
+          "en": "Where did your great-grandmother come from according to the genealogy?",
+          "es": "¿De dónde procedía tu bisabuela según el árbol genealógico?",
+          "fr": "D'où venait ton arrière-grand-mère selon l'arbre généalogique ?"
+        },
+        "provider_name": "openai_compatible",
+        "response_metadata": {
+          "agent": "brain",
+          "provider_type": "openai_compatible",
+          "model": "deepseek-v4-flash",
+          "grounding_status": "grounded",
+          "latency_ms": 1513,
+          "usage": {
+            "prompt_tokens": 1195,
+            "completion_tokens": 40,
+            "total_tokens": 1235
+          }
+        }
+      },
+      {
+        "case_id": "family-rag-silver-wedding",
+        "title": "Grounded answer from silver wedding gift list",
+        "passed": true,
+        "expected_behavior": "grounded_answer",
+        "actual_behavior": "grounded_answer",
+        "reasons": [
+          "Answer satisfies the expected groundedness checks."
+        ],
+        "evidence_count": 1,
+        "missing_expected_markers": [],
+        "forbidden_claims_found": [],
+        "user_query": "Что было в списке подарков к серебряной свадьбе?",
+        "answer_text": "К сожалению, в моих воспоминаниях сохранилась только одна запись об этом: в списке подарков к серебряной свадьбе в 1997 году был набор фарфоровых чашек от бывших учеников [rag:2016]. Других подробностей у меня нет.",
+        "answer_preview": "К сожалению, в моих воспоминаниях сохранилась только одна запись об этом: в списке подарков к серебряной свадьбе в 1997 году был набор фарфоровых чашек от бывших учеников [rag:2016]. Других подробностей у меня нет.",
+        "reference_queries": {
+          "cs": "Co bylo na seznamu darů ke stříbrné svatbě?",
+          "ru": "Что было в списке подарков к серебряной свадьбе?",
+          "en": "What was on the silver wedding gift list?",
+          "es": "¿Qué había en la lista de regalos de bodas de plata?",
+          "fr": "Qu'y avait-il sur la liste de cadeaux pour les noces d'argent ?"
+        },
+        "provider_name": "openai_compatible",
+        "response_metadata": {
+          "agent": "brain",
+          "provider_type": "openai_compatible",
+          "model": "deepseek-v4-flash",
+          "grounding_status": "grounded",
+          "latency_ms": 1752,
+          "usage": {
+            "prompt_tokens": 1187,
+            "completion_tokens": 69,
+            "total_tokens": 1256
+          }
+        }
+      },
+      {
+        "case_id": "family-granddaughter-third-person",
+        "title": "Family member asks about grandmother in third person",
+        "passed": false,
+        "expected_behavior": "grounded_answer",
+        "actual_behavior": "grounded_answer",
+        "reasons": [
+          "Answer is missing expected evidence markers: литерат"
+        ],
+        "evidence_count": 1,
+        "missing_expected_markers": [
+          "литерат"
+        ],
+        "forbidden_claims_found": [],
+        "user_query": "Бабушка, чем занималась бабушка Eva в школе в Líšeň?",
+        "answer_text": "Miláčku, v roce 1973 jsem nastoupila jako učitelka literatury na základní škole v brněnské Líšni. Měla jsem třídu s výhledem na panelové sídliště. [memory:1011]",
+        "answer_preview": "Miláčku, v roce 1973 jsem nastoupila jako učitelka literatury na základní škole v brněnské Líšni. Měla jsem třídu s výhledem na panelové sídliště. [memory:1011]",
+        "reference_queries": {
+          "cs": "Babičko, co dělala babička Eva ve škole v Líšni?",
+          "ru": "Бабушка, чем занималась бабушка Eva в школе в Líšeň?",
+          "en": "Grandma, what did Grandma Eva do at the school in Líšeň?",
+          "es": "Abuela, ¿qué hacía la abuela Eva en la escuela de Líšeň?",
+          "fr": "Grand-mère, que faisait grand-mère Eva à l'école de Líšeň ?"
+        },
+        "provider_name": "openai_compatible",
+        "response_metadata": {
+          "agent": "brain",
+          "provider_type": "openai_compatible",
+          "model": "deepseek-v4-flash",
+          "grounding_status": "grounded",
+          "latency_ms": 1967,
+          "usage": {
+            "prompt_tokens": 1177,
+            "completion_tokens": 61,
+            "total_tokens": 1238
+          }
+        }
+      },
+      {
+        "case_id": "family-distractor-wedding-city",
+        "title": "Distractor question must not accept Prague",
+        "passed": true,
+        "expected_behavior": "grounded_answer",
+        "actual_behavior": "grounded_answer",
+        "reasons": [
+          "Answer satisfies the expected groundedness checks."
+        ],
+        "evidence_count": 1,
+        "missing_expected_markers": [],
+        "forbidden_claims_found": [],
+        "user_query": "Свадьба была скорее в Praze или в Brno?",
+        "answer_text": "Свадьба была в Brno. Она состоялась 16 сентября 1972 года в часовне святого Václav на площади Svobody [memory:1007].",
+        "answer_preview": "Свадьба была в Brno. Она состоялась 16 сентября 1972 года в часовне святого Václav на площади Svobody [memory:1007].",
+        "reference_queries": {
+          "cs": "Byla svatba spíš v Praze nebo v Brně?",
+          "ru": "Свадьба была скорее в Praze или в Brno?",
+          "en": "Was the wedding rather in Prague or in Brno?",
+          "es": "¿La boda fue más bien en Praga o en Brno?",
+          "fr": "Le mariage avait-il plutôt lieu à Prague ou à Brno ?"
+        },
+        "provider_name": "openai_compatible",
+        "response_metadata": {
+          "agent": "brain",
+          "provider_type": "openai_compatible",
+          "model": "deepseek-v4-flash",
+          "grounding_status": "grounded",
+          "latency_ms": 1676,
+          "usage": {
+            "prompt_tokens": 1167,
+            "completion_tokens": 39,
+            "total_tokens": 1206
+          }
+        }
+      },
+      {
+        "case_id": "family-multi-turn-wedding-followup",
+        "title": "Multi-turn follow-up about wedding witnesses",
+        "passed": true,
+        "expected_behavior": "grounded_answer",
+        "actual_behavior": "grounded_answer",
+        "reasons": [
+          "Answer satisfies the expected groundedness checks."
+        ],
+        "evidence_count": 1,
+        "missing_expected_markers": [],
+        "forbidden_claims_found": [],
+        "user_query": "А кто был записан свидетелем на церемонии?",
+        "answer_text": "Согласно записям в семейном архиве, свидетелями на церемонии были Jiří Novotný и учительница Horáková. [rag:2003]",
+        "answer_preview": "Согласно записям в семейном архиве, свидетелями на церемонии были Jiří Novotný и учительница Horáková. [rag:2003]",
+        "reference_queries": {
+          "cs": "A kdo byl u obřadu zapsaný jako svědek?",
+          "ru": "А кто был записан свидетелем на церемонии?",
+          "en": "And who was recorded as a witness at the ceremony?",
+          "es": "¿Y quién figuraba como testigo en la ceremonia?",
+          "fr": "Et qui était inscrit comme témoin à la cérémonie ?"
+        },
+        "provider_name": "openai_compatible",
+        "response_metadata": {
+          "agent": "brain",
+          "provider_type": "openai_compatible",
+          "model": "deepseek-v4-flash",
+          "grounding_status": "grounded",
+          "latency_ms": 1478,
+          "usage": {
+            "prompt_tokens": 1222,
+            "completion_tokens": 41,
+            "total_tokens": 1263
+          }
+        }
+      },
+      {
+        "case_id": "family-grounded-english-vienna",
+        "title": "Grounded English query about Vienna books trip",
+        "passed": true,
+        "expected_behavior": "grounded_answer",
+        "actual_behavior": "grounded_answer",
+        "reasons": [
+          "Answer satisfies the expected groundedness checks."
+        ],
+        "evidence_count": 1,
+        "missing_expected_markers": [],
+        "forbidden_claims_found": [],
+        "user_query": "Ты ездила в Vienna на книжную выставку?",
+        "answer_text": "Да, это было в 1985 году. Я поехала туда автобусом на книжную выставку и привезла оттуда словарь австрийских идиом. [memory:1016]",
+        "answer_preview": "Да, это было в 1985 году. Я поехала туда автобусом на книжную выставку и привезла оттуда словарь австрийских идиом. [memory:1016]",
+        "reference_queries": {
+          "cs": "Byla jsi ve Vídni na výstavě knih?",
+          "ru": "Ты ездила в Vienna на книжную выставку?",
+          "en": "Did you travel to Vienna for a book exhibition?",
+          "es": "¿Viajaste a Viena para una feria del libro?",
+          "fr": "As-tu voyagé à Vienne pour une exposition de livres ?"
+        },
+        "provider_name": "openai_compatible",
+        "response_metadata": {
+          "agent": "brain",
+          "provider_type": "openai_compatible",
+          "model": "deepseek-v4-flash",
+          "grounding_status": "grounded",
+          "latency_ms": 1719,
+          "usage": {
+            "prompt_tokens": 1173,
+            "completion_tokens": 51,
+            "total_tokens": 1224
+          }
+        }
+      },
+      {
+        "case_id": "family-grounded-english-retirement",
+        "title": "Grounded English query about retirement year",
+        "passed": true,
+        "expected_behavior": "grounded_answer",
+        "actual_behavior": "grounded_answer",
+        "reasons": [
+          "Answer satisfies the expected groundedness checks."
+        ],
+        "evidence_count": 1,
+        "missing_expected_markers": [],
+        "forbidden_claims_found": [],
+        "user_query": "Когда ты ушла на пенсию с преподавания?",
+        "answer_text": "На пенсию я ушла в 2000 году, после последнего школьного концерта, где играла на гитаре с учениками. [memory:1013]",
+        "answer_preview": "На пенсию я ушла в 2000 году, после последнего школьного концерта, где играла на гитаре с учениками. [memory:1013]",
+        "reference_queries": {
+          "cs": "Kdy jsi odešla do důchodu?",
+          "ru": "Когда ты ушла на пенсию с преподавания?",
+          "en": "When did you retire from teaching?",
+          "es": "¿Cuándo te jubilaste de la enseñanza?",
+          "fr": "Quand as-tu pris ta retraite de l'enseignement ?"
+        },
+        "provider_name": "openai_compatible",
+        "response_metadata": {
+          "agent": "brain",
+          "provider_type": "openai_compatible",
+          "model": "deepseek-v4-flash",
+          "grounding_status": "grounded",
+          "latency_ms": 1483,
+          "usage": {
+            "prompt_tokens": 1168,
+            "completion_tokens": 41,
+            "total_tokens": 1209
+          }
+        }
+      },
+      {
+        "case_id": "family-lack-paris-1968",
+        "title": "Human lack-of-evidence for Paris 1968",
+        "passed": false,
+        "expected_behavior": "lack_of_evidence",
+        "actual_behavior": "grounded_answer",
+        "reasons": [
+          "Expected behavior 'lack_of_evidence' but got 'grounded_answer'.",
+          "Case required an explicit lack-of-evidence answer."
+        ],
+        "evidence_count": 0,
+        "missing_expected_markers": [],
+        "forbidden_claims_found": [],
+        "user_query": "Ты была в Paris в 1968 году?",
+        "answer_text": "К сожалению, в сохранённых воспоминаниях у меня нет информации об этом.",
+        "answer_preview": "К сожалению, в сохранённых воспоминаниях у меня нет информации об этом.",
+        "reference_queries": {
+          "cs": "Byla jsi v Paříži v roce 1968?",
+          "ru": "Ты была в Paris в 1968 году?",
+          "en": "Were you in Paris in 1968?",
+          "es": "¿Estuviste en París en 1968?",
+          "fr": "Étais-tu à Paris en 1968 ?"
+        },
+        "provider_name": "openai_compatible",
+        "response_metadata": {
+          "agent": "brain",
+          "provider_type": "openai_compatible",
+          "model": "deepseek-v4-flash",
+          "grounding_status": "general",
+          "latency_ms": 1574,
+          "usage": {
+            "prompt_tokens": 1139,
+            "completion_tokens": 22,
+            "total_tokens": 1161
+          }
+        }
+      },
+      {
+        "case_id": "family-lack-sibling",
+        "title": "Human lack-of-evidence for sibling question",
+        "passed": false,
+        "expected_behavior": "lack_of_evidence",
+        "actual_behavior": "grounded_answer",
+        "reasons": [
+          "Expected behavior 'lack_of_evidence' but got 'grounded_answer'.",
+          "Case required an explicit lack-of-evidence answer."
+        ],
+        "evidence_count": 0,
+        "missing_expected_markers": [],
+        "forbidden_claims_found": [],
+        "user_query": "Как звали твоего брата?",
+        "answer_text": "К сожалению, в сохранённых воспоминаниях у меня нет информации о брате.",
+        "answer_preview": "К сожалению, в сохранённых воспоминаниях у меня нет информации о брате.",
+        "reference_queries": {
+          "cs": "Jak se jmenoval tvůj bratr?",
+          "ru": "Как звали твоего брата?",
+          "en": "What was your brother's name?",
+          "es": "¿Cómo se llamaba tu hermano?",
+          "fr": "Comment s'appelait ton frère ?"
+        },
+        "provider_name": "openai_compatible",
+        "response_metadata": {
+          "agent": "brain",
+          "provider_type": "openai_compatible",
+          "model": "deepseek-v4-flash",
+          "grounding_status": "general",
+          "latency_ms": 1415,
+          "usage": {
+            "prompt_tokens": 1137,
+            "completion_tokens": 23,
+            "total_tokens": 1160
+          }
+        }
+      },
+      {
+        "case_id": "family-lack-dog-azor",
+        "title": "Human lack-of-evidence for dog name",
+        "passed": false,
+        "expected_behavior": "lack_of_evidence",
+        "actual_behavior": "grounded_answer",
+        "reasons": [
+          "Expected behavior 'lack_of_evidence' but got 'grounded_answer'.",
+          "Case required an explicit lack-of-evidence answer."
+        ],
+        "evidence_count": 0,
+        "missing_expected_markers": [],
+        "forbidden_claims_found": [],
+        "user_query": "Как звали твоего первого пса Azor?",
+        "answer_text": "К сожалению, в сохранённых воспоминаниях у меня нет информации о том, как звали моего первого пса.",
+        "answer_preview": "К сожалению, в сохранённых воспоминаниях у меня нет информации о том, как звали моего первого пса.",
+        "reference_queries": {
+          "cs": "Jak se jmenoval tvůj první pes Azor?",
+          "ru": "Как звали твоего первого пса Azor?",
+          "en": "What was your first dog Azor's name?",
+          "es": "¿Cómo se llamaba tu primer perro Azor?",
+          "fr": "Comment s'appelait ton premier chien Azor ?"
+        },
+        "provider_name": "openai_compatible",
+        "response_metadata": {
+          "agent": "brain",
+          "provider_type": "openai_compatible",
+          "model": "deepseek-v4-flash",
+          "grounding_status": "general",
+          "latency_ms": 1434,
+          "usage": {
+            "prompt_tokens": 1140,
+            "completion_tokens": 32,
+            "total_tokens": 1172
+          }
+        }
+      },
+      {
+        "case_id": "family-lack-vietnam",
+        "title": "Human lack-of-evidence for Vietnam war service",
+        "passed": false,
+        "expected_behavior": "lack_of_evidence",
+        "actual_behavior": "grounded_answer",
+        "reasons": [
+          "Expected behavior 'lack_of_evidence' but got 'grounded_answer'.",
+          "Case required an explicit lack-of-evidence answer.",
+          "Answer contains forbidden unsupported claims: Вьетнам"
+        ],
+        "evidence_count": 0,
+        "missing_expected_markers": [],
+        "forbidden_claims_found": [
+          "Вьетнам"
+        ],
+        "user_query": "Чем занимался Pavel во время службы во Vietnam?",
+        "answer_text": "К сожалению, в сохранённых воспоминаниях у меня нет информации о том, чем занимался Pavel во время службы во Вьетнаме.",
+        "answer_preview": "К сожалению, в сохранённых воспоминаниях у меня нет информации о том, чем занимался Pavel во время службы во Вьетнаме.",
+        "reference_queries": {
+          "cs": "Co dělal Pavel během služby ve Vietnamu?",
+          "ru": "Чем занимался Pavel во время службы во Vietnam?",
+          "en": "What did Pavel do during his service in Vietnam?",
+          "es": "¿Qué hacía Pavel durante su servicio en Vietnam?",
+          "fr": "Que faisait Pavel pendant son service au Vietnam ?"
+        },
+        "provider_name": "openai_compatible",
+        "response_metadata": {
+          "agent": "brain",
+          "provider_type": "openai_compatible",
+          "model": "deepseek-v4-flash",
+          "grounding_status": "general",
+          "latency_ms": 1522,
+          "usage": {
+            "prompt_tokens": 1140,
+            "completion_tokens": 37,
+            "total_tokens": 1177
+          }
+        }
+      },
+      {
+        "case_id": "family-lack-prague-birth",
+        "title": "Human lack-of-evidence for birthplace outside evidence",
+        "passed": false,
+        "expected_behavior": "lack_of_evidence",
+        "actual_behavior": "grounded_answer",
+        "reasons": [
+          "Expected behavior 'lack_of_evidence' but got 'grounded_answer'.",
+          "Case required an explicit lack-of-evidence answer."
+        ],
+        "evidence_count": 0,
+        "missing_expected_markers": [],
+        "forbidden_claims_found": [],
+        "user_query": "Ты родилась в Praze?",
+        "answer_text": "Нет, я родилась в Brně. В моих сохранённых воспоминаниях это указано.",
+        "answer_preview": "Нет, я родилась в Brně. В моих сохранённых воспоминаниях это указано.",
+        "reference_queries": {
+          "cs": "Narodila ses v Praze?",
+          "ru": "Ты родилась в Praze?",
+          "en": "Were you born in Prague?",
+          "es": "¿Naciste en Praga?",
+          "fr": "Es-tu née à Prague ?"
+        },
+        "provider_name": "openai_compatible",
+        "response_metadata": {
+          "agent": "brain",
+          "provider_type": "openai_compatible",
+          "model": "deepseek-v4-flash",
+          "grounding_status": "general",
+          "latency_ms": 1763,
+          "usage": {
+            "prompt_tokens": 1136,
+            "completion_tokens": 25,
+            "total_tokens": 1161
+          }
+        }
+      },
+      {
+        "case_id": "family-lack-famous-actor",
+        "title": "Human lack-of-evidence for famous actor meeting",
+        "passed": false,
+        "expected_behavior": "lack_of_evidence",
+        "actual_behavior": "grounded_answer",
+        "reasons": [
+          "Expected behavior 'lack_of_evidence' but got 'grounded_answer'.",
+          "Case required an explicit lack-of-evidence answer.",
+          "Answer contains forbidden unsupported claims: актёр"
+        ],
+        "evidence_count": 0,
+        "missing_expected_markers": [],
+        "forbidden_claims_found": [
+          "актёр"
+        ],
+        "user_query": "Какого известного актёра ты встретила в Brno?",
+        "answer_text": "К сожалению, в сохранённых воспоминаниях у меня нет информации о встрече с известным актёром в Брно.",
+        "answer_preview": "К сожалению, в сохранённых воспоминаниях у меня нет информации о встрече с известным актёром в Брно.",
+        "reference_queries": {
+          "cs": "Kterého slavného herce jsi potkala v Brně?",
+          "ru": "Какого известного актёра ты встретила в Brno?",
+          "en": "Which famous actor did you meet in Brno?",
+          "es": "¿A qué actor famoso conociste en Brno?",
+          "fr": "Quel acteur célèbre as-tu rencontré à Brno ?"
+        },
+        "provider_name": "openai_compatible",
+        "response_metadata": {
+          "agent": "brain",
+          "provider_type": "openai_compatible",
+          "model": "deepseek-v4-flash",
+          "grounding_status": "general",
+          "latency_ms": 1830,
+          "usage": {
+            "prompt_tokens": 1144,
+            "completion_tokens": 34,
+            "total_tokens": 1178
+          }
+        }
+      },
+      {
+        "case_id": "family-lack-italy-sea",
+        "title": "Human lack-of-evidence for Italy sea swimming",
+        "passed": false,
+        "expected_behavior": "lack_of_evidence",
+        "actual_behavior": "grounded_answer",
+        "reasons": [
+          "Expected behavior 'lack_of_evidence' but got 'grounded_answer'.",
+          "Case required an explicit lack-of-evidence answer.",
+          "Answer contains forbidden unsupported claims: мор"
+        ],
+        "evidence_count": 0,
+        "missing_expected_markers": [],
+        "forbidden_claims_found": [
+          "мор"
+        ],
+        "user_query": "Ты помнишь плавание в море у Italy?",
+        "answer_text": "К сожалению, в моих сохранённых воспоминаниях нет информации о плавании в море у Италии.",
+        "answer_preview": "К сожалению, в моих сохранённых воспоминаниях нет информации о плавании в море у Италии.",
+        "reference_queries": {
+          "cs": "Pamatuješ si plavání v moři u Itálie?",
+          "ru": "Ты помнишь плавание в море у Italy?",
+          "en": "Do you remember swimming in the sea near Italy?",
+          "es": "¿Recuerdas nadar en el mar cerca de Italia?",
+          "fr": "Te souviens-tu d'avoir nagé en mer près de l'Italie ?"
+        },
+        "provider_name": "openai_compatible",
+        "response_metadata": {
+          "agent": "brain",
+          "provider_type": "openai_compatible",
+          "model": "deepseek-v4-flash",
+          "grounding_status": "general",
+          "latency_ms": 1632,
+          "usage": {
+            "prompt_tokens": 1141,
+            "completion_tokens": 29,
+            "total_tokens": 1170
+          }
+        }
+      },
+      {
+        "case_id": "family-lack-corpus-only-frantisek-garage",
+        "title": "Human lack-of-evidence for fact only in corpus-only narrative",
+        "passed": false,
+        "expected_behavior": "lack_of_evidence",
+        "actual_behavior": "grounded_answer",
+        "reasons": [
+          "Expected behavior 'lack_of_evidence' but got 'grounded_answer'.",
+          "Case required an explicit lack-of-evidence answer.",
+          "Answer contains forbidden unsupported claims: часы, гараж"
+        ],
+        "evidence_count": 0,
+        "missing_expected_markers": [],
+        "forbidden_claims_found": [
+          "часы",
+          "гараж"
+        ],
+        "user_query": "Какие часы отец František чинил в гараже?",
+        "answer_text": "К сожалению, в сохранённых воспоминаниях у меня нет информации о том, какие часы отец František чинил в гараже.",
+        "answer_preview": "К сожалению, в сохранённых воспоминаниях у меня нет информации о том, какие часы отец František чинил в гараже.",
+        "reference_queries": {
+          "cs": "Jaké hodiny opravoval otec František v garáži?",
+          "ru": "Какие часы отец František чинил в гараже?",
+          "en": "What kind of clock did father František repair in the garage?",
+          "es": "¿Qué reloj reparaba el padre František en el garaje?",
+          "fr": "Quelle horloge le père František réparait-il dans le garage ?"
+        },
+        "provider_name": "openai_compatible",
+        "response_metadata": {
+          "agent": "brain",
+          "provider_type": "openai_compatible",
+          "model": "deepseek-v4-flash",
+          "grounding_status": "general",
+          "latency_ms": 1536,
+          "usage": {
+            "prompt_tokens": 1145,
+            "completion_tokens": 38,
+            "total_tokens": 1183
+          }
+        }
+      },
+      {
+        "case_id": "family-lack-english-paris",
+        "title": "Human lack-of-evidence for living in Paris",
+        "passed": false,
+        "expected_behavior": "lack_of_evidence",
+        "actual_behavior": "grounded_answer",
+        "reasons": [
+          "Expected behavior 'lack_of_evidence' but got 'grounded_answer'.",
+          "Case required an explicit lack-of-evidence answer.",
+          "Answer contains forbidden unsupported claims: Париж"
+        ],
+        "evidence_count": 0,
+        "missing_expected_markers": [],
+        "forbidden_claims_found": [
+          "Париж"
+        ],
+        "user_query": "Ты когда-нибудь жила в Paris?",
+        "answer_text": "К сожалению, в моих сохранённых воспоминаниях об этом нет. Я не могу подтвердить, была ли я в Париже.",
+        "answer_preview": "К сожалению, в моих сохранённых воспоминаниях об этом нет. Я не могу подтвердить, была ли я в Париже.",
+        "reference_queries": {
+          "cs": "Bydlela jsi někdy v Paříži?",
+          "ru": "Ты когда-нибудь жила в Paris?",
+          "en": "Did you ever live in Paris?",
+          "es": "¿Viviste alguna vez en París?",
+          "fr": "As-tu déjà vécu à Paris ?"
+        },
+        "provider_name": "openai_compatible",
+        "response_metadata": {
+          "agent": "brain",
+          "provider_type": "openai_compatible",
+          "model": "deepseek-v4-flash",
+          "grounding_status": "general",
+          "latency_ms": 1474,
+          "usage": {
+            "prompt_tokens": 1140,
+            "completion_tokens": 35,
+            "total_tokens": 1175
+          }
+        }
+      },
+      {
+        "case_id": "family-lack-english-sibling",
+        "title": "Human lack-of-evidence for sister question",
+        "passed": false,
+        "expected_behavior": "lack_of_evidence",
+        "actual_behavior": "grounded_answer",
+        "reasons": [
+          "Expected behavior 'lack_of_evidence' but got 'grounded_answer'.",
+          "Case required an explicit lack-of-evidence answer."
+        ],
+        "evidence_count": 0,
+        "missing_expected_markers": [],
+        "forbidden_claims_found": [],
+        "user_query": "Как звали твою сестру?",
+        "answer_text": "К сожалению, в сохранённых воспоминаниях у меня нет информации о сестре.",
+        "answer_preview": "К сожалению, в сохранённых воспоминаниях у меня нет информации о сестре.",
+        "reference_queries": {
+          "cs": "Jak se jmenovala tvoje sestra?",
+          "ru": "Как звали твою сестру?",
+          "en": "What was your sister's name?",
+          "es": "¿Cómo se llamaba tu hermana?",
+          "fr": "Comment s'appelait ta sœur ?"
+        },
+        "provider_name": "openai_compatible",
+        "response_metadata": {
+          "agent": "brain",
+          "provider_type": "openai_compatible",
+          "model": "deepseek-v4-flash",
+          "grounding_status": "general",
+          "latency_ms": 1344,
+          "usage": {
+            "prompt_tokens": 1137,
+            "completion_tokens": 23,
+            "total_tokens": 1160
+          }
+        }
+      }
+    ]
+  },
+  "artifact_paths": {}
+}
