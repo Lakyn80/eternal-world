@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+import unicodedata
 from datetime import date, datetime
 
 from pydantic import BaseModel, Field
@@ -10,8 +11,8 @@ from app.core.config import settings
 
 MAX_MEMORY_EVIDENCE_ITEMS = 10
 MAX_CONTENT_PREVIEW_LENGTH = 240
+MIN_UNICODE_TOKEN_LENGTH = 2
 ABSOLUTE_FILESYSTEM_PATH_PATTERN = re.compile(r"([A-Za-z]:\\[^\s]+|/app/[^\s]+)")
-QUERY_TOKEN_PATTERN = re.compile(r"[A-Za-z0-9]{2,}")
 
 
 class BrainProfileContext(BaseModel):
@@ -104,8 +105,36 @@ def build_brain_profile_context(profile) -> BrainProfileContext:
     )
 
 
+def _normalize_unicode_text(value: str) -> str:
+    return unicodedata.normalize("NFKC", value).casefold()
+
+
+def _extract_unicode_tokens(
+    text: str,
+    *,
+    min_length: int = MIN_UNICODE_TOKEN_LENGTH,
+) -> set[str]:
+    normalized_text = _normalize_unicode_text(text)
+    tokens: list[str] = []
+    current_token: list[str] = []
+
+    for character in normalized_text:
+        if unicodedata.category(character)[0] in {"L", "N"}:
+            current_token.append(character)
+            continue
+
+        if len(current_token) >= min_length:
+            tokens.append("".join(current_token))
+        current_token = []
+
+    if len(current_token) >= min_length:
+        tokens.append("".join(current_token))
+
+    return set(tokens)
+
+
 def _extract_query_tokens(user_message: str) -> set[str]:
-    return {token.lower() for token in QUERY_TOKEN_PATTERN.findall(user_message)}
+    return _extract_unicode_tokens(user_message)
 
 
 def _build_memory_search_text(memory) -> str:
@@ -117,10 +146,7 @@ def _count_keyword_overlap(user_message_tokens: set[str], memory) -> int:
     if not user_message_tokens:
         return 0
 
-    memory_tokens = {
-        token.lower()
-        for token in QUERY_TOKEN_PATTERN.findall(_build_memory_search_text(memory))
-    }
+    memory_tokens = _extract_unicode_tokens(_build_memory_search_text(memory))
     return len(user_message_tokens & memory_tokens)
 
 
@@ -154,19 +180,19 @@ def select_memory_evidence(
             for overlap_count, memory in selected_memories
         ]
 
-    fallback_memories = memories[:limit]
-    return [
-        BrainMemoryEvidence(
-            source_id=memory.id,
-            title=_sanitize_prompt_text(memory.title) or "Untitled memory",
-            memory_type=memory.memory_type,
-            occurred_at=memory.occurred_at,
-            occurred_year=memory.occurred_year,
-            content_preview=_build_memory_content_preview(memory.content),
-            selection_reason="latest_timeline_fallback",
-        )
-        for memory in fallback_memories
-    ]
+    return []
+
+
+def build_vector_retrieval_grounded_context(
+    *,
+    profile,
+    retrieved_evidence_items: list[BrainRagEvidence] | None = None,
+) -> BrainGroundedContext:
+    return BrainGroundedContext(
+        profile_context=build_brain_profile_context(profile),
+        evidence_items=[],
+        retrieved_evidence_items=retrieved_evidence_items or [],
+    )
 
 
 def build_grounded_context(

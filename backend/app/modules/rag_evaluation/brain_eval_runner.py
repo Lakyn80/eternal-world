@@ -47,6 +47,8 @@ def resolve_brain_rag_eval_cases(case_set: BrainRagEvalCaseSet) -> tuple[RagEval
         return FAMILY_AVATAR_CS_EVALUATION_CASES
     if case_set == "family_avatar_ru":
         return FAMILY_AVATAR_RU_EVALUATION_CASES
+    if case_set == "family_avatar_ru_e2e":
+        return FAMILY_AVATAR_RU_EVALUATION_CASES
     if case_set == "family_avatar_en":
         return FAMILY_AVATAR_EN_EVALUATION_CASES
     if case_set == "family_avatar_es":

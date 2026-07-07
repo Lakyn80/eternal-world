@@ -21,6 +21,7 @@ BrainRagEvalCaseSet = Literal[
     "family_avatar",
     "family_avatar_cs",
     "family_avatar_ru",
+    "family_avatar_ru_e2e",
     "family_avatar_en",
     "family_avatar_es",
     "family_avatar_fr",
@@ -171,6 +172,8 @@ class BrainRagEvalConfig(BaseModel):
     provider_name: str = Field(default="openai_compatible", min_length=1)
     artifact_dir: Path | None = None
     write_artifacts: bool = True
+    real_retrieval: bool = False
+    allow_mock_embeddings: bool = False
 
     @field_validator("provider_name")
     @classmethod

@@ -5,6 +5,8 @@ import json
 import sys
 from pathlib import Path
 
+from app.db.session import SessionLocal
+from app.modules.rag_evaluation.brain_eval_e2e_runner import run_brain_rag_eval_e2e
 from app.modules.rag_evaluation.brain_eval_runner import (
     preflight_brain_rag_eval,
     run_brain_rag_eval,
@@ -30,6 +32,7 @@ def _build_parser() -> argparse.ArgumentParser:
             "family_avatar",
             "family_avatar_cs",
             "family_avatar_ru",
+            "family_avatar_ru_e2e",
             "family_avatar_en",
             "family_avatar_es",
             "family_avatar_fr",
@@ -53,6 +56,16 @@ def _build_parser() -> argparse.ArgumentParser:
         "--preflight",
         action="store_true",
         help="Validate configuration and case set without calling the Brain provider.",
+    )
+    parser.add_argument(
+        "--real-retrieval",
+        action="store_true",
+        help="Run through real Qdrant retrieval instead of injected fixture evidence.",
+    )
+    parser.add_argument(
+        "--allow-mock-embeddings",
+        action="store_true",
+        help="Allow real-retrieval E2E to run with mock embedding providers (diagnostics only).",
     )
     parser.add_argument("--json", action="store_true", dest="json_output")
     return parser
@@ -94,13 +107,77 @@ def _print_text_result(result) -> None:
             print(f"  {key}: {path}")
 
 
+def _print_text_e2e_result(result) -> None:
+    print(f"BRAIN RAG E2E RESULT: {'PASS' if result.passed else 'FAIL'}")
+    print(f"run_id: {result.run_id}")
+    print(f"provider: {result.provider_name}")
+    print(f"model: {result.model or 'unknown'}")
+    print(f"case_set: {result.case_set}")
+    print(f"profile_id: {result.profile_id}")
+    print(f"embedding_model: {result.embedding_model_code}")
+    print(f"retrieval_mode: {result.retrieval_mode}")
+    print(f"qdrant_collection: {result.qdrant_collection}")
+    print(f"top_k: {result.top_k}")
+    print(f"embedding_provider: {result.embedding_diagnostics.embedding_provider_setting}")
+    print(f"indexing_provider: {result.embedding_diagnostics.resolved_indexing_provider_name}")
+    print(f"query_provider: {result.embedding_diagnostics.resolved_query_provider_name}")
+    print(f"mock_indexing_provider: {result.embedding_diagnostics.is_mock_indexing_provider}")
+    print(f"mock_query_provider: {result.embedding_diagnostics.is_mock_query_provider}")
+    print(f"embedding_dimension: {result.embedding_diagnostics.embedding_dimension}")
+    print(f"collection_vector_size: {result.embedding_diagnostics.collection_vector_size}")
+    print(f"collection_rebuilt: {result.embedding_diagnostics.collection_rebuilt}")
+    print(
+        f"passed_cases: {result.suite_result.passed_cases}/"
+        f"{result.suite_result.total_cases}"
+    )
+    print(f"retrieval_failures: {result.suite_result.retrieval_failures}")
+    print(f"answer_failures: {result.suite_result.answer_failures}")
+    print()
+    print("retrieval_diagnostics:")
+    for diagnostic in result.retrieval_diagnostics:
+        print(
+            f"  - {diagnostic.case_id}: expected_chunk_in_top_k="
+            f"{diagnostic.expected_chunk_in_top_k} rank={diagnostic.expected_chunk_rank} "
+            f"retrieved={diagnostic.retrieved_chunk_ids}"
+        )
+    print("top_k_diagnostics:")
+    for diagnostic in result.top_k_diagnostics:
+        print(
+            f"  - top_k={diagnostic.top_k}: "
+            f"{diagnostic.expected_chunk_hits}/{diagnostic.expected_chunk_checks}"
+        )
+    print()
+    for case_result in result.suite_result.results:
+        status = "PASS" if case_result.passed else "FAIL"
+        print(f"[{status}] {case_result.case_id}")
+        print(f"  expected: {case_result.expected_behavior}")
+        print(f"  actual: {case_result.actual_behavior}")
+        if case_result.failure_class:
+            print(f"  failure_class: {case_result.failure_class}")
+        if case_result.retrieved_chunks:
+            chunk_ids = ", ".join(
+                f"{item.chunk_id}({item.score:.3f})" for item in case_result.retrieved_chunks
+            )
+            print(f"  retrieved_chunks: {chunk_ids}")
+        if case_result.reasons:
+            print(f"  reasons: {'; '.join(case_result.reasons)}")
+    if result.artifact_paths:
+        print()
+        print("artifacts:")
+        for key, path in sorted(result.artifact_paths.items()):
+            print(f"  {key}: {path}")
+
+
 def main() -> int:
     args = _build_parser().parse_args()
     case_set: BrainRagEvalCaseSet = args.case_set
+    real_retrieval = args.real_retrieval or case_set == "family_avatar_ru_e2e"
     config = BrainRagEvalConfig(
         case_set=case_set,
         artifact_dir=args.artifact_dir,
         write_artifacts=not args.no_artifacts,
+        real_retrieval=real_retrieval,
+        allow_mock_embeddings=args.allow_mock_embeddings,
     )
 
     try:
@@ -111,6 +188,18 @@ def main() -> int:
             else:
                 _print_text_preflight(preflight_result)
             return 0 if preflight_result.passed else 1
+
+        if real_retrieval:
+            db = SessionLocal()
+            try:
+                result = run_brain_rag_eval_e2e(db, config)
+            finally:
+                db.close()
+            if args.json_output:
+                print(json.dumps(result.model_dump(mode="json"), indent=2, sort_keys=True))
+            else:
+                _print_text_e2e_result(result)
+            return 0 if result.passed else 1
 
         result = run_brain_rag_eval(config)
     except (BrainRagEvalConfigurationError, RagEvaluationError) as exc:

@@ -7,11 +7,16 @@ from app.modules.embedding_models.registry import (
     get_embedding_model_definition,
 )
 from app.modules.embeddings.providers.base import BaseEmbeddingProvider
+from app.modules.embeddings.providers.bge_m3_hybrid import (
+    BGE_M3_HYBRID_PROVIDER_NAME,
+    BgeM3HybridEmbeddingAdapter,
+)
 from app.modules.embeddings.providers.mock import MockEmbeddingProvider
 from app.modules.embeddings.providers.sentence_transformers import (
     SENTENCE_TRANSFORMERS_PROVIDER_NAME,
     SentenceTransformersEmbeddingProvider,
 )
+from app.modules.rag_retrieval.hybrid import _can_use_real_bge_m3_hybrid_provider
 
 
 MOCK_PROVIDER_NAME = "mock"
@@ -27,6 +32,11 @@ def build_embedding_provider(*, model_code: str) -> BaseEmbeddingProvider:
         model_definition is not None
         and model_definition.runtime_adapter == BGE_M3_HYBRID_ADAPTER
     ):
+        if _can_use_real_bge_m3_hybrid_provider():
+            return BgeM3HybridEmbeddingAdapter(
+                device=settings.sentence_transformers_device,
+                cache_dir=settings.sentence_transformers_cache_dir,
+            )
         return MockEmbeddingProvider()
 
     if (

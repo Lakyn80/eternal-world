@@ -556,8 +556,8 @@ def test_memory_evidence_count_is_capped_at_10(client, monkeypatch):
             client,
             token,
             profile_id,
-            title=f"Memory {index}",
-            content=f"Fallback content {index}",
+            title=f"Shared keyword memory {index}",
+            content=f"Shared keyword content {index}",
             occurred_year=2000 + index,
         )
         assert response.status_code == 201
@@ -565,14 +565,14 @@ def test_memory_evidence_count_is_capped_at_10(client, monkeypatch):
     response = client.post(
         f"/api/chat/{profile_id}/messages",
         headers={"Authorization": f"Bearer {token}"},
-        json={"message": "completely unrelated query"},
+        json={"message": "Tell me about shared keyword memories"},
     )
 
     assert response.status_code == 200
     assert captured["prompt"].count("- [memory:") == MAX_MEMORY_EVIDENCE_ITEMS
 
 
-def test_memory_evidence_is_deterministic_and_timeline_ordered_for_fallback(client, monkeypatch):
+def test_unrelated_query_does_not_inject_timeline_memory_fallback(client, monkeypatch):
     captured = _capture_prompt(monkeypatch)
     token = _register_and_login(client, "ai-fallback-order@example.com")
     profile_id = _create_profile(client, token, name="Fallback Order Profile")
@@ -608,8 +608,8 @@ def test_memory_evidence_is_deterministic_and_timeline_ordered_for_fallback(clie
 
     assert response.status_code == 200
     prompt = captured["prompt"]
-    assert prompt.index("Occurred At") < prompt.index("Year Only") < prompt.index("Created Only")
-    assert "latest_timeline_fallback" in prompt
+    assert "- [memory:" not in prompt
+    assert "latest_timeline_fallback" not in prompt
 
 
 def test_keyword_matching_memory_is_preferred_over_unrelated_latest_memory(client, monkeypatch):

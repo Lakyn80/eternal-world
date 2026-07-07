@@ -9,6 +9,7 @@ from time import perf_counter
 from typing import Any
 
 from app.modules.embedding_models.service import get_embedding_model
+from app.modules.embeddings.providers.base import BaseEmbeddingProvider, EmbeddingVector
 
 
 BGE_M3_HYBRID_PROVIDER_NAME = "bge_m3_hybrid"
@@ -364,4 +365,70 @@ def _coerce_multivectors(raw_multivectors: Any) -> list[list[list[float]]]:
             ]
         )
     return normalized_vectors
+
+
+class BgeM3HybridEmbeddingAdapter(BaseEmbeddingProvider):
+    def __init__(
+        self,
+        *,
+        device: str = "cpu",
+        cache_dir: Path | None = None,
+    ) -> None:
+        self._hybrid_provider = BgeM3HybridEmbeddingProvider(
+            device=device,
+            cache_dir=cache_dir,
+        )
+
+    def embed_text(self, text: str, model_code: str) -> EmbeddingVector:
+        return self.embed_passage(text, model_code)
+
+    def embed_passage(self, text: str, model_code: str) -> EmbeddingVector:
+        encoded = self._hybrid_provider.encode_passages([text], model_code)
+        return self._build_embedding_vector(encoded=encoded, model_code=model_code)
+
+    def embed_query(self, text: str, model_code: str) -> EmbeddingVector:
+        encoded = self._hybrid_provider.encode_query(text, model_code)
+        return self._build_embedding_vector(encoded=encoded, model_code=model_code)
+
+    def embed_batch(self, texts: list[str], model_code: str) -> list[EmbeddingVector]:
+        encoded = self._hybrid_provider.encode_passages(texts, model_code)
+        vectors: list[EmbeddingVector] = []
+        for index, _text in enumerate(texts):
+            vectors.append(
+                self._build_embedding_vector(
+                    encoded=BgeM3HybridEmbeddings(
+                        dense_vectors=[encoded.dense_vectors[index]],
+                        sparse_vectors=[encoded.sparse_vectors[index]],
+                        multivectors=None,
+                    ),
+                    model_code=model_code,
+                )
+            )
+        return vectors
+
+    def _build_embedding_vector(
+        self,
+        *,
+        encoded: BgeM3HybridEmbeddings,
+        model_code: str,
+    ) -> EmbeddingVector:
+        if not encoded.dense_vectors:
+            raise BgeM3HybridProviderError("BGE-M3 hybrid embedding output is empty")
+
+        model = get_embedding_model(model_code)
+        dense_vector = [float(value) for value in encoded.dense_vectors[0]]
+        sparse_vector = encoded.sparse_vectors[0] if encoded.sparse_vectors else {}
+        if len(dense_vector) != model.dimension:
+            raise BgeM3HybridProviderError("BGE-M3 dense vector dimension is invalid")
+
+        return EmbeddingVector(
+            values=dense_vector,
+            dimension=len(dense_vector),
+            metadata={
+                "provider_name": BGE_M3_HYBRID_PROVIDER_NAME,
+                "normalized_vectors": model.normalized_vectors,
+                "supports_batching": model.supports_batching,
+                "sparse_vector": sparse_vector,
+            },
+        )
 

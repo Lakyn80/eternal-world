@@ -52,6 +52,22 @@ class QdrantRestClient:
         except httpx.HTTPError as exc:
             raise QdrantClientError("Qdrant request failed") from exc
 
+    def delete_collection(self, *, collection_name: str) -> bool:
+        response = self._request("DELETE", f"/collections/{collection_name}")
+        if response.status_code == 404:
+            return False
+        if response.is_error:
+            raise QdrantClientError("Qdrant collection deletion failed")
+        return True
+
+    def get_collection_vector_size(self, *, collection_name: str) -> int | None:
+        response = self._request("GET", f"/collections/{collection_name}")
+        if response.status_code == 404:
+            return None
+        if response.is_error:
+            raise QdrantClientError("Qdrant collection check failed")
+        return _extract_vector_size(response.json())
+
     def ensure_collection(self, *, collection_name: str, vector_size: int) -> None:
         response = self._request("GET", f"/collections/{collection_name}")
 
