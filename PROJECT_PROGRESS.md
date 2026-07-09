@@ -5832,3 +5832,99 @@ Next recommended task:
 2. alternatively, add a LangGraph orchestration layer on top of the validated retrieval + guarded Brain flow
 
 ---
+
+### Task 62O follow-up - Fix FA Demo Profile/Collection Wiring (2026-07-09)
+
+Observed bad UI response:
+
+- question shown and used in the demo UI: `Где Павел жил в детстве?`
+- returned answer claimed there was no supporting memory
+- reported trace id: `ed9cfa17-8677-48d8-8627-a7383cc56ad5`
+
+Investigation result:
+
+- the backend was already resolving the correct seeded demo profile:
+  - `profile_id=8`
+- the backend was already using the correct dedicated E2E collection:
+  - `eternal_world_rag_chunks__bge_m3_dense_sparse__family_novak_ru_e2e_v3_bge_m3_real_cpu`
+- the wrong answer was not caused by:
+  - Qdrant fallback
+  - wrong active retrieval config
+  - output guard rewriting
+  - Redis embedding cache failure
+- root cause was the demo UI copy itself:
+  - the seeded/test avatar is Eva Novakova
+  - the validated Popice childhood fact belongs to Eva, not Pavel
+  - the frontend example question incorrectly suggested a Pavel-childhood query, which retrieves a different chunk cluster and does not surface the Popice childhood evidence
+
+What was fixed:
+
+- frontend example question corrected to the avatar-consistent form:
+  - `Где ты жила в детстве?`
+- frontend subtitle clarified that this is the avatar of Eva Novakova
+- backend demo endpoint hardened with explicit demo initialization verification:
+  - checks active retrieval config exists
+  - checks the active collection matches the dedicated E2E collection
+  - checks the seeded E2E source exists
+  - checks the dedicated collection contains Qdrant points for that seeded source
+- if demo initialization is missing or broken, the endpoint now fails clearly in Russian instead of pretending the avatar simply does not know:
+  - `Демо-профиль ещё не инициализирован. Пожалуйста, запустите подготовку тестовой памяти.`
+- safe retrieval diagnostics were added under `trace_id`:
+  - collection name
+  - retrieval top_k
+  - source id
+  - Qdrant point count
+  - retrieved chunk count
+  - top chunk ids
+  - short retrieved text previews
+
+Key trace findings:
+
+- old trace `ed9cfa17-8677-48d8-8627-a7383cc56ad5`
+  - resolved profile id: `8`
+  - collection used: `eternal_world_rag_chunks__bge_m3_dense_sparse__family_novak_ru_e2e_v3_bge_m3_real_cpu`
+  - output guard changed answer: no
+  - cache/runtime path: BGE-M3 local snapshot CPU path stayed valid
+- new diagnostic traces after the fix:
+  - correct Eva question trace retrieved `chunk_id=27618` first and returned `Попице`
+  - old Pavel wording still retrieved a different top-5 chunk set without the childhood Popice chunk, confirming the copy bug
+
+Tests run:
+
+- targeted backend regression:
+  - `cd backend`
+  - `python -m pytest tests/test_demo_fa_chat.py tests/test_ai_agents.py tests/test_rag_evaluation.py -q`
+  - result: passed
+- full backend safety suite:
+  - `python -m pytest tests/test_brain_rag_eval.py tests/test_brain_eval_e2e_bootstrap.py tests/test_brain_eval_e2e_embedding_runtime.py tests/test_rag_evaluation.py tests/test_ai_agents.py tests/test_demo_fa_chat.py -q`
+  - result: passed
+- cache tests:
+  - `python -m pytest tests/test_embedding_cache.py tests/test_bge_m3_embedding_cache.py -q`
+  - result: passed
+- frontend:
+  - `cd frontend`
+  - `npm test`
+  - `npm run build`
+  - result: passed
+
+Manual smoke:
+
+- direct API with corrected question:
+  - `Где ты жила в детстве?`
+  - returned grounded Russian answer mentioning `Попице`
+- direct API with the old incorrect Pavel wording:
+  - still retrieves a Pavel-focused evidence cluster instead of the Popice childhood chunk
+  - confirms the original issue was a wrong demo question, not broken collection wiring
+- direct API with Vietnam question:
+  - returned a grounded Russian answer that Pavel was not in Vietnam
+  - this matches stored evidence, so it is not an out-of-memory case
+
+Known limitation after the follow-up:
+
+- the demo still depends on the seeded Eva/E2E memory package being prepared in advance
+
+Next recommended task:
+
+1. add a visible small Russian helper hint in the UI that questions should be asked to Eva in first person for the strongest grounded answers
+
+---

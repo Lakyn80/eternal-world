@@ -35,7 +35,7 @@ type ChatMessage = {
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8033";
 const EXAMPLE_QUESTIONS = [
-  "Где Павел жил в детстве?",
+  "Где ты жила в детстве?",
   "Кто подписал строительный план дома?",
   "Что известно о доме в Ржечковицах?",
 ];
@@ -142,14 +142,15 @@ export function FaChatDemoPage() {
           }}
         >
           <p style={{ margin: 0, fontSize: 13, letterSpacing: "0.08em", textTransform: "uppercase" }}>
-            Family Avatar Demo
+            Аватар Евы Новаковой
           </p>
           <h1 style={{ margin: "10px 0 12px", fontSize: "clamp(2rem, 5vw, 3.4rem)", lineHeight: 1.05 }}>
             Тестовый чат с цифровым аватаром
           </h1>
           <p style={{ margin: 0, fontSize: 18, lineHeight: 1.6, maxWidth: 720 }}>
-            Это демонстрационная версия. Аватар отвечает только на основе подготовленных воспоминаний.
-            Если информации нет, он честно скажет, что не знает.
+            Это демонстрационная версия аватара Евы Новаковой. Аватар отвечает только на основе
+            подготовленных воспоминаний и архивных фрагментов. Если подтверждения нет, он честно
+            скажет, что не знает.
           </p>
         </section>
 

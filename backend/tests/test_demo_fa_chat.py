@@ -12,6 +12,10 @@ from app.modules.rag_evaluation.brain_eval_e2e_bootstrap import (
     FAMILY_AVATAR_RU_E2E_PASSWORD,
     FAMILY_AVATAR_RU_E2E_PROFILE_NAME,
 )
+from app.modules.demo_fa_chat.service import (
+    DEMO_FA_CHAT_NOT_INITIALIZED_DETAIL,
+    DemoFaChatInitializationError,
+)
 from app.modules.rag_retrieval.schemas import RagRetrievalResponseRead, RagRetrievalResultRead
 
 
@@ -57,7 +61,7 @@ def _build_retrieval_response(profile_id: int, query: str) -> RagRetrievalRespon
                 source_title="Family Novak RU E2E Corpus",
                 embedding_id=43591,
                 score=0.99,
-                text="Павел в детстве жил в доме со сливовым садом у Попице.",
+                text="В детстве Ева жила с родителями в домике со сливовым садом у Попице.",
                 chunk_index=0,
                 language="ru",
                 source_type="manual_text",
@@ -104,6 +108,16 @@ def test_demo_fa_chat_valid_message_returns_answer_with_default_profile_and_trac
     _user, profile = _create_demo_profile()
 
     monkeypatch.setattr(
+        "app.modules.demo_fa_chat.service._resolve_demo_runtime",
+        lambda db, *, resolved_profile: SimpleNamespace(
+            collection_name="eternal_world_rag_chunks__bge_m3_dense_sparse__family_novak_ru_e2e_v3_bge_m3_real_cpu",
+            retrieval_mode="bge_m3_dense_sparse",
+            top_k=5,
+            source_id=7,
+            point_count=20,
+        ),
+    )
+    monkeypatch.setattr(
         "app.modules.demo_fa_chat.service.retrieve_profile_rag",
         lambda db, *, current_user, profile_id, payload: _build_retrieval_response(profile_id, payload.query),
     )
@@ -111,7 +125,7 @@ def test_demo_fa_chat_valid_message_returns_answer_with_default_profile_and_trac
         "app.modules.demo_fa_chat.service.get_agent_orchestrator",
         lambda: SimpleNamespace(
             generate_chat_response=lambda request: SimpleNamespace(
-                text="Павел в детстве жил у Попице. [rag:27618]",
+                text="В детстве я жила с родителями у Попице. [rag:27618]",
                 provider_name="mock-brain",
                 metadata={
                     "grounding_status": "grounded",
@@ -126,12 +140,12 @@ def test_demo_fa_chat_valid_message_returns_answer_with_default_profile_and_trac
     response = client.post(
         "/api/demo/fa-chat/message",
         headers={"X-Request-ID": "demo-trace-1"},
-        json={"message": "Где Павел жил в детстве?"},
+        json={"message": "Где ты жила в детстве?"},
     )
 
     assert response.status_code == 200
     body = response.json()
-    assert body["answer"] == "Павел в детстве жил у Попице. [rag:27618]"
+    assert body["answer"] == "В детстве я жила с родителями у Попице. [rag:27618]"
     assert body["trace_id"] == "demo-trace-1"
     assert body["guard_applied"] is False
     assert body["guard_reason"] is None
@@ -145,6 +159,16 @@ def test_demo_fa_chat_debug_true_includes_evidence_preview(client, monkeypatch):
     _user, profile = _create_demo_profile()
 
     monkeypatch.setattr(
+        "app.modules.demo_fa_chat.service._resolve_demo_runtime",
+        lambda db, *, resolved_profile: SimpleNamespace(
+            collection_name="eternal_world_rag_chunks__bge_m3_dense_sparse__family_novak_ru_e2e_v3_bge_m3_real_cpu",
+            retrieval_mode="bge_m3_dense_sparse",
+            top_k=5,
+            source_id=7,
+            point_count=20,
+        ),
+    )
+    monkeypatch.setattr(
         "app.modules.demo_fa_chat.service.retrieve_profile_rag",
         lambda db, *, current_user, profile_id, payload: _build_retrieval_response(profile_id, payload.query),
     )
@@ -152,7 +176,7 @@ def test_demo_fa_chat_debug_true_includes_evidence_preview(client, monkeypatch):
         "app.modules.demo_fa_chat.service.get_agent_orchestrator",
         lambda: SimpleNamespace(
             generate_chat_response=lambda request: SimpleNamespace(
-                text="Павел в детстве жил у Попице. [rag:27618]",
+                text="В детстве я жила с родителями у Попице. [rag:27618]",
                 provider_name="mock-brain",
                 metadata={
                     "grounding_status": "grounded",
@@ -168,7 +192,7 @@ def test_demo_fa_chat_debug_true_includes_evidence_preview(client, monkeypatch):
         "/api/demo/fa-chat/message",
         json={
             "profile_id": profile.id,
-            "message": "Где Павел жил в детстве?",
+            "message": "Где ты жила в детстве?",
             "debug": True,
         },
     )
@@ -182,9 +206,38 @@ def test_demo_fa_chat_debug_true_includes_evidence_preview(client, monkeypatch):
     assert "Попице" in body["evidence"][0]["text_preview"]
 
 
+def test_demo_fa_chat_returns_safe_error_when_demo_runtime_is_not_initialized(client, monkeypatch):
+    _create_demo_profile()
+
+    monkeypatch.setattr(
+        "app.modules.demo_fa_chat.service._resolve_demo_runtime",
+        lambda *args, **kwargs: (_ for _ in ()).throw(
+            DemoFaChatInitializationError(DEMO_FA_CHAT_NOT_INITIALIZED_DETAIL)
+        ),
+    )
+
+    response = client.post(
+        "/api/demo/fa-chat/message",
+        json={"message": "Где ты жила в детстве?"},
+    )
+
+    assert response.status_code == 503
+    assert response.json()["detail"] == DEMO_FA_CHAT_NOT_INITIALIZED_DETAIL
+
+
 def test_demo_fa_chat_internal_errors_return_safe_russian_response(client, monkeypatch):
     _user, profile = _create_demo_profile()
 
+    monkeypatch.setattr(
+        "app.modules.demo_fa_chat.service._resolve_demo_runtime",
+        lambda db, *, resolved_profile: SimpleNamespace(
+            collection_name="eternal_world_rag_chunks__bge_m3_dense_sparse__family_novak_ru_e2e_v3_bge_m3_real_cpu",
+            retrieval_mode="bge_m3_dense_sparse",
+            top_k=5,
+            source_id=7,
+            point_count=20,
+        ),
+    )
     monkeypatch.setattr(
         "app.modules.demo_fa_chat.service.retrieve_profile_rag",
         lambda *args, **kwargs: (_ for _ in ()).throw(RuntimeError("boom")),
@@ -192,7 +245,7 @@ def test_demo_fa_chat_internal_errors_return_safe_russian_response(client, monke
 
     response = client.post(
         "/api/demo/fa-chat/message",
-        json={"profile_id": profile.id, "message": "Где Павел жил в детстве?"},
+        json={"profile_id": profile.id, "message": "Где ты жила в детстве?"},
     )
 
     assert response.status_code == 500

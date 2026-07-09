@@ -11,6 +11,7 @@ from app.db.session import get_db
 from .schemas import DemoFaChatErrorResponse, DemoFaChatMessageRequest, DemoFaChatMessageResponse
 from .service import (
     DEMO_FA_CHAT_INTERNAL_ERROR_DETAIL,
+    DemoFaChatInitializationError,
     DemoFaChatProfileUnavailableError,
     DemoFaChatValidationError,
     run_demo_fa_chat_message,
@@ -27,6 +28,7 @@ logger = get_logger("demo_fa_chat_router")
     responses={
         status.HTTP_400_BAD_REQUEST: {"model": DemoFaChatErrorResponse},
         status.HTTP_404_NOT_FOUND: {"model": DemoFaChatErrorResponse},
+        status.HTTP_503_SERVICE_UNAVAILABLE: {"model": DemoFaChatErrorResponse},
         status.HTTP_500_INTERNAL_SERVER_ERROR: {"model": DemoFaChatErrorResponse},
     },
 )
@@ -52,6 +54,11 @@ def send_demo_fa_chat_message(
     except DemoFaChatProfileUnavailableError as exc:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(exc),
+        ) from exc
+    except DemoFaChatInitializationError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail=str(exc),
         ) from exc
     except HTTPException:

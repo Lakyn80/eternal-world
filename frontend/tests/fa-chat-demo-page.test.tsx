@@ -64,7 +64,7 @@ describe("fa chat demo page", () => {
     const view = renderComponent();
     const form = view.container.querySelector("form");
     const exampleButton = Array.from(view.container.querySelectorAll("button")).find(
-      (button) => button.textContent === "Где Павел жил в детстве?"
+      (button) => button.textContent === "Где ты жила в детстве?"
     );
     if (!form || !exampleButton) {
       throw new Error("Required form controls are missing");
@@ -86,7 +86,7 @@ describe("fa chat demo page", () => {
       resolveFetch?.({
         ok: true,
         json: async () => ({
-          answer: "Павел в детстве жил у Попице. [rag:27618]",
+          answer: "В детстве я жила с родителями в домике у Попице. [rag:27618]",
           lack_of_evidence: false,
           retrieval_used: true,
           guard_applied: false,
@@ -98,7 +98,7 @@ describe("fa chat demo page", () => {
       await fetchPromise;
     });
 
-    expect(view.container.textContent).toContain("Павел в детстве жил у Попице. [rag:27618]");
+    expect(view.container.textContent).toContain("В детстве я жила с родителями в домике у Попице. [rag:27618]");
     expect(view.container.textContent).toContain("trace_id: demo-trace-frontend");
 
     view.unmount();
