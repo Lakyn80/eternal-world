@@ -3,13 +3,26 @@ from __future__ import annotations
 import sys
 from contextlib import contextmanager
 from contextvars import ContextVar
+from dataclasses import dataclass
 from pathlib import Path
 from threading import Lock
 from time import perf_counter
 from typing import Any
 
+from app.core.config import settings
 from app.modules.embedding_models.service import get_embedding_model
-from app.modules.embeddings.bge_m3_model_cache import resolve_bge_m3_model_load_path
+from app.modules.embeddings.bge_m3_model_cache import (
+    BGE_M3_DEFAULT_REPO_ID,
+    resolve_bge_m3_model_load_path,
+    resolve_local_snapshot_path,
+)
+from app.modules.embeddings.embedding_cache import (
+    CachedEmbeddingPayload,
+    build_cache_key,
+    build_cached_embedding_payload,
+    build_embedding_cache,
+    build_text_hash,
+)
 from app.modules.embeddings.providers.base import BaseEmbeddingProvider, EmbeddingVector
 
 
@@ -25,6 +38,23 @@ except ImportError:  # pragma: no cover - resource is unavailable on some local 
 
 class BgeM3HybridProviderError(Exception):
     pass
+
+
+@dataclass(frozen=True)
+class _BgeM3CacheContext:
+    provider_code: str
+    provider_model_name: str
+    snapshot_revision: str
+    mode: str
+    dimension: int
+
+
+@dataclass(frozen=True)
+class _PreparedCacheItem:
+    index: int
+    text: str
+    cache_key: str
+    text_hash: str
 
 
 class BgeM3HybridEmbeddings:
@@ -103,6 +133,8 @@ class BgeM3HybridEmbeddingProvider:
         self.device = device
         self.cache_dir = str(cache_dir) if cache_dir is not None else None
         self._models: dict[str, Any] = {}
+        self._cache_contexts: dict[str, _BgeM3CacheContext] = {}
+        self._embedding_cache = build_embedding_cache()
         self._lock = Lock()
 
     def encode_query(self, text: str, provider_code: str) -> BgeM3HybridEmbeddings:
@@ -123,22 +155,156 @@ class BgeM3HybridEmbeddingProvider:
 
         normalized_provider_code = provider_code.strip().lower()
         model = self._get_or_load_model(normalized_provider_code)
-        model_definition = get_embedding_model(normalized_provider_code)
+        cache_context = self._get_cache_context(normalized_provider_code)
         return_colbert_vecs = normalized_provider_code == "bge_m3_dense_sparse_multivector"
+        prepared_items: list[_PreparedCacheItem] = []
+        unique_items_by_key: dict[str, _PreparedCacheItem] = {}
+        for index, text in enumerate(texts):
+            cache_key = build_cache_key(
+                key_prefix=settings.embedding_cache_key_prefix,
+                provider_code=cache_context.provider_code,
+                provider_model_name=cache_context.provider_model_name,
+                snapshot_revision=cache_context.snapshot_revision,
+                mode=cache_context.mode,
+                input_type=input_type,
+                dimension=cache_context.dimension,
+                text=text,
+            )
+            item = _PreparedCacheItem(
+                index=index,
+                text=text,
+                cache_key=cache_key,
+                text_hash=build_text_hash(text),
+            )
+            prepared_items.append(item)
+            unique_items_by_key.setdefault(cache_key, item)
+
+        cached_payloads_by_key: dict[str, CachedEmbeddingPayload] = {}
+        cached_hit_keys: set[str] = set()
+        missing_items: list[_PreparedCacheItem] = []
+        for cache_key, item in unique_items_by_key.items():
+            cached_payload = self._embedding_cache.get(cache_key)
+            if cached_payload is None:
+                missing_items.append(item)
+                continue
+            if not _cached_payload_matches_context(
+                payload=cached_payload,
+                cache_context=cache_context,
+                input_type=input_type,
+                expected_text_hash=item.text_hash,
+                require_multivector=return_colbert_vecs,
+            ):
+                missing_items.append(item)
+                continue
+            cached_payloads_by_key[cache_key] = cached_payload
+            cached_hit_keys.add(cache_key)
+
+        if missing_items:
+            raw_payloads = self._encode_missing_items(
+                model=model,
+                provider_code=normalized_provider_code,
+                input_type=input_type,
+                texts=[item.text for item in missing_items],
+                return_colbert_vecs=return_colbert_vecs,
+            )
+            for offset, item in enumerate(missing_items):
+                payload = build_cached_embedding_payload(
+                    provider_code=cache_context.provider_code,
+                    provider_model_name=cache_context.provider_model_name,
+                    snapshot_revision=cache_context.snapshot_revision,
+                    mode=cache_context.mode,
+                    input_type=input_type,
+                    dimension=cache_context.dimension,
+                    dense_vector=raw_payloads.dense_vectors[offset],
+                    sparse_vector=raw_payloads.sparse_vectors[offset],
+                    multivector=(
+                        raw_payloads.multivectors[offset]
+                        if raw_payloads.multivectors is not None
+                        else None
+                    ),
+                    text=item.text,
+                )
+                cached_payloads_by_key[item.cache_key] = payload
+                self._embedding_cache.set(
+                    item.cache_key,
+                    payload,
+                    settings.embedding_cache_ttl_seconds,
+                )
+
+        dense_vectors: list[list[float]] = []
+        sparse_vectors: list[dict[str, float]] = []
+        multivectors: list[list[list[float]]] | None = [] if return_colbert_vecs else None
+        for item in prepared_items:
+            payload = cached_payloads_by_key.get(item.cache_key)
+            if payload is None:
+                raise BgeM3HybridProviderError("BGE-M3 cached embedding output is incomplete")
+            dense_vectors.append(list(payload.dense_vector))
+            sparse_vectors.append(dict(payload.sparse_vector))
+            if multivectors is not None:
+                if payload.multivector is None:
+                    raise BgeM3HybridProviderError("BGE-M3 cached multivector output is invalid")
+                multivectors.append([list(token_vector) for token_vector in payload.multivector])
+
+        _emit_bge_m3_hybrid_log(
+            "cache summary "
+            f"provider_code={normalized_provider_code} input_type={input_type} "
+            f"mode={cache_context.mode} batch_size={len(texts)} unique_texts={len(unique_items_by_key)} "
+            f"hits={sum(1 for item in prepared_items if item.cache_key in cached_hit_keys)} "
+            f"misses={len(missing_items)} writes={len(missing_items)} "
+            f"errors={self._consume_cache_error_count()}"
+        )
+        return BgeM3HybridEmbeddings(
+            dense_vectors=dense_vectors,
+            sparse_vectors=sparse_vectors,
+            multivectors=multivectors,
+        )
+
+    def _get_cache_context(self, provider_code: str) -> _BgeM3CacheContext:
+        existing_context = self._cache_contexts.get(provider_code)
+        if existing_context is not None:
+            return existing_context
+
+        model_definition = get_embedding_model(provider_code)
+        provider_model_name = model_definition.provider_model_name or BGE_M3_DEFAULT_REPO_ID
+        snapshot_path = resolve_local_snapshot_path(
+            provider_model_name,
+            cache_dir=self.cache_dir,
+        )
+        snapshot_revision = _resolve_snapshot_revision(snapshot_path)
+        cache_context = _BgeM3CacheContext(
+            provider_code=provider_code,
+            provider_model_name=provider_model_name,
+            snapshot_revision=snapshot_revision,
+            mode=_resolve_bge_m3_cache_mode(provider_code),
+            dimension=model_definition.dimension,
+        )
+        self._cache_contexts[provider_code] = cache_context
+        return cache_context
+
+    def _encode_missing_items(
+        self,
+        *,
+        model: Any,
+        provider_code: str,
+        input_type: str,
+        texts: list[str],
+        return_colbert_vecs: bool,
+    ) -> BgeM3HybridEmbeddings:
+        model_definition = get_embedding_model(provider_code)
         batch_size = max(1, min(8, len(texts)))
 
         _emit_bge_m3_hybrid_log(
             "dense encode start "
-            f"provider_code={normalized_provider_code} input_type={input_type} batch_size={len(texts)}"
+            f"provider_code={provider_code} input_type={input_type} batch_size={len(texts)}"
         )
         _emit_bge_m3_hybrid_log(
             "sparse encode start "
-            f"provider_code={normalized_provider_code} input_type={input_type} batch_size={len(texts)}"
+            f"provider_code={provider_code} input_type={input_type} batch_size={len(texts)}"
         )
         if return_colbert_vecs:
             _emit_bge_m3_hybrid_log(
                 "multivector encode start "
-                f"provider_code={normalized_provider_code} input_type={input_type} batch_size={len(texts)}"
+                f"provider_code={provider_code} input_type={input_type} batch_size={len(texts)}"
             )
 
         started_at = perf_counter()
@@ -154,7 +320,7 @@ class BgeM3HybridEmbeddingProvider:
         except Exception as exc:  # pragma: no cover - exercised through higher-level failure tests
             _emit_bge_m3_hybrid_log(
                 "encode failed "
-                f"provider_code={normalized_provider_code} input_type={input_type} "
+                f"provider_code={provider_code} input_type={input_type} "
                 f"batch_size={len(texts)} error={exc.__class__.__name__}: {exc}"
             )
             raise BgeM3HybridProviderError(SAFE_BGE_M3_HYBRID_FAILURE_MESSAGE) from exc
@@ -162,18 +328,18 @@ class BgeM3HybridEmbeddingProvider:
         duration_ms = round((perf_counter() - started_at) * 1000, 2)
         _emit_bge_m3_hybrid_log(
             "dense encode done "
-            f"provider_code={normalized_provider_code} input_type={input_type} "
+            f"provider_code={provider_code} input_type={input_type} "
             f"batch_size={len(texts)} duration_ms={duration_ms}"
         )
         _emit_bge_m3_hybrid_log(
             "sparse encode done "
-            f"provider_code={normalized_provider_code} input_type={input_type} "
+            f"provider_code={provider_code} input_type={input_type} "
             f"batch_size={len(texts)} duration_ms={duration_ms}"
         )
         if return_colbert_vecs:
             _emit_bge_m3_hybrid_log(
                 "multivector encode done "
-                f"provider_code={normalized_provider_code} input_type={input_type} "
+                f"provider_code={provider_code} input_type={input_type} "
                 f"batch_size={len(texts)} duration_ms={duration_ms}"
             )
 
@@ -194,6 +360,12 @@ class BgeM3HybridEmbeddingProvider:
             sparse_vectors=sparse_vectors,
             multivectors=multivectors,
         )
+
+    def _consume_cache_error_count(self) -> int:
+        consume_error_count = getattr(self._embedding_cache, "consume_error_count", None)
+        if callable(consume_error_count):
+            return int(consume_error_count())
+        return 0
 
     def _get_or_load_model(self, provider_code: str):
         if provider_code in self._models:
@@ -332,6 +504,47 @@ def _import_bge_m3_flag_model_class():
     return BGEM3FlagModel
 
 
+def _resolve_snapshot_revision(snapshot_path: str | None) -> str:
+    if not snapshot_path:
+        return "missing"
+    return snapshot_path.rstrip("/").split("/")[-1]
+
+
+def _resolve_bge_m3_cache_mode(provider_code: str) -> str:
+    if provider_code == "bge_m3_dense_sparse_multivector":
+        return "dense_sparse_multivector"
+    return "dense_sparse"
+
+
+def _cached_payload_matches_context(
+    *,
+    payload: CachedEmbeddingPayload,
+    cache_context: _BgeM3CacheContext,
+    input_type: str,
+    expected_text_hash: str,
+    require_multivector: bool,
+) -> bool:
+    if payload.cache_schema_version != "v1":
+        return False
+    if payload.provider_code != cache_context.provider_code:
+        return False
+    if payload.provider_model_name != cache_context.provider_model_name:
+        return False
+    if payload.snapshot_revision != cache_context.snapshot_revision:
+        return False
+    if payload.mode != cache_context.mode:
+        return False
+    if payload.input_type != input_type:
+        return False
+    if payload.dimension != cache_context.dimension:
+        return False
+    if payload.text_hash != expected_text_hash:
+        return False
+    if require_multivector and payload.multivector is None:
+        return False
+    return True
+
+
 def _coerce_dense_vectors(raw_dense_vectors: Any) -> list[list[float]]:
     if hasattr(raw_dense_vectors, "tolist"):
         raw_dense_vectors = raw_dense_vectors.tolist()
@@ -449,4 +662,3 @@ class BgeM3HybridEmbeddingAdapter(BaseEmbeddingProvider):
                 "sparse_vector": sparse_vector,
             },
         )
-

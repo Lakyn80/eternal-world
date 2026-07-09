@@ -5435,3 +5435,91 @@ from this session's iterations are intentionally **not** all committed — only 
 best/final `56/57` run) are committed. The full list of this session's run ids is recorded above and in Task 62J.
 
 ---
+
+## Task 62L - Redis Embedding Cache (2026-07-09)
+
+Goal:
+
+- add a safe Redis-backed cache for BGE-M3 hybrid embeddings without changing retrieval/indexing contracts
+- no raw text in keys or values
+- no runtime failure on Redis outage or deserialization error
+
+Implemented:
+
+- new module: `backend/app/modules/embeddings/embedding_cache.py`
+  - `EmbeddingCacheProtocol`
+  - `NullEmbeddingCache`
+  - `RedisEmbeddingCache`
+  - `build_cache_key(...)`
+  - `build_cached_embedding_payload(...)`
+  - `build_embedding_cache(...)`
+- new settings in `backend/app/core/config.py`
+  - `embedding_cache_enabled=false`
+  - `embedding_cache_provider=redis`
+  - `embedding_cache_ttl_seconds=0`
+  - `embedding_cache_key_prefix=eternal_world`
+- integrated cache into `backend/app/modules/embeddings/providers/bge_m3_hybrid.py`
+  - safe text normalization for key hashing: trim + whitespace collapse only
+  - key includes provider code, sanitized provider model name, full snapshot revision, explicit mode,
+    input type, dimension, and `sha256(normalized_text)`
+  - batch miss deduplication preserves original output order
+  - repeated normalized text inside one batch is encoded only once
+  - Redis `get/set` errors and JSON decode errors log and fall back to direct embedding
+  - per-call summary log added:
+    - `hits=...`
+    - `misses=...`
+    - `writes=...`
+    - `errors=...`
+
+Tests added:
+
+- `backend/tests/test_embedding_cache.py`
+- `backend/tests/test_bge_m3_embedding_cache.py`
+
+Verification run:
+
+- `pytest tests/test_embedding_cache.py tests/test_bge_m3_embedding_cache.py -q`
+  - `6 passed`
+- `pytest tests/test_brain_eval_e2e_embedding_runtime.py -q`
+  - `6 passed`
+- `pytest tests/test_rag_retrieval.py -q -k bge_m3_query_embedding_can_use_sentence_transformers_without_persisting_query_embeddings`
+  - `1 passed`
+- `pytest tests/test_real_question_eval.py -q -k bge_m3_hybrid_shared_cache_reuses_single_model_across_provider_modes`
+  - `1 passed`
+
+Optional real E2E smoke with cache enabled:
+
+```bash
+docker compose exec -e HF_HUB_OFFLINE=1 -e TRANSFORMERS_OFFLINE=1 -e CUDA_VISIBLE_DEVICES="" -e NVIDIA_VISIBLE_DEVICES=void -e EMBEDDING_DEVICE=cpu -e TORCH_DEVICE=cpu -e EMBEDDING_CACHE_ENABLED=1 backend python scripts/run_brain_rag_eval.py --case-set family_avatar_ru --real-retrieval
+```
+
+Result:
+
+- run_id: `20260709_120025Z`
+- result: `54/57 PASS`
+- retrieval_failures: `0`
+- answer_failures: `3`
+- collection_rebuilt: `false`
+- mock flags: `false / false`
+- snapshot cached: `true`
+- offline mode: `true`
+
+Interpretation:
+
+- cache-enabled E2E completed without runtime crash, Redis/cache logic did not break retrieval
+- this run is a runtime/retrieval smoke pass only; it does **not** replace the selected `56/57` prompt-only
+  quality baseline from Task 62J
+- this run reused the already-built clean collection, so indexing-side cache was not exercised
+- the suite's query set effectively produced only unique query embeddings in this run, so cache logs showed misses
+  but not meaningful hit reuse; this is expected for a no-repeat query workload
+- remaining failures were answer-quality cases, not retrieval/cache failures:
+  - `family-reckovice-cherry`
+  - `family-rag-machovo`
+  - `family-lack-corpus-only-frantisek-garage`
+
+Commit note:
+
+- no commit or push was made in this task
+- generated run artifacts and `.idea/` remain intentionally outside intended commit scope
+
+---

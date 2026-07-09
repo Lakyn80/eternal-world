@@ -40,6 +40,10 @@ class Settings(BaseSettings):
     embedding_provider: str = "mock"
     sentence_transformers_device: str = "cpu"
     sentence_transformers_cache_dir: Path | None = None
+    embedding_cache_enabled: bool = False
+    embedding_cache_provider: str = "redis"
+    embedding_cache_ttl_seconds: int = Field(default=0, ge=0)
+    embedding_cache_key_prefix: str = "eternal_world"
     media_storage_provider: str = "local"
     media_root: Path = BACKEND_DIR / "media"
     media_public_base_url: str = "/media"
@@ -98,6 +102,18 @@ class Settings(BaseSettings):
     def normalize_sentence_transformers_device(cls, value: str) -> str:
         normalized_value = value.strip().lower()
         return normalized_value or "cpu"
+
+    @field_validator("embedding_cache_provider")
+    @classmethod
+    def normalize_embedding_cache_provider(cls, value: str) -> str:
+        normalized_value = value.strip().lower()
+        return normalized_value or "redis"
+
+    @field_validator("embedding_cache_key_prefix")
+    @classmethod
+    def normalize_embedding_cache_key_prefix(cls, value: str) -> str:
+        normalized_value = value.strip()
+        return normalized_value or "eternal_world"
 
     @field_validator("ai_brain_model")
     @classmethod
