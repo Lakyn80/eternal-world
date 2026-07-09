@@ -5738,3 +5738,97 @@ Next recommended task:
 1. build the simple FA chat demo on top of the validated retrieval path and guarded Brain output
 
 ---
+
+## Task 62O - Russian FA Demo Chat Page (2026-07-09)
+
+Goal:
+
+- add one simple Russian-language demo chat page over the existing seeded/test Family Avatar profile
+- reuse the validated Brain RAG path end-to-end without adding profile creation, upload flows, or media/avatar features
+
+Implemented:
+
+- backend endpoint: `POST /api/demo/fa-chat/message`
+  - files:
+    - `backend/app/modules/demo_fa_chat/router.py`
+    - `backend/app/modules/demo_fa_chat/service.py`
+    - `backend/app/modules/demo_fa_chat/schemas.py`
+    - `backend/app/modules/demo_fa_chat/__init__.py`
+  - wired in `backend/app/main.py`
+- frontend route: `/fa-chat`
+  - files:
+    - `frontend/app/fa-chat/page.tsx`
+    - `frontend/components/fa-chat-demo-page.tsx`
+  - updated Russian-facing app shell in:
+    - `frontend/app/page.tsx`
+    - `frontend/app/layout.tsx`
+
+Behavior:
+
+- uses the existing seeded/test Family Avatar profile only
+- profile creation and memory upload are intentionally not implemented
+- client-visible UI is Russian only
+- backend reuses the validated Brain RAG path for:
+  - profile retrieval context
+  - BGE-M3 query embedding
+  - Qdrant retrieval
+  - Brain answer generation
+  - output guard handling
+  - Redis embedding cache compatibility
+- `debug=true` returns only short evidence previews
+- request logging is safe:
+  - no raw user message logged
+  - logs trace id, profile id, message length, and short hash prefix only
+
+Backend validation behavior:
+
+- empty message -> HTTP 400 with Russian error
+- too-long message -> HTTP 400 with Russian error
+- missing demo profile -> safe Russian unavailable error
+- internal failures -> safe Russian error response without stack trace leakage
+
+Tests run:
+
+- backend route + safety suite:
+  - `cd backend`
+  - `python -m pytest tests/test_brain_rag_eval.py tests/test_brain_eval_e2e_bootstrap.py tests/test_brain_eval_e2e_embedding_runtime.py tests/test_rag_evaluation.py tests/test_ai_agents.py tests/test_demo_fa_chat.py -q`
+  - result: passed
+- Redis cache tests:
+  - `python -m pytest tests/test_embedding_cache.py tests/test_bge_m3_embedding_cache.py -q`
+  - result: passed
+- frontend tests:
+  - `cd frontend`
+  - `npm test`
+  - result: passed
+- frontend production build:
+  - `npm run build`
+  - result: passed
+
+Manual smoke:
+
+- backend demo endpoint:
+  - `POST http://localhost:8033/api/demo/fa-chat/message`
+  - Russian answer returned successfully
+  - `trace_id` present
+  - `debug=true` returned evidence previews
+- frontend demo page:
+  - `http://localhost:8017/fa-chat`
+  - Russian title rendered after frontend service restart
+- lack-of-evidence behavior:
+  - a question outside memory returned a natural Russian lack-of-evidence response without raw technical error
+
+Known limitations:
+
+- demo profile only
+- no profile creation
+- no memory upload
+- no voice/video/avatar animation
+- no auth workflow added in this task
+- remaining answer nondeterminism from the larger Brain E2E path is still a known separate issue
+
+Next recommended task:
+
+1. build profile onboarding and memory upload around this demo path
+2. alternatively, add a LangGraph orchestration layer on top of the validated retrieval + guarded Brain flow
+
+---

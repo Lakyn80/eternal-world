@@ -14,6 +14,7 @@ from app.modules.active_retrieval_config.router import router as active_retrieva
 from app.modules.auth.router import router as auth_router
 from app.modules.billing.router import router as billing_router
 from app.modules.chat.router import router as chat_router
+from app.modules.demo_fa_chat.router import router as demo_fa_chat_router
 from app.modules.memories.router import router as memories_router
 from app.modules.media.router import public_router as media_public_router
 from app.modules.media.router import router as media_router
@@ -45,6 +46,7 @@ app.include_router(active_retrieval_config_router)
 app.include_router(auth_router)
 app.include_router(billing_router)
 app.include_router(chat_router)
+app.include_router(demo_fa_chat_router)
 app.include_router(job_tracking_router)
 app.include_router(multi_embedding_eval_router)
 app.include_router(memories_router)
