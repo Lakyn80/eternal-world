@@ -6086,3 +6086,115 @@ Next recommended task:
 1. profile onboarding / memory upload pipeline
 
 ---
+
+## Task 62R - Prometheus and Grafana Monitoring Stack (2026-07-09)
+
+Goal:
+
+- add a local Prometheus and Grafana stack on top of the existing backend `/metrics` endpoint
+- keep FA chat synchronous in FastAPI and leave Celery for long-running background work only
+- expose a simple dashboard for FA chat, HTTP, retrieval, embedding cache, and Brain timing metrics
+
+Current backend state reused:
+
+- backend metrics endpoint already existed:
+  - `GET http://localhost:8033/metrics`
+- FA chat execution model unchanged:
+  - synchronous FastAPI endpoint
+  - `POST /api/demo/fa-chat/message`
+- no change to RAG behavior, prompt, guard, retrieval ranking, or `top_k`
+
+Monitoring stack added:
+
+- Prometheus service:
+  - URL: `http://localhost:9090`
+  - image: `prom/prometheus:v2.54.1`
+  - scrape target: `backend:8000`
+  - scrape interval: `15s`
+  - config path:
+    - `monitoring/prometheus/prometheus.yml`
+- Grafana service:
+  - URL: `http://localhost:3001`
+  - image: `grafana/grafana:11.1.5`
+  - local dev login:
+    - `admin / admin`
+  - note:
+    - default password is for local development only and must be changed for production
+
+Provisioning paths:
+
+- datasource:
+  - `monitoring/grafana/provisioning/datasources/prometheus.yml`
+- dashboard loader:
+  - `monitoring/grafana/provisioning/dashboards/dashboards.yml`
+- dashboard JSON:
+  - `monitoring/grafana/dashboards/fa_chat_observability.json`
+
+Dashboard:
+
+- title:
+  - `Eternal World — FA Chat Observability`
+- key panels:
+  - FA Chat Requests
+  - FA Chat Duration p95
+  - FA Chat Errors
+  - Lack of Evidence Rate
+  - Guard Applied
+  - HTTP Requests by Route
+  - HTTP Duration p95
+  - RAG Retrieval Duration p95
+  - Retrieved Chunks
+  - Embedding Cache Hits
+  - Embedding Cache Misses
+  - Embedding Cache Hit Ratio
+  - Brain Answer Duration p95
+  - Brain Errors
+
+Verification steps:
+
+- `docker compose config`
+- `docker compose up -d backend prometheus grafana`
+- `curl http://localhost:8033/metrics`
+- `curl http://localhost:9090/-/ready`
+- `curl http://localhost:3001/api/health`
+- open `http://localhost:9090/targets`
+- open `http://localhost:3001`
+- log in with `admin / admin`
+- send FA chat traffic and confirm panel movement
+
+Verification result:
+
+- `docker compose config`
+  - passed
+- monitoring services:
+  - `backend`, `prometheus`, `grafana` all started
+- backend metrics:
+  - `GET http://localhost:8033/metrics` returned `200`
+- Prometheus:
+  - `GET http://localhost:9090/-/ready` returned `200`
+  - backend target status: `up`
+  - scrape URL: `http://backend:8000/metrics`
+- Grafana:
+  - `GET http://localhost:3001/api/health` returned `200`
+  - provisioned dashboard detected via API:
+    - `Eternal World — FA Chat Observability`
+- live FA chat metric traffic:
+  - request counter movement confirmed after a real `POST /api/demo/fa-chat/message`
+  - HTTP request counter movement confirmed in Prometheus
+  - note:
+    - after the clean backend image rebuild, the live request path hit a cold BGE-M3 runtime/cache issue and returned `500` before retrieval/Brain panels could move on that specific host runtime
+    - this did not affect the monitoring stack itself or the backend test suite
+    - it should be treated as a separate runtime warm-cache issue, not a Grafana/Prometheus wiring bug
+
+Limitations:
+
+- no production alerting yet
+- no production authentication hardening yet
+- default Grafana password is local-dev only
+- a clean backend recreate may require re-warming the BGE-M3 local snapshot/cache before the live FA demo path produces successful retrieval traffic again
+
+Next recommended task:
+
+1. profile onboarding / memory upload pipeline
+
+---

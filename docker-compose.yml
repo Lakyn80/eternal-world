@@ -122,7 +122,40 @@ services:
       - ./frontend:/app
       - /app/node_modules
 
+  prometheus:
+    image: prom/prometheus:v2.54.1
+    container_name: eternal_world_prometheus
+    restart: unless-stopped
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+    ports:
+      - "9090:9090"
+    depends_on:
+      - backend
+    volumes:
+      - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - eternal_world_prometheus_data:/prometheus
+
+  grafana:
+    image: grafana/grafana:11.1.5
+    container_name: eternal_world_grafana
+    restart: unless-stopped
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+    ports:
+      - "3001:3000"
+    depends_on:
+      - prometheus
+    volumes:
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - eternal_world_grafana_data:/var/lib/grafana
+
 volumes:
   eternal_world_postgres_data:
   eternal_world_redis_data:
   eternal_world_qdrant_data:
+  eternal_world_prometheus_data:
+  eternal_world_grafana_data:
