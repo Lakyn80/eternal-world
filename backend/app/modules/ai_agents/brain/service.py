@@ -1,5 +1,9 @@
 from __future__ import annotations
 
+from time import perf_counter
+
+from app.core.config import settings
+from app.core.metrics import observe_brain_answer_error, observe_brain_answer_success
 from app.modules.ai_agents.brain.output_guard import apply_brain_output_guard
 from app.modules.ai_agents.brain.provider import BrainAgentProvider, build_brain_provider
 from app.modules.ai_agents.brain.prompt_builder import build_brain_prompt_messages
@@ -18,6 +22,7 @@ class BrainAgentService:
         self,
         request: OrchestratorChatRequest,
     ) -> BrainAgentResponse:
+        started_at = perf_counter()
         prompt_messages = build_brain_prompt_messages(request)
         provider_request = BrainAgentRequest(
             profile=request.profile,
@@ -29,12 +34,24 @@ class BrainAgentService:
             user_prompt=prompt_messages.user_prompt,
             prompt=prompt_messages.combined_prompt,
         )
-        provider_response = self.provider.generate_response(provider_request)
+        try:
+            provider_response = self.provider.generate_response(provider_request)
+        except Exception:
+            observe_brain_answer_error(
+                provider=settings.ai_brain_provider,
+                model=settings.ai_brain_model,
+            )
+            raise
         guard_result = apply_brain_output_guard(
             answer_text=provider_response.text,
             user_message=request.user_message,
             response_metadata=provider_response.metadata,
             guard_context=request.output_guard_context,
+        )
+        observe_brain_answer_success(
+            provider=settings.ai_brain_provider,
+            model=settings.ai_brain_model,
+            duration_seconds=perf_counter() - started_at,
         )
         return BrainAgentResponse(
             text=guard_result.answer_text,

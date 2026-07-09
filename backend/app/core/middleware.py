@@ -16,6 +16,7 @@ from app.core.logging import (
     log_event,
     set_request_id,
 )
+from app.core.metrics import observe_http_request
 
 
 SAFE_REQUEST_ID_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,63}$")
@@ -54,7 +55,14 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
             response = await handle_unexpected_exception(request, exc)
 
         duration_ms = round((time.perf_counter() - start_time) * 1000, 2)
+        route = getattr(request.scope.get("route"), "path", None)
         response.headers[REQUEST_ID_HEADER] = request_id
+        observe_http_request(
+            method=request.method,
+            route=route,
+            status_code=response.status_code,
+            duration_seconds=duration_ms / 1000,
+        )
 
         log_event(
             logger,

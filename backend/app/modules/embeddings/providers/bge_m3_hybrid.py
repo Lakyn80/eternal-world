@@ -10,6 +10,7 @@ from time import perf_counter
 from typing import Any
 
 from app.core.config import settings
+from app.core.metrics import observe_embedding_cache_summary
 from app.modules.embedding_models.service import get_embedding_model
 from app.modules.embeddings.bge_m3_model_cache import (
     BGE_M3_DEFAULT_REPO_ID,
@@ -298,6 +299,15 @@ class BgeM3HybridEmbeddingProvider:
             f"mode={cache_context.mode} batch_size={len(texts)} unique_texts={len(unique_items_by_key)} "
             f"hits={hit_count} misses={len(missing_items)} writes={len(missing_items)} "
             f"errors={error_count}"
+        )
+        observe_embedding_cache_summary(
+            provider_code=normalized_provider_code,
+            input_type=input_type,
+            mode=cache_context.mode,
+            hits=hit_count,
+            misses=len(missing_items),
+            writes=len(missing_items),
+            errors=error_count,
         )
         return BgeM3HybridEmbeddings(
             dense_vectors=dense_vectors,

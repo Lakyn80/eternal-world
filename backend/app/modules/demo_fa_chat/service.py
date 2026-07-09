@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from time import perf_counter
 
 from sqlalchemy.orm import Session
 
 from app.core.logging import get_logger, log_event
+from app.core.metrics import observe_rag_retrieval_error, observe_rag_retrieval_success
 from app.db.models import User
 from app.modules.active_retrieval_config.exceptions import ActiveRetrievalConfigNotFoundError
 from app.modules.active_retrieval_config.service import (
@@ -269,11 +271,26 @@ def run_demo_fa_chat_message(
         debug=debug,
     )
 
-    retrieval_response = retrieve_profile_rag(
-        db,
-        current_user=resolved_profile.user,
-        profile_id=resolved_profile.profile.id,
-        payload=RagRetrievalRequest(query=normalized_message),
+    retrieval_started_at = perf_counter()
+    try:
+        retrieval_response = retrieve_profile_rag(
+            db,
+            current_user=resolved_profile.user,
+            profile_id=resolved_profile.profile.id,
+            payload=RagRetrievalRequest(query=normalized_message),
+        )
+    except Exception:
+        observe_rag_retrieval_error(
+            retrieval_mode=resolved_runtime.retrieval_mode,
+            top_k=resolved_runtime.top_k,
+        )
+        raise
+
+    observe_rag_retrieval_success(
+        retrieval_mode=resolved_runtime.retrieval_mode,
+        top_k=resolved_runtime.top_k,
+        duration_seconds=perf_counter() - retrieval_started_at,
+        retrieved_chunk_count=len(retrieval_response.results),
     )
     log_event(
         logger,

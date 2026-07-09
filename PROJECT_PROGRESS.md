@@ -5928,3 +5928,161 @@ Next recommended task:
 1. add a visible small Russian helper hint in the UI that questions should be asked to Eva in first person for the strongest grounded answers
 
 ---
+
+## Task 62P - Export Russian Demo Avatar Memory for Client Testing (2026-07-09)
+
+Goal:
+
+- export the exact Russian demo memory text used by the seeded Family Avatar profile
+- give the client a readable guide to what the demo avatar knows and what kinds of questions are valid
+- keep the export strictly read-only against the existing seeded source and chunk tables
+
+Resolved runtime/source identity:
+
+- `profile_id=8`
+- `source_id=7`
+- `collection_name=eternal_world_rag_chunks__bge_m3_dense_sparse__family_novak_ru_e2e_v3_bge_m3_real_cpu`
+- `retrieval_mode=bge_m3_dense_sparse`
+- `top_k=5`
+- `chunk_count=20`
+
+What was added:
+
+- read-only export script:
+  - `backend/scripts/export_demo_fa_memory.py`
+- generated export files:
+  - `backend/artifacts/demo_exports/client_demo_family_avatar_memory_ru.md`
+  - `backend/artifacts/demo_exports/client_demo_family_avatar_memory_ru.json`
+
+What the export contains:
+
+- Markdown:
+  - client-readable Russian guide
+  - exact seeded source text from `rag_sources.raw_text`
+  - main topics detected from the real corpus
+  - suggested Russian questions based only on that source text
+- JSON:
+  - exact source metadata
+  - active collection name
+  - all 20 indexed chunks with:
+    - `chunk_id`
+    - `chunk_index`
+    - `text`
+    - `text_hash`
+  - suggested questions for client testing
+
+Verification:
+
+- export was loaded from the real seeded profile/source, not from invented summary text
+- host-side script run succeeded:
+  - `cd backend`
+  - `python scripts/export_demo_fa_memory.py --profile-id 8 --source-id 7 --output-dir artifacts/demo_exports`
+- output contains `Попице`
+- output metadata matches only the seeded demo profile and source:
+  - `profile_id=8`
+  - `source_id=7`
+- no unrelated profiles were included in the exported JSON payload
+
+What the client should use it for:
+
+- read what the demo avatar actually knows before asking questions
+- choose grounded first-person Russian questions for Eva Novakova
+- deliberately test both:
+  - answerable grounded questions
+  - questions that should produce a negative / no-support answer
+
+Limitations:
+
+- this export reflects the currently seeded demo source only
+- it does not include any hidden runtime reasoning
+- it does not alter retrieval, prompts, embeddings, Qdrant, or chat behavior
+- files were generated under `backend/artifacts`, so they are suitable for local/client sharing but are not staged by default
+
+---
+
+## Task 62Q - Prometheus Metrics for FA Demo Chat (2026-07-09)
+
+Goal:
+
+- add production-safe Prometheus observability for the Russian FA demo chat and its validated Brain RAG path
+- keep live chat synchronous in FastAPI; do not move it to Celery
+- avoid high-cardinality labels and any raw user content in metrics
+
+Chat execution model:
+
+- Celery usage: no
+- FA demo chat remains the synchronous FastAPI endpoint:
+  - `POST /api/demo/fa-chat/message`
+- Celery stays reserved for long-running background workflows only
+
+Metrics endpoint:
+
+- added:
+  - `GET /metrics`
+- implementation:
+  - `prometheus_client`
+
+Metrics added:
+
+- HTTP:
+  - `http_requests_total`
+  - `http_request_duration_seconds`
+  - `http_errors_total`
+- FA demo chat:
+  - `fa_chat_requests_total`
+  - `fa_chat_duration_seconds`
+  - `fa_chat_errors_total`
+  - `fa_chat_lack_of_evidence_total`
+  - `fa_chat_guard_applied_total`
+- retrieval around the demo path:
+  - `rag_retrieval_duration_seconds`
+  - `rag_retrieved_chunks_count`
+  - `rag_retrieval_errors_total`
+- embedding cache:
+  - `embedding_cache_hits_total`
+  - `embedding_cache_misses_total`
+  - `embedding_cache_writes_total`
+  - `embedding_cache_errors_total`
+- Brain answer timing:
+  - `brain_answer_duration_seconds`
+  - `brain_answer_errors_total`
+
+Safety constraints preserved:
+
+- no RAG behavior change
+- no retrieval ranking change
+- no `top_k` change
+- no Brain prompt change
+- no output guard behavior change
+- no raw user message, `trace_id`, `chunk_id`, raw `collection_name`, or raw `profile_id` used as metric labels
+- bounded label normalization added for route, guard reason, provider/model, `top_k`, and boolean flags
+
+Tests run:
+
+- `cd backend`
+- `python -m pytest tests/test_demo_fa_chat.py tests/test_ai_agents.py tests/test_rag_evaluation.py -q`
+  - result: passed
+- `python -m pytest tests/test_embedding_cache.py tests/test_bge_m3_embedding_cache.py -q`
+  - result: passed
+- `python -m pytest tests/test_brain_rag_eval.py tests/test_brain_eval_e2e_bootstrap.py tests/test_brain_eval_e2e_embedding_runtime.py tests/test_rag_evaluation.py tests/test_ai_agents.py tests/test_demo_fa_chat.py tests/test_metrics.py -q`
+  - result: passed
+
+Manual smoke:
+
+- `GET http://localhost:8033/metrics`
+  - returned Prometheus text successfully
+- `POST http://localhost:8033/api/demo/fa-chat/message`
+  - test payload:
+    - `message="Где ты жила в детстве?"`
+    - `debug=true`
+  - returned grounded Russian answer mentioning `Попице`
+- `/metrics` after the POST showed counter movement:
+  - `fa_chat_requests_total: 2 -> 3`
+  - `http_requests_total{method="POST",route="/api/demo/fa-chat/message",status_code="200"}: 2 -> 3`
+  - `rag_retrieved_chunks_count_count{retrieval_mode="bge_m3_dense_sparse",top_k="5"}: 2 -> 3`
+
+Next recommended task:
+
+1. profile onboarding / memory upload pipeline
+
+---
