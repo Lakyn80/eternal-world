@@ -268,6 +268,7 @@ def _retrieve_hybrid_dense_sparse(
             {
                 "chunk_id": evidence_record.chunk_id,
                 "source_id": evidence_record.source_id,
+                "source_title": evidence_record.source_title,
                 "embedding_id": evidence_record.embedding_id,
                 "score": fused_result.fused_score,
                 "text": evidence_record.chunk_text,
@@ -457,6 +458,7 @@ def retrieve_profile_rag_for_collection(
             {
                 "chunk_id": evidence_record.chunk_id,
                 "source_id": evidence_record.source_id,
+                "source_title": evidence_record.source_title,
                 "embedding_id": evidence_record.embedding_id,
                 "score": item["score"],
                 "text": evidence_record.chunk_text,

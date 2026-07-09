@@ -49,6 +49,8 @@ services:
       AI_BRAIN_TIMEOUT_SECONDS: 30
       EMBEDDING_PROVIDER: sentence_transformers
       SENTENCE_TRANSFORMERS_DEVICE: cpu
+      CUDA_VISIBLE_DEVICES: ""
+      NVIDIA_VISIBLE_DEVICES: void
       MEDIA_STORAGE_PROVIDER: local
       MEDIA_ROOT: /app/media
       MEDIA_PUBLIC_BASE_URL: /media

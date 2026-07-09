@@ -108,6 +108,23 @@ LACK_DENIAL_CONTEXT_MARKERS = (
     "materiály",
     "materialy",
 )
+DIRECT_LACK_DENIAL_PREFIXES = (
+    "нет",
+    "к сожалению, я не",
+    "к сожалению у меня не",
+    "я не была",
+    "я не был",
+    "я не жила",
+    "я не жил",
+    "у меня не было",
+    "никогда не",
+    "no,",
+    "no ",
+    "i never",
+    "i was never",
+    "i had no",
+    "there was no",
+)
 
 
 def _normalize_text(value: str) -> str:
@@ -161,6 +178,14 @@ def _contains_any_marker(text: str, markers: Iterable[str]) -> bool:
     return any(_normalize_text(marker) in normalized_text for marker in markers)
 
 
+def _looks_like_direct_lack_denial(answer_text: str) -> bool:
+    normalized_answer = _normalize_text(answer_text)
+    return any(
+        normalized_answer.startswith(_normalize_text(prefix))
+        for prefix in DIRECT_LACK_DENIAL_PREFIXES
+    )
+
+
 def _missing_expected_markers(
     *,
     answer_text: str,
@@ -208,7 +233,9 @@ def _forbidden_claim_is_question_echo_in_lack_denial(
 ) -> bool:
     if not _claim_echoes_question_entity(claim=claim, user_query=user_query):
         return False
-    return _contains_any_marker(answer_text, LACK_DENIAL_CONTEXT_MARKERS)
+    return _contains_any_marker(answer_text, LACK_DENIAL_CONTEXT_MARKERS) or _looks_like_direct_lack_denial(
+        answer_text
+    )
 
 
 def _find_forbidden_claims(
@@ -245,6 +272,7 @@ def detect_actual_behavior(
     answer_text: str,
     response_metadata: dict[str, object] | None,
     expected_evidence_markers: Iterable[str] | None = None,
+    is_lack_case: bool = False,
 ) -> RagEvaluationBehavior:
     grounding_status = str((response_metadata or {}).get("grounding_status") or "").strip().lower()
     markers = list(expected_evidence_markers or [])
@@ -254,10 +282,19 @@ def detect_actual_behavior(
     )
     substantively_grounded = not missing_markers and _has_evidence_citations(answer_text)
 
+    if grounding_status == "no_evidence":
+        return "lack_of_evidence"
+
+    if is_lack_case and (
+        _contains_any_marker(answer_text, LACK_OF_EVIDENCE_MARKERS)
+        or _looks_like_direct_lack_denial(answer_text)
+    ):
+        return "lack_of_evidence"
+
     if substantively_grounded and grounding_status == "grounded":
         return "grounded_answer"
 
-    if grounding_status == "no_evidence" or _contains_any_marker(answer_text, LACK_OF_EVIDENCE_MARKERS):
+    if _contains_any_marker(answer_text, LACK_OF_EVIDENCE_MARKERS):
         return "lack_of_evidence"
 
     if grounding_status == "partial":
@@ -290,6 +327,9 @@ def evaluate_answer_against_case(
         answer_text=answer_text,
         response_metadata=response_metadata,
         expected_evidence_markers=case.expected_evidence_markers,
+        is_lack_case=(
+            case.expected_behavior == "lack_of_evidence" or case.should_require_lack_of_evidence
+        ),
     )
     missing_expected_markers = _missing_expected_markers(
         answer_text=answer_text,

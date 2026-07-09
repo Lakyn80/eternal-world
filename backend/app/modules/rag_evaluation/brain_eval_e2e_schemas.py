@@ -21,6 +21,9 @@ class BrainEvalRetrievedChunkRecord(BaseModel):
     rank: int = Field(ge=1)
     chunk_id: int
     embedding_id: int
+    source_id: int | None = None
+    source_title: str | None = None
+    chunk_index: int | None = None
     score: float
     text_preview: str
 
@@ -30,9 +33,21 @@ class BrainEvalE2ERetrievalDiagnostic(BaseModel):
     user_query: str
     expected_fact_id: str | None = None
     expected_chunk_id: int | None = None
+    expected_chunk_source_id: int | None = None
+    expected_chunk_source_title: str | None = None
+    expected_chunk_index: int | None = None
+    expected_chunk_exists_in_qdrant: bool | None = None
     expected_chunk_in_top_k: bool | None = None
     expected_chunk_rank: int | None = None
+    expected_chunk_in_top_5: bool | None = None
+    expected_chunk_in_top_10: bool | None = None
+    expected_chunk_in_top_20: bool | None = None
+    expected_chunk_in_top_50: bool | None = None
+    expected_chunk_rank_at_50: int | None = None
+    diagnostic_search_limit: int = Field(default=50, ge=1)
+    expected_chunk_position_bucket: str | None = None
     retrieved_chunk_ids: list[int] = Field(default_factory=list)
+    retrieved_chunks: list[BrainEvalRetrievedChunkRecord] = Field(default_factory=list)
     top_k: int = Field(ge=1)
 
 
@@ -50,6 +65,9 @@ class BrainEvalE2EEmbeddingDiagnostics(BaseModel):
     collection_name: str
     collection_vector_size: int | None = None
     flag_embedding_available: bool
+    bge_m3_snapshot_cached: bool = False
+    bge_m3_snapshot_path: str | None = None
+    huggingface_offline_mode: bool = False
     embedding_runtime_fingerprint: str
     collection_rebuilt: bool = False
 

@@ -21,6 +21,7 @@ from app.modules.embeddings.runtime import (
 )
 from app.modules.rag_evaluation.brain_eval_e2e_bootstrap import (
     FamilyAvatarRuE2EBootstrapResult,
+    build_family_avatar_ru_e2e_collection_name,
     ensure_family_avatar_ru_e2e_bootstrap,
 )
 from app.modules.rag_evaluation.brain_eval_e2e_diagnostics import (
@@ -214,6 +215,9 @@ def _run_e2e_case(
             rank=index,
             chunk_id=result.chunk_id,
             embedding_id=result.embedding_id,
+            source_id=result.source_id,
+            source_title=result.source_title,
+            chunk_index=result.chunk_index,
             score=float(result.score),
             text_preview=result.text[:240],
         )
@@ -270,10 +274,13 @@ def run_brain_rag_eval_e2e(
         raise BrainRagEvalConfigurationError("Brain RAG E2E requires at least one case.")
 
     recommendation = get_production_recommended_active_retrieval_config()
+    e2e_collection_name = build_family_avatar_ru_e2e_collection_name(
+        base_collection_name=recommendation.collection_name,
+    )
     try:
         runtime_diagnostics = assert_real_embedding_runtime_for_e2e(
             model_code=recommendation.model_code,
-            collection_name=recommendation.collection_name,
+            collection_name=e2e_collection_name,
             allow_mock_embeddings=config.allow_mock_embeddings,
         )
     except RuntimeError as exc:
@@ -284,26 +291,6 @@ def run_brain_rag_eval_e2e(
     user = get_user_by_id(db, bootstrap.user_id)
     if user is None:
         raise BrainRagEvalConfigurationError("Family Avatar RU E2E user not found")
-
-    retrieval_diagnostics = run_e2e_retrieval_diagnostics(
-        db=db,
-        user=user,
-        bootstrap=bootstrap,
-        top_k=bootstrap.top_k,
-    )
-    top_k_diagnostics = [
-        BrainEvalE2ETopKDiagnostic(
-            top_k=summary.top_k,
-            expected_chunk_hits=summary.expected_chunk_hits,
-            expected_chunk_checks=summary.expected_chunk_checks,
-        )
-        for summary in run_e2e_top_k_diagnostics(
-            db=db,
-            user=user,
-            bootstrap=bootstrap,
-            top_k_values=(5, 10, 20),
-        )
-    ]
     embedding_diagnostics = BrainEvalE2EEmbeddingDiagnostics(
         embedding_provider_setting=runtime_diagnostics.embedding_provider_setting,
         resolved_indexing_provider_name=runtime_diagnostics.resolved_indexing_provider_name,
@@ -318,6 +305,9 @@ def run_brain_rag_eval_e2e(
         collection_name=runtime_diagnostics.collection_name,
         collection_vector_size=runtime_diagnostics.collection_vector_size,
         flag_embedding_available=runtime_diagnostics.flag_embedding_available,
+        bge_m3_snapshot_cached=runtime_diagnostics.bge_m3_snapshot_cached,
+        bge_m3_snapshot_path=runtime_diagnostics.bge_m3_snapshot_path,
+        huggingface_offline_mode=runtime_diagnostics.huggingface_offline_mode,
         embedding_runtime_fingerprint=bootstrap.embedding_runtime_fingerprint,
         collection_rebuilt=bootstrap.collection_rebuilt,
     )
@@ -354,6 +344,26 @@ def run_brain_rag_eval_e2e(
         answer_failures=answer_failures,
         results=results,
     )
+    retrieval_diagnostics = run_e2e_retrieval_diagnostics(
+        db=db,
+        user=user,
+        bootstrap=bootstrap,
+        case_results=results,
+        top_k=bootstrap.top_k,
+    )
+    top_k_diagnostics = [
+        BrainEvalE2ETopKDiagnostic(
+            top_k=summary.top_k,
+            expected_chunk_hits=summary.expected_chunk_hits,
+            expected_chunk_checks=summary.expected_chunk_checks,
+        )
+        for summary in run_e2e_top_k_diagnostics(
+            db=db,
+            user=user,
+            bootstrap=bootstrap,
+            top_k_values=(5, 10, 20),
+        )
+    ]
 
     run_id = datetime.now(UTC).strftime("%Y%m%d_%H%M%SZ")
     e2e_result = BrainRagEvalE2ERunResult(

@@ -12,6 +12,7 @@ from app.db.models import MemoryProfile, RagChunk, RagEmbedding, RagSource
 class RetrievalEvidenceRecord:
     chunk_id: int
     source_id: int
+    source_title: str
     embedding_id: int
     owner_user_id: int
     profile_id: int
@@ -57,6 +58,7 @@ def list_retrieval_evidence_for_embeddings(
         RetrievalEvidenceRecord(
             chunk_id=rag_chunk.id,
             source_id=rag_source.id,
+            source_title=rag_source.title,
             embedding_id=rag_embedding.id,
             owner_user_id=rag_embedding.owner_user_id,
             profile_id=rag_embedding.profile_id,

@@ -371,10 +371,20 @@ def test_factual_grounding_instructions_are_present_in_prompt(client, monkeypatc
     assert "Answer factual questions ONLY from B1, B2, and explicit profile fields above." in prompt
     assert "Do not guess, fill gaps, or use world knowledge to invent personal history." in prompt
     assert "the information is not available in the stored memories/context." in prompt
+    assert "correcting the premise with a related denial or substitute fact." in prompt
+    assert "\"I never lived in Paris.\", \"I had no sister.\", \"Pavel was never in Vietnam.\"" in prompt
+    assert "answer ONLY with lack-of-evidence wording and stop after" in prompt
+    assert "Do not add a contrasting true fact, corrective denial, or extra archival detail" in prompt
     assert "Na to bohužel nemám vzpomínku." in prompt
     assert "cite inline: [memory:id] or [rag:chunk_id]" in prompt
     assert "Respond in the same language as the user's current message" in prompt
     assert "B1. Timeline memory evidence:" in prompt
+    assert "check EVERY item in B1 and B2 individually, not only" in prompt
+    assert "even when other provided" in prompt
+    assert "evidence items are about unrelated facts or state that different things did not happen." in prompt
+    assert "does not state the exact specific" in prompt
+    assert "do not restate the general event as a partial or consolation answer either." in prompt
+    assert "without repeating the surrounding general facts from that evidence item." in prompt
 
 
 def test_brain_prompt_separates_memory_and_rag_evidence_sections(client, monkeypatch):

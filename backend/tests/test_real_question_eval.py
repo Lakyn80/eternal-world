@@ -289,6 +289,10 @@ def _install_fake_bge_m3_hybrid_model(monkeypatch, fake_class=_FakeBGEM3FlagMode
         "app.modules.embeddings.providers.bge_m3_hybrid._import_bge_m3_flag_model_class",
         lambda: fake_class,
     )
+    monkeypatch.setattr(
+        "app.modules.embeddings.providers.bge_m3_hybrid.resolve_bge_m3_model_load_path",
+        lambda repo_id, **kwargs: (repo_id, False),
+    )
 
 
 def test_real_question_eval_compares_both_candidates_writes_report_and_verifies_runtime_retrieval(

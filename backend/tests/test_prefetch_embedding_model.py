@@ -8,6 +8,18 @@ from scripts.prefetch_embedding_model import (
     prefetch_provider_assets,
     resolve_prefetch_target,
 )
+from app.modules.embeddings.bge_m3_model_cache import (
+    BGE_M3_MULTIVECTOR_EXTRA_PREFETCH_PATTERNS,
+    BGE_M3_PREFETCH_ALLOW_PATTERNS,
+)
+
+
+@pytest.fixture(autouse=True)
+def _treat_fake_snapshot_paths_as_complete(monkeypatch):
+    monkeypatch.setattr(
+        "scripts.prefetch_embedding_model.is_snapshot_weights_complete",
+        lambda _path: True,
+    )
 
 
 def test_resolve_prefetch_target_for_jina_embeddings_v3():
@@ -86,7 +98,44 @@ def test_prefetch_provider_assets_downloads_only_expected_repos_without_real_net
     ]
     for call in download_calls[1::2]:
         assert call["local_files_only"] is False
-        assert call["max_workers"] == 4
+        assert call["max_workers"] == 1
+        assert call["tqdm_class"] is not None
+
+
+def test_prefetch_provider_assets_uses_bge_m3_allow_patterns_for_dense_sparse():
+    download_calls: list[dict[str, object]] = []
+
+    def fake_snapshot_download(**kwargs):
+        download_calls.append(dict(kwargs))
+        return "/fake-cache/BAAI--bge-m3"
+
+    prefetch_provider_assets(
+        provider_key="bge_m3_dense_sparse",
+        retries=1,
+        retry_delay_seconds=0.0,
+        snapshot_download_fn=fake_snapshot_download,
+    )
+
+    assert download_calls[0]["allow_patterns"]
+    assert "model.safetensors" in download_calls[0]["allow_patterns"]
+    assert "colbert_linear.pt" not in download_calls[0]["allow_patterns"]
+
+
+def test_prefetch_provider_assets_uses_bge_m3_allow_patterns_for_multivector():
+    download_calls: list[dict[str, object]] = []
+
+    def fake_snapshot_download(**kwargs):
+        download_calls.append(dict(kwargs))
+        return "/fake-cache/BAAI--bge-m3"
+
+    prefetch_provider_assets(
+        provider_key="bge_m3_dense_sparse_multivector",
+        retries=1,
+        retry_delay_seconds=0.0,
+        snapshot_download_fn=fake_snapshot_download,
+    )
+
+    assert "colbert_linear.pt" in download_calls[0]["allow_patterns"]
 
 
 def test_prefetch_provider_assets_supports_qwen3_embedding_0_6b_without_unrelated_repo_downloads():
@@ -159,7 +208,9 @@ def test_prefetch_provider_assets_uses_cached_snapshot_before_attempting_remote_
             "repo_id": "BAAI/bge-m3",
             "revision": None,
             "local_files_only": True,
-            "max_workers": 1,
+            "allow_patterns": list(BGE_M3_PREFETCH_ALLOW_PATTERNS)
+            + list(BGE_M3_MULTIVECTOR_EXTRA_PREFETCH_PATTERNS),
+            "max_workers": 4,
             "tqdm_class": None,
         }
     ]

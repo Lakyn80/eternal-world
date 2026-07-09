@@ -60,7 +60,11 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--real-retrieval",
         action="store_true",
-        help="Run through real Qdrant retrieval instead of injected fixture evidence.",
+        help=(
+            "Run through real Qdrant retrieval instead of injected fixture evidence. "
+            "Requires prefetched BAAI/bge-m3 cache; for offline runs set "
+            "HF_HUB_OFFLINE=1 and TRANSFORMERS_OFFLINE=1."
+        ),
     )
     parser.add_argument(
         "--allow-mock-embeddings",
@@ -126,6 +130,8 @@ def _print_text_e2e_result(result) -> None:
     print(f"embedding_dimension: {result.embedding_diagnostics.embedding_dimension}")
     print(f"collection_vector_size: {result.embedding_diagnostics.collection_vector_size}")
     print(f"collection_rebuilt: {result.embedding_diagnostics.collection_rebuilt}")
+    print(f"bge_m3_snapshot_cached: {result.embedding_diagnostics.bge_m3_snapshot_cached}")
+    print(f"bge_m3_snapshot_path: {result.embedding_diagnostics.bge_m3_snapshot_path}")
     print(
         f"passed_cases: {result.suite_result.passed_cases}/"
         f"{result.suite_result.total_cases}"
@@ -136,8 +142,13 @@ def _print_text_e2e_result(result) -> None:
     print("retrieval_diagnostics:")
     for diagnostic in result.retrieval_diagnostics:
         print(
-            f"  - {diagnostic.case_id}: expected_chunk_in_top_k="
-            f"{diagnostic.expected_chunk_in_top_k} rank={diagnostic.expected_chunk_rank} "
+            f"  - {diagnostic.case_id}: qdrant_exists={diagnostic.expected_chunk_exists_in_qdrant} "
+            f"bucket={diagnostic.expected_chunk_position_bucket} "
+            f"top5={diagnostic.expected_chunk_in_top_5} "
+            f"top10={diagnostic.expected_chunk_in_top_10} "
+            f"top20={diagnostic.expected_chunk_in_top_20} "
+            f"top50={diagnostic.expected_chunk_in_top_50} "
+            f"rank_top50={diagnostic.expected_chunk_rank_at_50} "
             f"retrieved={diagnostic.retrieved_chunk_ids}"
         )
     print("top_k_diagnostics:")

@@ -9,6 +9,7 @@ from time import perf_counter
 from typing import Any
 
 from app.modules.embedding_models.service import get_embedding_model
+from app.modules.embeddings.bge_m3_model_cache import resolve_bge_m3_model_load_path
 from app.modules.embeddings.providers.base import BaseEmbeddingProvider, EmbeddingVector
 
 
@@ -246,7 +247,10 @@ class BgeM3HybridEmbeddingProvider:
             return model
 
     def _build_model_init_kwargs(self) -> dict[str, object]:
-        return {"use_fp16": False}
+        return {
+            "use_fp16": False,
+            "devices": self.device,
+        }
 
     def _build_shared_model_cache_key(
         self,
@@ -277,15 +281,27 @@ class BgeM3HybridEmbeddingProvider:
             provider_code=provider_code,
             model_name=model_name,
         )
+        try:
+            load_path, loaded_from_local_cache = resolve_bge_m3_model_load_path(
+                model_name,
+                cache_dir=self.cache_dir,
+                allow_remote_download=False,
+            )
+        except RuntimeError as exc:
+            raise BgeM3HybridProviderError(str(exc)) from exc
+
+        load_source = "local_snapshot" if loaded_from_local_cache else "remote_repo_id"
         _emit_bge_m3_hybrid_log(
-            f"load start provider_code={provider_code} model_name={model_name} device={self.device}"
+            "load start "
+            f"provider_code={provider_code} model_name={model_name} "
+            f"load_path={load_path} source={load_source} device={self.device}"
         )
         try:
-            model = flag_model_class(model_name, **model_init_kwargs)
+            model = flag_model_class(load_path, **model_init_kwargs)
         except Exception as exc:  # pragma: no cover - exercised through higher-level failure tests
             _emit_bge_m3_hybrid_log(
                 "load failed "
-                f"provider_code={provider_code} model_name={model_name} "
+                f"provider_code={provider_code} model_name={model_name} load_path={load_path} "
                 f"error={exc.__class__.__name__}: {exc}"
             )
             raise BgeM3HybridProviderError("BGE-M3 hybrid model load failed") from exc
@@ -296,7 +312,9 @@ class BgeM3HybridEmbeddingProvider:
             model_name=model_name,
         )
         _emit_bge_m3_hybrid_log(
-            f"load success provider_code={provider_code} model_name={model_name} device={self.device}"
+            "load success "
+            f"provider_code={provider_code} model_name={model_name} "
+            f"load_path={load_path} source={load_source} device={self.device}"
         )
         return model
 

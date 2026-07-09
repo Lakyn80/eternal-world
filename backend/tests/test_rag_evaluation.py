@@ -548,3 +548,104 @@ def test_shorter_lack_phrases_are_detected():
             response_metadata={"grounding_status": "general"},
         )
         assert behavior == "lack_of_evidence", answer_text
+
+
+def test_real_russian_lack_denials_with_citations_count_as_lack_for_lack_cases():
+    audit_answers = {
+        "family-lack-paris-1968": (
+            "Нет, в 1968 году я не была в Париже. "
+            "Весь тот год я провела за учёбой в Брно и на практике в Моравии [rag:27636]."
+        ),
+        "family-lack-prague-birth": (
+            "Нет, я родилась в Брно, в доме с красной крышей на улице Вевери. [rag:27634]"
+        ),
+        "family-lack-english-paris": (
+            "К сожалению, я не была в Париже. "
+            "Самая дальняя моя поездка за границу вела в Будапешт в 1994 году [rag:27627]."
+        ),
+    }
+    for case_id, answer_text in audit_answers.items():
+        case = next(item for item in FAMILY_AVATAR_EVALUATION_CASES if item.case_id == case_id)
+        result = evaluate_answer_against_case(
+            case=case,
+            answer_text=answer_text,
+            provider_name="mock-eval",
+            response_metadata={"grounding_status": "grounded"},
+            evidence_count=1,
+        )
+        assert result.actual_behavior == "lack_of_evidence", case_id
+        assert result.forbidden_claims_found == [], case_id
+        assert result.passed is True, case_id
+
+
+def test_real_garage_lack_answer_still_fails_when_it_repeats_forbidden_details():
+    base_case = next(
+        item
+        for item in FAMILY_AVATAR_EVALUATION_CASES
+        if item.case_id == "family-lack-corpus-only-frantisek-garage"
+    )
+    case = base_case.model_copy(
+        update={
+            "user_query": "Какие часы отец Франтишек чинил в гараже?",
+            "forbidden_claims": ["часы", "гараж", "луп"],
+        }
+    )
+    answer_text = (
+        "Дорогой мой, в сохранённых воспоминаниях не указано, какие именно часы чинил отец "
+        "Франтишек в гараже. Помню только, что я держала ему лупу, когда мне было семь лет, "
+        "но марку или тип часов — увы, не запомнила. [rag:27618]"
+    )
+
+    result = evaluate_answer_against_case(
+        case=case,
+        answer_text=answer_text,
+        provider_name="mock-eval",
+        response_metadata={"grounding_status": "grounded"},
+        evidence_count=1,
+    )
+
+    assert result.passed is False
+    assert "часы" in result.forbidden_claims_found
+    assert "гараж" in result.forbidden_claims_found
+
+
+def test_real_machovo_answer_passes_when_fact_is_extracted_from_a_lower_ranked_chunk():
+    base_case = next(
+        item for item in FAMILY_AVATAR_EVALUATION_CASES if item.case_id == "family-rag-machovo"
+    )
+    case = base_case.model_copy(update={"expected_evidence_markers": ["Мах", "озер"]})
+    answer_text = (
+        "Семейный архив хранит письмо, где Мартин описывает первый совместный отпуск с детьми "
+        "у озера Маха. [rag:27633]"
+    )
+
+    result = evaluate_answer_against_case(
+        case=case,
+        answer_text=answer_text,
+        provider_name="mock-eval",
+        response_metadata={"grounding_status": "grounded"},
+        evidence_count=5,
+    )
+
+    assert result.actual_behavior == "grounded_answer"
+    assert result.missing_expected_markers == []
+    assert result.passed is True
+
+
+def test_real_machovo_over_refusal_still_fails_on_missing_markers():
+    base_case = next(
+        item for item in FAMILY_AVATAR_EVALUATION_CASES if item.case_id == "family-rag-machovo"
+    )
+    case = base_case.model_copy(update={"expected_evidence_markers": ["Мах", "озер"]})
+    answer_text = "Извините, я не могу найти эту информацию в сохранённых воспоминаниях."
+
+    result = evaluate_answer_against_case(
+        case=case,
+        answer_text=answer_text,
+        provider_name="mock-eval",
+        response_metadata={"grounding_status": "grounded"},
+        evidence_count=5,
+    )
+
+    assert result.passed is False
+    assert result.missing_expected_markers == ["Мах", "озер"]

@@ -6,6 +6,11 @@ from app.core.config import settings
 from app.modules.embedding_models.registry import BGE_M3_HYBRID_ADAPTER
 from app.modules.embedding_models.service import get_embedding_model
 from app.modules.embeddings.providers import MOCK_PROVIDER_NAME, build_embedding_provider
+from app.modules.embeddings.bge_m3_model_cache import (
+    BGE_M3_DEFAULT_REPO_ID,
+    is_huggingface_offline_mode,
+    resolve_local_snapshot_path,
+)
 from app.modules.embeddings.providers.bge_m3_hybrid import (
     BGE_M3_HYBRID_PROVIDER_NAME,
     BgeM3HybridEmbeddingAdapter,
@@ -29,6 +34,9 @@ class EmbeddingRuntimeDiagnostics:
     collection_name: str
     collection_vector_size: int | None
     flag_embedding_available: bool
+    bge_m3_snapshot_cached: bool = False
+    bge_m3_snapshot_path: str | None = None
+    huggingface_offline_mode: bool = False
 
 
 def _flag_embedding_available() -> bool:
@@ -63,12 +71,27 @@ def _resolve_query_provider_name(*, model_code: str) -> str:
 
 
 def build_embedding_runtime_fingerprint(*, model_code: str) -> str:
+    model = get_embedding_model(model_code)
     indexing_provider_name = _resolve_runtime_adapter_name(model_code=model_code)
     query_provider_name = _resolve_query_provider_name(model_code=model_code)
-    return (
+    fingerprint = (
         f"{settings.embedding_provider}:{model_code}:"
         f"index={indexing_provider_name}:query={query_provider_name}"
     )
+    if model.provider_model_name:
+        fingerprint += f":provider_model={model.provider_model_name}"
+
+    if model.runtime_adapter == BGE_M3_HYBRID_ADAPTER:
+        snapshot_path = resolve_local_snapshot_path(
+            model.provider_model_name or BGE_M3_DEFAULT_REPO_ID,
+            cache_dir=settings.sentence_transformers_cache_dir,
+        )
+        snapshot_revision = None
+        if snapshot_path:
+            snapshot_revision = snapshot_path.rstrip("/").split("/")[-1]
+        fingerprint += f":snapshot={snapshot_revision or 'missing'}"
+
+    return fingerprint
 
 
 def resolve_embedding_runtime_diagnostics(
@@ -88,6 +111,16 @@ def resolve_embedding_runtime_diagnostics(
     except Exception:
         collection_vector_size = None
 
+    bge_m3_snapshot_path: str | None = None
+    bge_m3_snapshot_cached = False
+    if model.runtime_adapter == BGE_M3_HYBRID_ADAPTER:
+        repo_id = model.provider_model_name or BGE_M3_DEFAULT_REPO_ID
+        bge_m3_snapshot_path = resolve_local_snapshot_path(
+            repo_id,
+            cache_dir=settings.sentence_transformers_cache_dir,
+        )
+        bge_m3_snapshot_cached = bge_m3_snapshot_path is not None
+
     return EmbeddingRuntimeDiagnostics(
         embedding_provider_setting=settings.embedding_provider,
         resolved_indexing_provider_name=indexing_provider_name,
@@ -102,6 +135,9 @@ def resolve_embedding_runtime_diagnostics(
         collection_name=collection_name,
         collection_vector_size=collection_vector_size,
         flag_embedding_available=_flag_embedding_available(),
+        bge_m3_snapshot_cached=bge_m3_snapshot_cached,
+        bge_m3_snapshot_path=bge_m3_snapshot_path,
+        huggingface_offline_mode=is_huggingface_offline_mode(),
     )
 
 
@@ -142,6 +178,12 @@ def assert_real_embedding_runtime_for_e2e(
         )
     if not diagnostics.flag_embedding_available:
         issues.append("FlagEmbedding is not available in the runtime environment.")
+    if diagnostics.model_code.startswith("bge_m3") and not diagnostics.bge_m3_snapshot_cached:
+        issues.append(
+            "BGE-M3 Hugging Face snapshot is missing or incomplete (model weights not cached). "
+            "Re-run prefetch: docker compose exec backend python scripts/prefetch_embedding_model.py "
+            "--provider bge_m3_dense_sparse"
+        )
     if (
         diagnostics.collection_vector_size is not None
         and diagnostics.collection_vector_size != diagnostics.embedding_dimension

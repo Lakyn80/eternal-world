@@ -28,6 +28,9 @@ def build_brain_rag_eval_e2e_markdown(result: BrainRagEvalE2ERunResult) -> str:
         f"- Provider model name: `{result.embedding_diagnostics.provider_model_name or 'unknown'}`",
         f"- Embedding dimension: `{result.embedding_diagnostics.embedding_dimension}`",
         f"- Collection vector size: `{result.embedding_diagnostics.collection_vector_size}`",
+        f"- BGE-M3 snapshot cached: `{result.embedding_diagnostics.bge_m3_snapshot_cached}`",
+        f"- BGE-M3 snapshot path: `{result.embedding_diagnostics.bge_m3_snapshot_path}`",
+        f"- Hugging Face offline mode: `{result.embedding_diagnostics.huggingface_offline_mode}`",
         f"- Embedding runtime fingerprint: `{result.embedding_diagnostics.embedding_runtime_fingerprint}`",
         f"- Collection rebuilt: `{result.embedding_diagnostics.collection_rebuilt}`",
         f"- Overall: `{'PASS' if result.passed else 'FAIL'}`",
@@ -44,12 +47,23 @@ def build_brain_rag_eval_e2e_markdown(result: BrainRagEvalE2ERunResult) -> str:
             [
                 f"- `{diagnostic.case_id}`",
                 f"  - Query: {diagnostic.user_query}",
+                f"  - Expected fact: `{diagnostic.expected_fact_id}`",
                 f"  - Expected chunk: `{diagnostic.expected_chunk_id}`",
+                f"  - Expected chunk source: `{diagnostic.expected_chunk_source_title}`",
+                f"  - Expected chunk index: `{diagnostic.expected_chunk_index}`",
+                f"  - Expected chunk exists in Qdrant: `{diagnostic.expected_chunk_exists_in_qdrant}`",
                 f"  - Expected chunk in top_k: `{diagnostic.expected_chunk_in_top_k}`",
-                f"  - Expected chunk rank: `{diagnostic.expected_chunk_rank}`",
-                f"  - Retrieved chunk IDs: `{diagnostic.retrieved_chunk_ids}`",
+                f"  - Expected chunk rank at top_k: `{diagnostic.expected_chunk_rank}`",
+                f"  - Expected chunk rank at top_50: `{diagnostic.expected_chunk_rank_at_50}`",
+                f"  - Position bucket: `{diagnostic.expected_chunk_position_bucket}`",
+                f"  - In top_5/top_10/top_20/top_50: `{diagnostic.expected_chunk_in_top_5}` / `{diagnostic.expected_chunk_in_top_10}` / `{diagnostic.expected_chunk_in_top_20}` / `{diagnostic.expected_chunk_in_top_50}`",
+                f"  - Top retrieved chunk IDs: `{diagnostic.retrieved_chunk_ids}`",
             ]
         )
+        for chunk in diagnostic.retrieved_chunks:
+            lines.append(
+                f"    - #{chunk.rank} chunk `{chunk.chunk_id}` score `{chunk.score:.4f}` source `{chunk.source_title or 'unknown'}` chunk_index `{chunk.chunk_index}`"
+            )
 
     lines.extend(["", "## top_k Diagnostics", ""])
     for diagnostic in result.top_k_diagnostics:

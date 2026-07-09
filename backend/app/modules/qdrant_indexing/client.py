@@ -68,6 +68,83 @@ class QdrantRestClient:
             raise QdrantClientError("Qdrant collection check failed")
         return _extract_vector_size(response.json())
 
+    def count_points(
+        self,
+        *,
+        collection_name: str,
+        search_filter: dict[str, object] | None = None,
+        exact: bool = True,
+    ) -> int:
+        request_body: dict[str, object] = {"exact": exact}
+        if search_filter is not None:
+            request_body["filter"] = search_filter
+
+        response = self._request(
+            "POST",
+            f"/collections/{collection_name}/points/count",
+            json=request_body,
+        )
+        if response.status_code == 404:
+            return 0
+        if response.is_error:
+            raise QdrantClientError("Qdrant point count failed")
+
+        response_payload = response.json()
+        result = response_payload.get("result")
+        if not isinstance(result, dict):
+            return 0
+
+        count = result.get("count")
+        if isinstance(count, bool):
+            return 0
+        if isinstance(count, int):
+            return count
+        if isinstance(count, float):
+            return int(count)
+        return 0
+
+    def scroll_points(
+        self,
+        *,
+        collection_name: str,
+        limit: int,
+        search_filter: dict[str, object] | None = None,
+        with_payload: bool = True,
+        with_vector: bool = False,
+    ) -> list[dict[str, object]]:
+        request_body: dict[str, object] = {
+            "limit": limit,
+            "with_payload": with_payload,
+            "with_vector": with_vector,
+        }
+        if search_filter is not None:
+            request_body["filter"] = search_filter
+
+        response = self._request(
+            "POST",
+            f"/collections/{collection_name}/points/scroll",
+            json=request_body,
+        )
+        if response.status_code == 404:
+            return []
+        if response.is_error:
+            raise QdrantClientError("Qdrant point scroll failed")
+
+        response_payload = response.json()
+        result = response_payload.get("result")
+        if not isinstance(result, dict):
+            return []
+
+        points = result.get("points")
+        if not isinstance(points, list):
+            return []
+
+        normalized_points: list[dict[str, object]] = []
+        for item in points:
+            if isinstance(item, dict):
+                normalized_points.append(item)
+        return normalized_points
+
     def ensure_collection(self, *, collection_name: str, vector_size: int) -> None:
         response = self._request("GET", f"/collections/{collection_name}")
 

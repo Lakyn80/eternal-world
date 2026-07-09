@@ -13,14 +13,19 @@ from app.modules.active_retrieval_config.service import (
 )
 from app.modules.auth.schemas import RegisterRequest
 from app.modules.auth.service import DuplicateEmailError, register_user
+from app.modules.embedding_models.service import get_embedding_model
 from app.modules.embeddings.service import embed_source_chunks
 from app.modules.memories.repository import create_memory as create_memory_record
 from app.modules.memories.repository import list_memories_for_profile
 from app.modules.memory_profiles.repository import list_memory_profiles_for_user
 from app.modules.memory_profiles.schemas import MemoryProfileCreate
 from app.modules.memory_profiles.service import create_memory_profile
-from app.modules.embeddings.runtime import build_embedding_runtime_fingerprint
+from app.modules.embeddings.runtime import (
+    build_embedding_runtime_fingerprint,
+    resolve_embedding_runtime_diagnostics,
+)
 from app.modules.qdrant_indexing.client import build_qdrant_client
+from app.modules.qdrant_indexing.repository import list_source_embeddings_for_user
 from app.modules.qdrant_indexing.service import index_source_embeddings
 from app.modules.rag_chunks.service import chunk_rag_source, list_rag_chunks
 from app.modules.rag_evaluation.fixtures.family_novak_facts import FamilyNovakFact
@@ -39,7 +44,9 @@ FAMILY_AVATAR_RU_E2E_EMAIL = "family.avatar.ru.e2e@example.test"
 FAMILY_AVATAR_RU_E2E_PASSWORD = "FamilyAvatarRuE2e123"
 FAMILY_AVATAR_RU_E2E_PROFILE_NAME = "Ева Новакова (RU E2E Eval)"
 FAMILY_AVATAR_RU_E2E_SOURCE_TITLE = "Family Novak RU E2E Corpus"
-FAMILY_AVATAR_RU_E2E_SOURCE_KEY = "family_novak_ru_e2e_v2_real_embeddings"
+FAMILY_AVATAR_RU_E2E_SOURCE_KEY = "family_novak_ru_e2e_v3_bge_m3_real_cpu"
+FAMILY_AVATAR_RU_E2E_COLLECTION_SUFFIX = "family_novak_ru_e2e_v3_bge_m3_real_cpu"
+FAMILY_AVATAR_RU_E2E_CORPUS_LANGUAGE = "ru"
 
 _MEMORY_FACT_ID_PATTERN = re.compile(r"^\[(f\d{3})\]\s+")
 
@@ -98,8 +105,106 @@ def _delete_qdrant_collection_if_exists(*, collection_name: str) -> bool:
     return qdrant_client.delete_collection(collection_name=collection_name)
 
 
+def build_family_avatar_ru_e2e_collection_name(*, base_collection_name: str) -> str:
+    return f"{base_collection_name}__{FAMILY_AVATAR_RU_E2E_COLLECTION_SUFFIX}"
+
+
+def _build_qdrant_source_filter(
+    *,
+    owner_user_id: int,
+    profile_id: int,
+    source_id: int,
+) -> dict[str, object]:
+    return {
+        "must": [
+            {"key": "owner_user_id", "match": {"value": owner_user_id}},
+            {"key": "profile_id", "match": {"value": profile_id}},
+            {"key": "source_id", "match": {"value": source_id}},
+        ]
+    }
+
+
+def _count_qdrant_points_for_source(
+    *,
+    collection_name: str,
+    owner_user_id: int,
+    profile_id: int,
+    source_id: int,
+) -> int:
+    qdrant_client = build_qdrant_client()
+    return qdrant_client.count_points(
+        collection_name=collection_name,
+        search_filter=_build_qdrant_source_filter(
+            owner_user_id=owner_user_id,
+            profile_id=profile_id,
+            source_id=source_id,
+        ),
+    )
+
+
+def _build_e2e_source_metadata(
+    *,
+    corpus_hash: str,
+    collection_name: str,
+    model_code: str,
+    retrieval_mode: str,
+    embedding_runtime_fingerprint: str,
+) -> dict[str, object]:
+    model = get_embedding_model(model_code)
+    runtime_diagnostics = resolve_embedding_runtime_diagnostics(
+        model_code=model_code,
+        collection_name=collection_name,
+    )
+    snapshot_revision = None
+    if runtime_diagnostics.bge_m3_snapshot_path:
+        snapshot_revision = runtime_diagnostics.bge_m3_snapshot_path.rstrip("/").split("/")[-1]
+
+    return {
+        "family_avatar_ru_e2e_key": FAMILY_AVATAR_RU_E2E_SOURCE_KEY,
+        "corpus_text_hash": corpus_hash,
+        "corpus_language": FAMILY_AVATAR_RU_E2E_CORPUS_LANGUAGE,
+        "embedding_runtime_fingerprint": embedding_runtime_fingerprint,
+        "embedding_provider_setting": runtime_diagnostics.embedding_provider_setting,
+        "resolved_indexing_provider_name": runtime_diagnostics.resolved_indexing_provider_name,
+        "resolved_query_provider_name": runtime_diagnostics.resolved_query_provider_name,
+        "model_code": model.code,
+        "provider_model_name": model.provider_model_name,
+        "retrieval_mode": retrieval_mode,
+        "collection_name": collection_name,
+        "bge_m3_snapshot_path": runtime_diagnostics.bge_m3_snapshot_path,
+        "bge_m3_snapshot_revision": snapshot_revision,
+        "safe_fictional_data": True,
+    }
+
+
+def _source_needs_embedding_pipeline(
+    *,
+    stored_hash: str | None,
+    corpus_hash: str,
+    stored_fingerprint: str | None,
+    embedding_runtime_fingerprint: str,
+    chunk_count: int,
+    embedding_count: int,
+    qdrant_point_count: int,
+) -> bool:
+    if stored_hash != corpus_hash:
+        return True
+    if stored_fingerprint != embedding_runtime_fingerprint:
+        return True
+    if chunk_count == 0:
+        return True
+    if embedding_count != chunk_count:
+        return True
+    if qdrant_point_count != chunk_count:
+        return True
+    return False
+
+
 def ensure_family_avatar_ru_e2e_bootstrap(db: Session) -> FamilyAvatarRuE2EBootstrapResult:
     recommendation = get_production_recommended_active_retrieval_config()
+    e2e_collection_name = build_family_avatar_ru_e2e_collection_name(
+        base_collection_name=recommendation.collection_name,
+    )
     corpus_text = build_corpus_text_ru()
     corpus_hash = _corpus_text_hash(corpus_text)
     embedding_runtime_fingerprint = build_embedding_runtime_fingerprint(
@@ -147,7 +252,7 @@ def ensure_family_avatar_ru_e2e_bootstrap(db: Session) -> FamilyAvatarRuE2EBoots
         profile_id=profile.id,
         payload=ActiveRetrievalConfigUpsertRequest(
             model_code=recommendation.model_code,
-            collection_name=recommendation.collection_name,
+            collection_name=e2e_collection_name,
             top_k=recommendation.top_k,
             score_threshold=recommendation.score_threshold,
             retrieval_mode=recommendation.retrieval_mode,
@@ -190,12 +295,13 @@ def ensure_family_avatar_ru_e2e_bootstrap(db: Session) -> FamilyAvatarRuE2EBoots
         owner_user_id=user.id,
         profile_id=profile.id,
     )
-    metadata = {
-        "family_avatar_ru_e2e_key": FAMILY_AVATAR_RU_E2E_SOURCE_KEY,
-        "corpus_text_hash": corpus_hash,
-        "embedding_runtime_fingerprint": embedding_runtime_fingerprint,
-        "safe_fictional_data": True,
-    }
+    metadata = _build_e2e_source_metadata(
+        corpus_hash=corpus_hash,
+        collection_name=e2e_collection_name,
+        model_code=recommendation.model_code,
+        retrieval_mode=recommendation.retrieval_mode,
+        embedding_runtime_fingerprint=embedding_runtime_fingerprint,
+    )
     source = next(
         (
             item
@@ -239,20 +345,31 @@ def ensure_family_avatar_ru_e2e_bootstrap(db: Session) -> FamilyAvatarRuE2EBoots
         stored_hash = source.source_metadata.get("corpus_text_hash")
         stored_fingerprint = source.source_metadata.get("embedding_runtime_fingerprint")
     existing_chunks = list_rag_chunks(db, current_user=user, source_id=source.id)
+    existing_embeddings = list_source_embeddings_for_user(
+        db,
+        owner_user_id=user.id,
+        source_id=source.id,
+        model_code=recommendation.model_code,
+    )
+    qdrant_point_count = _count_qdrant_points_for_source(
+        collection_name=e2e_collection_name,
+        owner_user_id=user.id,
+        profile_id=profile.id,
+        source_id=source.id,
+    )
     collection_rebuilt = False
-    needs_pipeline = (
-        stored_hash != corpus_hash
-        or stored_fingerprint != embedding_runtime_fingerprint
-        or not existing_chunks
-        or source.status not in {"chunked", "embedded", "indexed"}
+    needs_pipeline = _source_needs_embedding_pipeline(
+        stored_hash=stored_hash,
+        corpus_hash=corpus_hash,
+        stored_fingerprint=stored_fingerprint,
+        embedding_runtime_fingerprint=embedding_runtime_fingerprint,
+        chunk_count=len(existing_chunks),
+        embedding_count=len(existing_embeddings),
+        qdrant_point_count=qdrant_point_count,
     )
 
-    if needs_pipeline and stored_fingerprint != embedding_runtime_fingerprint:
-        collection_rebuilt = _delete_qdrant_collection_if_exists(
-            collection_name=recommendation.collection_name,
-        )
-
     if needs_pipeline:
+        _delete_qdrant_collection_if_exists(collection_name=e2e_collection_name)
         chunk_rag_source(db, current_user=user, source_id=source.id)
         embed_source_chunks(
             db,
@@ -265,8 +382,10 @@ def ensure_family_avatar_ru_e2e_bootstrap(db: Session) -> FamilyAvatarRuE2EBoots
             current_user=user,
             source_id=source.id,
             model_code=recommendation.model_code,
+            collection_name=e2e_collection_name,
         )
         db.refresh(source)
+        collection_rebuilt = True
 
     chunks = list_rag_chunks(db, current_user=user, source_id=source.id)
     chunk_ids_by_fact_id: dict[str, int] = {}
@@ -282,7 +401,7 @@ def ensure_family_avatar_ru_e2e_bootstrap(db: Session) -> FamilyAvatarRuE2EBoots
         profile_id=profile.id,
         source_id=source.id,
         model_code=recommendation.model_code,
-        collection_name=recommendation.collection_name,
+        collection_name=e2e_collection_name,
         retrieval_mode=recommendation.retrieval_mode,
         top_k=recommendation.top_k,
         corpus_text_hash=corpus_hash,

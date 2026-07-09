@@ -53,6 +53,7 @@ class RagRetrievalRequest(BaseModel):
 class RagRetrievalResultRead(BaseModel):
     chunk_id: int
     source_id: int
+    source_title: str | None = None
     embedding_id: int
     score: float
     text: str
