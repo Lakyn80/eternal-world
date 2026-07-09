@@ -6,12 +6,17 @@ from app.db.session import get_db
 from app.core.logging import REDACTED_VALUE, sanitize_log_data
 from app.main import app
 from app.modules.ai_agents.brain.context import MAX_MEMORY_EVIDENCE_ITEMS
+from app.modules.ai_agents.brain.output_guard import (
+    BrainOutputGuardContext,
+    apply_brain_output_guard,
+)
 from app.modules.ai_agents.brain.provider import (
     BrainProviderConfigurationError,
     MockBrainAgentProvider,
     build_brain_provider,
 )
 from app.modules.ai_agents.orchestrator import AgentOrchestrator, get_agent_orchestrator
+from app.modules.ai_agents.brain.service import BrainAgentService
 from app.modules.ai_agents.schemas import (
     BrainAgentRequest,
     BrainAgentResponse,
@@ -908,3 +913,88 @@ def test_brain_agent_chat_flow_uses_rag_retrieval_service_not_qdrant_directly(cl
     )
 
     assert response.status_code == 200
+
+
+def test_output_guard_sanitizes_lack_answer_with_substitute_unsupported_detail():
+    result = apply_brain_output_guard(
+        answer_text=(
+            "В сохранённых воспоминаниях не указано, какие именно часы чинил отец Франтишек в гараже. "
+            "Помню только, что я держала ему лупу. [rag:27618]"
+        ),
+        user_message="Какие часы отец Франтишек чинил в гараже?",
+        response_metadata={"grounding_status": "grounded"},
+        guard_context=BrainOutputGuardContext(
+            expected_behavior="lack_of_evidence",
+            forbidden_claims=("часы", "гараж", "луп"),
+        ),
+    )
+
+    assert result.guard_applied is True
+    assert result.reason == "forbidden_claim_in_lack_case"
+    assert result.answer_text == (
+        "В сохранённых воспоминаниях этого нет, поэтому не хочу придумывать."
+    )
+    assert "луп" in result.detected_unsupported_terms
+    assert "держала" not in result.answer_text
+
+
+def test_output_guard_does_not_change_grounded_machovo_answer():
+    answer_text = (
+        "Семейный архив хранит письмо, где Мартин описывает первый совместный отпуск с детьми "
+        "у озера Маха. [rag:27633]"
+    )
+
+    result = apply_brain_output_guard(
+        answer_text=answer_text,
+        user_message="Где был первый совместный отпуск с детьми?",
+        response_metadata={"grounding_status": "grounded"},
+    )
+
+    assert result.guard_applied is False
+    assert result.answer_text == answer_text
+
+
+def test_output_guard_does_not_change_grounded_reckovice_cherry_answer():
+    answer_text = (
+        "В саду в Řečkovicích росла старая вишня, под которой мы летом пили лимонад. [rag:27624]"
+    )
+
+    result = apply_brain_output_guard(
+        answer_text=answer_text,
+        user_message="Что росло в саду в Řečkovicích?",
+        response_metadata={"grounding_status": "grounded"},
+    )
+
+    assert result.guard_applied is False
+    assert result.answer_text == answer_text
+
+
+def test_brain_service_guard_metadata_does_not_store_original_answer_text():
+    class StubProvider:
+        def generate_response(self, request: BrainAgentRequest) -> BrainAgentResponse:
+            return BrainAgentResponse(
+                text=(
+                    "В сохранённых воспоминаниях не указано, какие именно часы чинил отец Франтишек в гараже. "
+                    "Помню только, что я держала ему лупу. [rag:27618]"
+                ),
+                provider_name="stub",
+                metadata={"grounding_status": "grounded"},
+            )
+
+    service = BrainAgentService(provider=StubProvider())
+    response = service.generate_chat_response(
+        OrchestratorChatRequest(
+            profile=MemoryProfileContext(id=1, name="Анна"),
+            user_message="Какие часы отец Франтишек чинил в гараже?",
+            recent_history=[],
+            output_guard_context=BrainOutputGuardContext(
+                expected_behavior="lack_of_evidence",
+                forbidden_claims=("часы", "гараж", "луп"),
+            ),
+        )
+    )
+
+    assert response.metadata["output_guard_applied"] is True
+    assert response.metadata["output_guard_reason"] == "forbidden_claim_in_lack_case"
+    assert response.metadata["output_guard_detected_unsupported_terms"] == ["часы", "гараж", "луп"]
+    assert "original_answer_text" not in response.metadata

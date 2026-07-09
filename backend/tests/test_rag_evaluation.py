@@ -649,3 +649,32 @@ def test_real_machovo_over_refusal_still_fails_on_missing_markers():
 
     assert result.passed is False
     assert result.missing_expected_markers == ["Мах", "озер"]
+
+
+def test_rag_evaluation_service_guard_sanitizes_forbidden_detail_in_lack_case():
+    class StubLeakProvider:
+        def generate_response(self, request) -> BrainAgentResponse:
+            return BrainAgentResponse(
+                text=(
+                    "Дорогой мой, в сохранённых воспоминаниях не указано, какие именно часы чинил отец "
+                    "Франтишек в гараже. Помню только, что я держала ему лупу, когда мне было семь лет. "
+                    "[rag:27618]"
+                ),
+                provider_name="stub-eval",
+                metadata={"grounding_status": "grounded"},
+            )
+
+    case = next(
+        item
+        for item in FAMILY_AVATAR_EVALUATION_CASES
+        if item.case_id == "family-lack-corpus-only-frantisek-garage"
+    ).model_copy(update={"forbidden_claims": ["часы", "гараж", "луп"]})
+    service = RagEvaluationService(brain_service=BrainAgentService(StubLeakProvider()))
+
+    result = service.run_eval_case(case)
+
+    assert result.passed is True
+    assert result.actual_behavior == "lack_of_evidence"
+    assert result.forbidden_claims_found == []
+    assert result.response_metadata["output_guard_applied"] is True
+    assert result.response_metadata["output_guard_reason"] == "forbidden_claim_in_lack_case"

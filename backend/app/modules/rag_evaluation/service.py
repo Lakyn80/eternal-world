@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections.abc import Callable, Sequence
 
 from app.modules.ai_agents.brain.context import BrainGroundedContext, BrainMemoryEvidence, BrainProfileContext, BrainRagEvidence
+from app.modules.ai_agents.brain.output_guard import BrainOutputGuardContext
 from app.modules.ai_agents.brain.service import BrainAgentService, get_brain_service
 from app.modules.ai_agents.schemas import BrainAgentResponse, MemoryProfileContext, OrchestratorChatRequest
 from app.modules.rag_evaluation.evaluator import evaluate_answer_against_case
@@ -96,6 +97,11 @@ class RagEvaluationService:
             user_message=case.user_query,
             recent_history=case.recent_history,
             grounded_context=grounded_context,
+            output_guard_context=BrainOutputGuardContext(
+                expected_behavior=case.expected_behavior,
+                forbidden_claims=tuple(case.forbidden_claims),
+                should_require_lack_of_evidence=case.should_require_lack_of_evidence,
+            ),
         )
 
     def run_eval_case(

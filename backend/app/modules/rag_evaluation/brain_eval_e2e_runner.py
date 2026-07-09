@@ -16,6 +16,7 @@ from app.modules.memory_profiles.repository import get_memory_profile_for_user
 from app.modules.active_retrieval_config.service import (
     get_production_recommended_active_retrieval_config,
 )
+from app.modules.ai_agents.brain.output_guard import BrainOutputGuardContext
 from app.modules.embeddings.runtime import (
     assert_real_embedding_runtime_for_e2e,
 )
@@ -178,6 +179,11 @@ def _run_e2e_case(
         user_message=case.user_query,
         recent_history=case.recent_history,
         grounded_context=grounded_context,
+        output_guard_context=BrainOutputGuardContext(
+            expected_behavior=case.expected_behavior,
+            forbidden_claims=tuple(case.forbidden_claims),
+            should_require_lack_of_evidence=case.should_require_lack_of_evidence,
+        ),
     )
     response = brain_service.generate_chat_response(request)
 

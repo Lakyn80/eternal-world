@@ -30,6 +30,7 @@ class BrainAgentRequest(BaseModel):
     user_message: str
     recent_history: list[ChatHistoryEntry] = Field(default_factory=list)
     grounded_context: BrainGroundedContext | None = None
+    output_guard_context: Any | None = None
     system_prompt: str
     user_prompt: str
     prompt: str
@@ -46,6 +47,7 @@ class OrchestratorChatRequest(BaseModel):
     user_message: str
     recent_history: list[ChatHistoryEntry] = Field(default_factory=list)
     grounded_context: BrainGroundedContext | None = None
+    output_guard_context: Any | None = None
 
 
 class OrchestratorChatResponse(BaseModel):

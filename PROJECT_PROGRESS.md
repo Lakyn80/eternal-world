@@ -5631,3 +5631,110 @@ Next recommended task:
 2. alternatively, build the simple FA chat demo on top of the already-validated `56/57` Brain RAG path
 
 ---
+
+## Task 62N - Brain Output Unsupported-detail Guard (2026-07-09)
+
+Goal:
+
+- add a deterministic post-generation guard that removes unsupported incidental detail leakage from Brain answers
+- keep retrieval, embeddings, top_k, dataset, Redis cache behavior, and prompt rules unchanged
+
+Why prompt-only tuning stopped at `56/57`:
+
+- the selected prompt-only baseline already proved retrieval was clean and reached `56/57`
+- further prompt tightening had previously caused collateral regressions on unrelated grounded cases
+- the remaining leak class (`family-lack-corpus-only-frantisek-garage`) was therefore moved to an output-side
+  deterministic fix instead of more prompt chasing
+
+Implemented:
+
+- new module: `backend/app/modules/ai_agents/brain/output_guard.py`
+  - `BrainOutputGuardContext`
+  - `BrainOutputGuardResult`
+  - deterministic guard application based on:
+    - eval lack-case expectation
+    - forbidden claim markers
+    - conservative no-evidence cleanup
+- integrated in `backend/app/modules/ai_agents/brain/service.py`
+  - provider answer is now guarded after generation and before the final response is returned/stored/evaluated
+  - safe metadata added:
+    - `output_guard_applied`
+    - `output_guard_reason`
+    - `output_guard_detected_unsupported_terms`
+    - `output_guard_lack_of_evidence`
+  - raw original answer text is not stored in metadata
+- eval-context wiring added in:
+  - `backend/app/modules/rag_evaluation/service.py`
+  - `backend/app/modules/rag_evaluation/brain_eval_e2e_runner.py`
+- request schemas updated so the optional guard context can flow through Brain without changing normal chat behavior
+
+What the guard does:
+
+- for eval-labeled lack cases, if forbidden unsupported terms appear in the generated answer, the answer is replaced
+  with a natural lack-of-evidence response in the user’s language
+- for grounded answers, the guard stays out of the way unless explicit lack-case safety conditions are met
+- for production/live chat without eval metadata, only conservative no-evidence cleanup is allowed
+
+Tests run:
+
+- targeted guard/eval tests:
+  - `python -m pytest tests/test_ai_agents.py tests/test_rag_evaluation.py -q`
+  - result: `61 passed`
+- full Brain/RAG safety suite:
+  - `python -m pytest tests/test_brain_rag_eval.py tests/test_brain_eval_e2e_bootstrap.py tests/test_brain_eval_e2e_embedding_runtime.py tests/test_rag_evaluation.py tests/test_ai_agents.py -q`
+  - result: `81 passed`
+- cache regression tests:
+  - `python -m pytest tests/test_embedding_cache.py tests/test_bge_m3_embedding_cache.py -q`
+  - result: `7 passed`
+
+Real E2E verification:
+
+Command used:
+
+```bash
+docker compose exec -e EMBEDDING_CACHE_ENABLED=true -e HF_HUB_OFFLINE=1 -e TRANSFORMERS_OFFLINE=1 -e CUDA_VISIBLE_DEVICES="" -e NVIDIA_VISIBLE_DEVICES=void -e EMBEDDING_DEVICE=cpu -e TORCH_DEVICE=cpu backend python scripts/run_brain_rag_eval.py --case-set family_avatar_ru --real-retrieval
+```
+
+Final run:
+
+- `run_id`: `20260709_164250Z`
+- result: `55/57 PASS`
+- `retrieval_failures=0`
+- `answer_failures=2`
+- `provider_model_name=BAAI/bge-m3`
+- `source=local_snapshot`
+- `device=cpu`
+- `collection_rebuilt=false`
+- no Hugging Face download observed
+
+Behavior in the final real run:
+
+- `family-lack-corpus-only-frantisek-garage`: **passed**
+  - the unsupported incidental detail leak was neutralized by the output guard
+- `family-lack-sibling`: **passed**
+  - a denial-style unsupported answer was normalized into a pure lack response
+- `family-rag-machovo`: **failed**
+  - still an answer-generation / over-refusal issue, not retrieval
+- `family-reckovice-cherry`: **failed**
+  - missing expected marker `вишн`; this is not a retrieval failure and the guard was not meant to rewrite grounded facts
+
+Interpretation:
+
+- the new guard does what it was designed to do: remove unsupported detail leakage in lack cases without touching
+  retrieval or embedding behavior
+- retrieval stayed clean at `0` failures throughout
+- the remaining failures after the guard are still grounded-answer nondeterminism / marker-omission problems, not
+  unsupported-detail leaks
+
+Known limitations:
+
+- this is not a full semantic verifier and does not use a second LLM
+- the guard intentionally does not rewrite ordinary grounded answers
+- it will not fix over-refusal or grounded marker omission in cases like `family-rag-machovo` or
+  `family-reckovice-cherry`
+
+Next recommended task:
+
+1. build the simple FA chat demo on top of the validated retrieval path and guarded Brain output
+
+---
