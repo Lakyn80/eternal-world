@@ -5523,3 +5523,111 @@ Commit note:
 - generated run artifacts and `.idea/` remain intentionally outside intended commit scope
 
 ---
+
+## Task 62M - Repeat-query Redis Embedding Cache Smoke (2026-07-09)
+
+Goal:
+
+- prove the Redis embedding cache is effective on repeated identical query embeddings, not only fail-safe
+- keep scope limited to cache-hit verification; no Brain prompt, evaluator, retrieval ranking, top_k, dataset, or
+  embedding semantics changes
+
+Why the earlier cache-enabled E2E mostly showed misses:
+
+- the prior cache-enabled real E2E run (`20260709_120025Z`) was a runtime/retrieval smoke only
+- that eval workload uses mostly unique query texts, so it naturally exercises miss/write behavior far more than
+  same-query hit reuse
+- the clean E2E collection was reused (`collection_rebuilt=false`), so indexing-side repeat-cache behavior was not
+  part of that run either
+
+Implemented:
+
+- new script: `backend/scripts/smoke_embedding_cache.py`
+  - runs the real BGE-M3 hybrid provider in `input_type=query` mode
+  - encodes the exact same query repeatedly
+  - prints a safe summary with:
+    - `provider_code`
+    - `provider_model_name`
+    - `source`
+    - `device`
+    - `cache_enabled`
+    - `repeat`
+    - `hits`
+    - `misses`
+    - `writes`
+    - `errors`
+    - `text_hash_prefix`
+    - `embedding_dimension`
+  - never prints the raw query text in the script summary
+  - fails if cache is enabled but repeated identical calls do not produce a cache hit
+- small provider observability hook in `backend/app/modules/embeddings/providers/bge_m3_hybrid.py`
+  - added a typed per-call cache summary object for script/test inspection
+  - no retrieval/output semantics changed
+- test updates in `backend/tests/test_bge_m3_embedding_cache.py`
+  - repeat-query smoke proves first call miss/write and subsequent calls hit
+  - duplicate texts in one batch are still encoded only once
+  - script summary serialization does not expose raw query text
+
+Verification:
+
+- targeted cache tests:
+  - `python -m pytest tests/test_embedding_cache.py tests/test_bge_m3_embedding_cache.py -q`
+  - result: `7 passed`
+- full existing Brain/RAG safety suite:
+  - `python -m pytest tests/test_brain_rag_eval.py tests/test_brain_eval_e2e_bootstrap.py tests/test_brain_eval_e2e_embedding_runtime.py tests/test_rag_evaluation.py tests/test_ai_agents.py -q`
+  - result: `76 passed`
+
+Real Docker smoke command used:
+
+```bash
+docker compose exec -e EMBEDDING_CACHE_ENABLED=true -e HF_HUB_OFFLINE=1 -e TRANSFORMERS_OFFLINE=1 -e CUDA_VISIBLE_DEVICES="" -e NVIDIA_VISIBLE_DEVICES=void -e EMBEDDING_DEVICE=cpu -e TORCH_DEVICE=cpu backend python scripts/smoke_embedding_cache.py --provider bge_m3_dense_sparse --query "Где Павел жил в детстве?" --repeat 3
+```
+
+Real smoke result:
+
+- result: `PASS`
+- `provider_code=bge_m3_dense_sparse`
+- `provider_model_name=BAAI/bge-m3`
+- `source=local_snapshot`
+- `device=cpu`
+- `cache_enabled=true`
+- `repeat=3`
+- `hits=2`
+- `misses=1`
+- `writes=1`
+- `errors=0`
+- `text_hash_prefix=7f1bed4c`
+- `embedding_dimension=1024`
+- iteration breakdown:
+  - call 1: `hits=0`, `misses=1`, `writes=1`
+  - call 2: `hits=1`, `misses=0`, `writes=0`
+  - call 3: `hits=1`, `misses=0`, `writes=0`
+
+Interpretation:
+
+- this is the missing proof that the Redis query-embedding cache actually reuses repeated identical queries
+- first call computed and wrote the embedding once; second and third calls were cache hits with no new writes
+- the dense embedding dimension stayed stable at `1024` across all repeats
+- no Hugging Face download was observed; the model loaded from `source=local_snapshot`
+- Redis fallback behavior remains fail-safe because the underlying cache layer still treats all Redis errors as
+  miss/no-op rather than runtime failure
+
+Retrieval stability:
+
+- this minimal smoke did **not** run profile retrieval/Qdrant comparison because the command was intentionally scoped
+  to repeat-query embedding reuse only
+- retrieval semantics were not touched anywhere in this task, and the repeated-call smoke confirmed identical
+  embedding output shape/stability for the same normalized query input
+
+Limitations:
+
+- this does not benchmark end-to-end latency under concurrent load
+- this does not exercise indexing-time cache reuse
+- this does not replace the selected `56/57` Brain prompt quality baseline from Task 62J
+
+Next recommended task:
+
+1. add an output-side unsupported-detail guard for the remaining residual leak class in Brain answers
+2. alternatively, build the simple FA chat demo on top of the already-validated `56/57` Brain RAG path
+
+---

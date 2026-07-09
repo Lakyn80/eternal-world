@@ -18,6 +18,7 @@ from app.modules.embeddings.bge_m3_model_cache import (
 )
 from app.modules.embeddings.embedding_cache import (
     CachedEmbeddingPayload,
+    NullEmbeddingCache,
     build_cache_key,
     build_cached_embedding_payload,
     build_embedding_cache,
@@ -55,6 +56,25 @@ class _PreparedCacheItem:
     text: str
     cache_key: str
     text_hash: str
+
+
+@dataclass(frozen=True)
+class BgeM3HybridCacheSummary:
+    provider_code: str
+    provider_model_name: str
+    snapshot_revision: str
+    source: str
+    device: str
+    mode: str
+    input_type: str
+    batch_size: int
+    unique_texts: int
+    hits: int
+    misses: int
+    writes: int
+    errors: int
+    cache_enabled: bool
+    text_hash_prefixes: tuple[str, ...]
 
 
 class BgeM3HybridEmbeddings:
@@ -135,7 +155,12 @@ class BgeM3HybridEmbeddingProvider:
         self._models: dict[str, Any] = {}
         self._cache_contexts: dict[str, _BgeM3CacheContext] = {}
         self._embedding_cache = build_embedding_cache()
+        self._last_cache_summary: BgeM3HybridCacheSummary | None = None
         self._lock = Lock()
+
+    @property
+    def last_cache_summary(self) -> BgeM3HybridCacheSummary | None:
+        return self._last_cache_summary
 
     def encode_query(self, text: str, provider_code: str) -> BgeM3HybridEmbeddings:
         return self.encode_texts([text], provider_code=provider_code, input_type="query")
@@ -245,13 +270,34 @@ class BgeM3HybridEmbeddingProvider:
                     raise BgeM3HybridProviderError("BGE-M3 cached multivector output is invalid")
                 multivectors.append([list(token_vector) for token_vector in payload.multivector])
 
+        hit_count = sum(1 for item in prepared_items if item.cache_key in cached_hit_keys)
+        error_count = self._consume_cache_error_count()
+        self._last_cache_summary = BgeM3HybridCacheSummary(
+            provider_code=normalized_provider_code,
+            provider_model_name=cache_context.provider_model_name,
+            snapshot_revision=cache_context.snapshot_revision,
+            source="local_snapshot" if cache_context.snapshot_revision != "missing" else "missing",
+            device=self.device,
+            mode=cache_context.mode,
+            input_type=input_type,
+            batch_size=len(texts),
+            unique_texts=len(unique_items_by_key),
+            hits=hit_count,
+            misses=len(missing_items),
+            writes=len(missing_items),
+            errors=error_count,
+            cache_enabled=not isinstance(self._embedding_cache, NullEmbeddingCache),
+            text_hash_prefixes=tuple(
+                item.text_hash.split(":", 1)[1][:8]
+                for item in unique_items_by_key.values()
+            ),
+        )
         _emit_bge_m3_hybrid_log(
             "cache summary "
             f"provider_code={normalized_provider_code} input_type={input_type} "
             f"mode={cache_context.mode} batch_size={len(texts)} unique_texts={len(unique_items_by_key)} "
-            f"hits={sum(1 for item in prepared_items if item.cache_key in cached_hit_keys)} "
-            f"misses={len(missing_items)} writes={len(missing_items)} "
-            f"errors={self._consume_cache_error_count()}"
+            f"hits={hit_count} misses={len(missing_items)} writes={len(missing_items)} "
+            f"errors={error_count}"
         )
         return BgeM3HybridEmbeddings(
             dense_vectors=dense_vectors,

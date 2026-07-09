@@ -8,6 +8,7 @@ from app.modules.embeddings.embedding_cache import (
     build_cached_embedding_payload,
 )
 from app.modules.embeddings.providers.bge_m3_hybrid import BgeM3HybridEmbeddingProvider
+from scripts.smoke_embedding_cache import _result_to_json_ready, run_embedding_cache_smoke
 
 
 class _FakeRedisClient:
@@ -174,3 +175,47 @@ def test_bge_m3_embedding_cache_writes_missing_payloads_for_roundtrip_hits(monke
     assert len(_FakeBGEM3FlagModel.encode_calls) == 1
     assert first_result.dense_vectors == second_result.dense_vectors
     assert first_result.sparse_vectors == second_result.sparse_vectors
+
+
+def test_bge_m3_embedding_cache_repeat_query_smoke_reports_hit_without_raw_text(monkeypatch):
+    _FakeBGEM3FlagModel.encode_calls = []
+    fake_redis_client = _FakeRedisClient()
+    cache = RedisEmbeddingCache(fake_redis_client)
+
+    monkeypatch.setattr(
+        "app.modules.embeddings.providers.bge_m3_hybrid._import_bge_m3_flag_model_class",
+        lambda: _FakeBGEM3FlagModel,
+    )
+    monkeypatch.setattr(
+        "app.modules.embeddings.providers.bge_m3_hybrid.resolve_bge_m3_model_load_path",
+        lambda repo_id, **kwargs: (repo_id, False),
+    )
+    monkeypatch.setattr(
+        "app.modules.embeddings.providers.bge_m3_hybrid.resolve_local_snapshot_path",
+        lambda repo_id, **kwargs: f"/cache/{repo_id}/5617a9f61b028005a4858fdac845db406aefb181",
+    )
+    monkeypatch.setattr(
+        "app.modules.embeddings.providers.bge_m3_hybrid.build_embedding_cache",
+        lambda: cache,
+    )
+
+    query = "  Где   Павел жил   в детстве?  "
+    result = run_embedding_cache_smoke(
+        provider_code="bge_m3_dense_sparse",
+        query=query,
+        repeat=3,
+    )
+    serialized = _result_to_json_ready(result)
+
+    assert len(_FakeBGEM3FlagModel.encode_calls) == 1
+    assert _FakeBGEM3FlagModel.encode_calls[0]["texts"] == ["  Где   Павел жил   в детстве?  "]
+    assert result.cache_enabled is True
+    assert result.repeated_call_hit is True
+    assert result.hits == 2
+    assert result.misses == 1
+    assert result.writes == 1
+    assert result.errors == 0
+    assert result.vectors_stable is True
+    assert query not in str(serialized)
+    assert "Павел" not in str(serialized)
+    assert result.text_hash_prefix
