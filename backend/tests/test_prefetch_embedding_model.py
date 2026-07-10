@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 
+from app.core.config import settings
 from scripts.prefetch_embedding_model import (
     PREFETCH_DEPENDENCY_REPOS_BY_PROVIDER,
     PrefetchTarget,
@@ -214,3 +217,64 @@ def test_prefetch_provider_assets_uses_cached_snapshot_before_attempting_remote_
             "tqdm_class": None,
         }
     ]
+
+
+def test_prefetch_provider_assets_forwards_configured_cache_dir(monkeypatch, tmp_path):
+    explicit_cache_dir = tmp_path / "hf-cache"
+    monkeypatch.setattr(settings, "sentence_transformers_cache_dir", explicit_cache_dir)
+
+    download_calls: list[dict[str, object]] = []
+
+    def fake_snapshot_download(**kwargs):
+        download_calls.append(dict(kwargs))
+        return "/fake-cache/BAAI--bge-m3"
+
+    prefetch_provider_assets(
+        provider_key="bge_m3_dense_sparse",
+        retries=1,
+        retry_delay_seconds=0.0,
+        snapshot_download_fn=fake_snapshot_download,
+    )
+
+    assert all(call["cache_dir"] == str(explicit_cache_dir) for call in download_calls)
+
+
+def test_prefetch_provider_assets_forwards_configured_cache_dir_for_non_bge_m3_repos(
+    monkeypatch, tmp_path
+):
+    explicit_cache_dir = tmp_path / "hf-cache"
+    monkeypatch.setattr(settings, "sentence_transformers_cache_dir", explicit_cache_dir)
+
+    download_calls: list[dict[str, object]] = []
+
+    def fake_snapshot_download(**kwargs):
+        download_calls.append(dict(kwargs))
+        return f"/fake-cache/{str(kwargs['repo_id']).replace('/', '--')}"
+
+    prefetch_provider_assets(
+        provider_key="jina_embeddings_v3",
+        retries=1,
+        retry_delay_seconds=0.0,
+        snapshot_download_fn=fake_snapshot_download,
+    )
+
+    assert all(call["cache_dir"] == str(explicit_cache_dir) for call in download_calls)
+
+
+def test_prefetch_provider_assets_omits_cache_dir_when_not_configured():
+    assert settings.sentence_transformers_cache_dir is None
+
+    download_calls: list[dict[str, object]] = []
+
+    def fake_snapshot_download(**kwargs):
+        download_calls.append(dict(kwargs))
+        return "/fake-cache/BAAI--bge-m3"
+
+    prefetch_provider_assets(
+        provider_key="bge_m3_dense_sparse",
+        retries=1,
+        retry_delay_seconds=0.0,
+        snapshot_download_fn=fake_snapshot_download,
+    )
+
+    assert all("cache_dir" not in call for call in download_calls)

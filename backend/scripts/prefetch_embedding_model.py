@@ -7,6 +7,7 @@ import time
 from dataclasses import dataclass
 from pathlib import Path
 
+from app.core.config import settings
 from app.modules.embeddings.bge_m3_model_cache import (
     BGE_M3_DEFAULT_REPO_ID,
     build_bge_m3_snapshot_download_kwargs,
@@ -103,11 +104,23 @@ def _import_snapshot_download():
 
 
 def _log_cache_environment() -> None:
+    if settings.sentence_transformers_cache_dir is not None:
+        _emit_prefetch_log(
+            f"SENTENCE_TRANSFORMERS_CACHE_DIR={settings.sentence_transformers_cache_dir}"
+        )
+    else:
+        _emit_prefetch_log(
+            "SENTENCE_TRANSFORMERS_CACHE_DIR is unset; falling back to the default "
+            "Hugging Face cache location, which does not survive a container recreate "
+            "unless a volume is mounted there."
+        )
     for env_name in (
         "HF_HOME",
         "HUGGINGFACE_HUB_CACHE",
         "TRANSFORMERS_CACHE",
         "SENTENCE_TRANSFORMERS_HOME",
+        "HF_HUB_OFFLINE",
+        "TRANSFORMERS_OFFLINE",
     ):
         value = os.getenv(env_name)
         if value:
@@ -115,6 +128,8 @@ def _log_cache_environment() -> None:
 
 
 def _resolve_hf_cache_dir() -> Path | None:
+    if settings.sentence_transformers_cache_dir is not None:
+        return Path(settings.sentence_transformers_cache_dir)
     for env_name in ("HUGGINGFACE_HUB_CACHE", "HF_HOME"):
         value = os.getenv(env_name)
         if value:
@@ -144,10 +159,12 @@ def _build_snapshot_download_kwargs(
     provider_key: str,
     local_files_only: bool,
 ) -> dict[str, object]:
+    cache_dir = settings.sentence_transformers_cache_dir
     if repo_id == BGE_M3_DEFAULT_REPO_ID:
         kwargs = build_bge_m3_snapshot_download_kwargs(
             local_files_only=local_files_only,
             include_multivector_assets=provider_key == "bge_m3_dense_sparse_multivector",
+            cache_dir=cache_dir,
         )
         if not local_files_only:
             kwargs["tqdm_class"] = PrefetchTqdm
@@ -155,13 +172,16 @@ def _build_snapshot_download_kwargs(
             kwargs["tqdm_class"] = None
         return kwargs
 
-    return {
+    kwargs = {
         "repo_id": repo_id,
         "revision": None,
         "local_files_only": local_files_only,
         "max_workers": 1,
         "tqdm_class": None if local_files_only else PrefetchTqdm,
     }
+    if cache_dir is not None:
+        kwargs["cache_dir"] = str(cache_dir)
+    return kwargs
 
 
 def _prefetch_repo(

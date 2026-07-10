@@ -17,6 +17,7 @@ from app.modules.ai_agents import get_agent_orchestrator
 from app.modules.ai_agents.brain.context import build_rag_evidence_items, build_vector_retrieval_grounded_context
 from app.modules.ai_agents.schemas import MemoryProfileContext, OrchestratorChatRequest
 from app.modules.embeddings.embedding_cache import build_text_hash
+from app.modules.embeddings.runtime import resolve_embedding_runtime_diagnostics
 from app.modules.memory_profiles.repository import get_memory_profile_for_user, list_memory_profiles_for_user
 from app.modules.qdrant_indexing.client import build_qdrant_client
 from app.modules.rag_evaluation.brain_eval_e2e_bootstrap import (
@@ -39,6 +40,10 @@ DEMO_FA_CHAT_EVIDENCE_PREVIEW_LENGTH = 220
 DEMO_FA_CHAT_PROFILE_UNAVAILABLE_DETAIL = "Тестовый профиль аватара сейчас недоступен."
 DEMO_FA_CHAT_NOT_INITIALIZED_DETAIL = (
     "Демо-профиль ещё не инициализирован. Пожалуйста, запустите подготовку тестовой памяти."
+)
+DEMO_FA_CHAT_EMBEDDING_UNAVAILABLE_DETAIL = (
+    "Демо временно недоступно: модель эмбеддингов BGE-M3 не инициализирована. "
+    "Запустите подготовку модели и повторите запрос."
 )
 DEMO_FA_CHAT_INTERNAL_ERROR_DETAIL = "Не удалось получить ответ аватара. Попробуйте ещё раз."
 
@@ -148,6 +153,28 @@ def _build_qdrant_demo_source_filter(
     }
 
 
+def _assert_embedding_runtime_ready(*, model_code: str, collection_name: str) -> None:
+    diagnostics = resolve_embedding_runtime_diagnostics(
+        model_code=model_code,
+        collection_name=collection_name,
+    )
+    is_bge_m3_model = diagnostics.model_code.startswith("bge_m3")
+    snapshot_missing = is_bge_m3_model and not diagnostics.bge_m3_snapshot_cached
+    if snapshot_missing or diagnostics.is_mock_query_provider:
+        log_event(
+            logger,
+            40,
+            "fa_demo_chat_embedding_unavailable",
+            model_code=diagnostics.model_code,
+            embedding_provider_setting=diagnostics.embedding_provider_setting,
+            is_mock_query_provider=diagnostics.is_mock_query_provider,
+            bge_m3_snapshot_cached=diagnostics.bge_m3_snapshot_cached,
+            bge_m3_snapshot_path=diagnostics.bge_m3_snapshot_path,
+            huggingface_offline_mode=diagnostics.huggingface_offline_mode,
+        )
+        raise DemoFaChatInitializationError(DEMO_FA_CHAT_EMBEDDING_UNAVAILABLE_DETAIL)
+
+
 def _resolve_demo_runtime(
     db: Session,
     *,
@@ -170,6 +197,11 @@ def _resolve_demo_runtime(
         or active_config.retrieval_mode != recommendation.retrieval_mode
     ):
         raise DemoFaChatInitializationError(DEMO_FA_CHAT_NOT_INITIALIZED_DETAIL)
+
+    _assert_embedding_runtime_ready(
+        model_code=active_config.model_code,
+        collection_name=active_config.collection_name,
+    )
 
     sources = list_rag_sources_for_profile(
         db,

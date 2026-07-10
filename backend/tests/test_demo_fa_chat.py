@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
+import pytest
+
 from app.main import app
 from app.modules.auth.schemas import RegisterRequest
 from app.modules.auth.service import register_user
@@ -13,9 +15,12 @@ from app.modules.rag_evaluation.brain_eval_e2e_bootstrap import (
     FAMILY_AVATAR_RU_E2E_PROFILE_NAME,
 )
 from app.modules.demo_fa_chat.service import (
+    DEMO_FA_CHAT_EMBEDDING_UNAVAILABLE_DETAIL,
     DEMO_FA_CHAT_NOT_INITIALIZED_DETAIL,
     DemoFaChatInitializationError,
+    _assert_embedding_runtime_ready,
 )
+from app.modules.embeddings.runtime import EmbeddingRuntimeDiagnostics
 from app.modules.rag_retrieval.schemas import RagRetrievalResponseRead, RagRetrievalResultRead
 
 
@@ -223,6 +228,96 @@ def test_demo_fa_chat_returns_safe_error_when_demo_runtime_is_not_initialized(cl
 
     assert response.status_code == 503
     assert response.json()["detail"] == DEMO_FA_CHAT_NOT_INITIALIZED_DETAIL
+
+
+def _build_embedding_runtime_diagnostics(
+    *,
+    model_code: str = "bge_m3_dense_sparse",
+    bge_m3_snapshot_cached: bool = True,
+    is_mock_query_provider: bool = False,
+) -> EmbeddingRuntimeDiagnostics:
+    return EmbeddingRuntimeDiagnostics(
+        embedding_provider_setting="sentence_transformers",
+        resolved_indexing_provider_name="bge_m3_hybrid",
+        resolved_query_provider_name="mock" if is_mock_query_provider else "bge_m3_hybrid",
+        is_mock_indexing_provider=False,
+        is_mock_query_provider=is_mock_query_provider,
+        indexing_query_providers_match=not is_mock_query_provider,
+        model_code=model_code,
+        model_display_name="BGE-M3 (dense+sparse)",
+        provider_model_name="BAAI/bge-m3",
+        embedding_dimension=1024,
+        collection_name="eternal_world_rag_chunks__bge_m3_dense_sparse__family_novak_ru_e2e_v3_bge_m3_real_cpu",
+        collection_vector_size=1024,
+        flag_embedding_available=True,
+        bge_m3_snapshot_cached=bge_m3_snapshot_cached,
+        bge_m3_snapshot_path=(
+            "/models/huggingface/hub/models--BAAI--bge-m3/snapshots/5617a9f"
+            if bge_m3_snapshot_cached
+            else None
+        ),
+        huggingface_offline_mode=True,
+    )
+
+
+def test_assert_embedding_runtime_ready_passes_when_snapshot_is_cached(monkeypatch):
+    monkeypatch.setattr(
+        "app.modules.demo_fa_chat.service.resolve_embedding_runtime_diagnostics",
+        lambda *, model_code, collection_name: _build_embedding_runtime_diagnostics(
+            model_code=model_code,
+        ),
+    )
+
+    _assert_embedding_runtime_ready(model_code="bge_m3_dense_sparse", collection_name="col")
+
+
+def test_assert_embedding_runtime_ready_fails_clearly_when_snapshot_is_missing(monkeypatch):
+    monkeypatch.setattr(
+        "app.modules.demo_fa_chat.service.resolve_embedding_runtime_diagnostics",
+        lambda *, model_code, collection_name: _build_embedding_runtime_diagnostics(
+            model_code=model_code,
+            bge_m3_snapshot_cached=False,
+        ),
+    )
+
+    with pytest.raises(DemoFaChatInitializationError) as exc_info:
+        _assert_embedding_runtime_ready(model_code="bge_m3_dense_sparse", collection_name="col")
+
+    assert str(exc_info.value) == DEMO_FA_CHAT_EMBEDDING_UNAVAILABLE_DETAIL
+
+
+def test_assert_embedding_runtime_ready_fails_when_query_provider_is_mock(monkeypatch):
+    monkeypatch.setattr(
+        "app.modules.demo_fa_chat.service.resolve_embedding_runtime_diagnostics",
+        lambda *, model_code, collection_name: _build_embedding_runtime_diagnostics(
+            model_code=model_code,
+            is_mock_query_provider=True,
+        ),
+    )
+
+    with pytest.raises(DemoFaChatInitializationError) as exc_info:
+        _assert_embedding_runtime_ready(model_code="bge_m3_dense_sparse", collection_name="col")
+
+    assert str(exc_info.value) == DEMO_FA_CHAT_EMBEDDING_UNAVAILABLE_DETAIL
+
+
+def test_demo_fa_chat_returns_safe_503_when_embedding_runtime_is_unavailable(client, monkeypatch):
+    _create_demo_profile()
+
+    monkeypatch.setattr(
+        "app.modules.demo_fa_chat.service._resolve_demo_runtime",
+        lambda *args, **kwargs: (_ for _ in ()).throw(
+            DemoFaChatInitializationError(DEMO_FA_CHAT_EMBEDDING_UNAVAILABLE_DETAIL)
+        ),
+    )
+
+    response = client.post(
+        "/api/demo/fa-chat/message",
+        json={"message": "Где ты жила в детстве?"},
+    )
+
+    assert response.status_code == 503
+    assert response.json()["detail"] == DEMO_FA_CHAT_EMBEDDING_UNAVAILABLE_DETAIL
 
 
 def test_demo_fa_chat_internal_errors_return_safe_russian_response(client, monkeypatch):

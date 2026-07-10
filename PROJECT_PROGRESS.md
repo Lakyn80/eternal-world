@@ -6087,6 +6087,151 @@ Next recommended task:
 
 ---
 
+## Task 62S - Fix BGE-M3 cold-start/cache runtime for FA demo (2026-07-10)
+
+Goal:
+
+- harden the FA demo against cold backend/container restarts when the BGE-M3 Hugging Face snapshot is missing or incomplete
+- make the failure mode explicit and safe instead of letting the live demo fall into unclear runtime errors
+- keep retrieval logic, Brain prompting, Redis embedding cache behavior, and Qdrant collection wiring unchanged
+
+Why this task was needed:
+
+- after a clean backend recreate, the FA demo could hit an incomplete BGE-M3 local snapshot state
+- the live runtime then failed before grounded retrieval/answer generation was usable
+- the problem was operational, not semantic:
+  - no retrieval ranking change was needed
+  - no Brain prompt change was needed
+  - no Qdrant collection rename or re-ingest was needed
+
+What was changed:
+
+- persistent Hugging Face / BGE-M3 cache volume added in Docker Compose:
+  - volume name: `eternal_world_bge_m3_cache`
+  - mounted in backend at:
+    - `/models/huggingface`
+- backend runtime now uses:
+  - `SENTENCE_TRANSFORMERS_CACHE_DIR=/models/huggingface`
+  - `SENTENCE_TRANSFORMERS_DEVICE=cpu`
+  - `CUDA_VISIBLE_DEVICES=""`
+  - `NVIDIA_VISIBLE_DEVICES=void`
+- dead compose envs removed:
+  - `EMBEDDING_DEVICE`
+  - `TORCH_DEVICE`
+- BGE-M3 cache diagnostics were tightened:
+  - cache-dir aware error messages
+  - explicit reporting of missing/incomplete local snapshot state
+  - safer loader logs for cache path / offline mode / source
+- FA demo preflight now checks embedding runtime readiness before attempting retrieval/answer generation
+- if the BGE-M3 snapshot is missing/incomplete, the demo endpoint returns a clear Russian `503` instead of a vague `500`
+
+Russian 503 behavior:
+
+- live demo now returns:
+  - `Демо временно недоступно: модель эмбеддингов BGE-M3 не инициализирована. Запустите подготовку модели и повторите запрос.`
+- the endpoint does not silently fall back to mock query embeddings
+- the endpoint does not pretend the avatar simply lacks knowledge when the real problem is missing runtime model state
+
+Scripts confirmed / added to the official flow:
+
+- committed:
+  - `backend/scripts/prefetch_embedding_model.py`
+    - now forwards the configured cache dir explicitly
+    - now logs cache environment more clearly
+  - `backend/scripts/smoke_fa_chat_runtime.py`
+    - official live smoke script for FA demo cold-start/runtime verification
+    - Windows stdout/stderr Unicode handling fixed for JSON output
+  - `backend/scripts/export_demo_fa_memory.py`
+    - committed to resolve the earlier Task 62P progress mismatch
+- not committed:
+  - generated exports under `backend/artifacts/demo_exports/`
+  - generated evaluation run artifacts under `backend/artifacts/brain_rag_eval/runs/`
+
+Tests added / updated:
+
+- `backend/tests/test_demo_fa_chat.py`
+  - safe `503` when embedding runtime is unavailable
+  - failure when query provider resolves to mock
+- `backend/tests/test_bge_m3_model_cache.py`
+  - cache-dir aware failure messages
+  - explicit local-files-only snapshot check
+- `backend/tests/test_prefetch_embedding_model.py`
+  - configured cache-dir forwarding coverage
+- new:
+  - `backend/tests/test_export_demo_fa_memory.py`
+  - `backend/tests/test_smoke_fa_chat_runtime.py`
+
+Tests run:
+
+- targeted Task 62S suite:
+  - `cd backend`
+  - `python -m pytest tests/test_demo_fa_chat.py tests/test_bge_m3_model_cache.py tests/test_prefetch_embedding_model.py tests/test_export_demo_fa_memory.py tests/test_smoke_fa_chat_runtime.py -q`
+  - result: passed
+- broader FA/RAG safety:
+  - `python -m pytest tests/test_ai_agents.py tests/test_rag_evaluation.py tests/test_demo_fa_chat.py -q`
+  - result: passed
+- cache/runtime safety:
+  - `python -m pytest tests/test_embedding_cache.py tests/test_bge_m3_embedding_cache.py tests/test_bge_m3_model_cache.py tests/test_prefetch_embedding_model.py -q`
+  - result: passed
+
+Docker / live smoke:
+
+- `docker compose config`
+  - passed
+- `docker compose up -d --build backend frontend`
+  - passed
+- frontend shell:
+  - `GET http://localhost:8017/fa-chat`
+  - returned `200`
+  - Russian page shell rendered
+- live FA demo after clean backend recreate and before warm cache:
+  - `python scripts/smoke_fa_chat_runtime.py --json`
+  - returned clean `503` with the new Russian BGE-M3 initialization message
+  - this verified the new cold-start failure behavior
+- backend logs confirmed:
+  - no silent mock fallback
+  - no unclear stack trace
+  - no CUDA/NVIDIA runtime error
+  - safe diagnostic event:
+    - `fa_demo_chat_embedding_unavailable`
+    - `bge_m3_snapshot_cached=false`
+    - `bge_m3_snapshot_path=null`
+- explicit warm-up command used:
+  - `docker compose exec -T backend python -u scripts/prefetch_embedding_model.py --provider bge_m3_dense_sparse --retries 1 --retry-delay-seconds 0`
+- warm-up diagnostic result:
+  - the persistent volume already contained the BGE-M3 snapshot metadata tree
+  - the snapshot was still incomplete
+  - prefetch correctly detected and resumed the incomplete blob:
+    - downloaded so far: `767.6MB`
+  - within this session, the large resume download did not complete, so a post-prefetch grounded `200` answer could not be re-verified end-to-end
+
+What this task fixed operationally:
+
+- a cold backend restart now fails clearly and safely when BGE-M3 is not fully available
+- operators have an explicit prefetch path tied to the persistent cache volume
+- runtime diagnostics now point to the real cache/snapshot problem instead of leaving an ambiguous live-demo failure
+
+What this task did not change:
+
+- no Brain prompt change
+- no retrieval ranking change
+- no BGE-M3 embedding semantics change
+- no Redis embedding cache behavior change
+- no Qdrant collection name change
+- no demo memory rebuild/re-ingest as part of the code fix
+
+Remaining limitations:
+
+- the live demo still requires a fully completed BGE-M3 prefetch/warm snapshot before it can return grounded `200` answers after a clean recreate
+- in this environment, the explicit resume download started correctly but did not finish within the verification window
+- frontend page render was verified, but live interactive answer flow remained blocked until the model warm-up completes
+
+Next recommended task:
+
+1. profile onboarding / memory upload pipeline
+
+---
+
 ## Task 62R - Prometheus and Grafana Monitoring Stack (2026-07-09)
 
 Goal:

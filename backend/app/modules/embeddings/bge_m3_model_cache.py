@@ -16,6 +16,9 @@ BGE_M3_PREFETCH_ALLOW_PATTERNS = (
     "sentence_bert_config.json",
     "sparse_linear.pt",
     "model.safetensors",
+    "model.safetensors.index.json",
+    "pytorch_model.bin",
+    "pytorch_model.bin.index.json",
     "1_Pooling/*",
 )
 BGE_M3_MULTIVECTOR_EXTRA_PREFETCH_PATTERNS = ("colbert_linear.pt",)
@@ -119,20 +122,28 @@ def resolve_local_snapshot_path(
     return snapshot_path
 
 
+def describe_cache_dir(cache_dir: str | Path | None) -> str:
+    if cache_dir is not None:
+        return str(cache_dir)
+    return "<default Hugging Face cache: ~/.cache/huggingface/hub (not backed by a stable volume)>"
+
+
 def assert_local_snapshot_available(
     repo_id: str,
     *,
     cache_dir: str | Path | None = None,
 ) -> str:
     snapshot_path = resolve_local_snapshot_path(repo_id, cache_dir=cache_dir)
+    resolved_cache_dir = describe_cache_dir(cache_dir)
     if snapshot_path is None:
         raise RuntimeError(
-            f"BGE-M3 Hugging Face snapshot is not fully cached for `{repo_id}`. "
+            f"BGE-M3 Hugging Face snapshot is not fully cached for `{repo_id}` "
+            f"under cache_dir={resolved_cache_dir}. "
             f"Prefetch first: {PREFETCH_CLI_HINT}"
         )
     if not is_snapshot_weights_complete(snapshot_path):
         raise RuntimeError(
-            f"BGE-M3 Hugging Face snapshot is incomplete for `{repo_id}` "
+            f"BGE-M3 Hugging Face snapshot is incomplete for `{repo_id}` at path={snapshot_path} "
             f"(missing model weights). Re-run prefetch: {PREFETCH_CLI_HINT}"
         )
     return snapshot_path
@@ -148,9 +159,11 @@ def resolve_bge_m3_model_load_path(
     if snapshot_path is not None:
         return snapshot_path, True
 
+    resolved_cache_dir = describe_cache_dir(cache_dir)
     if is_huggingface_offline_mode():
         raise RuntimeError(
-            f"BGE-M3 snapshot cache is missing for `{repo_id}` while offline mode is enabled. "
+            f"BGE-M3 snapshot cache is missing for `{repo_id}` under cache_dir={resolved_cache_dir} "
+            "while offline mode is enabled. "
             f"Prefetch first: {PREFETCH_CLI_HINT}"
         )
 
@@ -158,7 +171,7 @@ def resolve_bge_m3_model_load_path(
         return repo_id, False
 
     raise RuntimeError(
-        f"BGE-M3 snapshot cache is missing for `{repo_id}`. "
+        f"BGE-M3 snapshot cache is missing for `{repo_id}` under cache_dir={resolved_cache_dir}. "
         f"Prefetch first: {PREFETCH_CLI_HINT} "
         "Remote download during embedding is disabled to avoid blocking E2E runs."
     )

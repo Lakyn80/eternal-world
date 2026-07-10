@@ -49,6 +49,7 @@ services:
       AI_BRAIN_TIMEOUT_SECONDS: 30
       EMBEDDING_PROVIDER: sentence_transformers
       SENTENCE_TRANSFORMERS_DEVICE: cpu
+      SENTENCE_TRANSFORMERS_CACHE_DIR: /models/huggingface
       CUDA_VISIBLE_DEVICES: ""
       NVIDIA_VISIBLE_DEVICES: void
       MEDIA_STORAGE_PROVIDER: local
@@ -72,6 +73,7 @@ services:
     volumes:
       - ./backend:/app
       - ./packages/rag-embedding-benchmark:/packages/rag-embedding-benchmark
+      - eternal_world_bge_m3_cache:/models/huggingface
 
   celery_worker:
     build:
@@ -159,3 +161,4 @@ volumes:
   eternal_world_qdrant_data:
   eternal_world_prometheus_data:
   eternal_world_grafana_data:
+  eternal_world_bge_m3_cache:

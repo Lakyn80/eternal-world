@@ -14,6 +14,8 @@ from app.core.metrics import observe_embedding_cache_summary
 from app.modules.embedding_models.service import get_embedding_model
 from app.modules.embeddings.bge_m3_model_cache import (
     BGE_M3_DEFAULT_REPO_ID,
+    describe_cache_dir,
+    is_huggingface_offline_mode,
     resolve_bge_m3_model_load_path,
     resolve_local_snapshot_path,
 )
@@ -509,6 +511,8 @@ class BgeM3HybridEmbeddingProvider:
             provider_code=provider_code,
             model_name=model_name,
         )
+        resolved_cache_dir = describe_cache_dir(self.cache_dir)
+        offline_mode = is_huggingface_offline_mode()
         try:
             load_path, loaded_from_local_cache = resolve_bge_m3_model_load_path(
                 model_name,
@@ -516,13 +520,22 @@ class BgeM3HybridEmbeddingProvider:
                 allow_remote_download=False,
             )
         except RuntimeError as exc:
+            _emit_bge_m3_hybrid_log(
+                "load failed "
+                f"provider_code={provider_code} model_name={model_name} "
+                f"cache_dir={resolved_cache_dir} source=local_snapshot device={self.device} "
+                f"snapshot_exists=false offline_hf_hub_env={offline_mode} "
+                f"error={exc.__class__.__name__}: {exc}"
+            )
             raise BgeM3HybridProviderError(str(exc)) from exc
 
         load_source = "local_snapshot" if loaded_from_local_cache else "remote_repo_id"
         _emit_bge_m3_hybrid_log(
             "load start "
             f"provider_code={provider_code} model_name={model_name} "
-            f"load_path={load_path} source={load_source} device={self.device}"
+            f"load_path={load_path} source={load_source} device={self.device} "
+            f"cache_dir={resolved_cache_dir} offline_hf_hub_env={offline_mode} "
+            f"snapshot_exists=true"
         )
         try:
             model = flag_model_class(load_path, **model_init_kwargs)
@@ -542,7 +555,8 @@ class BgeM3HybridEmbeddingProvider:
         _emit_bge_m3_hybrid_log(
             "load success "
             f"provider_code={provider_code} model_name={model_name} "
-            f"load_path={load_path} source={load_source} device={self.device}"
+            f"load_path={load_path} source={load_source} device={self.device} "
+            f"cache_dir={resolved_cache_dir} offline_hf_hub_env={offline_mode}"
         )
         return model
 

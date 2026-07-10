@@ -104,6 +104,7 @@ def send_demo_fa_chat_message(
             trace_id=trace_id,
             profile_id=payload.profile_id,
             error_type=exc.__class__.__name__,
+            error_summary=str(exc)[:200],
         )
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
