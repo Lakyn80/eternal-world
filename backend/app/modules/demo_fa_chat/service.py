@@ -16,6 +16,11 @@ from app.modules.active_retrieval_config.service import (
 from app.modules.ai_agents import get_agent_orchestrator
 from app.modules.ai_agents.brain.context import build_rag_evidence_items, build_vector_retrieval_grounded_context
 from app.modules.ai_agents.schemas import MemoryProfileContext, OrchestratorChatRequest
+from app.modules.avatar_persona import (
+    build_memory_candidate,
+    derive_avatar_response_directives,
+    load_demo_avatar_persona,
+)
 from app.modules.embeddings.embedding_cache import build_text_hash
 from app.modules.embeddings.runtime import resolve_embedding_runtime_diagnostics
 from app.modules.memory_profiles.repository import get_memory_profile_for_user, list_memory_profiles_for_user
@@ -108,6 +113,10 @@ def _build_profile_context(profile) -> MemoryProfileContext:
         catchphrases=profile.catchphrases,
         is_public=profile.is_public,
     )
+
+
+def _resolve_demo_avatar_persona():
+    return load_demo_avatar_persona()
 
 
 def _resolve_demo_profile(
@@ -283,6 +292,7 @@ def run_demo_fa_chat_message(
     normalized_message = _normalize_message_text(message)
     message_hash_prefix = _build_message_hash_prefix(normalized_message)
     resolved_profile = _resolve_demo_profile(db, profile_id=profile_id)
+    avatar_persona = _resolve_demo_avatar_persona()
     resolved_runtime = _resolve_demo_runtime(
         db,
         resolved_profile=resolved_profile,
@@ -351,14 +361,25 @@ def run_demo_fa_chat_message(
     orchestrator_response = orchestrator.generate_chat_response(
         OrchestratorChatRequest(
             profile=_build_profile_context(resolved_profile.profile),
+            avatar_persona=avatar_persona,
             user_message=normalized_message,
             recent_history=[],
             grounded_context=grounded_context,
         )
     )
     metadata = dict(orchestrator_response.metadata)
+    persona_applied = bool(metadata.get("persona_applied", True))
     lack_of_evidence = bool(metadata.get("output_guard_lack_of_evidence")) or (
         str(metadata.get("grounding_status") or "").strip().lower() == "no_evidence"
+    )
+    memory_candidate = build_memory_candidate(
+        user_message=normalized_message,
+        lack_of_evidence=lack_of_evidence,
+    )
+    response_directives = derive_avatar_response_directives(
+        persona=avatar_persona,
+        user_message=normalized_message,
+        lack_of_evidence=lack_of_evidence,
     )
 
     log_event(
@@ -368,14 +389,18 @@ def run_demo_fa_chat_message(
         trace_id=trace_id,
         profile_id=resolved_profile.profile.id,
         retrieval_used=bool(retrieval_response.results),
+        persona_applied=persona_applied,
         guard_applied=bool(metadata.get("output_guard_applied")),
         guard_reason=metadata.get("output_guard_reason"),
         lack_of_evidence=lack_of_evidence,
+        memory_candidate_created=memory_candidate is not None,
+        emotion_primary=response_directives.emotion.primary,
     )
     return DemoFaChatMessageResponse(
         answer=orchestrator_response.text,
         lack_of_evidence=lack_of_evidence,
         retrieval_used=bool(retrieval_response.results),
+        persona_applied=persona_applied,
         guard_applied=bool(metadata.get("output_guard_applied")),
         guard_reason=(
             str(metadata.get("output_guard_reason"))
@@ -383,5 +408,9 @@ def run_demo_fa_chat_message(
             else None
         ),
         trace_id=trace_id,
+        memory_candidate=memory_candidate,
+        emotion=response_directives.emotion,
+        face_directives=response_directives.face_directives,
+        voice_directives=response_directives.voice_directives,
         evidence=_build_evidence_items(retrieval_response.results, debug=debug),
     )

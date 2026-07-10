@@ -152,10 +152,15 @@ def test_demo_fa_chat_valid_message_returns_answer_with_default_profile_and_trac
     body = response.json()
     assert body["answer"] == "В детстве я жила с родителями у Попице. [rag:27618]"
     assert body["trace_id"] == "demo-trace-1"
+    assert body["persona_applied"] is True
     assert body["guard_applied"] is False
     assert body["guard_reason"] is None
     assert body["retrieval_used"] is True
     assert body["lack_of_evidence"] is False
+    assert body["memory_candidate"] is None
+    assert body["emotion"]["primary"] == "warm_nostalgic"
+    assert body["face_directives"]["expression"] == "gentle_smile"
+    assert body["voice_directives"]["pace"] == "slow"
     assert body["evidence"] == []
     assert profile.id > 0
 
@@ -204,11 +209,71 @@ def test_demo_fa_chat_debug_true_includes_evidence_preview(client, monkeypatch):
 
     assert response.status_code == 200
     body = response.json()
+    assert body["persona_applied"] is True
     assert body["guard_applied"] is True
     assert body["guard_reason"] == "demo_reason"
     assert len(body["evidence"]) == 1
     assert body["evidence"][0]["chunk_id"] == "27618"
     assert "Попице" in body["evidence"][0]["text_preview"]
+
+
+def test_demo_fa_chat_creates_unverified_memory_candidate_for_new_personal_claim(client, monkeypatch):
+    _user, profile = _create_demo_profile()
+
+    monkeypatch.setattr(
+        "app.modules.demo_fa_chat.service._resolve_demo_runtime",
+        lambda db, *, resolved_profile: SimpleNamespace(
+            collection_name="eternal_world_rag_chunks__bge_m3_dense_sparse__family_novak_ru_e2e_v3_bge_m3_real_cpu",
+            retrieval_mode="bge_m3_dense_sparse",
+            top_k=5,
+            source_id=7,
+            point_count=20,
+        ),
+    )
+    monkeypatch.setattr(
+        "app.modules.demo_fa_chat.service.retrieve_profile_rag",
+        lambda db, *, current_user, profile_id, payload: RagRetrievalResponseRead(
+            profile_id=profile_id,
+            query=payload.query,
+            model_code="bge_m3_dense_sparse",
+            results=[],
+        ),
+    )
+    monkeypatch.setattr(
+        "app.modules.demo_fa_chat.service.get_agent_orchestrator",
+        lambda: SimpleNamespace(
+            generate_chat_response=lambda request: SimpleNamespace(
+                text=(
+                    "Я не помню этого по тем воспоминаниям, которые у меня сейчас есть. "
+                    "Если хочешь, расскажи мне больше, и мы сможем сохранить это как новое воспоминание."
+                ),
+                provider_name="mock-brain",
+                metadata={
+                    "grounding_status": "no_evidence",
+                    "output_guard_applied": False,
+                    "output_guard_reason": None,
+                    "output_guard_lack_of_evidence": True,
+                    "persona_applied": True,
+                },
+            )
+        ),
+    )
+
+    response = client.post(
+        "/api/demo/fa-chat/message",
+        json={
+            "profile_id": profile.id,
+            "message": "Ты помнишь, как пела мне песню перед сном?",
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["lack_of_evidence"] is True
+    assert body["persona_applied"] is True
+    assert body["memory_candidate"]["status"] == "needs_review"
+    assert "песню перед сном" in body["memory_candidate"]["proposed_memory_text"]
+    assert body["emotion"]["primary"] == "warm_reflective"
 
 
 def test_demo_fa_chat_returns_safe_error_when_demo_runtime_is_not_initialized(client, monkeypatch):

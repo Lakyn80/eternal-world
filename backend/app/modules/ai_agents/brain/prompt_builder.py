@@ -5,6 +5,7 @@ from datetime import date
 
 from app.modules.ai_agents.brain.context import BrainMemoryEvidence, BrainRagEvidence
 from app.modules.ai_agents.schemas import OrchestratorChatRequest
+from app.modules.avatar_persona.prompt_composer import compose_avatar_persona_prompt
 
 PROMPT_SECTION_SEPARATOR = "---"
 SYSTEM_PROMPT_HEADER = "SYSTEM — Eternal World Brain Agent (Production v2)"
@@ -39,7 +40,7 @@ def _format_profile_date(value: date | None) -> str:
     return value.isoformat() if value is not None else "unknown"
 
 
-def _build_system_prompt(*, profile) -> str:
+def _build_system_prompt(*, profile, avatar_persona=None) -> str:
     profile_name = profile.name
     personality = _format_optional_profile_field(
         profile.personality,
@@ -47,8 +48,7 @@ def _build_system_prompt(*, profile) -> str:
     )
     catchphrases = _format_optional_profile_field(profile.catchphrases, default="none")
 
-    return "\n".join(
-        [
+    sections = [
             SYSTEM_PROMPT_HEADER,
             "",
             "You are the grounded conversational Brain for a memorial memory profile in Eternal World.",
@@ -148,7 +148,14 @@ def _build_system_prompt(*, profile) -> str:
             "- No JSON. No roleplay outside the memorial context.",
             "- End factual answers with the key fact; citations may appear inline where the fact is stated.",
         ]
-    )
+    if avatar_persona is not None:
+        sections.extend(
+            [
+                "",
+                compose_avatar_persona_prompt(avatar_persona),
+            ]
+        )
+    return "\n".join(sections)
 
 
 def _build_memory_evidence_block(
@@ -273,7 +280,10 @@ def build_brain_prompt_messages(request: OrchestratorChatRequest) -> BrainPrompt
     else:
         formatted_history = "No recent chat history."
 
-    system_prompt = _build_system_prompt(profile=profile)
+    system_prompt = _build_system_prompt(
+        profile=profile,
+        avatar_persona=request.avatar_persona,
+    )
     user_prompt = _build_user_prompt(
         memory_evidence_block=_build_memory_evidence_block(memory_evidence_items),
         rag_evidence_block=_build_rag_evidence_block(rag_evidence_items),

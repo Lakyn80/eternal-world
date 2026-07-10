@@ -6087,6 +6087,162 @@ Next recommended task:
 
 ---
 
+## Task 63 - Avatar Persona + Character Evaluation Harness (2026-07-10)
+
+Goal:
+
+- make the current FA demo avatar behave as a stable personality, not only as a grounded RAG chat
+- keep `avatar_persona` as the source of truth for character
+- keep factual retrieval, embeddings, Redis embedding cache, and Qdrant behavior unchanged
+- update the FE demo chat so it visually matches the softer avatar/glass-chat direction from the current reference image
+
+In scope:
+
+- new backend persona module:
+  - `backend/app/modules/avatar_persona/__init__.py`
+  - `backend/app/modules/avatar_persona/schemas.py`
+  - `backend/app/modules/avatar_persona/loader.py`
+  - `backend/app/modules/avatar_persona/prompt_composer.py`
+  - `backend/app/modules/avatar_persona/memory_candidates.py`
+  - `backend/app/modules/avatar_persona/evaluator.py`
+- FA demo backend integration:
+  - `backend/app/modules/ai_agents/schemas.py`
+  - `backend/app/modules/ai_agents/brain/prompt_builder.py`
+  - `backend/app/modules/ai_agents/brain/service.py`
+  - `backend/app/modules/demo_fa_chat/schemas.py`
+  - `backend/app/modules/demo_fa_chat/service.py`
+- FE demo redesign:
+  - `frontend/components/fa-chat-demo-page.tsx`
+  - `frontend/components/fa-chat-demo-page.module.css`
+- tests:
+  - `backend/tests/test_avatar_persona.py`
+  - `backend/tests/test_avatar_persona_prompt_composer.py`
+  - `backend/tests/test_avatar_memory_candidates.py`
+  - `backend/tests/test_demo_fa_chat.py`
+  - `frontend/tests/fa-chat-demo-page.test.tsx`
+
+Out of scope and intentionally untouched:
+
+- onboarding / upload pipeline
+- long-term review storage for conversation memory candidates
+- Redis embedding cache semantics
+- BGE-M3 embedding logic
+- Qdrant collection names
+- retrieval ranking / `top_k`
+- voice rendering implementation
+- face rendering implementation
+- Director agent implementation
+
+What changed:
+
+- added a dedicated `avatar_persona` backend module as the source of truth for avatar character
+- seeded a static RU demo persona for Eva Novakova with:
+  - core traits
+  - life background
+  - values
+  - speaking style
+  - emotional style
+  - explicit boundaries
+  - human lack-of-evidence wording template
+- added a persona prompt composer so the Brain prompt now receives:
+  - factual evidence instructions
+  - persona identity/tone instructions
+  - explicit forbidden style constraints
+- extended FA demo response metadata with:
+  - `persona_applied`
+  - `memory_candidate`
+  - `emotion`
+  - `face_directives`
+  - `voice_directives`
+- implemented safe in-memory conversation memory candidate creation:
+  - only when the turn is lack-of-evidence
+  - only for user-introduced possible personal memories
+  - no write to Qdrant
+  - no permanent write to Postgres
+  - status remains `needs_review`
+  - confidence remains `unverified`
+- kept character logic out of Face/Voice runtime code:
+  - backend only emits directives metadata for later agents
+- redesigned the FE demo chat into a softer avatar scene:
+  - luminous avatar halo
+  - frosted glass chat panel
+  - mobile-first scenic layout
+  - support for displaying memory candidate and persona/emotion metadata
+  - backend error detail is now shown directly when safe Russian detail exists
+
+Behavior preserved:
+
+- no retrieval logic change
+- no embedding logic change
+- no Redis embedding cache behavior change
+- no Qdrant modification
+- no model/provider fallback introduced
+- no automatic learning as verified memory
+
+Tests added / updated:
+
+- backend persona tests:
+  - `test_avatar_persona.py`
+  - `test_avatar_persona_prompt_composer.py`
+  - `test_avatar_memory_candidates.py`
+- FA demo regression:
+  - `test_demo_fa_chat.py`
+- FE demo regression:
+  - `frontend/tests/fa-chat-demo-page.test.tsx`
+
+Tests run:
+
+- targeted persona/demo backend suite:
+  - `cd backend`
+  - `python -m pytest tests/test_avatar_persona.py tests/test_avatar_persona_prompt_composer.py tests/test_avatar_memory_candidates.py tests/test_demo_fa_chat.py -q`
+  - result: passed
+- broader Brain/RAG regression:
+  - `python -m pytest tests/test_ai_agents.py tests/test_rag_evaluation.py tests/test_demo_fa_chat.py -q`
+  - result: passed
+- frontend tests:
+  - `cd frontend`
+  - `npm test`
+  - result: passed
+- frontend production build:
+  - `npm run build`
+  - result: passed
+
+Docker / smoke verification:
+
+- `docker compose ps`
+  - backend / frontend / db / redis / qdrant / prometheus / grafana all up
+- FE route smoke:
+  - `GET http://localhost:8017/fa-chat`
+  - returned `200`
+  - new FE page rendered successfully
+- direct demo API smoke:
+  - `POST /api/demo/fa-chat/message`
+  - questions used:
+    - `Где ты жила в детстве?`
+    - `Бабушка, мне сегодня тяжело.`
+    - `Ты помнишь, как пела мне песню перед сном?`
+  - result:
+    - all three returned the known safe `503`
+    - no stack trace leaked to the client
+    - Russian model-initialization message remained correct
+- backend logs:
+  - no new unsafe logging introduced
+  - no raw user text added to metrics/logs
+  - reload noise present because local dev bind mounts reloaded the backend after file edits
+
+Known limitations:
+
+- live grounded persona behavior is still blocked until the BGE-M3 snapshot/cache warm-up completes
+- because of that runtime dependency, the fully live expected persona answers could not be re-verified end-to-end in Docker during this task
+- memory candidates are intentionally response-only / in-memory for now and are not yet persisted for review
+- face/voice directives are metadata only in this task; no rendering agent consumes them yet
+
+Next recommended task:
+
+1. Task 64 - Conversation Memory Candidate Review
+
+---
+
 ## Task 62S - Fix BGE-M3 cold-start/cache runtime for FA demo (2026-07-10)
 
 Goal:

@@ -26,6 +26,7 @@ class BrainAgentService:
         prompt_messages = build_brain_prompt_messages(request)
         provider_request = BrainAgentRequest(
             profile=request.profile,
+            avatar_persona=request.avatar_persona,
             user_message=request.user_message,
             recent_history=request.recent_history,
             grounded_context=request.grounded_context,
@@ -58,6 +59,12 @@ class BrainAgentService:
             provider_name=provider_response.provider_name,
             metadata={
                 **provider_response.metadata,
+                "persona_applied": request.avatar_persona is not None,
+                "avatar_persona_id": (
+                    request.avatar_persona.avatar_id
+                    if request.avatar_persona is not None
+                    else None
+                ),
                 "output_guard_applied": guard_result.guard_applied,
                 "output_guard_reason": guard_result.reason,
                 "output_guard_detected_unsupported_terms": list(guard_result.detected_unsupported_terms),

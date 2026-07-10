@@ -46,7 +46,7 @@ describe("fa chat demo page", () => {
 
     expect(view.container.textContent).toContain("Тестовый чат с цифровым аватаром");
     expect(view.container.querySelector("textarea")?.getAttribute("placeholder")).toBe(
-      "Напишите вопрос аватару..."
+      "Напишите Еве вопрос или тёплое сообщение..."
     );
     expect(view.container.textContent).toContain("Отправить");
 
@@ -80,7 +80,7 @@ describe("fa chat demo page", () => {
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(String(fetchMock.mock.calls[0]?.[0])).toContain("/api/demo/fa-chat/message");
-    expect(view.container.textContent).toContain("Аватар думает...");
+    expect(view.container.textContent).toContain("Ева подбирает ответ...");
 
     await act(async () => {
       resolveFetch?.({
@@ -89,9 +89,25 @@ describe("fa chat demo page", () => {
           answer: "В детстве я жила с родителями в домике у Попице. [rag:27618]",
           lack_of_evidence: false,
           retrieval_used: true,
+          persona_applied: true,
           guard_applied: false,
           guard_reason: null,
           trace_id: "demo-trace-frontend",
+          memory_candidate: null,
+          emotion: {
+            primary: "warm_nostalgic",
+            intensity: 0.61,
+          },
+          face_directives: {
+            expression: "gentle_smile",
+            gaze: "soft",
+            head_motion: "small_nod",
+          },
+          voice_directives: {
+            tone: "warm",
+            pace: "slow",
+            volume: "normal",
+          },
           evidence: [],
         }),
       } as Response);
@@ -100,22 +116,28 @@ describe("fa chat demo page", () => {
 
     expect(view.container.textContent).toContain("В детстве я жила с родителями в домике у Попице. [rag:27618]");
     expect(view.container.textContent).toContain("trace_id: demo-trace-frontend");
+    expect(view.container.textContent).toContain("persona: on");
 
     view.unmount();
   });
 
-  it("shows a Russian error message when backend request fails", async () => {
+  it("shows backend Russian detail when backend request fails", async () => {
     vi.stubGlobal(
       "fetch",
       vi.fn(async () => {
-        throw new Error("network");
+        return {
+          ok: false,
+          json: async () => ({
+            detail: "Демо временно недоступно: модель эмбеддингов BGE-M3 не инициализирована.",
+          }),
+        } as Response;
       })
     );
 
     const view = renderComponent();
     const form = view.container.querySelector("form");
     const exampleButton = Array.from(view.container.querySelectorAll("button")).find(
-      (button) => button.textContent === "Что известно о доме в Ржечковицах?"
+      (button) => button.textContent === "Ты помнишь, как пела мне песню перед сном?"
     );
     if (!form || !exampleButton) {
       throw new Error("Required form controls are missing");
@@ -129,7 +151,9 @@ describe("fa chat demo page", () => {
       form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
     });
 
-    expect(view.container.textContent).toContain("Не удалось получить ответ. Попробуйте ещё раз.");
+    expect(view.container.textContent).toContain(
+      "Демо временно недоступно: модель эмбеддингов BGE-M3 не инициализирована."
+    );
 
     view.unmount();
   });
