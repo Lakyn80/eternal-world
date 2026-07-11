@@ -343,6 +343,72 @@ def test_dry_run_summary_does_not_mutate_or_embed(client):
         db.close()
 
 
+def test_cli_invalid_pending_candidate_is_skipped_not_eligible(client):
+    db, _user, _profile, _candidate, promotion = _create_pending_promotion(approve=False)
+    try:
+        summary = run_indexing(
+            db,
+            promotion_id=promotion.id,
+            avatar_id=None,
+            profile_id=None,
+            limit=10,
+            dry_run=True,
+            writer=FakeWriter(),
+            encoder=FakeEncoder(),
+            validate_runtime=False,
+        )
+        assert summary["eligible"] == 0
+        assert summary["failed"] == 0
+        assert summary["skipped"] == 1
+    finally:
+        db.close()
+
+
+def test_cli_batch_limit_is_applied_to_pending_promotions_only(client):
+    db, user, profile, _candidate, terminal_promotion = _create_pending_promotion()
+    try:
+        terminal_promotion.promotion_status = "indexed"
+        terminal_promotion.indexed_at = datetime.now(timezone.utc)
+        candidate = create_candidate(
+            db,
+            payload=MemoryCandidateCreate(
+                owner_user_id=user.id,
+                avatar_id="eva_novakova_demo",
+                profile_id=profile.id,
+                trace_id="index-trace-second",
+                user_message_excerpt="Вторая семейная история.",
+                proposed_memory_text="Пользователь рассказал вторую семейную историю.",
+                reason="Новый семейный факт.",
+                language="ru",
+            ),
+        )
+        pending_promotion = approve_candidate(
+            db,
+            owner_user_id=user.id,
+            candidate_id=candidate.id,
+            payload=MemoryCandidateReviewUpdate(reviewed_by=user.id),
+        ).promotion
+
+        summary = run_indexing(
+            db,
+            promotion_id=None,
+            avatar_id=None,
+            profile_id=None,
+            limit=1,
+            dry_run=False,
+            writer=FakeWriter(),
+            encoder=FakeEncoder(),
+            validate_runtime=False,
+        )
+        assert summary["eligible"] == 1
+        assert summary["indexed"] == 1
+        assert summary["already_indexed"] == 0
+        db.refresh(pending_promotion)
+        assert pending_promotion.promotion_status == "indexed"
+    finally:
+        db.close()
+
+
 def test_script_execute_and_failure_summaries(client):
     db, _user, _profile, _candidate, promotion = _create_pending_promotion()
     try:

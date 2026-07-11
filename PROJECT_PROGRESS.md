@@ -7123,7 +7123,9 @@ Idempotency and failure safety:
 - exact point lookup happens before upsert
 - matching payload returns `already_indexed` without another write
 - conflicting immutable payload fails safely and is never silently overwritten
-- supporting SQL evidence is persisted while the promotion is still non-searchable, then Qdrant is written, then promotion/vector-index status is committed as `indexed`
+- indexing takes a PostgreSQL row lock so concurrent index/index and index/cancel actions serialize safely
+- supporting SQL evidence is flushed but remains uncommitted and therefore cannot hydrate retrieval until Qdrant succeeds and the promotion/vector-index transaction commits as `indexed`
+- retrieval hydration independently requires `conversation_candidate` evidence to have a linked `indexed` promotion
 - a newly written point is deleted as compensation if the final database commit fails
 - Qdrant write/runtime failures mark the promotion `failed`, set `failed_at`, retain a safe generic error, and never expose raw memory text
 
@@ -7165,6 +7167,7 @@ Metrics and Grafana:
   - `memory_indexing_failed_total`
   - `memory_indexing_duration_seconds{result=...}`
   - `memory_promotion_index_status_total{status=...}`
+  - `memory_promotions_current{status=...}` populated from durable Postgres state on scrape
 - no promotion, candidate, trace, avatar, profile, or text metric labels
 - Grafana dashboard version advanced to 3 with panels for:
   - indexed promotions
@@ -7172,6 +7175,7 @@ Metrics and Grafana:
   - p95 indexing duration
   - indexing success/failure rate
 - existing pending-promotions panel remains in place
+- current pending/indexed/failed stat panels use the durable-state gauge rather than process-lifetime event arithmetic
 - NALUS monitoring wiring was not changed
 
 Tests added / updated:
@@ -7189,10 +7193,10 @@ Tests run:
 
 - focused Task 64.2 suite:
   - `python -m pytest tests/test_avatar_memory_promotions.py tests/test_conversation_memory_candidates.py tests/test_demo_fa_chat.py tests/test_models.py tests/test_metrics.py tests/test_avatar_memory_indexing.py -q`
-  - result: `49 passed`
-- post-smoke focused rerun after debug provenance update:
-  - `python -m pytest tests/test_avatar_memory_indexing.py tests/test_demo_fa_chat.py tests/test_metrics.py tests/test_models.py -q`
-  - result: `34 passed`
+  - result after final safety review: `52 passed`
+- focused concurrency/transaction/privacy safety rerun:
+  - `python -m pytest tests/test_avatar_memory_indexing.py tests/test_avatar_memory_promotions.py tests/test_demo_fa_chat.py tests/test_metrics.py tests/test_models.py -q`
+  - result: `42 passed`
 - required AI/RAG/FA regression:
   - `python -m pytest tests/test_ai_agents.py tests/test_rag_evaluation.py tests/test_demo_fa_chat.py -q`
   - result: `78 passed`
@@ -7237,6 +7241,7 @@ Docker smoke:
 - logs:
   - safe indexing completion fields present
   - no full approved memory text in indexing logs
+  - retrieval logs use text-hash prefixes instead of private text previews
   - no API key, CUDA, NVIDIA, or model-download error text
   - BGE-M3 loaded from the existing local snapshot
 
