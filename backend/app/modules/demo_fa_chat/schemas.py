@@ -2,8 +2,13 @@ from __future__ import annotations
 
 from pydantic import BaseModel
 
+from app.modules.avatar_memory_promotions.schemas import (
+    AvatarMemoryPromotionRead,
+    AvatarMemoryPromotionStatus,
+)
 from app.modules.conversation_memory_candidates.schemas import (
     MemoryCandidateConfidence,
+    MemoryCandidateRead,
     MemoryCandidateSource,
     MemoryCandidateStatus,
 )
@@ -57,3 +62,15 @@ class DemoFaChatMessageResponse(BaseModel):
 class DemoFaChatErrorResponse(BaseModel):
     detail: str
     trace_id: str | None = None
+
+
+class DemoFaChatMemoryCandidateReviewResponse(MemoryCandidateRead):
+    promotion_created: bool
+    promotion_id: int | None = None
+    promotion_status: AvatarMemoryPromotionStatus | None = None
+    searchable_as_fact: bool | None = None
+
+
+class DemoFaChatMemoryPromotionListResponse(BaseModel):
+    items: list[AvatarMemoryPromotionRead]
+    total: int

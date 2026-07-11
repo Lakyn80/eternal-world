@@ -150,11 +150,13 @@ def test_approve_candidate_updates_review_fields(client):
             payload=MemoryCandidateReviewUpdate(review_note="Подтверждено семьей", reviewed_by=user.id),
         )
 
-        assert approved.status == "approved"
-        assert approved.review_note == "Подтверждено семьей"
-        assert approved.reviewed_by == user.id
-        assert approved.reviewed_at is not None
-        assert approved.rejection_reason is None
+        assert approved.candidate.status == "approved"
+        assert approved.candidate.review_note == "Подтверждено семьей"
+        assert approved.candidate.reviewed_by == user.id
+        assert approved.candidate.reviewed_at is not None
+        assert approved.candidate.rejection_reason is None
+        assert approved.promotion_created is True
+        assert approved.promotion.promotion_status == "pending_index"
     finally:
         db.close()
 

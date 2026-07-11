@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
 from datetime import datetime, timezone
 
 from sqlalchemy.orm import Session
 
 from app.db.models import ConversationMemoryCandidate
+from app.modules.avatar_memory_promotions import service as avatar_memory_promotions_service
 from app.modules.conversation_memory_candidates import repository
 from app.modules.conversation_memory_candidates.schemas import (
     MemoryCandidateCreate,
@@ -26,6 +28,13 @@ class ConversationMemoryCandidateProfileNotFoundError(Exception):
 
 class ConversationMemoryCandidateInvalidTransitionError(Exception):
     pass
+
+
+@dataclass(frozen=True)
+class CandidateApprovalResult:
+    candidate: ConversationMemoryCandidate
+    promotion: object
+    promotion_created: bool
 
 
 def _validate_owned_profile(
@@ -158,7 +167,7 @@ def approve_candidate(
     owner_user_id: int,
     candidate_id: int,
     payload: MemoryCandidateReviewUpdate | None = None,
-) -> ConversationMemoryCandidate:
+) -> CandidateApprovalResult:
     candidate = get_candidate(
         db,
         owner_user_id=owner_user_id,
@@ -169,9 +178,18 @@ def approve_candidate(
         next_status=MemoryCandidateStatus.APPROVED,
         payload=payload,
     )
+    promotion_outcome = avatar_memory_promotions_service.create_or_get_promotion_for_candidate(
+        db,
+        candidate=candidate,
+    )
     db.commit()
     db.refresh(candidate)
-    return candidate
+    db.refresh(promotion_outcome.promotion)
+    return CandidateApprovalResult(
+        candidate=candidate,
+        promotion=promotion_outcome.promotion,
+        promotion_created=promotion_outcome.created,
+    )
 
 
 def reject_candidate(

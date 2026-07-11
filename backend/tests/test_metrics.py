@@ -99,6 +99,8 @@ def test_metrics_endpoint_exists(client):
     assert "rag_retrieval_duration_seconds" in body
     assert "brain_answer_duration_seconds" in body
     assert "embedding_cache_hits_total" in body
+    assert "memory_promotion_created_total" in body
+    assert "memory_promotion_status_total" in body
 
 
 def test_fa_chat_metrics_increment_for_successful_request(client, monkeypatch):
@@ -298,3 +300,101 @@ def test_fa_chat_guard_metric_increments(client, monkeypatch):
     )
 
     assert after_guard == before_guard + 1
+
+
+def test_memory_review_and_promotion_metrics_increment(client, monkeypatch):
+    _user, profile = _create_demo_profile()
+
+    monkeypatch.setattr(
+        "app.modules.demo_fa_chat.service._resolve_demo_runtime",
+        lambda db, *, resolved_profile: SimpleNamespace(
+            collection_name=DEMO_COLLECTION_NAME,
+            retrieval_mode="bge_m3_dense_sparse",
+            top_k=5,
+            source_id=7,
+            point_count=20,
+        ),
+    )
+    monkeypatch.setattr(
+        "app.modules.demo_fa_chat.service.retrieve_profile_rag",
+        lambda db, *, current_user, profile_id, payload: RagRetrievalResponseRead(
+            profile_id=profile_id,
+            query=payload.query,
+            model_code="bge_m3_dense_sparse",
+            results=[],
+        ),
+    )
+    monkeypatch.setattr(
+        "app.modules.demo_fa_chat.service.get_agent_orchestrator",
+        lambda: SimpleNamespace(
+            generate_chat_response=lambda request: SimpleNamespace(
+                text="Я не помню этого по тем воспоминаниям, которые у меня сейчас есть.",
+                provider_name="mock-brain",
+                metadata={
+                    "grounding_status": "no_evidence",
+                    "output_guard_applied": False,
+                    "output_guard_reason": None,
+                    "output_guard_lack_of_evidence": True,
+                    "persona_applied": True,
+                },
+            )
+        ),
+    )
+
+    before_metrics = _metrics_text(client)
+    before_reviewed = _sample_value(
+        before_metrics,
+        "memory_candidate_reviewed_total",
+        {"status": "approved"},
+    )
+    before_promotions_created = _sample_value(
+        before_metrics,
+        "memory_promotion_created_total",
+        {},
+    )
+    before_promotion_status = _sample_value(
+        before_metrics,
+        "memory_promotion_status_total",
+        {"status": "pending_index"},
+    )
+
+    create_response = client.post(
+        "/api/demo/fa-chat/message",
+        json={
+            "profile_id": profile.id,
+            "message": "Ты помнишь, как я выиграл чемпионат мира по плаванию?",
+        },
+    )
+    candidate_id = create_response.json()["memory_candidate"]["candidate_id"]
+    approve_response = client.post(
+        f"/api/demo/fa-chat/memory-candidates/{candidate_id}/approve?profile_id={profile.id}",
+        json={"review_note": "Подтверждено"},
+    )
+
+    assert approve_response.status_code == 200
+
+    after_metrics = _metrics_text(client)
+    after_reviewed = _sample_value(
+        after_metrics,
+        "memory_candidate_reviewed_total",
+        {"status": "approved"},
+    )
+    after_promotions_created = _sample_value(
+        after_metrics,
+        "memory_promotion_created_total",
+        {},
+    )
+    after_promotion_status = _sample_value(
+        after_metrics,
+        "memory_promotion_status_total",
+        {"status": "pending_index"},
+    )
+
+    assert after_reviewed == before_reviewed + 1
+    assert after_promotions_created == before_promotions_created + 1
+    assert after_promotion_status == before_promotion_status + 1
+    assert "Ты помнишь, как я выиграл чемпионат мира по плаванию?" not in after_metrics
+    forbidden_labels = {"candidate_id", "promotion_id", "trace_id"}
+    for family in text_string_to_metric_families(after_metrics):
+        for sample in family.samples:
+            assert forbidden_labels.isdisjoint(sample.labels.keys())

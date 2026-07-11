@@ -424,6 +424,10 @@ def test_demo_fa_chat_memory_candidate_endpoints_cover_review_workflow(client, m
     )
     assert approve_response.status_code == 200
     assert approve_response.json()["status"] == "approved"
+    assert approve_response.json()["promotion_created"] is True
+    assert approve_response.json()["promotion_id"] is not None
+    assert approve_response.json()["promotion_status"] == "pending_index"
+    assert approve_response.json()["searchable_as_fact"] is False
 
     invalid_transition_response = client.post(
         f"/api/demo/fa-chat/memory-candidates/{candidate_id}/archive?profile_id={profile.id}",
@@ -515,6 +519,168 @@ def test_demo_fa_chat_memory_candidate_reject_and_archive_endpoints(client, monk
     assert archive_response.status_code == 200
     assert archive_response.json()["status"] == "archived"
     assert archive_response.json()["rejection_reason"] is None
+
+
+def test_demo_fa_chat_memory_promotion_endpoints_cover_cancel_workflow(client, monkeypatch):
+    _user, profile = _create_demo_profile()
+
+    monkeypatch.setattr(
+        "app.modules.demo_fa_chat.service._resolve_demo_runtime",
+        lambda db, *, resolved_profile: SimpleNamespace(
+            collection_name="eternal_world_rag_chunks__bge_m3_dense_sparse__family_novak_ru_e2e_v3_bge_m3_real_cpu",
+            retrieval_mode="bge_m3_dense_sparse",
+            top_k=5,
+            source_id=7,
+            point_count=20,
+        ),
+    )
+    monkeypatch.setattr(
+        "app.modules.demo_fa_chat.service.retrieve_profile_rag",
+        lambda db, *, current_user, profile_id, payload: RagRetrievalResponseRead(
+            profile_id=profile_id,
+            query=payload.query,
+            model_code="bge_m3_dense_sparse",
+            results=[],
+        ),
+    )
+    monkeypatch.setattr(
+        "app.modules.demo_fa_chat.service.get_agent_orchestrator",
+        lambda: SimpleNamespace(
+            generate_chat_response=lambda request: SimpleNamespace(
+                text="Я не помню этого по тем воспоминаниям, которые у меня сейчас есть.",
+                provider_name="mock-brain",
+                metadata={
+                    "grounding_status": "no_evidence",
+                    "output_guard_applied": False,
+                    "output_guard_reason": None,
+                    "output_guard_lack_of_evidence": True,
+                    "persona_applied": True,
+                },
+            )
+        ),
+    )
+
+    create_response = client.post(
+        "/api/demo/fa-chat/message",
+        json={
+            "profile_id": profile.id,
+            "message": "Ты помнишь, как я выиграл чемпионат мира по плаванию?",
+        },
+    )
+    candidate_id = create_response.json()["memory_candidate"]["candidate_id"]
+    approve_response = client.post(
+        f"/api/demo/fa-chat/memory-candidates/{candidate_id}/approve?profile_id={profile.id}",
+        json={"review_note": "Подтверждено", "reviewed_by": _user.id},
+    )
+    promotion_id = approve_response.json()["promotion_id"]
+
+    list_response = client.get(
+        "/api/demo/fa-chat/memory-promotions",
+        params={"profile_id": profile.id},
+    )
+    assert list_response.status_code == 200
+    assert list_response.json()["total"] == 1
+    assert list_response.json()["items"][0]["promotion_id"] == promotion_id
+    assert list_response.json()["items"][0]["promotion_status"] == "pending_index"
+    assert list_response.json()["items"][0]["searchable_as_fact"] is False
+
+    get_response = client.get(
+        f"/api/demo/fa-chat/memory-promotions/{promotion_id}",
+        params={"profile_id": profile.id},
+    )
+    assert get_response.status_code == 200
+    assert get_response.json()["promotion_id"] == promotion_id
+    assert get_response.json()["searchable_as_fact"] is False
+
+    cancel_response = client.post(
+        f"/api/demo/fa-chat/memory-promotions/{promotion_id}/cancel?profile_id={profile.id}",
+    )
+    assert cancel_response.status_code == 200
+    assert cancel_response.json()["promotion_status"] == "cancelled"
+
+    invalid_cancel_response = client.post(
+        f"/api/demo/fa-chat/memory-promotions/{promotion_id}/cancel?profile_id={profile.id}",
+    )
+    assert invalid_cancel_response.status_code == 409
+    assert invalid_cancel_response.json()["detail"] == "Недопустимое изменение статуса продвижения."
+
+    missing_response = client.get(
+        "/api/demo/fa-chat/memory-promotions/999",
+        params={"profile_id": profile.id},
+    )
+    assert missing_response.status_code == 404
+    assert missing_response.json()["detail"] == "Продвижение воспоминания не найдено."
+
+
+def test_pending_index_promotion_is_not_used_as_factual_evidence(client, monkeypatch):
+    _user, profile = _create_demo_profile()
+
+    monkeypatch.setattr(
+        "app.modules.demo_fa_chat.service._resolve_demo_runtime",
+        lambda db, *, resolved_profile: SimpleNamespace(
+            collection_name="eternal_world_rag_chunks__bge_m3_dense_sparse__family_novak_ru_e2e_v3_bge_m3_real_cpu",
+            retrieval_mode="bge_m3_dense_sparse",
+            top_k=5,
+            source_id=7,
+            point_count=20,
+        ),
+    )
+    monkeypatch.setattr(
+        "app.modules.demo_fa_chat.service.retrieve_profile_rag",
+        lambda db, *, current_user, profile_id, payload: RagRetrievalResponseRead(
+            profile_id=profile_id,
+            query=payload.query,
+            model_code="bge_m3_dense_sparse",
+            results=[],
+        ),
+    )
+    monkeypatch.setattr(
+        "app.modules.demo_fa_chat.service.get_agent_orchestrator",
+        lambda: SimpleNamespace(
+            generate_chat_response=lambda request: SimpleNamespace(
+                text=(
+                    "Я не помню этого по тем воспоминаниям, которые у меня сейчас есть. "
+                    "Если хочешь, расскажи мне больше, и мы сможем сохранить это как новое воспоминание."
+                ),
+                provider_name="mock-brain",
+                metadata={
+                    "grounding_status": "no_evidence",
+                    "output_guard_applied": False,
+                    "output_guard_reason": None,
+                    "output_guard_lack_of_evidence": True,
+                    "persona_applied": True,
+                },
+            )
+        ),
+    )
+
+    first_response = client.post(
+        "/api/demo/fa-chat/message",
+        json={
+            "profile_id": profile.id,
+            "message": "Ты помнишь, как я выиграл чемпионат мира по плаванию?",
+        },
+    )
+    candidate_id = first_response.json()["memory_candidate"]["candidate_id"]
+    approve_response = client.post(
+        f"/api/demo/fa-chat/memory-candidates/{candidate_id}/approve?profile_id={profile.id}",
+        json={"review_note": "Подтверждено", "reviewed_by": _user.id},
+    )
+    assert approve_response.status_code == 200
+    assert approve_response.json()["promotion_status"] == "pending_index"
+    assert approve_response.json()["searchable_as_fact"] is False
+
+    second_response = client.post(
+        "/api/demo/fa-chat/message",
+        json={
+            "profile_id": profile.id,
+            "message": "Ты помнишь, как я выиграл чемпионат мира по плаванию?",
+        },
+    )
+
+    assert second_response.status_code == 200
+    assert second_response.json()["lack_of_evidence"] is True
+    assert second_response.json()["memory_candidate"]["status"] == "needs_review"
 
 
 def test_demo_fa_chat_returns_safe_error_when_demo_runtime_is_not_initialized(client, monkeypatch):

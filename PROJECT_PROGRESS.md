@@ -6820,3 +6820,219 @@ Next recommended task:
 2. Task 65 - Profile onboarding / memory upload pipeline
 
 ---
+
+## Task 64.1 - Approved Candidate Promotion + Learning Observability Foundation (2026-07-11)
+
+Goal:
+
+- create a safe promotion layer between approved conversation candidates and any future indexing job
+- make approval auditable without making approved memories searchable facts
+- extend Prometheus/Grafana observability for avatar learning without changing retrieval, Redis cache behavior, or Qdrant
+
+In scope:
+
+- new backend module:
+  - `backend/app/modules/avatar_memory_promotions/`
+- durable Postgres promotion table + Alembic migration
+- approval integration from candidate review to promotion creation
+- demo/internal promotion endpoints
+- learning metrics and Grafana dashboard extension
+- backend tests and Docker smoke
+
+Out of scope and intentionally unchanged:
+
+- Qdrant indexing for approved memories
+- onboarding / upload pipeline
+- voice / face / director work
+- retrieval ranking / `top_k`
+- BGE-M3 embedding semantics
+- Redis embedding cache behavior
+- Brain provider
+- frontend admin UI
+
+Why this task exists:
+
+- Task 64 persisted reviewable conversation candidates but stopped at `approved`
+- the system still needed an explicit audited handoff record for later indexing work
+- the core rule remains:
+  - approval is not indexing
+  - pending promotions are not searchable facts
+
+What changed:
+
+- added new SQLAlchemy model:
+  - `AvatarMemoryPromotion`
+  - stored in `avatar_memory_promotions`
+- added Alembic migration:
+  - `backend/alembic/versions/20260711_0016_create_avatar_memory_promotions.py`
+- added backend module:
+  - `backend/app/modules/avatar_memory_promotions/__init__.py`
+  - `backend/app/modules/avatar_memory_promotions/schemas.py`
+  - `backend/app/modules/avatar_memory_promotions/repository.py`
+  - `backend/app/modules/avatar_memory_promotions/service.py`
+- promotion table fields include:
+  - `candidate_id`
+  - `owner_user_id`
+  - `avatar_id`
+  - `profile_id`
+  - `source_type`
+  - `promotion_status`
+  - `approved_memory_text`
+  - `normalized_memory_text`
+  - `language`
+  - `indexed_at`
+  - `cancelled_at`
+  - `failure_reason`
+  - `trace_id`
+  - `source_candidate_status_snapshot`
+  - `review_note_snapshot`
+- promotion workflow added:
+  - approved candidate -> one `pending_index` promotion record
+  - duplicate promotion prevented by unique `candidate_id`
+  - pending promotion can be cancelled
+  - no indexing is triggered here
+- candidate approval integration changed:
+  - approval now creates promotion in the same transaction
+  - approve response now includes:
+    - `promotion_created`
+    - `promotion_id`
+    - `promotion_status`
+    - `searchable_as_fact`
+- safer rule chosen for later archive handling:
+  - already-approved candidates are not allowed to transition to `archived`
+  - this avoids ambiguous post-approval cancellation semantics at the candidate layer
+- added promotion endpoints:
+  - `GET /api/demo/fa-chat/memory-promotions`
+  - `GET /api/demo/fa-chat/memory-promotions/{promotion_id}`
+  - `POST /api/demo/fa-chat/memory-promotions/{promotion_id}/cancel`
+- added low-cardinality metrics:
+  - `memory_promotion_created_total`
+  - `memory_promotion_status_total{status=...}`
+- extended provisioned Grafana dashboard:
+  - `monitoring/grafana/dashboards/fa_chat_observability.json`
+  - new section title:
+    - `Eternal World — Avatar Learning`
+  - new panels for:
+    - candidates created
+    - candidates reviewed by status
+    - promotions pending
+    - promotions created
+    - promotion status
+
+Behavior preserved:
+
+- pending/index promotion data is not used as factual evidence
+- no Qdrant write
+- no retrieval change
+- no embedding change
+- no Redis cache behavior change
+- no model download introduced
+- no auto-indexing
+
+Tests added / updated:
+
+- new:
+  - `backend/tests/test_avatar_memory_promotions.py`
+- updated:
+  - `backend/tests/test_conversation_memory_candidates.py`
+  - `backend/tests/test_demo_fa_chat.py`
+  - `backend/tests/test_metrics.py`
+  - `backend/tests/test_models.py`
+
+Tests run:
+
+- targeted Task 64.1 suite:
+  - `cd backend`
+  - `python -m pytest tests/test_avatar_memory_promotions.py tests/test_conversation_memory_candidates.py tests/test_demo_fa_chat.py tests/test_metrics.py tests/test_models.py -q`
+  - result: passed
+- broader FA/RAG regression:
+  - `python -m pytest tests/test_ai_agents.py tests/test_rag_evaluation.py tests/test_demo_fa_chat.py -q`
+  - result: passed
+- cache/model regression:
+  - `python -m pytest tests/test_embedding_cache.py tests/test_bge_m3_embedding_cache.py tests/test_bge_m3_model_cache.py tests/test_prefetch_embedding_model.py -q`
+  - result: passed
+
+Warnings:
+
+- all pytest runs still show the existing `pytest_asyncio` deprecation warning for unset `asyncio_default_fixture_loop_scope`
+- warning is non-blocking for this task
+
+Runtime / Docker smoke:
+
+- `docker compose up -d backend frontend`
+  - passed
+- `docker compose exec -T backend alembic upgrade head`
+  - passed
+- dashboard JSON parse validation:
+  - passed
+- smoke 1:
+  - `POST /api/demo/fa-chat/message`
+  - question:
+    - `Бабушка, ты помнишь, как я выиграл чемпионат мира по плаванию?`
+  - result:
+    - HTTP `200`
+    - candidate persisted
+    - `status=needs_review`
+    - `confidence=unverified`
+    - no Qdrant write path introduced
+- smoke 2:
+  - `POST /api/demo/fa-chat/memory-candidates/{candidate_id}/approve`
+  - result:
+    - HTTP `200`
+    - candidate status `approved`
+    - `promotion_created=true`
+    - `promotion_id` present
+    - `promotion_status=pending_index`
+    - `searchable_as_fact=false`
+- smoke 3:
+  - `GET /api/demo/fa-chat/memory-promotions`
+  - result:
+    - promotion visible
+    - `promotion_status=pending_index`
+    - still not searchable
+- smoke 4:
+  - repeated the same FA chat claim after approval
+  - result:
+    - still returned lack-of-evidence behavior
+    - no false learned answer from pending promotion
+- smoke 5:
+  - `POST /api/demo/fa-chat/memory-promotions/{promotion_id}/cancel`
+  - result:
+    - `promotion_status=cancelled`
+- smoke 6:
+  - `GET /metrics`
+  - result:
+    - candidate and promotion metrics present
+    - no raw text in metrics
+    - no `candidate_id` / `promotion_id` metric labels
+
+Grafana / monitoring result:
+
+- existing Eternal World Grafana provisioning was reused
+- NALUS was not touched
+- no duplicate datasource or dashboard stack was created
+- the existing Eternal World dashboard now contains a dedicated avatar-learning section
+
+Observability notes:
+
+- backend logs remained safe:
+  - `trace_id`
+  - `profile_id`
+  - `candidate_id`
+  - promotion endpoints visible via route logs
+- during local bind-mount development, a transient uvicorn reload race briefly logged an import error while files were still being written
+- after reload completion, backend startup and smoke requests were healthy
+
+Known limitations:
+
+- no Qdrant indexing job exists yet for approved promotions
+- `pending_index` promotions are not searchable and are intentionally ignored by factual retrieval
+- no full admin UI yet
+- no onboarding/upload pipeline yet
+- no retry flow from `failed -> pending_index` yet
+
+Next recommended task:
+
+1. Task 64.2 - Approved Memory Indexing Job
+
+---

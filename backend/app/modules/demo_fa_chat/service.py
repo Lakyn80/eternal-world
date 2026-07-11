@@ -9,6 +9,8 @@ from app.core.logging import get_logger, log_event
 from app.core.metrics import (
     observe_memory_candidate_created,
     observe_memory_candidate_reviewed,
+    observe_memory_promotion_created,
+    observe_memory_promotion_status,
     observe_rag_retrieval_error,
     observe_rag_retrieval_success,
 )
@@ -26,6 +28,8 @@ from app.modules.avatar_persona import (
     derive_avatar_response_directives,
     load_demo_avatar_persona,
 )
+from app.modules.avatar_memory_promotions import service as avatar_memory_promotions_service
+from app.modules.avatar_memory_promotions.schemas import build_avatar_memory_promotion_read
 from app.modules.conversation_memory_candidates import service as conversation_memory_candidates_service
 from app.modules.conversation_memory_candidates.schemas import (
     MemoryCandidateCreate,
@@ -48,7 +52,12 @@ from app.modules.rag_retrieval.service import retrieve_profile_rag
 from app.modules.rag_sources.repository import list_rag_sources_for_profile
 from app.modules.users.repository import get_user_by_email
 
-from .schemas import DemoFaChatEvidenceItem, DemoFaChatMemoryCandidate, DemoFaChatMessageResponse
+from .schemas import (
+    DemoFaChatEvidenceItem,
+    DemoFaChatMemoryCandidate,
+    DemoFaChatMemoryCandidateReviewResponse,
+    DemoFaChatMessageResponse,
+)
 
 
 DEMO_FA_CHAT_MESSAGE_MAX_LENGTH = 4000
@@ -381,14 +390,17 @@ def approve_demo_memory_candidate(
         profile_id=profile_id,
         candidate_id=candidate_id,
     )
-    approved_candidate = conversation_memory_candidates_service.approve_candidate(
+    approval_result = conversation_memory_candidates_service.approve_candidate(
         db,
         owner_user_id=candidate.owner_user_id,
         candidate_id=candidate.id,
         payload=payload,
     )
-    observe_memory_candidate_reviewed(status=approved_candidate.status)
-    return approved_candidate
+    observe_memory_candidate_reviewed(status=approval_result.candidate.status)
+    if approval_result.promotion_created:
+        observe_memory_promotion_created()
+    observe_memory_promotion_status(status=approval_result.promotion.promotion_status)
+    return approval_result
 
 
 def reject_demo_memory_candidate(
@@ -433,6 +445,91 @@ def archive_demo_memory_candidate(
     )
     observe_memory_candidate_reviewed(status=archived_candidate.status)
     return archived_candidate
+
+
+def list_demo_memory_promotions(
+    db: Session,
+    *,
+    profile_id: int | None,
+):
+    resolved_profile = _resolve_demo_profile(db, profile_id=profile_id)
+    avatar_persona = _resolve_demo_avatar_persona()
+    return avatar_memory_promotions_service.list_promotions(
+        db,
+        owner_user_id=resolved_profile.user.id,
+        profile_id=resolved_profile.profile.id,
+        avatar_id=avatar_persona.avatar_id,
+    )
+
+
+def get_demo_memory_promotion(
+    db: Session,
+    *,
+    profile_id: int | None,
+    promotion_id: int,
+):
+    resolved_profile = _resolve_demo_profile(db, profile_id=profile_id)
+    promotion = avatar_memory_promotions_service.get_promotion(
+        db,
+        owner_user_id=resolved_profile.user.id,
+        promotion_id=promotion_id,
+    )
+    if promotion.profile_id != resolved_profile.profile.id:
+        raise avatar_memory_promotions_service.AvatarMemoryPromotionNotFoundError(
+            "Avatar memory promotion not found"
+        )
+    return promotion
+
+
+def cancel_demo_memory_promotion(
+    db: Session,
+    *,
+    profile_id: int | None,
+    promotion_id: int,
+):
+    promotion = get_demo_memory_promotion(
+        db,
+        profile_id=profile_id,
+        promotion_id=promotion_id,
+    )
+    cancelled_promotion = avatar_memory_promotions_service.cancel_promotion(
+        db,
+        owner_user_id=promotion.owner_user_id,
+        promotion_id=promotion.id,
+    )
+    observe_memory_promotion_status(status=cancelled_promotion.promotion_status)
+    return cancelled_promotion
+
+
+def build_demo_memory_candidate_review_response(
+    approval_result: conversation_memory_candidates_service.CandidateApprovalResult,
+) -> DemoFaChatMemoryCandidateReviewResponse:
+    promotion = build_avatar_memory_promotion_read(approval_result.promotion)
+    return DemoFaChatMemoryCandidateReviewResponse(
+        candidate_id=approval_result.candidate.id,
+        owner_user_id=approval_result.candidate.owner_user_id,
+        avatar_id=approval_result.candidate.avatar_id,
+        profile_id=approval_result.candidate.profile_id,
+        conversation_id=approval_result.candidate.conversation_id,
+        trace_id=approval_result.candidate.trace_id,
+        source=approval_result.candidate.source,
+        status=approval_result.candidate.status,
+        confidence=approval_result.candidate.confidence,
+        user_message_excerpt=approval_result.candidate.user_message_excerpt,
+        proposed_memory_text=approval_result.candidate.proposed_memory_text,
+        reason=approval_result.candidate.reason,
+        language=approval_result.candidate.language,
+        created_at=approval_result.candidate.created_at,
+        updated_at=approval_result.candidate.updated_at,
+        reviewed_at=approval_result.candidate.reviewed_at,
+        reviewed_by=approval_result.candidate.reviewed_by,
+        review_note=approval_result.candidate.review_note,
+        rejection_reason=approval_result.candidate.rejection_reason,
+        promotion_created=approval_result.promotion_created,
+        promotion_id=promotion.promotion_id,
+        promotion_status=promotion.promotion_status,
+        searchable_as_fact=promotion.searchable_as_fact,
+    )
 
 
 def run_demo_fa_chat_message(

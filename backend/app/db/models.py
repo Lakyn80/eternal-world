@@ -79,6 +79,10 @@ class User(TimestampMixin, Base):
         foreign_keys="ConversationMemoryCandidate.reviewed_by",
         back_populates="reviewed_by_user",
     )
+    avatar_memory_promotions: Mapped[list[AvatarMemoryPromotion]] = relationship(
+        back_populates="owner",
+        cascade="all, delete-orphan",
+    )
 
 
 class MemoryProfile(TimestampMixin, Base):
@@ -138,6 +142,10 @@ class MemoryProfile(TimestampMixin, Base):
         foreign_keys="MediaAsset.profile_id",
     )
     conversation_memory_candidates: Mapped[list[ConversationMemoryCandidate]] = relationship(
+        back_populates="memory_profile",
+        cascade="all, delete-orphan",
+    )
+    avatar_memory_promotions: Mapped[list[AvatarMemoryPromotion]] = relationship(
         back_populates="memory_profile",
         cascade="all, delete-orphan",
     )
@@ -715,6 +723,73 @@ class ConversationMemoryCandidate(TimestampMixin, Base):
         foreign_keys=[reviewed_by],
         back_populates="reviewed_conversation_memory_candidates",
     )
+    avatar_memory_promotion: Mapped[AvatarMemoryPromotion | None] = relationship(
+        back_populates="candidate",
+        cascade="all, delete-orphan",
+        uselist=False,
+    )
+
+
+class AvatarMemoryPromotion(TimestampMixin, Base):
+    __tablename__ = "avatar_memory_promotions"
+    __table_args__ = (
+        CheckConstraint(
+            "source_type IN ('conversation_candidate')",
+            name="avatar_memory_promotions_source_type",
+        ),
+        CheckConstraint(
+            "promotion_status IN ('pending_index', 'indexed', 'failed', 'cancelled')",
+            name="avatar_memory_promotions_status",
+        ),
+        Index("ix_amp_created_at", "created_at"),
+        Index("ix_amp_owner_profile_status", "owner_user_id", "profile_id", "promotion_status"),
+        Index("ix_amp_avatar_status", "avatar_id", "promotion_status"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    candidate_id: Mapped[int] = mapped_column(
+        ForeignKey("conversation_memory_candidates.id", ondelete="CASCADE"),
+        unique=True,
+        index=True,
+        nullable=False,
+    )
+    owner_user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"),
+        index=True,
+        nullable=False,
+    )
+    avatar_id: Mapped[str] = mapped_column(String(120), index=True, nullable=False)
+    profile_id: Mapped[int | None] = mapped_column(
+        ForeignKey("memory_profiles.id", ondelete="SET NULL"),
+        index=True,
+        nullable=True,
+    )
+    source_type: Mapped[str] = mapped_column(
+        String(32),
+        nullable=False,
+        default="conversation_candidate",
+        server_default=text("'conversation_candidate'"),
+    )
+    promotion_status: Mapped[str] = mapped_column(
+        String(32),
+        index=True,
+        nullable=False,
+        default="pending_index",
+        server_default=text("'pending_index'"),
+    )
+    approved_memory_text: Mapped[str] = mapped_column(String(500), nullable=False)
+    normalized_memory_text: Mapped[str] = mapped_column(String(500), nullable=False)
+    language: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    indexed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    cancelled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    failure_reason: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    trace_id: Mapped[str | None] = mapped_column(String(120), index=True, nullable=True)
+    source_candidate_status_snapshot: Mapped[str] = mapped_column(String(32), nullable=False)
+    review_note_snapshot: Mapped[str | None] = mapped_column(String(500), nullable=True)
+
+    candidate: Mapped[ConversationMemoryCandidate] = relationship(back_populates="avatar_memory_promotion")
+    owner: Mapped[User] = relationship(back_populates="avatar_memory_promotions")
+    memory_profile: Mapped[MemoryProfile | None] = relationship(back_populates="avatar_memory_promotions")
 
 
 class MediaAsset(TimestampMixin, Base):

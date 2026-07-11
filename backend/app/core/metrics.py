@@ -117,6 +117,15 @@ MEMORY_CANDIDATE_REVIEWED_TOTAL = Counter(
     "Total reviewed conversation-derived memory candidates.",
     labelnames=("status",),
 )
+MEMORY_PROMOTION_CREATED_TOTAL = Counter(
+    "memory_promotion_created_total",
+    "Total avatar memory promotion records created.",
+)
+MEMORY_PROMOTION_STATUS_TOTAL = Counter(
+    "memory_promotion_status_total",
+    "Total avatar memory promotion status events.",
+    labelnames=("status",),
+)
 
 
 def normalize_http_route_label(route_path: str | None) -> str:
@@ -272,3 +281,11 @@ def observe_memory_candidate_created(*, persisted: bool, status: str) -> None:
 
 def observe_memory_candidate_reviewed(*, status: str) -> None:
     MEMORY_CANDIDATE_REVIEWED_TOTAL.labels(status.strip().lower() or "unknown").inc()
+
+
+def observe_memory_promotion_created() -> None:
+    MEMORY_PROMOTION_CREATED_TOTAL.inc()
+
+
+def observe_memory_promotion_status(*, status: str) -> None:
+    MEMORY_PROMOTION_STATUS_TOTAL.labels(status.strip().lower() or "unknown").inc()

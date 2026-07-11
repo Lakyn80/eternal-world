@@ -1,6 +1,7 @@
 from app.db.base import Base
 from app.db.models import (
     ActiveRetrievalConfig,
+    AvatarMemoryPromotion,
     BackgroundJob,
     ChatMessage,
     ConversationMemoryCandidate,
@@ -28,6 +29,7 @@ def test_database_models_are_registered():
     assert BackgroundJob.__tablename__ == "background_jobs"
     assert ActiveRetrievalConfig.__tablename__ == "active_retrieval_configs"
     assert ConversationMemoryCandidate.__tablename__ == "conversation_memory_candidates"
+    assert AvatarMemoryPromotion.__tablename__ == "avatar_memory_promotions"
     assert "full_name" in User.__table__.columns.keys()
     assert {
         "main_photo_media_id",
@@ -147,6 +149,23 @@ def test_database_models_are_registered():
         "rejection_reason",
     }.issubset(ConversationMemoryCandidate.__table__.columns.keys())
     assert {
+        "candidate_id",
+        "owner_user_id",
+        "avatar_id",
+        "profile_id",
+        "source_type",
+        "promotion_status",
+        "approved_memory_text",
+        "normalized_memory_text",
+        "language",
+        "indexed_at",
+        "cancelled_at",
+        "failure_reason",
+        "trace_id",
+        "source_candidate_status_snapshot",
+        "review_note_snapshot",
+    }.issubset(AvatarMemoryPromotion.__table__.columns.keys())
+    assert {
         "owner_user_id",
         "profile_id",
         "model_code",
@@ -177,6 +196,7 @@ def test_database_models_are_registered():
         "background_jobs",
         "active_retrieval_configs",
         "conversation_memory_candidates",
+        "avatar_memory_promotions",
     }.issubset(
         Base.metadata.tables.keys()
     )

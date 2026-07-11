@@ -10,6 +10,14 @@ from sqlalchemy.orm import Session
 from app.core.logging import get_logger, log_event
 from app.core.metrics import observe_fa_chat_error, observe_fa_chat_success
 from app.db.session import get_db
+from app.modules.avatar_memory_promotions.schemas import (
+    AvatarMemoryPromotionRead,
+    build_avatar_memory_promotion_read,
+)
+from app.modules.avatar_memory_promotions.service import (
+    AvatarMemoryPromotionInvalidTransitionError,
+    AvatarMemoryPromotionNotFoundError,
+)
 from app.modules.conversation_memory_candidates.schemas import (
     MemoryCandidateListResponse,
     MemoryCandidateRead,
@@ -17,7 +25,13 @@ from app.modules.conversation_memory_candidates.schemas import (
     build_memory_candidate_read,
 )
 
-from .schemas import DemoFaChatErrorResponse, DemoFaChatMessageRequest, DemoFaChatMessageResponse
+from .schemas import (
+    DemoFaChatErrorResponse,
+    DemoFaChatMemoryCandidateReviewResponse,
+    DemoFaChatMemoryPromotionListResponse,
+    DemoFaChatMessageRequest,
+    DemoFaChatMessageResponse,
+)
 from .service import (
     DEMO_FA_CHAT_INTERNAL_ERROR_DETAIL,
     DemoFaChatInitializationError,
@@ -25,8 +39,12 @@ from .service import (
     DemoFaChatValidationError,
     approve_demo_memory_candidate,
     archive_demo_memory_candidate,
+    build_demo_memory_candidate_review_response,
+    cancel_demo_memory_promotion,
     get_demo_memory_candidate,
+    get_demo_memory_promotion,
     list_demo_memory_candidates,
+    list_demo_memory_promotions,
     reject_demo_memory_candidate,
     run_demo_fa_chat_message,
 )
@@ -42,6 +60,8 @@ CandidateIdPath = Annotated[int, Path(gt=0)]
 
 CANDIDATE_NOT_FOUND_DETAIL = "Кандидат воспоминания не найден."
 CANDIDATE_INVALID_TRANSITION_DETAIL = "Недопустимое изменение статуса кандидата."
+PROMOTION_NOT_FOUND_DETAIL = "Продвижение воспоминания не найдено."
+PROMOTION_INVALID_TRANSITION_DETAIL = "Недопустимое изменение статуса продвижения."
 
 
 @router.post(
@@ -205,7 +225,7 @@ def _review_demo_memory_candidate(
     candidate_id: int,
     payload: MemoryCandidateReviewUpdate | None,
     action: str,
-) -> MemoryCandidateRead:
+ ) -> MemoryCandidateRead | DemoFaChatMemoryCandidateReviewResponse:
     action_map = {
         "approve": approve_demo_memory_candidate,
         "reject": reject_demo_memory_candidate,
@@ -254,12 +274,14 @@ def _review_demo_memory_candidate(
             detail=CANDIDATE_INVALID_TRANSITION_DETAIL,
         ) from exc
 
+    if action == "approve":
+        return build_demo_memory_candidate_review_response(candidate)
     return build_memory_candidate_read(candidate)
 
 
 @router.post(
     "/memory-candidates/{candidate_id}/approve",
-    response_model=MemoryCandidateRead,
+    response_model=DemoFaChatMemoryCandidateReviewResponse,
     responses={
         status.HTTP_404_NOT_FOUND: {"model": DemoFaChatErrorResponse},
         status.HTTP_409_CONFLICT: {"model": DemoFaChatErrorResponse},
@@ -270,7 +292,7 @@ def approve_demo_memory_candidate_endpoint(
     payload: MemoryCandidateReviewUpdate | None = None,
     profile_id: int | None = None,
     db: Session = Depends(get_db),
-) -> MemoryCandidateRead:
+) -> DemoFaChatMemoryCandidateReviewResponse:
     return _review_demo_memory_candidate(
         db=db,
         profile_id=profile_id,
@@ -278,6 +300,129 @@ def approve_demo_memory_candidate_endpoint(
         payload=payload,
         action="approve",
     )
+
+
+@router.get(
+    "/memory-promotions",
+    response_model=DemoFaChatMemoryPromotionListResponse,
+    responses={
+        status.HTTP_404_NOT_FOUND: {"model": DemoFaChatErrorResponse},
+    },
+)
+def list_demo_memory_promotions_endpoint(
+    profile_id: int | None = None,
+    db: Session = Depends(get_db),
+) -> DemoFaChatMemoryPromotionListResponse:
+    try:
+        promotions = list_demo_memory_promotions(
+            db,
+            profile_id=profile_id,
+        )
+    except DemoFaChatProfileUnavailableError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(exc),
+        ) from exc
+
+    items = [build_avatar_memory_promotion_read(promotion) for promotion in promotions]
+    return DemoFaChatMemoryPromotionListResponse(items=items, total=len(items))
+
+
+@router.get(
+    "/memory-promotions/{promotion_id}",
+    response_model=AvatarMemoryPromotionRead,
+    responses={
+        status.HTTP_404_NOT_FOUND: {"model": DemoFaChatErrorResponse},
+    },
+)
+def get_demo_memory_promotion_endpoint(
+    promotion_id: CandidateIdPath,
+    profile_id: int | None = None,
+    db: Session = Depends(get_db),
+) -> AvatarMemoryPromotionRead:
+    try:
+        promotion = get_demo_memory_promotion(
+            db,
+            profile_id=profile_id,
+            promotion_id=promotion_id,
+        )
+    except DemoFaChatProfileUnavailableError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(exc),
+        ) from exc
+    except AvatarMemoryPromotionNotFoundError as exc:
+        log_event(
+            logger,
+            std_logging.INFO,
+            "fa_demo_chat_memory_promotion_not_found",
+            profile_id=profile_id,
+            promotion_id=promotion_id,
+            error_type=exc.__class__.__name__,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=PROMOTION_NOT_FOUND_DETAIL,
+        ) from exc
+
+    return build_avatar_memory_promotion_read(promotion)
+
+
+@router.post(
+    "/memory-promotions/{promotion_id}/cancel",
+    response_model=AvatarMemoryPromotionRead,
+    responses={
+        status.HTTP_404_NOT_FOUND: {"model": DemoFaChatErrorResponse},
+        status.HTTP_409_CONFLICT: {"model": DemoFaChatErrorResponse},
+    },
+)
+def cancel_demo_memory_promotion_endpoint(
+    promotion_id: CandidateIdPath,
+    profile_id: int | None = None,
+    db: Session = Depends(get_db),
+) -> AvatarMemoryPromotionRead:
+    try:
+        promotion = cancel_demo_memory_promotion(
+            db,
+            profile_id=profile_id,
+            promotion_id=promotion_id,
+        )
+    except DemoFaChatProfileUnavailableError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(exc),
+        ) from exc
+    except AvatarMemoryPromotionNotFoundError as exc:
+        log_event(
+            logger,
+            std_logging.INFO,
+            "fa_demo_chat_memory_promotion_not_found",
+            profile_id=profile_id,
+            promotion_id=promotion_id,
+            action="cancel",
+            error_type=exc.__class__.__name__,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=PROMOTION_NOT_FOUND_DETAIL,
+        ) from exc
+    except AvatarMemoryPromotionInvalidTransitionError as exc:
+        log_event(
+            logger,
+            std_logging.INFO,
+            "fa_demo_chat_memory_promotion_invalid_transition",
+            profile_id=profile_id,
+            promotion_id=promotion_id,
+            action="cancel",
+            error_type=exc.__class__.__name__,
+            error_summary=str(exc)[:200],
+        )
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=PROMOTION_INVALID_TRANSITION_DETAIL,
+        ) from exc
+
+    return build_avatar_memory_promotion_read(promotion)
 
 
 @router.post(
