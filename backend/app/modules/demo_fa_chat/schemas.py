@@ -2,10 +2,14 @@ from __future__ import annotations
 
 from pydantic import BaseModel
 
+from app.modules.conversation_memory_candidates.schemas import (
+    MemoryCandidateConfidence,
+    MemoryCandidateSource,
+    MemoryCandidateStatus,
+)
 from app.modules.avatar_persona.schemas import (
     AvatarEmotion,
     AvatarFaceDirectives,
-    AvatarMemoryCandidate,
     AvatarVoiceDirectives,
 )
 
@@ -24,6 +28,16 @@ class DemoFaChatEvidenceItem(BaseModel):
     text_preview: str | None = None
 
 
+class DemoFaChatMemoryCandidate(BaseModel):
+    candidate_id: int | None = None
+    status: MemoryCandidateStatus
+    confidence: MemoryCandidateConfidence
+    source: MemoryCandidateSource
+    proposed_memory_text: str
+    user_message_excerpt: str
+    reason: str
+
+
 class DemoFaChatMessageResponse(BaseModel):
     answer: str
     lack_of_evidence: bool
@@ -32,7 +46,8 @@ class DemoFaChatMessageResponse(BaseModel):
     guard_applied: bool
     guard_reason: str | None = None
     trace_id: str
-    memory_candidate: AvatarMemoryCandidate | None = None
+    memory_candidate: DemoFaChatMemoryCandidate | None = None
+    memory_candidate_persisted: bool | None = None
     emotion: AvatarEmotion | None = None
     face_directives: AvatarFaceDirectives | None = None
     voice_directives: AvatarVoiceDirectives | None = None

@@ -271,9 +271,250 @@ def test_demo_fa_chat_creates_unverified_memory_candidate_for_new_personal_claim
     body = response.json()
     assert body["lack_of_evidence"] is True
     assert body["persona_applied"] is True
+    assert body["memory_candidate_persisted"] is True
+    assert body["memory_candidate"]["candidate_id"] is not None
     assert body["memory_candidate"]["status"] == "needs_review"
+    assert body["memory_candidate"]["confidence"] == "unverified"
+    assert body["memory_candidate"]["source"] == "conversation"
     assert "песню перед сном" in body["memory_candidate"]["proposed_memory_text"]
     assert body["emotion"]["primary"] == "warm_reflective"
+
+
+def test_demo_fa_chat_candidate_persistence_failure_does_not_break_answer(client, monkeypatch):
+    _user, profile = _create_demo_profile()
+    logged_events: list[tuple[str, dict[str, object]]] = []
+
+    monkeypatch.setattr(
+        "app.modules.demo_fa_chat.service._resolve_demo_runtime",
+        lambda db, *, resolved_profile: SimpleNamespace(
+            collection_name="eternal_world_rag_chunks__bge_m3_dense_sparse__family_novak_ru_e2e_v3_bge_m3_real_cpu",
+            retrieval_mode="bge_m3_dense_sparse",
+            top_k=5,
+            source_id=7,
+            point_count=20,
+        ),
+    )
+    monkeypatch.setattr(
+        "app.modules.demo_fa_chat.service.retrieve_profile_rag",
+        lambda db, *, current_user, profile_id, payload: RagRetrievalResponseRead(
+            profile_id=profile_id,
+            query=payload.query,
+            model_code="bge_m3_dense_sparse",
+            results=[],
+        ),
+    )
+    monkeypatch.setattr(
+        "app.modules.demo_fa_chat.service.get_agent_orchestrator",
+        lambda: SimpleNamespace(
+            generate_chat_response=lambda request: SimpleNamespace(
+                text="Я не помню этого по тем воспоминаниям, которые у меня сейчас есть.",
+                provider_name="mock-brain",
+                metadata={
+                    "grounding_status": "no_evidence",
+                    "output_guard_applied": False,
+                    "output_guard_reason": None,
+                    "output_guard_lack_of_evidence": True,
+                    "persona_applied": True,
+                },
+            )
+        ),
+    )
+    monkeypatch.setattr(
+        "app.modules.demo_fa_chat.service._persist_memory_candidate",
+        lambda *args, **kwargs: (_ for _ in ()).throw(RuntimeError("db write failed for candidate")),
+    )
+    monkeypatch.setattr(
+        "app.modules.demo_fa_chat.service.log_event",
+        lambda logger, level, event, **fields: logged_events.append((event, fields)),
+    )
+
+    response = client.post(
+        "/api/demo/fa-chat/message",
+        headers={"X-Request-ID": "candidate-persist-fail-1"},
+        json={
+            "profile_id": profile.id,
+            "message": "Ты помнишь, как пела мне песню перед сном?",
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["memory_candidate"]["candidate_id"] is None
+    assert body["memory_candidate"]["status"] == "needs_review"
+    assert body["memory_candidate_persisted"] is False
+    assert "песню перед сном" in body["memory_candidate"]["proposed_memory_text"]
+    persist_failed_event = next(fields for event, fields in logged_events if event == "fa_demo_chat_memory_candidate_persist_failed")
+    assert persist_failed_event["trace_id"] == "candidate-persist-fail-1"
+    assert persist_failed_event["error_type"] == "RuntimeError"
+    assert persist_failed_event["candidate_persisted"] is False
+    assert "message" not in persist_failed_event
+    assert "proposed_memory_text" not in persist_failed_event
+
+
+def test_demo_fa_chat_memory_candidate_endpoints_cover_review_workflow(client, monkeypatch):
+    _user, profile = _create_demo_profile()
+
+    monkeypatch.setattr(
+        "app.modules.demo_fa_chat.service._resolve_demo_runtime",
+        lambda db, *, resolved_profile: SimpleNamespace(
+            collection_name="eternal_world_rag_chunks__bge_m3_dense_sparse__family_novak_ru_e2e_v3_bge_m3_real_cpu",
+            retrieval_mode="bge_m3_dense_sparse",
+            top_k=5,
+            source_id=7,
+            point_count=20,
+        ),
+    )
+    monkeypatch.setattr(
+        "app.modules.demo_fa_chat.service.retrieve_profile_rag",
+        lambda db, *, current_user, profile_id, payload: RagRetrievalResponseRead(
+            profile_id=profile_id,
+            query=payload.query,
+            model_code="bge_m3_dense_sparse",
+            results=[],
+        ),
+    )
+    monkeypatch.setattr(
+        "app.modules.demo_fa_chat.service.get_agent_orchestrator",
+        lambda: SimpleNamespace(
+            generate_chat_response=lambda request: SimpleNamespace(
+                text="Я не помню этого по тем воспоминаниям, которые у меня сейчас есть.",
+                provider_name="mock-brain",
+                metadata={
+                    "grounding_status": "no_evidence",
+                    "output_guard_applied": False,
+                    "output_guard_reason": None,
+                    "output_guard_lack_of_evidence": True,
+                    "persona_applied": True,
+                },
+            )
+        ),
+    )
+
+    create_response = client.post(
+        "/api/demo/fa-chat/message",
+        json={
+            "profile_id": profile.id,
+            "message": "Ты помнишь, как пела мне песню перед сном?",
+        },
+    )
+    assert create_response.status_code == 200
+    candidate_id = create_response.json()["memory_candidate"]["candidate_id"]
+    assert candidate_id is not None
+
+    list_response = client.get(
+        "/api/demo/fa-chat/memory-candidates",
+        params={"profile_id": profile.id},
+    )
+    assert list_response.status_code == 200
+    list_body = list_response.json()
+    assert list_body["total"] == 1
+    assert list_body["items"][0]["candidate_id"] == candidate_id
+    assert list_body["items"][0]["status"] == "needs_review"
+
+    get_response = client.get(
+        f"/api/demo/fa-chat/memory-candidates/{candidate_id}",
+        params={"profile_id": profile.id},
+    )
+    assert get_response.status_code == 200
+    assert get_response.json()["candidate_id"] == candidate_id
+
+    approve_response = client.post(
+        f"/api/demo/fa-chat/memory-candidates/{candidate_id}/approve?profile_id={profile.id}",
+        json={"review_note": "Подтверждено", "reviewed_by": _user.id},
+    )
+    assert approve_response.status_code == 200
+    assert approve_response.json()["status"] == "approved"
+
+    invalid_transition_response = client.post(
+        f"/api/demo/fa-chat/memory-candidates/{candidate_id}/archive?profile_id={profile.id}",
+        json={"reviewed_by": _user.id},
+    )
+    assert invalid_transition_response.status_code == 409
+    assert invalid_transition_response.json()["detail"] == "Недопустимое изменение статуса кандидата."
+
+    missing_response = client.get(
+        "/api/demo/fa-chat/memory-candidates/999",
+        params={"profile_id": profile.id},
+    )
+    assert missing_response.status_code == 404
+    assert missing_response.json()["detail"] == "Кандидат воспоминания не найден."
+
+
+def test_demo_fa_chat_memory_candidate_reject_and_archive_endpoints(client, monkeypatch):
+    _user, profile = _create_demo_profile()
+
+    monkeypatch.setattr(
+        "app.modules.demo_fa_chat.service._resolve_demo_runtime",
+        lambda db, *, resolved_profile: SimpleNamespace(
+            collection_name="eternal_world_rag_chunks__bge_m3_dense_sparse__family_novak_ru_e2e_v3_bge_m3_real_cpu",
+            retrieval_mode="bge_m3_dense_sparse",
+            top_k=5,
+            source_id=7,
+            point_count=20,
+        ),
+    )
+    monkeypatch.setattr(
+        "app.modules.demo_fa_chat.service.retrieve_profile_rag",
+        lambda db, *, current_user, profile_id, payload: RagRetrievalResponseRead(
+            profile_id=profile_id,
+            query=payload.query,
+            model_code="bge_m3_dense_sparse",
+            results=[],
+        ),
+    )
+    monkeypatch.setattr(
+        "app.modules.demo_fa_chat.service.get_agent_orchestrator",
+        lambda: SimpleNamespace(
+            generate_chat_response=lambda request: SimpleNamespace(
+                text="Я не помню этого по тем воспоминаниям, которые у меня сейчас есть.",
+                provider_name="mock-brain",
+                metadata={
+                    "grounding_status": "no_evidence",
+                    "output_guard_applied": False,
+                    "output_guard_reason": None,
+                    "output_guard_lack_of_evidence": True,
+                    "persona_applied": True,
+                },
+            )
+        ),
+    )
+
+    first_response = client.post(
+        "/api/demo/fa-chat/message",
+        json={
+            "profile_id": profile.id,
+            "message": "Ты помнишь, как пела мне колыбельную?",
+        },
+    )
+    second_response = client.post(
+        "/api/demo/fa-chat/message",
+        json={
+            "profile_id": profile.id,
+            "message": "Ты помнишь, как мы вместе собирали яблоки?",
+        },
+    )
+    first_candidate_id = first_response.json()["memory_candidate"]["candidate_id"]
+    second_candidate_id = second_response.json()["memory_candidate"]["candidate_id"]
+
+    reject_response = client.post(
+        f"/api/demo/fa-chat/memory-candidates/{first_candidate_id}/reject?profile_id={profile.id}",
+        json={
+            "review_note": "Нужно больше контекста",
+            "rejection_reason": "Нет подтверждения",
+            "reviewed_by": _user.id,
+        },
+    )
+    assert reject_response.status_code == 200
+    assert reject_response.json()["status"] == "rejected"
+    assert reject_response.json()["rejection_reason"] == "Нет подтверждения"
+
+    archive_response = client.post(
+        f"/api/demo/fa-chat/memory-candidates/{second_candidate_id}/archive?profile_id={profile.id}",
+        json={"review_note": "Снято с рассмотрения", "reviewed_by": _user.id},
+    )
+    assert archive_response.status_code == 200
+    assert archive_response.json()["status"] == "archived"
+    assert archive_response.json()["rejection_reason"] is None
 
 
 def test_demo_fa_chat_returns_safe_error_when_demo_runtime_is_not_initialized(client, monkeypatch):

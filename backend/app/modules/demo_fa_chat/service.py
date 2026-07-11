@@ -6,7 +6,12 @@ from time import perf_counter
 from sqlalchemy.orm import Session
 
 from app.core.logging import get_logger, log_event
-from app.core.metrics import observe_rag_retrieval_error, observe_rag_retrieval_success
+from app.core.metrics import (
+    observe_memory_candidate_created,
+    observe_memory_candidate_reviewed,
+    observe_rag_retrieval_error,
+    observe_rag_retrieval_success,
+)
 from app.db.models import User
 from app.modules.active_retrieval_config.exceptions import ActiveRetrievalConfigNotFoundError
 from app.modules.active_retrieval_config.service import (
@@ -20,6 +25,12 @@ from app.modules.avatar_persona import (
     build_memory_candidate,
     derive_avatar_response_directives,
     load_demo_avatar_persona,
+)
+from app.modules.conversation_memory_candidates import service as conversation_memory_candidates_service
+from app.modules.conversation_memory_candidates.schemas import (
+    MemoryCandidateCreate,
+    MemoryCandidateReviewUpdate,
+    MemoryCandidateStatus,
 )
 from app.modules.embeddings.embedding_cache import build_text_hash
 from app.modules.embeddings.runtime import resolve_embedding_runtime_diagnostics
@@ -37,7 +48,7 @@ from app.modules.rag_retrieval.service import retrieve_profile_rag
 from app.modules.rag_sources.repository import list_rag_sources_for_profile
 from app.modules.users.repository import get_user_by_email
 
-from .schemas import DemoFaChatEvidenceItem, DemoFaChatMessageResponse
+from .schemas import DemoFaChatEvidenceItem, DemoFaChatMemoryCandidate, DemoFaChatMessageResponse
 
 
 DEMO_FA_CHAT_MESSAGE_MAX_LENGTH = 4000
@@ -281,6 +292,149 @@ def _build_top_text_previews(results: list[RagRetrievalResultRead], *, limit: in
     return [_truncate_preview(result.text, limit=140) for result in results[:limit]]
 
 
+def _build_demo_memory_candidate(
+    *,
+    extracted_candidate,
+    persisted_candidate_id: int | None,
+) -> DemoFaChatMemoryCandidate:
+    return DemoFaChatMemoryCandidate(
+        candidate_id=persisted_candidate_id,
+        status=MemoryCandidateStatus.NEEDS_REVIEW,
+        confidence="unverified",
+        source="conversation",
+        proposed_memory_text=extracted_candidate.proposed_memory_text,
+        user_message_excerpt=extracted_candidate.user_message_excerpt,
+        reason=extracted_candidate.reason,
+    )
+
+
+def _persist_memory_candidate(
+    db: Session,
+    *,
+    owner_user_id: int,
+    avatar_id: str,
+    profile_id: int,
+    trace_id: str,
+    language: str,
+    extracted_candidate,
+):
+    payload = MemoryCandidateCreate(
+        owner_user_id=owner_user_id,
+        avatar_id=avatar_id,
+        profile_id=profile_id,
+        conversation_id=None,
+        trace_id=trace_id,
+        user_message_excerpt=extracted_candidate.user_message_excerpt,
+        proposed_memory_text=extracted_candidate.proposed_memory_text,
+        reason=extracted_candidate.reason,
+        language=language,
+    )
+    return conversation_memory_candidates_service.create_candidate(
+        db,
+        payload=payload,
+    )
+
+
+def list_demo_memory_candidates(
+    db: Session,
+    *,
+    profile_id: int | None,
+):
+    resolved_profile = _resolve_demo_profile(db, profile_id=profile_id)
+    avatar_persona = _resolve_demo_avatar_persona()
+    return conversation_memory_candidates_service.list_candidates(
+        db,
+        owner_user_id=resolved_profile.user.id,
+        profile_id=resolved_profile.profile.id,
+        avatar_id=avatar_persona.avatar_id,
+    )
+
+
+def get_demo_memory_candidate(
+    db: Session,
+    *,
+    profile_id: int | None,
+    candidate_id: int,
+):
+    resolved_profile = _resolve_demo_profile(db, profile_id=profile_id)
+    candidate = conversation_memory_candidates_service.get_candidate(
+        db,
+        owner_user_id=resolved_profile.user.id,
+        candidate_id=candidate_id,
+    )
+    if candidate.profile_id != resolved_profile.profile.id:
+        raise conversation_memory_candidates_service.ConversationMemoryCandidateNotFoundError(
+            "Memory candidate not found"
+        )
+    return candidate
+
+
+def approve_demo_memory_candidate(
+    db: Session,
+    *,
+    profile_id: int | None,
+    candidate_id: int,
+    payload: MemoryCandidateReviewUpdate | None,
+):
+    candidate = get_demo_memory_candidate(
+        db,
+        profile_id=profile_id,
+        candidate_id=candidate_id,
+    )
+    approved_candidate = conversation_memory_candidates_service.approve_candidate(
+        db,
+        owner_user_id=candidate.owner_user_id,
+        candidate_id=candidate.id,
+        payload=payload,
+    )
+    observe_memory_candidate_reviewed(status=approved_candidate.status)
+    return approved_candidate
+
+
+def reject_demo_memory_candidate(
+    db: Session,
+    *,
+    profile_id: int | None,
+    candidate_id: int,
+    payload: MemoryCandidateReviewUpdate | None,
+):
+    candidate = get_demo_memory_candidate(
+        db,
+        profile_id=profile_id,
+        candidate_id=candidate_id,
+    )
+    rejected_candidate = conversation_memory_candidates_service.reject_candidate(
+        db,
+        owner_user_id=candidate.owner_user_id,
+        candidate_id=candidate.id,
+        payload=payload,
+    )
+    observe_memory_candidate_reviewed(status=rejected_candidate.status)
+    return rejected_candidate
+
+
+def archive_demo_memory_candidate(
+    db: Session,
+    *,
+    profile_id: int | None,
+    candidate_id: int,
+    payload: MemoryCandidateReviewUpdate | None,
+):
+    candidate = get_demo_memory_candidate(
+        db,
+        profile_id=profile_id,
+        candidate_id=candidate_id,
+    )
+    archived_candidate = conversation_memory_candidates_service.archive_candidate(
+        db,
+        owner_user_id=candidate.owner_user_id,
+        candidate_id=candidate.id,
+        payload=payload,
+    )
+    observe_memory_candidate_reviewed(status=archived_candidate.status)
+    return archived_candidate
+
+
 def run_demo_fa_chat_message(
     db: Session,
     *,
@@ -372,10 +526,43 @@ def run_demo_fa_chat_message(
     lack_of_evidence = bool(metadata.get("output_guard_lack_of_evidence")) or (
         str(metadata.get("grounding_status") or "").strip().lower() == "no_evidence"
     )
-    memory_candidate = build_memory_candidate(
+    extracted_memory_candidate = build_memory_candidate(
         user_message=normalized_message,
         lack_of_evidence=lack_of_evidence,
     )
+    persisted_memory_candidate = None
+    memory_candidate_persisted: bool | None = None
+    if extracted_memory_candidate is not None:
+        try:
+            persisted_memory_candidate = _persist_memory_candidate(
+                db,
+                owner_user_id=resolved_profile.user.id,
+                avatar_id=avatar_persona.avatar_id,
+                profile_id=resolved_profile.profile.id,
+                trace_id=trace_id,
+                language=avatar_persona.language,
+                extracted_candidate=extracted_memory_candidate,
+            )
+            memory_candidate_persisted = True
+        except Exception as exc:
+            memory_candidate_persisted = False
+            log_event(
+                logger,
+                40,
+                "fa_demo_chat_memory_candidate_persist_failed",
+                trace_id=trace_id,
+                avatar_id=avatar_persona.avatar_id,
+                profile_id=resolved_profile.profile.id,
+                candidate_created=True,
+                candidate_persisted=False,
+                candidate_status=MemoryCandidateStatus.NEEDS_REVIEW.value,
+                error_type=exc.__class__.__name__,
+                error_summary=str(exc)[:200],
+            )
+        observe_memory_candidate_created(
+            persisted=bool(memory_candidate_persisted),
+            status=MemoryCandidateStatus.NEEDS_REVIEW.value,
+        )
     response_directives = derive_avatar_response_directives(
         persona=avatar_persona,
         user_message=normalized_message,
@@ -393,7 +580,18 @@ def run_demo_fa_chat_message(
         guard_applied=bool(metadata.get("output_guard_applied")),
         guard_reason=metadata.get("output_guard_reason"),
         lack_of_evidence=lack_of_evidence,
-        memory_candidate_created=memory_candidate is not None,
+        memory_candidate_created=extracted_memory_candidate is not None,
+        memory_candidate_persisted=memory_candidate_persisted,
+        candidate_id=persisted_memory_candidate.id if persisted_memory_candidate is not None else None,
+        candidate_status=(
+            persisted_memory_candidate.status
+            if persisted_memory_candidate is not None
+            else (
+                MemoryCandidateStatus.NEEDS_REVIEW.value
+                if extracted_memory_candidate is not None
+                else None
+            )
+        ),
         emotion_primary=response_directives.emotion.primary,
     )
     return DemoFaChatMessageResponse(
@@ -408,7 +606,17 @@ def run_demo_fa_chat_message(
             else None
         ),
         trace_id=trace_id,
-        memory_candidate=memory_candidate,
+        memory_candidate=(
+            _build_demo_memory_candidate(
+                extracted_candidate=extracted_memory_candidate,
+                persisted_candidate_id=(
+                    persisted_memory_candidate.id if persisted_memory_candidate is not None else None
+                ),
+            )
+            if extracted_memory_candidate is not None
+            else None
+        ),
+        memory_candidate_persisted=memory_candidate_persisted,
         emotion=response_directives.emotion,
         face_directives=response_directives.face_directives,
         voice_directives=response_directives.voice_directives,

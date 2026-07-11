@@ -6629,3 +6629,194 @@ Next recommended task:
 1. profile onboarding / memory upload pipeline
 
 ---
+
+## Task 64 - Conversation Memory Candidate Review (2026-07-11)
+
+Goal:
+
+- implement a safe persistent review workflow for conversation-derived memory candidates in the FA demo
+- keep unverified user claims out of factual memory, Qdrant retrieval, and automatic learning
+- expose review/list/get endpoints for the current demo flow without starting onboarding, upload, voice, face, or director work
+
+In scope:
+
+- persistent Postgres model and Alembic migration for conversation memory candidates
+- Pydantic validation schemas
+- repository/service layer for create/list/get/approve/reject/archive
+- FA demo integration for non-blocking candidate persistence
+- demo/internal API endpoints under `/api/demo/fa-chat/memory-candidates*`
+- backend tests and runtime smoke
+- documentation update and official roadmap tracking decision
+
+Out of scope and intentionally unchanged:
+
+- profile onboarding / upload pipeline
+- approved-candidate indexing into Qdrant
+- retrieval ranking / `top_k`
+- BGE-M3 embedding semantics
+- Redis embedding cache behavior
+- Qdrant collection names
+- Brain provider
+- output guard behavior
+- frontend admin UI beyond the existing API surface
+
+Why this was needed:
+
+- Task 63 could detect a safe `memory_candidate`, but the candidate lived only in the response payload
+- the system needed a durable review queue before any future learning pipeline can safely exist
+- the review queue had to preserve the core safety rule:
+  - a memory candidate is not a verified memory
+
+What changed:
+
+- added a durable SQLAlchemy model:
+  - `ConversationMemoryCandidate`
+  - stored in `conversation_memory_candidates`
+- added Alembic migration:
+  - `backend/alembic/versions/20260711_0015_create_conversation_memory_candidates.py`
+- added new backend module:
+  - `backend/app/modules/conversation_memory_candidates/`
+  - `__init__.py`
+  - `schemas.py`
+  - `repository.py`
+  - `service.py`
+- model/schema fields now include:
+  - `owner_user_id`
+  - `avatar_id`
+  - `profile_id`
+  - `conversation_id`
+  - `trace_id`
+  - `source`
+  - `status`
+  - `confidence`
+  - `user_message_excerpt`
+  - `proposed_memory_text`
+  - `reason`
+  - `language`
+  - `reviewed_at`
+  - `reviewed_by`
+  - `review_note`
+  - `rejection_reason`
+- field safety controls added:
+  - excerpt length truncation
+  - bounded text lengths
+  - enum-controlled `status`, `confidence`, and `source`
+  - ownership/profile validation before write
+- strict status workflow implemented:
+  - `needs_review -> approved`
+  - `needs_review -> rejected`
+  - `needs_review -> archived`
+  - no reverse transition back to `needs_review`
+  - no `approved/rejected/archived` mutation to another state in this task
+- FA demo chat integration now:
+  - persists extracted candidates as `needs_review`
+  - returns persisted `candidate_id`
+  - returns `memory_candidate_persisted=true/false`
+  - logs safe persistence failures without blocking the chat answer
+- added review endpoints:
+  - `GET /api/demo/fa-chat/memory-candidates`
+  - `GET /api/demo/fa-chat/memory-candidates/{candidate_id}`
+  - `POST /api/demo/fa-chat/memory-candidates/{candidate_id}/approve`
+  - `POST /api/demo/fa-chat/memory-candidates/{candidate_id}/reject`
+  - `POST /api/demo/fa-chat/memory-candidates/{candidate_id}/archive`
+- added safe low-cardinality Prometheus counters:
+  - `memory_candidate_created_total`
+  - `memory_candidate_reviewed_total`
+- committed official roadmap documentation input:
+  - `md_roadmap/ETERNAL_WORLD_AVATAR_QUALITY_PLAN.md`
+  - reason:
+    - it is the active implementation roadmap for Tasks 63 and 64, not local scratch content
+
+Behavior preserved:
+
+- unverified candidates are not used as factual evidence
+- no write to Qdrant from candidate creation or review
+- no retrieval logic change
+- no embedding logic change
+- no Redis cache behavior change
+- no model download introduced by this task
+- no auto-approval
+
+Tests added / updated:
+
+- new:
+  - `backend/tests/test_conversation_memory_candidates.py`
+- updated:
+  - `backend/tests/test_demo_fa_chat.py`
+  - `backend/tests/test_models.py`
+
+Tests run:
+
+- targeted Task 64 backend suite:
+  - `cd backend`
+  - `python -m pytest tests/test_conversation_memory_candidates.py tests/test_demo_fa_chat.py tests/test_models.py tests/test_avatar_persona.py tests/test_avatar_persona_prompt_composer.py tests/test_avatar_memory_candidates.py -q`
+  - result: passed
+- broader FA/RAG regression:
+  - `python -m pytest tests/test_ai_agents.py tests/test_rag_evaluation.py tests/test_demo_fa_chat.py -q`
+  - result: passed
+- cache/model regression:
+  - `python -m pytest tests/test_embedding_cache.py tests/test_bge_m3_embedding_cache.py tests/test_bge_m3_model_cache.py tests/test_prefetch_embedding_model.py -q`
+  - result: passed
+
+Runtime / Docker smoke:
+
+- `docker compose up -d backend frontend`
+  - passed
+- `docker compose exec -T backend alembic upgrade head`
+  - passed
+  - note:
+    - during first attempt, Postgres exposed an identifier-length issue in one new index name
+    - fixed by shortening only the index names in model + migration
+    - behavior/schema semantics unchanged
+- `docker compose ps`
+  - backend / frontend / db / redis / qdrant / prometheus / grafana up
+- factual smoke:
+  - `POST /api/demo/fa-chat/message`
+  - question:
+    - `Где ты жила в детстве?`
+  - result:
+    - HTTP `200`
+    - grounded Russian answer mentioning `Попице`
+    - `persona_applied=true`
+    - evidence present
+- candidate persistence smoke:
+  - `POST /api/demo/fa-chat/message`
+  - question:
+    - `Ты помнишь, как я выиграл чемпионат мира по плаванию?`
+  - result:
+    - HTTP `200`
+    - lack-of-evidence response
+    - `memory_candidate.status=needs_review`
+    - `memory_candidate.confidence=unverified`
+    - `memory_candidate_persisted=true`
+    - persisted candidate id returned
+- list/get/review smoke:
+  - `GET /api/demo/fa-chat/memory-candidates`
+  - `GET /api/demo/fa-chat/memory-candidates/{candidate_id}`
+  - `POST .../approve`
+  - `POST .../reject`
+  - `POST .../archive`
+  - result:
+    - all returned `200`
+    - statuses updated correctly
+- backend logs confirmed:
+  - no client stack trace
+  - safe fields such as `trace_id`, `profile_id`, `candidate_id`, `candidate_status`, and `memory_candidate_persisted`
+  - no raw full user message in candidate persistence failure logging
+  - BGE-M3 loaded from local snapshot only
+  - no model download surprise during this task
+
+Known limitations:
+
+- approved candidates are still review metadata only and are not indexed into Qdrant yet
+- there is no full admin UI yet; review is API-driven
+- no profile onboarding/upload pipeline yet
+- no automatic conversion of reviewed items into verified factual memory
+- some real demo prompts may be grounded by existing memory and therefore correctly produce no candidate; smoke verification used explicitly unknown claims for the persistence flow
+
+Next recommended task:
+
+1. Task 64.1 - Approved candidate indexing / review handoff design
+2. Task 65 - Profile onboarding / memory upload pipeline
+
+---

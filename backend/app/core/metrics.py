@@ -107,6 +107,16 @@ BRAIN_ANSWER_ERRORS_TOTAL = Counter(
     "Total Brain answer generation errors.",
     labelnames=("provider", "model"),
 )
+MEMORY_CANDIDATE_CREATED_TOTAL = Counter(
+    "memory_candidate_created_total",
+    "Total conversation-derived memory candidates created.",
+    labelnames=("persisted", "status"),
+)
+MEMORY_CANDIDATE_REVIEWED_TOTAL = Counter(
+    "memory_candidate_reviewed_total",
+    "Total reviewed conversation-derived memory candidates.",
+    labelnames=("status",),
+)
 
 
 def normalize_http_route_label(route_path: str | None) -> str:
@@ -251,3 +261,14 @@ def observe_brain_answer_error(*, provider: str | None, model: str | None) -> No
         normalize_brain_provider_label(provider),
         normalize_brain_model_label(model),
     ).inc()
+
+
+def observe_memory_candidate_created(*, persisted: bool, status: str) -> None:
+    MEMORY_CANDIDATE_CREATED_TOTAL.labels(
+        normalize_boolean_label(persisted),
+        status.strip().lower() or "unknown",
+    ).inc()
+
+
+def observe_memory_candidate_reviewed(*, status: str) -> None:
+    MEMORY_CANDIDATE_REVIEWED_TOTAL.labels(status.strip().lower() or "unknown").inc()

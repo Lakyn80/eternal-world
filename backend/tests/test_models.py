@@ -3,6 +3,7 @@ from app.db.models import (
     ActiveRetrievalConfig,
     BackgroundJob,
     ChatMessage,
+    ConversationMemoryCandidate,
     MediaAsset,
     Memory,
     MemoryProfile,
@@ -26,6 +27,7 @@ def test_database_models_are_registered():
     assert RagVectorIndex.__tablename__ == "rag_vector_indexes"
     assert BackgroundJob.__tablename__ == "background_jobs"
     assert ActiveRetrievalConfig.__tablename__ == "active_retrieval_configs"
+    assert ConversationMemoryCandidate.__tablename__ == "conversation_memory_candidates"
     assert "full_name" in User.__table__.columns.keys()
     assert {
         "main_photo_media_id",
@@ -129,6 +131,23 @@ def test_database_models_are_registered():
     }.issubset(BackgroundJob.__table__.columns.keys())
     assert {
         "owner_user_id",
+        "avatar_id",
+        "conversation_id",
+        "trace_id",
+        "source",
+        "status",
+        "confidence",
+        "user_message_excerpt",
+        "proposed_memory_text",
+        "reason",
+        "language",
+        "reviewed_at",
+        "reviewed_by",
+        "review_note",
+        "rejection_reason",
+    }.issubset(ConversationMemoryCandidate.__table__.columns.keys())
+    assert {
+        "owner_user_id",
         "profile_id",
         "model_code",
         "collection_name",
@@ -145,6 +164,19 @@ def test_database_models_are_registered():
         "selected_at",
     }.issubset(ActiveRetrievalConfig.__table__.columns.keys())
 
-    assert {"users", "memory_profiles", "chat_messages", "memories", "media_assets", "rag_sources", "rag_chunks", "rag_embeddings", "rag_vector_indexes", "background_jobs", "active_retrieval_configs"}.issubset(
+    assert {
+        "users",
+        "memory_profiles",
+        "chat_messages",
+        "memories",
+        "media_assets",
+        "rag_sources",
+        "rag_chunks",
+        "rag_embeddings",
+        "rag_vector_indexes",
+        "background_jobs",
+        "active_retrieval_configs",
+        "conversation_memory_candidates",
+    }.issubset(
         Base.metadata.tables.keys()
     )

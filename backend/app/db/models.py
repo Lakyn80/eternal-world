@@ -70,6 +70,15 @@ class User(TimestampMixin, Base):
         back_populates="owner",
         cascade="all, delete-orphan",
     )
+    conversation_memory_candidates: Mapped[list[ConversationMemoryCandidate]] = relationship(
+        foreign_keys="ConversationMemoryCandidate.owner_user_id",
+        back_populates="owner",
+        cascade="all, delete-orphan",
+    )
+    reviewed_conversation_memory_candidates: Mapped[list[ConversationMemoryCandidate]] = relationship(
+        foreign_keys="ConversationMemoryCandidate.reviewed_by",
+        back_populates="reviewed_by_user",
+    )
 
 
 class MemoryProfile(TimestampMixin, Base):
@@ -127,6 +136,10 @@ class MemoryProfile(TimestampMixin, Base):
     media_assets: Mapped[list[MediaAsset]] = relationship(
         back_populates="memory_profile",
         foreign_keys="MediaAsset.profile_id",
+    )
+    conversation_memory_candidates: Mapped[list[ConversationMemoryCandidate]] = relationship(
+        back_populates="memory_profile",
+        cascade="all, delete-orphan",
     )
     main_photo_media: Mapped[MediaAsset | None] = relationship(
         foreign_keys=[main_photo_media_id],
@@ -613,6 +626,94 @@ class ActiveRetrievalConfig(TimestampMixin, Base):
     memory_profile: Mapped[MemoryProfile] = relationship(back_populates="active_retrieval_config")
     source_eval_job: Mapped[BackgroundJob | None] = relationship(
         back_populates="active_retrieval_configs"
+    )
+
+
+class ConversationMemoryCandidate(TimestampMixin, Base):
+    __tablename__ = "conversation_memory_candidates"
+    __table_args__ = (
+        CheckConstraint(
+            "source IN ('conversation')",
+            name="conversation_memory_candidates_source",
+        ),
+        CheckConstraint(
+            "status IN ('needs_review', 'approved', 'rejected', 'archived')",
+            name="conversation_memory_candidates_status",
+        ),
+        CheckConstraint(
+            "confidence IN ('unverified')",
+            name="conversation_memory_candidates_confidence",
+        ),
+        Index("ix_cmc_created_at", "created_at"),
+        Index(
+            "ix_cmc_owner_profile_status",
+            "owner_user_id",
+            "profile_id",
+            "status",
+        ),
+        Index(
+            "ix_cmc_avatar_status",
+            "avatar_id",
+            "status",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    owner_user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"),
+        index=True,
+        nullable=False,
+    )
+    avatar_id: Mapped[str] = mapped_column(String(120), index=True, nullable=False)
+    profile_id: Mapped[int | None] = mapped_column(
+        ForeignKey("memory_profiles.id", ondelete="SET NULL"),
+        index=True,
+        nullable=True,
+    )
+    conversation_id: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    trace_id: Mapped[str | None] = mapped_column(String(120), index=True, nullable=True)
+    source: Mapped[str] = mapped_column(
+        String(32),
+        nullable=False,
+        default="conversation",
+        server_default=text("'conversation'"),
+    )
+    status: Mapped[str] = mapped_column(
+        String(32),
+        index=True,
+        nullable=False,
+        default="needs_review",
+        server_default=text("'needs_review'"),
+    )
+    confidence: Mapped[str] = mapped_column(
+        String(32),
+        nullable=False,
+        default="unverified",
+        server_default=text("'unverified'"),
+    )
+    user_message_excerpt: Mapped[str] = mapped_column(String(160), nullable=False)
+    proposed_memory_text: Mapped[str] = mapped_column(String(500), nullable=False)
+    reason: Mapped[str] = mapped_column(String(500), nullable=False)
+    language: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    reviewed_by: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"),
+        index=True,
+        nullable=True,
+    )
+    review_note: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    rejection_reason: Mapped[str | None] = mapped_column(String(500), nullable=True)
+
+    owner: Mapped[User] = relationship(
+        foreign_keys=[owner_user_id],
+        back_populates="conversation_memory_candidates",
+    )
+    memory_profile: Mapped[MemoryProfile | None] = relationship(
+        back_populates="conversation_memory_candidates"
+    )
+    reviewed_by_user: Mapped[User | None] = relationship(
+        foreign_keys=[reviewed_by],
+        back_populates="reviewed_conversation_memory_candidates",
     )
 
 
