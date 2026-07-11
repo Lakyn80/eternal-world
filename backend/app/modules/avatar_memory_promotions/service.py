@@ -137,11 +137,13 @@ def get_promotion(
     *,
     owner_user_id: int,
     promotion_id: int,
+    for_update: bool = False,
 ) -> AvatarMemoryPromotion:
     promotion = repository.get_avatar_memory_promotion_for_owner(
         db,
         owner_user_id=owner_user_id,
         promotion_id=promotion_id,
+        for_update=for_update,
     )
     if promotion is None:
         raise AvatarMemoryPromotionNotFoundError("Avatar memory promotion not found")
@@ -158,6 +160,7 @@ def cancel_promotion(
         db,
         owner_user_id=owner_user_id,
         promotion_id=promotion_id,
+        for_update=True,
     )
     if promotion.promotion_status != AvatarMemoryPromotionStatus.PENDING_INDEX.value:
         raise AvatarMemoryPromotionInvalidTransitionError(

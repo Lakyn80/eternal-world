@@ -2,10 +2,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from sqlalchemy import select
+from sqlalchemy import and_, or_, select
 from sqlalchemy.orm import Session
 
-from app.db.models import MemoryProfile, RagChunk, RagEmbedding, RagSource
+from app.db.models import AvatarMemoryPromotion, MemoryProfile, RagChunk, RagEmbedding, RagSource
 
 
 @dataclass(frozen=True)
@@ -40,6 +40,10 @@ def list_retrieval_evidence_for_embeddings(
         .join(RagChunk, RagEmbedding.chunk_id == RagChunk.id)
         .join(RagSource, RagEmbedding.source_id == RagSource.id)
         .join(MemoryProfile, RagEmbedding.profile_id == MemoryProfile.id)
+        .outerjoin(
+            AvatarMemoryPromotion,
+            AvatarMemoryPromotion.rag_embedding_id == RagEmbedding.id,
+        )
         .where(
             RagEmbedding.id.in_(embedding_ids),
             RagEmbedding.owner_user_id == owner_user_id,
@@ -50,6 +54,14 @@ def list_retrieval_evidence_for_embeddings(
             RagSource.profile_id == profile_id,
             MemoryProfile.user_id == owner_user_id,
             MemoryProfile.id == profile_id,
+            or_(
+                RagSource.source_type != "conversation_candidate",
+                and_(
+                    AvatarMemoryPromotion.promotion_status == "indexed",
+                    AvatarMemoryPromotion.owner_user_id == owner_user_id,
+                    AvatarMemoryPromotion.profile_id == profile_id,
+                ),
+            ),
         )
     )
 

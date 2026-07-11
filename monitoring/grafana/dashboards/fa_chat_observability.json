@@ -801,7 +801,7 @@
       },
       "targets": [
         {
-          "expr": "clamp_min(sum(memory_promotion_status_total{status=\"pending_index\"}) - sum(memory_promotion_status_total{status=~\"indexed|failed|cancelled\"}), 0)",
+          "expr": "sum(memory_promotions_current{status=\"pending_index\"}) or vector(0)",
           "refId": "A"
         }
       ],
@@ -887,6 +887,80 @@
       ],
       "title": "Avatar Learning - Promotion Status",
       "type": "timeseries"
+    },
+    {
+      "datasource": "Prometheus",
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "thresholds"},
+          "decimals": 0,
+          "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}]}
+        },
+        "overrides": []
+      },
+      "gridPos": {"h": 8, "w": 6, "x": 0, "y": 57},
+      "id": 21,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false},
+        "textMode": "auto"
+      },
+      "targets": [{"expr": "sum(memory_promotions_current{status=\"indexed\"}) or vector(0)", "refId": "A"}],
+      "title": "Avatar Learning - Indexed Promotions",
+      "type": "stat"
+    },
+    {
+      "datasource": "Prometheus",
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "thresholds"},
+          "decimals": 0,
+          "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}, {"color": "red", "value": 1}]}
+        },
+        "overrides": []
+      },
+      "gridPos": {"h": 8, "w": 6, "x": 6, "y": 57},
+      "id": 22,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false},
+        "textMode": "auto"
+      },
+      "targets": [{"expr": "sum(memory_promotions_current{status=\"failed\"}) or vector(0)", "refId": "A"}],
+      "title": "Avatar Learning - Failed Indexing",
+      "type": "stat"
+    },
+    {
+      "datasource": "Prometheus",
+      "fieldConfig": {"defaults": {"color": {"mode": "palette-classic"}, "unit": "s"}, "overrides": []},
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 57},
+      "id": 23,
+      "options": {
+        "legend": {"calcs": [], "displayMode": "list", "placement": "bottom", "showLegend": true},
+        "tooltip": {"mode": "multi", "sort": "desc"}
+      },
+      "targets": [{"expr": "histogram_quantile(0.95, sum(rate(memory_indexing_duration_seconds_bucket{result=\"indexed\"}[5m])) by (le))", "legendFormat": "p95", "refId": "A"}],
+      "title": "Avatar Learning - Indexing Duration",
+      "type": "timeseries"
+    },
+    {
+      "datasource": "Prometheus",
+      "fieldConfig": {"defaults": {"color": {"mode": "palette-classic"}, "unit": "ops"}, "overrides": []},
+      "gridPos": {"h": 8, "w": 24, "x": 0, "y": 65},
+      "id": 24,
+      "options": {
+        "legend": {"calcs": [], "displayMode": "list", "placement": "bottom", "showLegend": true},
+        "tooltip": {"mode": "multi", "sort": "desc"}
+      },
+      "targets": [{"expr": "sum(rate(memory_promotion_index_status_total{status=~\"indexed|failed\"}[5m])) by (status)", "legendFormat": "{{status}}", "refId": "A"}],
+      "title": "Avatar Learning - Indexing Success / Failure Rate",
+      "type": "timeseries"
     }
   ],
   "refresh": "15s",
@@ -909,6 +983,6 @@
   "timezone": "",
   "title": "Eternal World — FA Chat Observability",
   "uid": "eternal-world-fa-chat",
-  "version": 2,
+  "version": 3,
   "weekStart": ""
 }

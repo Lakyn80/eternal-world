@@ -76,9 +76,12 @@ def get_avatar_memory_promotion_for_owner(
     *,
     owner_user_id: int,
     promotion_id: int,
+    for_update: bool = False,
 ) -> AvatarMemoryPromotion | None:
     statement = select(AvatarMemoryPromotion).where(
         AvatarMemoryPromotion.id == promotion_id,
         AvatarMemoryPromotion.owner_user_id == owner_user_id,
     )
+    if for_update:
+        statement = statement.with_for_update()
     return db.scalar(statement)

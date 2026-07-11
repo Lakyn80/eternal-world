@@ -22,6 +22,7 @@ ALLOWED_RAG_SOURCE_TYPES = frozenset(
         "video_transcript",
         "letter",
         "diary",
+        "conversation_candidate",
         "other",
     }
 )
@@ -70,7 +71,7 @@ class RagSourceCreate(BaseModel):
             raise ValueError(
                 "source_type must be one of: "
                 "manual_text, biography, timeline_memory, document_text, chat_export, "
-                "audio_transcript, video_transcript, letter, diary, other"
+                "audio_transcript, video_transcript, letter, diary, conversation_candidate, other"
             )
 
         return normalized_value
@@ -115,7 +116,7 @@ class RagSourceUpdate(BaseModel):
             raise ValueError(
                 "source_type must be one of: "
                 "manual_text, biography, timeline_memory, document_text, chat_export, "
-                "audio_transcript, video_transcript, letter, diary, other"
+                "audio_transcript, video_transcript, letter, diary, conversation_candidate, other"
             )
 
         return normalized_value

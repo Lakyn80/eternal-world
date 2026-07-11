@@ -201,6 +201,35 @@ class QdrantRestClient:
         if response.is_error:
             raise QdrantClientError("Qdrant point upsert failed")
 
+    def get_point(
+        self,
+        *,
+        collection_name: str,
+        point_id: str,
+        with_vector: bool = False,
+    ) -> dict[str, object] | None:
+        response = self._request(
+            "GET",
+            f"/collections/{collection_name}/points/{point_id}",
+            params={"with_payload": "true", "with_vector": str(with_vector).lower()},
+        )
+        if response.status_code == 404:
+            return None
+        if response.is_error:
+            raise QdrantClientError("Qdrant point lookup failed")
+        result = response.json().get("result")
+        return result if isinstance(result, dict) else None
+
+    def delete_point(self, *, collection_name: str, point_id: str) -> None:
+        response = self._request(
+            "POST",
+            f"/collections/{collection_name}/points/delete",
+            params={"wait": "true"},
+            json={"points": [point_id]},
+        )
+        if response.is_error:
+            raise QdrantClientError("Qdrant point deletion failed")
+
     def search_points(
         self,
         *,

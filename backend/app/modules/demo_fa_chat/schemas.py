@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Any
+
 from pydantic import BaseModel
 
 from app.modules.avatar_memory_promotions.schemas import (
@@ -31,6 +33,7 @@ class DemoFaChatEvidenceItem(BaseModel):
     source_title: str | None = None
     score: float | None = None
     text_preview: str | None = None
+    payload_metadata: dict[str, Any] | None = None
 
 
 class DemoFaChatMemoryCandidate(BaseModel):

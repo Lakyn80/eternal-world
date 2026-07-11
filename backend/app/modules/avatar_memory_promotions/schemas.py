@@ -101,8 +101,12 @@ class AvatarMemoryPromotionRead(BaseModel):
     created_at: datetime
     updated_at: datetime
     indexed_at: datetime | None = None
+    failed_at: datetime | None = None
     cancelled_at: datetime | None = None
     failure_reason: str | None = None
+    target_collection_name: str | None = None
+    qdrant_point_id: str | None = None
+    indexing_attempt_count: int = 0
     trace_id: str | None = None
     source_candidate_status_snapshot: str
     review_note_snapshot: str | None = None
@@ -134,8 +138,12 @@ def build_avatar_memory_promotion_read(promotion: AvatarMemoryPromotion) -> Avat
         created_at=promotion.created_at,
         updated_at=promotion.updated_at,
         indexed_at=promotion.indexed_at,
+        failed_at=promotion.failed_at,
         cancelled_at=promotion.cancelled_at,
         failure_reason=promotion.failure_reason,
+        target_collection_name=promotion.target_collection_name,
+        qdrant_point_id=promotion.qdrant_point_id,
+        indexing_attempt_count=promotion.indexing_attempt_count,
         trace_id=promotion.trace_id,
         source_candidate_status_snapshot=promotion.source_candidate_status_snapshot,
         review_note_snapshot=promotion.review_note_snapshot,

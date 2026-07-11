@@ -251,7 +251,7 @@ class RagSource(TimestampMixin, Base):
                 "source_type IN ("
                 "'manual_text', 'biography', 'timeline_memory', 'document_text', "
                 "'chat_export', 'audio_transcript', 'video_transcript', "
-                "'letter', 'diary', 'other')"
+                "'letter', 'diary', 'conversation_candidate', 'other')"
             ),
             name="rag_sources_source_type",
         ),
@@ -741,6 +741,10 @@ class AvatarMemoryPromotion(TimestampMixin, Base):
             "promotion_status IN ('pending_index', 'indexed', 'failed', 'cancelled')",
             name="avatar_memory_promotions_status",
         ),
+        CheckConstraint(
+            "indexing_attempt_count >= 0",
+            name="avatar_memory_promotions_indexing_attempt_count_non_negative",
+        ),
         Index("ix_amp_created_at", "created_at"),
         Index("ix_amp_owner_profile_status", "owner_user_id", "profile_id", "promotion_status"),
         Index("ix_amp_avatar_status", "avatar_id", "promotion_status"),
@@ -781,8 +785,29 @@ class AvatarMemoryPromotion(TimestampMixin, Base):
     normalized_memory_text: Mapped[str] = mapped_column(String(500), nullable=False)
     language: Mapped[str | None] = mapped_column(String(16), nullable=True)
     indexed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    failed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     cancelled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     failure_reason: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    target_collection_name: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    qdrant_point_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    indexing_attempt_count: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        default=0,
+        server_default=text("0"),
+    )
+    rag_source_id: Mapped[int | None] = mapped_column(
+        ForeignKey("rag_sources.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    rag_chunk_id: Mapped[int | None] = mapped_column(
+        ForeignKey("rag_chunks.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    rag_embedding_id: Mapped[int | None] = mapped_column(
+        ForeignKey("rag_embeddings.id", ondelete="SET NULL"),
+        nullable=True,
+    )
     trace_id: Mapped[str | None] = mapped_column(String(120), index=True, nullable=True)
     source_candidate_status_snapshot: Mapped[str] = mapped_column(String(32), nullable=False)
     review_note_snapshot: Mapped[str | None] = mapped_column(String(500), nullable=True)

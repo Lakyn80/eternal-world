@@ -18,6 +18,13 @@ from app.modules.avatar_memory_promotions.service import (
     AvatarMemoryPromotionInvalidTransitionError,
     AvatarMemoryPromotionNotFoundError,
 )
+from app.modules.avatar_memory_indexing.schemas import AvatarMemoryIndexingRead
+from app.modules.avatar_memory_indexing.service import (
+    AvatarMemoryIndexingConflictError,
+    AvatarMemoryIndexingEligibilityError,
+    AvatarMemoryIndexingExecutionError,
+    AvatarMemoryIndexingNotFoundError,
+)
 from app.modules.conversation_memory_candidates.schemas import (
     MemoryCandidateListResponse,
     MemoryCandidateRead,
@@ -43,6 +50,7 @@ from .service import (
     cancel_demo_memory_promotion,
     get_demo_memory_candidate,
     get_demo_memory_promotion,
+    index_demo_memory_promotion,
     list_demo_memory_candidates,
     list_demo_memory_promotions,
     reject_demo_memory_candidate,
@@ -62,6 +70,7 @@ CANDIDATE_NOT_FOUND_DETAIL = "Кандидат воспоминания не н�
 CANDIDATE_INVALID_TRANSITION_DETAIL = "Недопустимое изменение статуса кандидата."
 PROMOTION_NOT_FOUND_DETAIL = "Продвижение воспоминания не найдено."
 PROMOTION_INVALID_TRANSITION_DETAIL = "Недопустимое изменение статуса продвижения."
+PROMOTION_INDEXING_FAILED_DETAIL = "Индексация подтвержденного воспоминания не выполнена."
 
 
 @router.post(
@@ -423,6 +432,66 @@ def cancel_demo_memory_promotion_endpoint(
         ) from exc
 
     return build_avatar_memory_promotion_read(promotion)
+
+
+@router.post(
+    "/memory-promotions/{promotion_id}/index",
+    response_model=AvatarMemoryIndexingRead,
+    responses={
+        status.HTTP_404_NOT_FOUND: {"model": DemoFaChatErrorResponse},
+        status.HTTP_409_CONFLICT: {"model": DemoFaChatErrorResponse},
+        status.HTTP_503_SERVICE_UNAVAILABLE: {"model": DemoFaChatErrorResponse},
+    },
+)
+def index_demo_memory_promotion_endpoint(
+    promotion_id: CandidateIdPath,
+    profile_id: int | None = None,
+    db: Session = Depends(get_db),
+) -> AvatarMemoryIndexingRead:
+    try:
+        return index_demo_memory_promotion(
+            db,
+            profile_id=profile_id,
+            promotion_id=promotion_id,
+        )
+    except (AvatarMemoryPromotionNotFoundError, AvatarMemoryIndexingNotFoundError) as exc:
+        log_event(
+            logger,
+            std_logging.INFO,
+            "fa_demo_chat_memory_promotion_not_found",
+            profile_id=profile_id,
+            promotion_id=promotion_id,
+            action="index",
+            error_type=exc.__class__.__name__,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=PROMOTION_NOT_FOUND_DETAIL,
+        ) from exc
+    except DemoFaChatProfileUnavailableError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(exc),
+        ) from exc
+    except (AvatarMemoryIndexingEligibilityError, AvatarMemoryIndexingConflictError) as exc:
+        log_event(
+            logger,
+            std_logging.INFO,
+            "fa_demo_chat_memory_promotion_index_rejected",
+            profile_id=profile_id,
+            promotion_id=promotion_id,
+            action="index",
+            error_type=exc.__class__.__name__,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=PROMOTION_INVALID_TRANSITION_DETAIL,
+        ) from exc
+    except AvatarMemoryIndexingExecutionError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=PROMOTION_INDEXING_FAILED_DETAIL,
+        ) from exc
 
 
 @router.post(

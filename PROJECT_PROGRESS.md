@@ -7036,3 +7036,232 @@ Next recommended task:
 1. Task 64.2 - Approved Memory Indexing Job
 
 ---
+
+## Task 64.2 - Approved Memory Indexing Job (2026-07-11)
+
+Goal:
+
+- convert an approved `pending_index` promotion into searchable avatar memory only through an explicit, audited action
+- preserve the rule that approval and `pending_index` are not indexing and are not factual evidence
+- make Qdrant indexing idempotent, conflict-safe, observable, and compatible with the existing FA retrieval path
+
+Why this task exists:
+
+- Task 64.1 created the safe promotion handoff but intentionally stopped before Qdrant
+- current retrieval hydrates Qdrant hits through Postgres `RagEmbedding -> RagChunk -> RagSource` records
+- a standalone ad-hoc Qdrant payload would therefore be discarded and would not become searchable evidence
+
+What changed:
+
+- added explicit indexing module:
+  - `backend/app/modules/avatar_memory_indexing/__init__.py`
+  - `backend/app/modules/avatar_memory_indexing/schemas.py`
+  - `backend/app/modules/avatar_memory_indexing/repository.py`
+  - `backend/app/modules/avatar_memory_indexing/service.py`
+  - `backend/app/modules/avatar_memory_indexing/qdrant_writer.py`
+- added Alembic migration:
+  - `backend/alembic/versions/20260711_0017_add_memory_promotion_indexing_metadata.py`
+- promotion indexing metadata now includes:
+  - `target_collection_name`
+  - `qdrant_point_id`
+  - `indexing_attempt_count`
+  - `failed_at`
+  - direct `rag_source_id`, `rag_chunk_id`, and `rag_embedding_id` audit links
+- extended the supported RAG source types with `conversation_candidate`
+- each indexed promotion creates exactly one dedicated source, one chunk, one passage embedding, and one vector-index record
+- approved memory text remains limited to one normalized short chunk (maximum 500 characters)
+
+Explicit indexing rule:
+
+- candidate creation does not index
+- candidate approval does not index
+- a `pending_index` promotion is not searchable
+- only the explicit endpoint or execute-mode CLI can write the approved promotion to Qdrant
+- `failed` and `cancelled` promotions are terminal for this task and are not retried automatically
+
+Eligibility:
+
+- promotion status is `pending_index`, or `indexed` for an explicit idempotency/repair check
+- actual candidate status and stored snapshot are both `approved`
+- candidate, owner, avatar, and profile identities match
+- profile exists and belongs to the promotion owner
+- approved normalized text is non-empty and within the short-memory limit
+- the active target is the existing `bge_m3_dense_sparse` collection with the expected dimension
+- real BGE-M3 runtime is required; the mock fallback is explicitly rejected
+
+Qdrant and retrieval compatibility:
+
+- writes to the profile's active retrieval collection; it does not create a collection from an invalid config
+- preserves required retrieval payload fields:
+  - `owner_user_id`
+  - `profile_id`
+  - `source_id`
+  - `chunk_id`
+  - `embedding_id`
+  - `model_code`
+  - `text_hash`
+  - `language`
+  - `validation_status`
+  - `source_type`
+  - `chunk_index`
+  - `indexed_at`
+  - BGE-M3 `sparse_vector`
+- adds approved-memory provenance:
+  - `avatar_id`
+  - `candidate_id`
+  - `promotion_id`
+  - `memory_status=verified`
+  - `provenance=review_approved_conversation_candidate`
+  - `approved_at`
+  - deterministic chunk source ID and safe source title
+- raw/private memory text is not duplicated in the Qdrant payload; retrieval hydrates it from the owned SQL chunk
+- FA debug evidence exposes only a safe subset of payload provenance and excludes vectors and private raw payload fields
+
+Idempotency and failure safety:
+
+- Qdrant point ID is deterministic UUID5 over promotion/avatar/profile/source identity
+- exact point lookup happens before upsert
+- matching payload returns `already_indexed` without another write
+- conflicting immutable payload fails safely and is never silently overwritten
+- supporting SQL evidence is persisted while the promotion is still non-searchable, then Qdrant is written, then promotion/vector-index status is committed as `indexed`
+- a newly written point is deleted as compensation if the final database commit fails
+- Qdrant write/runtime failures mark the promotion `failed`, set `failed_at`, retain a safe generic error, and never expose raw memory text
+
+API and CLI controls:
+
+- added required endpoint:
+  - `POST /api/demo/fa-chat/memory-promotions/{promotion_id}/index`
+- successful response includes:
+  - `promotion_id`
+  - `promotion_status`
+  - `indexed_at`
+  - `target_collection_name`
+  - `qdrant_point_id`
+  - `searchable_as_fact`
+  - `result=indexed|already_indexed`
+- added script:
+  - `backend/scripts/index_approved_memory_promotions.py`
+- script selectors/options:
+  - `--promotion-id`
+  - `--avatar-id`
+  - `--profile-id`
+  - `--limit`
+  - `--dry-run`
+  - `--qdrant-url`
+- dry-run validates eligibility and collection, does not embed, does not mutate Postgres, and does not write Qdrant
+- execute mode returns safe JSON counts for eligible, indexed, failed, skipped, and already indexed items
+
+Celery decision:
+
+- deferred for Task 64.2
+- the current Celery worker does not have the backend's real BGE provider/cache volume, Qdrant dependency, or Prometheus worker export wiring
+- synchronous explicit API plus bounded CLI avoids a half-configured background indexing path
+
+Metrics and Grafana:
+
+- added low-cardinality metrics:
+  - `memory_indexing_started_total`
+  - `memory_indexing_completed_total`
+  - `memory_indexing_failed_total`
+  - `memory_indexing_duration_seconds{result=...}`
+  - `memory_promotion_index_status_total{status=...}`
+- no promotion, candidate, trace, avatar, profile, or text metric labels
+- Grafana dashboard version advanced to 3 with panels for:
+  - indexed promotions
+  - failed indexing
+  - p95 indexing duration
+  - indexing success/failure rate
+- existing pending-promotions panel remains in place
+- NALUS monitoring wiring was not changed
+
+Tests added / updated:
+
+- new:
+  - `backend/tests/test_avatar_memory_indexing.py`
+- updated:
+  - `backend/tests/test_demo_fa_chat.py` behavior remains covered through the focused suite
+  - `backend/tests/test_metrics.py`
+  - `backend/tests/test_models.py`
+- offline indexing tests inject an in-memory Qdrant writer and fixed 1024-dimensional passage embedding
+- tests do not contact Redis, load a model, use a fallback provider, or download model data
+
+Tests run:
+
+- focused Task 64.2 suite:
+  - `python -m pytest tests/test_avatar_memory_promotions.py tests/test_conversation_memory_candidates.py tests/test_demo_fa_chat.py tests/test_models.py tests/test_metrics.py tests/test_avatar_memory_indexing.py -q`
+  - result: `49 passed`
+- post-smoke focused rerun after debug provenance update:
+  - `python -m pytest tests/test_avatar_memory_indexing.py tests/test_demo_fa_chat.py tests/test_metrics.py tests/test_models.py -q`
+  - result: `34 passed`
+- required AI/RAG/FA regression:
+  - `python -m pytest tests/test_ai_agents.py tests/test_rag_evaluation.py tests/test_demo_fa_chat.py -q`
+  - result: `78 passed`
+- required cache/model regression:
+  - `python -m pytest tests/test_embedding_cache.py tests/test_bge_m3_embedding_cache.py tests/test_bge_m3_model_cache.py tests/test_prefetch_embedding_model.py -q`
+  - result: `33 passed`
+- all runs show only the existing non-blocking `pytest_asyncio` default-loop-scope deprecation warning
+- one optional combined Alembic/Qdrant/retrieval test command was terminated after hanging without output; required suites and live PostgreSQL/Qdrant smoke passed
+
+Docker smoke:
+
+- `docker compose up -d backend frontend`: passed
+- `docker compose exec -T backend alembic upgrade head`: passed after correcting fixed-name handling in the new migration
+- current database revision: `20260711_0017 (head)`
+- before indexing:
+  - candidate `6` persisted as `needs_review`
+  - Qdrant point count stayed at 20
+  - approval created promotion `2` as `pending_index`
+  - `searchable_as_fact=false`
+  - the repeated claim returned no promotion provenance in evidence and retained lack-of-evidence behavior
+- explicit indexing:
+  - endpoint returned `promotion_status=indexed`
+  - deterministic point ID `b4d1e9f0-7894-5a64-8527-17f6811f6579`
+  - Qdrant point count changed from 20 to 21 only on this call
+  - `searchable_as_fact=true`
+- after indexing:
+  - the approved-memory chunk ranked first for the repeated claim
+  - debug evidence included candidate `6`, promotion `2`, `memory_status=verified`, and approved-review provenance
+  - the external Brain provider still chose conservative lack-of-evidence wording because the approved candidate text itself is phrased as a possible memory; retrieval and evidence availability were verified without changing the Brain provider
+- idempotency:
+  - repeated index call returned `result=already_indexed`
+  - Qdrant remained at 21 points
+- CLI dry-run:
+  - promotion `3` reported eligible
+  - remained `pending_index`
+  - indexing attempt count remained 0
+  - Qdrant remained at 21 points
+- metrics:
+  - all five indexing metric families present
+  - no forbidden high-cardinality labels
+  - no raw claim text
+- logs:
+  - safe indexing completion fields present
+  - no full approved memory text in indexing logs
+  - no API key, CUDA, NVIDIA, or model-download error text
+  - BGE-M3 loaded from the existing local snapshot
+
+Behavior preserved:
+
+- unindexed promotions cannot be used as factual evidence
+- Redis embedding cache behavior was not changed
+- retrieval ranking and top-k behavior were not changed
+- BGE-M3 embedding semantics were not changed
+- Brain provider was not changed
+- no model was downloaded
+- no onboarding, upload, voice, video, face, director, or frontend pipeline was added
+
+Known limitations:
+
+- one short memory per promotion; no general upload chunking pipeline
+- no full onboarding or memory upload pipeline
+- no full admin review/indexing UI
+- no explicit retry endpoint for terminal `failed` promotions
+- Celery indexing remains deferred until the worker has production BGE/Qdrant/metrics parity
+- approval currently accepts the candidate's generated memory wording without an editor; ambiguous “possible memory” wording can make the Brain answer conservatively even when retrieval succeeds
+
+Next recommended task:
+
+1. Task 65 - Profile Onboarding / Memory Upload Pipeline
+2. Task 64.3 - Admin review UI, if human text editing and indexing controls should come first
+
+---

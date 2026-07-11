@@ -5,6 +5,7 @@ from types import SimpleNamespace
 from prometheus_client.parser import text_string_to_metric_families
 
 from app.main import app
+from app.core.metrics import observe_memory_indexing_finished, observe_memory_indexing_started
 from app.modules.auth.schemas import RegisterRequest
 from app.modules.auth.service import register_user
 from app.modules.memory_profiles.schemas import MemoryProfileCreate
@@ -101,6 +102,12 @@ def test_metrics_endpoint_exists(client):
     assert "embedding_cache_hits_total" in body
     assert "memory_promotion_created_total" in body
     assert "memory_promotion_status_total" in body
+    assert "memory_indexing_started_total" in body
+    assert "memory_indexing_completed_total" in body
+    assert "memory_indexing_failed_total" in body
+    assert "memory_indexing_duration_seconds" in body
+    assert "memory_promotion_index_status_total" in body
+    assert "memory_promotions_current" in body
 
 
 def test_fa_chat_metrics_increment_for_successful_request(client, monkeypatch):
@@ -389,12 +396,60 @@ def test_memory_review_and_promotion_metrics_increment(client, monkeypatch):
         "memory_promotion_status_total",
         {"status": "pending_index"},
     )
+    current_pending_promotions = _sample_value(
+        after_metrics,
+        "memory_promotions_current",
+        {"status": "pending_index"},
+    )
 
     assert after_reviewed == before_reviewed + 1
     assert after_promotions_created == before_promotions_created + 1
     assert after_promotion_status == before_promotion_status + 1
+    assert current_pending_promotions == 1
     assert "Ты помнишь, как я выиграл чемпионат мира по плаванию?" not in after_metrics
-    forbidden_labels = {"candidate_id", "promotion_id", "trace_id"}
+    forbidden_labels = {"candidate_id", "promotion_id", "trace_id", "avatar_id", "profile_id"}
     for family in text_string_to_metric_families(after_metrics):
+        for sample in family.samples:
+            assert forbidden_labels.isdisjoint(sample.labels.keys())
+
+
+def test_memory_indexing_metrics_increment_without_high_cardinality_labels(client):
+    before = _metrics_text(client)
+    before_started = _sample_value(before, "memory_indexing_started_total", {})
+    before_completed = _sample_value(before, "memory_indexing_completed_total", {})
+    before_failed = _sample_value(before, "memory_indexing_failed_total", {})
+    before_indexed = _sample_value(
+        before,
+        "memory_promotion_index_status_total",
+        {"status": "indexed"},
+    )
+    before_failed_status = _sample_value(
+        before,
+        "memory_promotion_index_status_total",
+        {"status": "failed"},
+    )
+
+    observe_memory_indexing_started()
+    observe_memory_indexing_finished(result="indexed", duration_seconds=0.25)
+    observe_memory_indexing_started()
+    observe_memory_indexing_finished(result="failed", duration_seconds=0.5)
+
+    after = _metrics_text(client)
+    assert _sample_value(after, "memory_indexing_started_total", {}) == before_started + 2
+    assert _sample_value(after, "memory_indexing_completed_total", {}) == before_completed + 1
+    assert _sample_value(after, "memory_indexing_failed_total", {}) == before_failed + 1
+    assert _sample_value(
+        after,
+        "memory_promotion_index_status_total",
+        {"status": "indexed"},
+    ) == before_indexed + 1
+    assert _sample_value(
+        after,
+        "memory_promotion_index_status_total",
+        {"status": "failed"},
+    ) == before_failed_status + 1
+    assert "approved memory text" not in after.lower()
+    forbidden_labels = {"candidate_id", "promotion_id", "trace_id", "avatar_id", "profile_id"}
+    for family in text_string_to_metric_families(after):
         for sample in family.samples:
             assert forbidden_labels.isdisjoint(sample.labels.keys())

@@ -29,6 +29,7 @@ from app.modules.avatar_persona import (
     load_demo_avatar_persona,
 )
 from app.modules.avatar_memory_promotions import service as avatar_memory_promotions_service
+from app.modules.avatar_memory_indexing import service as avatar_memory_indexing_service
 from app.modules.avatar_memory_promotions.schemas import build_avatar_memory_promotion_read
 from app.modules.conversation_memory_candidates import service as conversation_memory_candidates_service
 from app.modules.conversation_memory_candidates.schemas import (
@@ -285,6 +286,17 @@ def _build_evidence_items(
     if not debug:
         return []
 
+    safe_payload_keys = {
+        "avatar_id",
+        "candidate_id",
+        "chunk_source_id",
+        "indexed_at",
+        "memory_status",
+        "promotion_id",
+        "provenance",
+        "source_type",
+    }
+
     return [
         DemoFaChatEvidenceItem(
             chunk_id=str(result.chunk_id),
@@ -292,13 +304,14 @@ def _build_evidence_items(
             source_title=result.source_title,
             score=float(result.score),
             text_preview=_truncate_preview(result.text),
+            payload_metadata={
+                key: value
+                for key, value in result.payload_metadata.items()
+                if key in safe_payload_keys
+            },
         )
         for result in results
     ]
-
-
-def _build_top_text_previews(results: list[RagRetrievalResultRead], *, limit: int = 3) -> list[str]:
-    return [_truncate_preview(result.text, limit=140) for result in results[:limit]]
 
 
 def _build_demo_memory_candidate(
@@ -469,12 +482,16 @@ def get_demo_memory_promotion(
     promotion_id: int,
 ):
     resolved_profile = _resolve_demo_profile(db, profile_id=profile_id)
+    avatar_persona = _resolve_demo_avatar_persona()
     promotion = avatar_memory_promotions_service.get_promotion(
         db,
         owner_user_id=resolved_profile.user.id,
         promotion_id=promotion_id,
     )
-    if promotion.profile_id != resolved_profile.profile.id:
+    if (
+        promotion.profile_id != resolved_profile.profile.id
+        or promotion.avatar_id != avatar_persona.avatar_id
+    ):
         raise avatar_memory_promotions_service.AvatarMemoryPromotionNotFoundError(
             "Avatar memory promotion not found"
         )
@@ -499,6 +516,24 @@ def cancel_demo_memory_promotion(
     )
     observe_memory_promotion_status(status=cancelled_promotion.promotion_status)
     return cancelled_promotion
+
+
+def index_demo_memory_promotion(
+    db: Session,
+    *,
+    profile_id: int | None,
+    promotion_id: int,
+):
+    promotion = get_demo_memory_promotion(
+        db,
+        profile_id=profile_id,
+        promotion_id=promotion_id,
+    )
+    return avatar_memory_indexing_service.index_promotion(
+        db,
+        owner_user_id=promotion.owner_user_id,
+        promotion_id=promotion.id,
+    )
 
 
 def build_demo_memory_candidate_review_response(
@@ -600,7 +635,7 @@ def run_demo_fa_chat_message(
         retrieved_chunk_count=len(retrieval_response.results),
         top_chunk_ids=[str(result.chunk_id) for result in retrieval_response.results[:5]],
         top_source_titles=[result.source_title for result in retrieval_response.results[:3] if result.source_title],
-        top_text_previews=_build_top_text_previews(retrieval_response.results),
+        top_text_hash_prefixes=[result.text_hash[:12] for result in retrieval_response.results[:5]],
     )
     retrieved_evidence_items = build_rag_evidence_items(retrieval_response.results)
     grounded_context = build_vector_retrieval_grounded_context(

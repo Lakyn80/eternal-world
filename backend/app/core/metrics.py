@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from prometheus_client import CONTENT_TYPE_LATEST, Counter, Histogram, generate_latest
+from prometheus_client import CONTENT_TYPE_LATEST, Counter, Gauge, Histogram, generate_latest
 from starlette.responses import Response
 
 
@@ -126,6 +126,36 @@ MEMORY_PROMOTION_STATUS_TOTAL = Counter(
     "Total avatar memory promotion status events.",
     labelnames=("status",),
 )
+MEMORY_INDEXING_STARTED_TOTAL = Counter(
+    "memory_indexing_started_total",
+    "Total explicit approved memory indexing attempts started.",
+)
+MEMORY_INDEXING_COMPLETED_TOTAL = Counter(
+    "memory_indexing_completed_total",
+    "Total explicit approved memory indexing calls completed safely.",
+)
+MEMORY_INDEXING_FAILED_TOTAL = Counter(
+    "memory_indexing_failed_total",
+    "Total explicit approved memory indexing calls that failed.",
+)
+MEMORY_INDEXING_DURATION_SECONDS = Histogram(
+    "memory_indexing_duration_seconds",
+    "Explicit approved memory indexing duration in seconds.",
+    labelnames=("result",),
+)
+MEMORY_PROMOTION_INDEX_STATUS_TOTAL = Counter(
+    "memory_promotion_index_status_total",
+    "Total explicit approved memory indexing outcomes.",
+    labelnames=("status",),
+)
+MEMORY_PROMOTIONS_CURRENT = Gauge(
+    "memory_promotions_current",
+    "Current avatar memory promotions by durable status.",
+    labelnames=("status",),
+)
+
+_MEMORY_INDEX_RESULTS = frozenset({"indexed", "failed", "skipped"})
+_MEMORY_PROMOTION_STATUSES = ("pending_index", "indexed", "failed", "cancelled")
 
 
 def normalize_http_route_label(route_path: str | None) -> str:
@@ -289,3 +319,24 @@ def observe_memory_promotion_created() -> None:
 
 def observe_memory_promotion_status(*, status: str) -> None:
     MEMORY_PROMOTION_STATUS_TOTAL.labels(status.strip().lower() or "unknown").inc()
+
+
+def observe_memory_indexing_started() -> None:
+    MEMORY_INDEXING_STARTED_TOTAL.inc()
+
+
+def observe_memory_indexing_finished(*, result: str, duration_seconds: float) -> None:
+    normalized_result = result.strip().lower()
+    if normalized_result not in _MEMORY_INDEX_RESULTS:
+        normalized_result = "other"
+    if normalized_result == "failed":
+        MEMORY_INDEXING_FAILED_TOTAL.inc()
+    else:
+        MEMORY_INDEXING_COMPLETED_TOTAL.inc()
+    MEMORY_INDEXING_DURATION_SECONDS.labels(normalized_result).observe(max(0.0, duration_seconds))
+    MEMORY_PROMOTION_INDEX_STATUS_TOTAL.labels(normalized_result).inc()
+
+
+def set_memory_promotions_current(*, counts_by_status: dict[str, int]) -> None:
+    for status in _MEMORY_PROMOTION_STATUSES:
+        MEMORY_PROMOTIONS_CURRENT.labels(status).set(max(0, int(counts_by_status.get(status, 0))))
