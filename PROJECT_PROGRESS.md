@@ -6243,6 +6243,136 @@ Next recommended task:
 
 ---
 
+## Task 63.1 - Verify warm BGE-M3 runtime after persona harness (2026-07-11)
+
+Goal:
+
+- verify that the live FA demo works end-to-end after the Task 63 persona integration once the explicit BGE-M3 warm cache is completed
+- keep retrieval, embeddings, Redis embedding cache semantics, Qdrant collections, and persona behavior unchanged
+
+Scope:
+
+- runtime verification only
+- explicit prefetch through the already committed script:
+  - `backend/scripts/prefetch_embedding_model.py`
+- no backend code changes
+- no frontend code changes
+
+Initial cache state:
+
+- cache dir:
+  - `/models/huggingface`
+- BGE-M3 snapshot initially incomplete:
+  - snapshot metadata tree existed
+  - main weight blob was still `.incomplete`
+- runtime stayed CPU-only throughout:
+  - `SENTENCE_TRANSFORMERS_DEVICE=cpu`
+  - `CUDA_VISIBLE_DEVICES=""`
+  - `NVIDIA_VISIBLE_DEVICES=void`
+
+What happened during verification:
+
+- resumed the official BGE-M3 prefetch using the existing script only
+- a long-running `hf_xet` download path hit an external DNS/network issue against the Xet CDN
+- verification then resumed the same official prefetch script with:
+  - `HF_HUB_DISABLE_XET=1`
+- this reused the already downloaded partial blob and completed the required weight file cleanly
+- no alternative model, mock embedding, hash embedding, MPNet fallback, or CUDA path was introduced
+
+Final cache state:
+
+- `bge_m3_snapshot_cached=true`
+- snapshot path:
+  - `/models/huggingface/models--BAAI--bge-m3/snapshots/5617a9f61b028005a4858fdac845db406aefb181`
+- required weight present:
+  - `pytorch_model.bin`
+- incomplete blobs remaining:
+  - none
+
+Direct API smoke:
+
+- factual grounded question:
+  - `Где ты жила в детстве?`
+  - result:
+    - HTTP `200`
+    - Russian answer
+    - answer mentions `Попице`
+    - `persona_applied=true`
+    - `trace_id` present
+    - debug evidence present
+- emotional/persona question:
+  - `Бабушка, мне сегодня тяжело.`
+  - result:
+    - HTTP `200`
+    - warm Russian answer
+    - `persona_applied=true`
+    - no technical/RAG/chunk wording
+- safe-learning question:
+  - `Ты помнишь, как пела мне песню перед сном?`
+  - result:
+    - HTTP `200`
+    - no invented concrete facts
+    - `memory_candidate.status=needs_review`
+    - `memory_candidate.confidence=unverified`
+    - no permanent DB/Qdrant write introduced
+
+Frontend smoke:
+
+- initial frontend smoke exposed a separate Next.js dev build artifact issue:
+  - `/fa-chat` returned `500`
+  - cause:
+    - missing generated `.next` chunk `./819.js`
+- fixed operationally by:
+  - stopping `frontend`
+  - removing generated `frontend/.next`
+  - starting `frontend` again
+- final frontend smoke:
+  - `GET http://localhost:8017/fa-chat`
+  - returned `200`
+  - page shell rendered correctly again
+
+Backend logs:
+
+- no cache permission error
+- no CUDA/NVIDIA error
+- no runtime model download attempt after cache completion
+- no mock/hash fallback
+- no client stack trace on the three API smoke requests
+- safe trace/log fields confirmed:
+  - `trace_id`
+  - `profile_id`
+  - `collection_name`
+  - `retrieved_chunk_count`
+  - `persona_applied`
+  - `memory_candidate_created`
+
+What changed:
+
+- no source code changed
+- no tests were re-run because this task was runtime verification only
+- one generated frontend dev build directory was cleared:
+  - `frontend/.next`
+
+What did not change:
+
+- retrieval logic: unchanged
+- embedding logic: unchanged
+- Redis embedding cache behavior: unchanged
+- Qdrant collections/data: unchanged
+- persona prompt behavior: unchanged
+- model/provider fallback behavior: unchanged
+
+Known limitations:
+
+- frontend smoke was validated by successful route load and backend/API integration, not by full browser automation of typing the message into the page
+- the completed warm cache depends on the persisted Docker volume remaining intact
+
+Next recommended task:
+
+1. Task 64 - Conversation Memory Candidate Review
+
+---
+
 ## Task 62S - Fix BGE-M3 cold-start/cache runtime for FA demo (2026-07-10)
 
 Goal:
