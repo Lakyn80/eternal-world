@@ -6,6 +6,12 @@ from enum import Enum
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from app.db.models import ConversationMemoryCandidate
+from app.modules.family_memory_enrichment.enums import (
+    DisputeStatus,
+    EnrichmentStatus,
+    MemoryType,
+    PrivacyScope,
+)
 
 
 MEMORY_CANDIDATE_EXCERPT_MAX_LENGTH = 160
@@ -58,6 +64,13 @@ class MemoryCandidateCreate(BaseModel):
     proposed_memory_text: str = Field(min_length=1, max_length=MEMORY_CANDIDATE_TEXT_MAX_LENGTH)
     reason: str = Field(min_length=1, max_length=MEMORY_CANDIDATE_REASON_MAX_LENGTH)
     language: str | None = Field(default=None, max_length=MEMORY_CANDIDATE_LANGUAGE_MAX_LENGTH)
+    memory_type: MemoryType = MemoryType.GENERAL
+    enrichment_status: EnrichmentStatus = EnrichmentStatus.READY_FOR_OWNER_REVIEW
+    finalized_memory_text: str | None = Field(default=None, max_length=MEMORY_CANDIDATE_TEXT_MAX_LENGTH)
+    privacy_scope: PrivacyScope = PrivacyScope.ALL_FAMILY
+    dispute_status: DisputeStatus = DisputeStatus.NONE
+    unresolved_clarification_count: int = Field(default=0, ge=0)
+    workflow_version: int = Field(default=1, ge=1, le=2)
 
     @field_validator("avatar_id", mode="before")
     @classmethod
@@ -83,9 +96,11 @@ class MemoryCandidateCreate(BaseModel):
             raise ValueError("user_message_excerpt is required")
         return truncated_value
 
-    @field_validator("proposed_memory_text", "reason", mode="before")
+    @field_validator("proposed_memory_text", "reason", "finalized_memory_text", mode="before")
     @classmethod
     def normalize_required_text(cls, value: str) -> str:
+        if value is None:
+            return None
         normalized_value = _normalize_text(str(value))
         if not normalized_value:
             raise ValueError("text field is required")
@@ -128,6 +143,19 @@ class MemoryCandidateRead(BaseModel):
     reviewed_by: int | None = None
     review_note: str | None = None
     rejection_reason: str | None = None
+    memory_type: MemoryType
+    enrichment_status: EnrichmentStatus
+    finalized_memory_text: str | None = None
+    privacy_scope: PrivacyScope
+    dispute_status: DisputeStatus
+    finalized_at: datetime | None = None
+    finalized_by: str | None = None
+    owner_reviewed_at: datetime | None = None
+    owner_reviewed_by: str | None = None
+    owner_review_actor_role: str | None = None
+    unresolved_clarification_count: int
+    version: int
+    workflow_version: int
 
 
 class MemoryCandidateListResponse(BaseModel):
@@ -156,4 +184,17 @@ def build_memory_candidate_read(candidate: ConversationMemoryCandidate) -> Memor
         reviewed_by=candidate.reviewed_by,
         review_note=candidate.review_note,
         rejection_reason=candidate.rejection_reason,
+        memory_type=MemoryType(candidate.memory_type),
+        enrichment_status=EnrichmentStatus(candidate.enrichment_status),
+        finalized_memory_text=candidate.finalized_memory_text,
+        privacy_scope=PrivacyScope(candidate.privacy_scope),
+        dispute_status=DisputeStatus(candidate.dispute_status),
+        finalized_at=candidate.finalized_at,
+        finalized_by=candidate.finalized_by,
+        owner_reviewed_at=candidate.owner_reviewed_at,
+        owner_reviewed_by=candidate.owner_reviewed_by,
+        owner_review_actor_role=candidate.owner_review_actor_role,
+        unresolved_clarification_count=candidate.unresolved_clarification_count,
+        version=candidate.version,
+        workflow_version=candidate.workflow_version,
     )

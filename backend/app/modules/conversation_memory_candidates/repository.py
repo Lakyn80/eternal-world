@@ -21,6 +21,13 @@ def create_conversation_memory_candidate(
     proposed_memory_text: str,
     reason: str,
     language: str | None,
+    memory_type: str,
+    enrichment_status: str,
+    finalized_memory_text: str | None,
+    privacy_scope: str,
+    dispute_status: str,
+    unresolved_clarification_count: int,
+    workflow_version: int,
 ) -> ConversationMemoryCandidate:
     candidate = ConversationMemoryCandidate(
         owner_user_id=owner_user_id,
@@ -35,6 +42,13 @@ def create_conversation_memory_candidate(
         proposed_memory_text=proposed_memory_text,
         reason=reason,
         language=language,
+        memory_type=memory_type,
+        enrichment_status=enrichment_status,
+        finalized_memory_text=finalized_memory_text,
+        privacy_scope=privacy_scope,
+        dispute_status=dispute_status,
+        unresolved_clarification_count=unresolved_clarification_count,
+        workflow_version=workflow_version,
     )
     db.add(candidate)
     return candidate

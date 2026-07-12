@@ -59,6 +59,7 @@ def create_candidate(
     db: Session,
     *,
     payload: MemoryCandidateCreate,
+    commit: bool = True,
 ) -> ConversationMemoryCandidate:
     _validate_owned_profile(
         db,
@@ -79,9 +80,26 @@ def create_candidate(
         proposed_memory_text=payload.proposed_memory_text,
         reason=payload.reason,
         language=payload.language,
+        memory_type=payload.memory_type.value,
+        enrichment_status=payload.enrichment_status.value,
+        finalized_memory_text=(
+            payload.finalized_memory_text
+            or (
+                payload.proposed_memory_text
+                if payload.enrichment_status.value == "ready_for_owner_review"
+                else None
+            )
+        ),
+        privacy_scope=payload.privacy_scope.value,
+        dispute_status=payload.dispute_status.value,
+        unresolved_clarification_count=payload.unresolved_clarification_count,
+        workflow_version=payload.workflow_version,
     )
-    db.commit()
-    db.refresh(candidate)
+    if commit:
+        db.commit()
+        db.refresh(candidate)
+    else:
+        db.flush()
     return candidate
 
 
@@ -132,6 +150,13 @@ def _assert_transition_allowed(
         )
 
 
+def _assert_legacy_review_workflow(candidate: ConversationMemoryCandidate) -> None:
+    if candidate.workflow_version >= 2:
+        raise ConversationMemoryCandidateInvalidTransitionError(
+            "Enriched candidates require the family memory owner-review workflow."
+        )
+
+
 def _apply_review_state(
     candidate: ConversationMemoryCandidate,
     *,
@@ -173,11 +198,16 @@ def approve_candidate(
         owner_user_id=owner_user_id,
         candidate_id=candidate_id,
     )
+    _assert_legacy_review_workflow(candidate)
     _apply_review_state(
         candidate,
         next_status=MemoryCandidateStatus.APPROVED,
         payload=payload,
     )
+    candidate.owner_reviewed_at = candidate.reviewed_at
+    candidate.owner_reviewed_by = f"internal-owner:{owner_user_id}"
+    candidate.owner_review_actor_role = "owner"
+    candidate.review_authority_source = "internal_service"
     promotion_outcome = avatar_memory_promotions_service.create_or_get_promotion_for_candidate(
         db,
         candidate=candidate,
@@ -204,6 +234,7 @@ def reject_candidate(
         owner_user_id=owner_user_id,
         candidate_id=candidate_id,
     )
+    _assert_legacy_review_workflow(candidate)
     _apply_review_state(
         candidate,
         next_status=MemoryCandidateStatus.REJECTED,
@@ -226,6 +257,7 @@ def archive_candidate(
         owner_user_id=owner_user_id,
         candidate_id=candidate_id,
     )
+    _assert_legacy_review_workflow(candidate)
     _apply_review_state(
         candidate,
         next_status=MemoryCandidateStatus.ARCHIVED,

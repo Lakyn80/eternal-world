@@ -5,9 +5,11 @@ from app.db.models import (
     BackgroundJob,
     ChatMessage,
     ConversationMemoryCandidate,
+    FamilyMemoryContribution,
     MediaAsset,
     Memory,
     MemoryProfile,
+    MemoryClarificationQuestion,
     RagChunk,
     RagEmbedding,
     RagSource,
@@ -30,6 +32,8 @@ def test_database_models_are_registered():
     assert ActiveRetrievalConfig.__tablename__ == "active_retrieval_configs"
     assert ConversationMemoryCandidate.__tablename__ == "conversation_memory_candidates"
     assert AvatarMemoryPromotion.__tablename__ == "avatar_memory_promotions"
+    assert FamilyMemoryContribution.__tablename__ == "family_memory_contributions"
+    assert MemoryClarificationQuestion.__tablename__ == "memory_clarification_questions"
     assert "full_name" in User.__table__.columns.keys()
     assert {
         "main_photo_media_id",
@@ -147,7 +151,43 @@ def test_database_models_are_registered():
         "reviewed_by",
         "review_note",
         "rejection_reason",
+        "memory_type",
+        "enrichment_status",
+        "finalized_memory_text",
+        "privacy_scope",
+        "dispute_status",
+        "finalized_at",
+        "finalized_by",
+        "owner_reviewed_at",
+        "owner_reviewed_by",
+        "owner_review_actor_role",
+        "review_authority_source",
+        "unresolved_clarification_count",
+        "version",
+        "workflow_version",
     }.issubset(ConversationMemoryCandidate.__table__.columns.keys())
+    assert "updated_at" not in FamilyMemoryContribution.__table__.columns.keys()
+    assert {
+        "candidate_id",
+        "actor_id",
+        "actor_role",
+        "contribution_type",
+        "contribution_text",
+        "structured_details",
+        "supersedes_contribution_id",
+        "privacy_scope_snapshot",
+        "created_at",
+    }.issubset(FamilyMemoryContribution.__table__.columns.keys())
+    assert {
+        "candidate_id",
+        "question_key",
+        "question_text",
+        "status",
+        "required",
+        "asked_at",
+        "answered_at",
+        "answer_contribution_id",
+    }.issubset(MemoryClarificationQuestion.__table__.columns.keys())
     assert {
         "candidate_id",
         "owner_user_id",
@@ -204,6 +244,8 @@ def test_database_models_are_registered():
         "active_retrieval_configs",
         "conversation_memory_candidates",
         "avatar_memory_promotions",
+        "family_memory_contributions",
+        "memory_clarification_questions",
     }.issubset(
         Base.metadata.tables.keys()
     )

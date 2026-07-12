@@ -961,6 +961,114 @@
       "targets": [{"expr": "sum(rate(memory_promotion_index_status_total{status=~\"indexed|failed\"}[5m])) by (status)", "legendFormat": "{{status}}", "refId": "A"}],
       "title": "Avatar Learning - Indexing Success / Failure Rate",
       "type": "timeseries"
+    },
+    {
+      "collapsed": false,
+      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 73},
+      "id": 25,
+      "panels": [],
+      "title": "Family Memory Enrichment",
+      "type": "row"
+    },
+    {
+      "datasource": "Prometheus",
+      "fieldConfig": {"defaults": {"decimals": 0, "unit": "short"}, "overrides": []},
+      "gridPos": {"h": 7, "w": 6, "x": 0, "y": 74},
+      "id": 26,
+      "options": {"reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}},
+      "targets": [{"expr": "sum(increase(memory_contribution_created_total[$__range])) or vector(0)", "refId": "A"}],
+      "title": "Family Contributions Created",
+      "type": "stat"
+    },
+    {
+      "datasource": "Prometheus",
+      "fieldConfig": {"defaults": {"decimals": 0, "unit": "short"}, "overrides": []},
+      "gridPos": {"h": 7, "w": 6, "x": 6, "y": 74},
+      "id": 27,
+      "options": {"reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}},
+      "targets": [{"expr": "sum(memory_enrichment_current{status=\"collecting_details\"}) or vector(0)", "refId": "A"}],
+      "title": "Active Collecting Details",
+      "type": "stat"
+    },
+    {
+      "datasource": "Prometheus",
+      "fieldConfig": {"defaults": {"decimals": 0, "unit": "short"}, "overrides": []},
+      "gridPos": {"h": 7, "w": 6, "x": 12, "y": 74},
+      "id": 28,
+      "options": {"reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}},
+      "targets": [{"expr": "sum(memory_enrichment_current{status=\"ready_for_owner_review\"}) or vector(0)", "refId": "A"}],
+      "title": "Ready for Owner Review",
+      "type": "stat"
+    },
+    {
+      "datasource": "Prometheus",
+      "fieldConfig": {"defaults": {"decimals": 0, "unit": "short"}, "overrides": []},
+      "gridPos": {"h": 7, "w": 6, "x": 18, "y": 74},
+      "id": 29,
+      "options": {"reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}},
+      "targets": [{"expr": "sum(increase(memory_owner_review_total{action=~\"confirm|approve_multiple_perspectives\"}[$__range])) or vector(0)", "refId": "A"}],
+      "title": "Owner Confirmations",
+      "type": "stat"
+    },
+    {
+      "datasource": "Prometheus",
+      "fieldConfig": {"defaults": {"decimals": 0, "unit": "short"}, "overrides": []},
+      "gridPos": {"h": 7, "w": 6, "x": 0, "y": 81},
+      "id": 30,
+      "options": {"reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}},
+      "targets": [{"expr": "sum(increase(memory_owner_review_total{action=\"edit_and_confirm\"}[$__range])) or vector(0)", "refId": "A"}],
+      "title": "Owner Corrections",
+      "type": "stat"
+    },
+    {
+      "datasource": "Prometheus",
+      "fieldConfig": {"defaults": {"decimals": 0, "unit": "short"}, "overrides": []},
+      "gridPos": {"h": 7, "w": 6, "x": 6, "y": 81},
+      "id": 31,
+      "options": {"reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}},
+      "targets": [{"expr": "sum(increase(memory_owner_review_total{action=\"reject\"}[$__range])) or vector(0)", "refId": "A"}],
+      "title": "Owner Rejections",
+      "type": "stat"
+    },
+    {
+      "datasource": "Prometheus",
+      "fieldConfig": {"defaults": {"decimals": 0, "unit": "short"}, "overrides": []},
+      "gridPos": {"h": 7, "w": 6, "x": 12, "y": 81},
+      "id": 32,
+      "options": {"reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}},
+      "targets": [{"expr": "sum(increase(memory_owner_review_total{action=\"request_more_details\"}[$__range])) or vector(0)", "refId": "A"}],
+      "title": "Requested More Details",
+      "type": "stat"
+    },
+    {
+      "datasource": "Prometheus",
+      "fieldConfig": {"defaults": {"decimals": 0, "unit": "short"}, "overrides": []},
+      "gridPos": {"h": 7, "w": 6, "x": 18, "y": 81},
+      "id": 33,
+      "options": {"reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}},
+      "targets": [{"expr": "sum(memory_disputes_current{status=\"disputed\"}) or vector(0)", "refId": "A"}],
+      "title": "Disputed Memories",
+      "type": "stat"
+    },
+    {
+      "datasource": "Prometheus",
+      "fieldConfig": {"defaults": {"decimals": 0, "unit": "short"}, "overrides": []},
+      "gridPos": {"h": 7, "w": 12, "x": 0, "y": 88},
+      "id": 34,
+      "options": {"reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}},
+      "targets": [{"expr": "sum(increase(memory_promotion_blocked_total{reason=~\"collecting_details|incomplete|unresolved_clarification\"}[$__range])) or vector(0)", "refId": "A"}],
+      "title": "Promotion Blocked by Incomplete Enrichment",
+      "type": "stat"
+    },
+    {
+      "datasource": "Prometheus",
+      "fieldConfig": {"defaults": {"decimals": 1, "max": 100, "min": 0, "unit": "percent"}, "overrides": []},
+      "gridPos": {"h": 7, "w": 12, "x": 12, "y": 88},
+      "id": 35,
+      "options": {"reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}},
+      "targets": [{"expr": "100 * sum(increase(memory_enrichment_status_total{status=\"ready_for_owner_review\"}[$__range])) / clamp_min(sum(increase(memory_enrichment_status_total{status=~\"collecting_details|ready_for_owner_review\"}[$__range])), 1)", "refId": "A"}],
+      "title": "Enrichment Completion Rate",
+      "type": "stat"
     }
   ],
   "refresh": "15s",
@@ -983,6 +1091,6 @@
   "timezone": "",
   "title": "Eternal World — FA Chat Observability",
   "uid": "eternal-world-fa-chat",
-  "version": 3,
+  "version": 4,
   "weekStart": ""
 }

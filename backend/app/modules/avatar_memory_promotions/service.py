@@ -12,6 +12,7 @@ from app.modules.avatar_memory_promotions.schemas import (
     AvatarMemoryPromotionStatus,
 )
 from app.modules.memory_profiles import repository as memory_profiles_repository
+from app.modules.family_memory_enrichment.eligibility import assert_candidate_eligible_for_promotion
 
 
 class AvatarMemoryPromotionNotFoundError(Exception):
@@ -62,6 +63,7 @@ def create_or_get_promotion_for_candidate(
         raise AvatarMemoryPromotionCandidateStateError(
             "Only approved memory candidates can create promotions."
         )
+    assert_candidate_eligible_for_promotion(db, candidate=candidate)
 
     existing_promotion = repository.get_avatar_memory_promotion_by_candidate_id(
         db,
@@ -83,8 +85,8 @@ def create_or_get_promotion_for_candidate(
         candidate_id=candidate.id,
         avatar_id=candidate.avatar_id,
         profile_id=candidate.profile_id,
-        approved_memory_text=candidate.proposed_memory_text,
-        normalized_memory_text=candidate.proposed_memory_text,
+        approved_memory_text=candidate.finalized_memory_text,
+        normalized_memory_text=candidate.finalized_memory_text,
         language=candidate.language,
         trace_id=candidate.trace_id,
         source_candidate_status_snapshot=candidate.status,

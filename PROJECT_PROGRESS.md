@@ -7270,3 +7270,174 @@ Next recommended task:
 2. Task 64.3 - Admin review UI, if human text editing and indexing controls should come first
 
 ---
+
+## Task 64.3 - Family-Contributed Memory Enrichment Workflow (2026-07-11)
+
+Goal and product use case:
+
+- let a family member introduce a possible personal memory without turning an unverified claim into avatar fact
+- collect one concise clarification at a time, preserve every contribution, build an attributed deterministic draft, and require an explicit owner decision
+- keep promotion and Qdrant indexing as separate audited actions
+
+Domain model and authorization:
+
+- added workflow-versioned enrichment state to conversation memory candidates:
+  - `draft`
+  - `collecting_details`
+  - `ready_for_owner_review`
+- review status remains independent: `needs_review`, `approved`, `rejected`, or `archived`
+- dispute status is independent: `none`, `disputed`, or `resolved`
+- supported domain roles:
+  - `owner`
+  - `contributor`
+  - `trusted_reviewer`
+  - internal-only `system`
+- the current demo uses explicit actor metadata; only `actor_id=demo-owner-eva` with role `owner` has owner authority
+- system role cannot be supplied by a demo client, and an arbitrary client cannot self-identify as a different demo owner
+- this actor context is a domain/demo boundary, not a replacement for production family-account authentication or relationship grants
+- workflow v1 preserves existing legacy candidate behavior; workflow v2 cannot use legacy approve/reject/archive shortcuts
+- private workflow-v2 candidates and promotions are hidden from legacy unauthenticated list/get endpoints
+
+Persistence and migration:
+
+- added Alembic revision `20260711_0018`
+- added append-only `family_memory_contributions` rows with:
+  - actor role and relationship context
+  - typed contribution kind
+  - validated structured personal-memory details
+  - source hash and trace audit fields
+  - supersession link for explicit corrections
+  - privacy snapshot
+  - `created_at` only; no mutable `updated_at` field
+- PostgreSQL rejects direct contribution updates through an append-only trigger; corrections must create a new superseding contribution
+- added `memory_clarification_questions` with deterministic keys, lifecycle status, required flag, answer attribution, and contribution link
+- legacy candidates are marked workflow v1; the migration does not fabricate a verified owner role for historical approvals
+- new raw database rows default to safe workflow-v2 `draft` plus `private_owner`
+
+Clarification and finalization:
+
+- added deterministic `bedtime_song` classification and typed missing-detail policy
+- required first-version song details are title, place, and approximate period
+- only one pending question is returned at a time
+- a natural context answer can satisfy place, period, and frequency together
+- answered questions are not asked again; required questions cannot be skipped
+- optional questions may be skipped without blocking readiness
+- owner-requested follow-up detail is stored and incorporated into the next deterministic draft
+- finalization uses supplied structured facts only and does not invent missing song, place, date, or frequency
+- conflicting values produce separate actor-attributed statements and set `dispute_status=disputed`
+- disagreements are never silently collapsed into one verified fact
+
+Owner review:
+
+- supports:
+  - `confirm`
+  - `edit_and_confirm`
+  - `reject`
+  - `request_more_details`
+  - `mark_disputed`
+  - `approve_multiple_perspectives`
+- owner edits and multiple-perspective rewrites are stored as new append-only owner-correction contributions
+- the previous draft and original contributions remain available in history
+- contributor owner-approval attempts return a safe 403
+- owner confirmation records explicit review authority and creates/reuses a promotion only when current privacy permits it
+- rejection, requested detail, and unresolved disputes create no promotion and perform no Qdrant write
+
+Privacy and promotion/indexing eligibility:
+
+- controlled privacy scopes:
+  - `private_owner`
+  - `selected_family`
+  - `all_family`
+  - `public_legacy`
+- current safe demo rule allows promotion/indexing only for `all_family` and `public_legacy`
+- `private_owner` and `selected_family` may be owner-approved but remain unpromoted and unindexed until permission-aware retrieval exists
+- promotion and indexing both revalidate:
+  - approved review status
+  - ready enrichment status
+  - non-empty finalized text
+  - no pending required clarification
+  - zero unresolved-clarification projection
+  - indexable privacy scope
+  - no unresolved dispute
+  - explicit owner role for workflow v2
+- indexing also verifies that the finalized candidate text still matches the immutable promotion snapshot
+- Qdrant payload now carries privacy, workflow version, and dispute provenance
+
+API and FA chat:
+
+- added demo endpoints for enrichment, contribution history, contribution append, next clarification, answer, skip, finalize, and owner review
+- FA chat requests accept explicit actor metadata and `active_memory_candidate_id`
+- an active clarification answer bypasses RAG and Brain and deterministically advances only the selected candidate
+- new actor-scoped candidate creation plus initial contribution is one transaction; an initialization failure rolls the candidate back instead of leaving an orphan draft
+- normal chat without actor metadata preserves the legacy flow
+- promotion cancel/index mutations for workflow-v2 memories require the explicit demo owner actor
+
+Metrics and Grafana:
+
+- added low-cardinality metrics:
+  - `memory_contribution_created_total{role}`
+  - `memory_clarification_total{status}`
+  - `memory_enrichment_status_total{status}`
+  - `memory_owner_review_total{action}`
+  - `memory_dispute_total{result}`
+  - `memory_promotion_blocked_total{reason}`
+  - durable `memory_enrichment_current{status}`
+  - durable `memory_disputes_current{status}`
+- actor IDs, candidate IDs, avatar/profile IDs, trace IDs, and raw text are not metric labels
+- safe workflow logs include trace/candidate/contribution IDs, actor role, enrichment/clarification/review/promotion status, and duration; full contribution text is not logged
+- extended the existing `fa_chat_observability.json` dashboard to version 4
+- added one Family Memory Enrichment row with panels for contributions, collecting/ready state, all owner actions, disputes, blocked promotions, and completion rate
+- NALUS monitoring wiring was not changed
+
+Tests:
+
+- added `backend/tests/test_family_memory_enrichment.py`
+- covers append-only history, typed input limits, one-at-a-time clarification, deterministic readiness, optional skip, owner actions, attributed disputes, privacy visibility, promotion policy, active-chat continuation, indexing revalidation, and low-cardinality metrics
+- required focused suite: `66 passed`
+- AI/RAG/FA regression suite: `78 passed`
+- cache/model regression suite: `33 passed`
+- all suites showed only the existing `pytest_asyncio` default-loop-scope deprecation warning
+- frontend was not changed, so frontend tests/build were not required
+
+Docker smoke:
+
+- backend/frontend and all supporting services remained healthy
+- migration advanced PostgreSQL to `20260711_0018 (head)`
+- full migration history was also applied on a clean temporary PostgreSQL database, downgraded to `0017`, and upgraded back to `0018`; the append-only trigger was present
+- bedtime-song contributor candidate `14`:
+  - initial claim created one contribution and asked for `song_title`
+  - song answer advanced to `place`
+  - combined village/summer context supplied place and period and reached `ready_for_owner_review`
+  - contributor owner-review attempt returned 403
+  - owner edit-and-confirm created promotion `5` as `pending_index`
+- Qdrant stayed at 22 points through claim, clarifications, finalization, and owner approval
+- before explicit indexing, promotion `5` was absent from retrieval evidence
+- explicit owner-scoped indexing created deterministic point `36361003-3f84-5060-b4ba-16a27fe0fe07` and changed Qdrant from 22 to 23 points
+- the repeated index call returned `already_indexed`; Qdrant remained at 23
+- after indexing, the new memory was retrieved with candidate `14`, promotion `5`, `memory_status=verified`, and `source_type=conversation_candidate`; `lack_of_evidence=false`
+- disputed-perspective smoke candidate `16` retained both contributor and owner statements, became `disputed`, created no promotion, and left Qdrant at 23
+- all eight new metric families were present; no raw demo actor or trace value appeared in metrics
+- the PostgreSQL append-only trigger rejected a direct contribution update
+
+Behavior preserved:
+
+- no retrieval ranking, top-k, Redis cache, BGE-M3 embedding semantics, or Brain provider changes
+- no automatic approval, promotion, indexing, or Qdrant write
+- no upload, biography, document, audio, voice, video, face, or frontend workflow added
+
+Known limitations:
+
+- full production authentication and trusted family-role authorization are not yet implemented for this demo workflow
+- there is no complete relationship-management UI or grant model
+- there is no biography/file/audio onboarding flow
+- permission-aware retrieval is deferred; therefore private/selected-family memories cannot currently be indexed
+- there is no voice or video behavior
+- clarification quality needs later evaluation and prompt/policy tuning
+- owner review remains API-only
+- the initial deterministic taxonomy currently has specialized required-detail logic only for `bedtime_song`; general memories use the attributed claim plus explicit follow-up details
+
+Next recommended task:
+
+1. Task 64.4 - Learned Memory Answer Evaluation & Persona Tuning
+
+---

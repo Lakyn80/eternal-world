@@ -25,6 +25,7 @@ from app.modules.memory_profiles.router import router as memory_profiles_router
 from app.modules.rag_retrieval.router import router as rag_retrieval_router
 from app.modules.rag_chunks.router import router as rag_chunks_router
 from app.modules.rag_sources.router import router as rag_sources_router
+from app.modules.family_memory_enrichment.router import router as family_memory_enrichment_router
 from app.modules.qdrant_indexing.router import router as qdrant_indexing_router
 from app.modules.rag_pipeline.router import router as rag_pipeline_router
 
@@ -60,6 +61,7 @@ app.include_router(qdrant_indexing_router)
 app.include_router(rag_pipeline_router)
 app.include_router(rag_chunks_router)
 app.include_router(rag_sources_router)
+app.include_router(family_memory_enrichment_router)
 
 
 @app.get("/")

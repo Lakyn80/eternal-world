@@ -37,6 +37,13 @@ from app.modules.conversation_memory_candidates.schemas import (
     MemoryCandidateReviewUpdate,
     MemoryCandidateStatus,
 )
+from app.modules.family_memory_enrichment import service as family_memory_enrichment_service
+from app.modules.family_memory_enrichment.enums import EnrichmentStatus, PrivacyScope
+from app.modules.family_memory_enrichment.schemas import (
+    CandidateEnrichmentRead,
+    ClarificationAnswerRequest,
+    DemoFamilyActorContext,
+)
 from app.modules.embeddings.embedding_cache import build_text_hash
 from app.modules.embeddings.runtime import resolve_embedding_runtime_diagnostics
 from app.modules.memory_profiles.repository import get_memory_profile_for_user, list_memory_profiles_for_user
@@ -317,16 +324,24 @@ def _build_evidence_items(
 def _build_demo_memory_candidate(
     *,
     extracted_candidate,
-    persisted_candidate_id: int | None,
+    persisted_candidate,
+    enrichment: CandidateEnrichmentRead | None,
 ) -> DemoFaChatMemoryCandidate:
     return DemoFaChatMemoryCandidate(
-        candidate_id=persisted_candidate_id,
+        candidate_id=persisted_candidate.id if persisted_candidate is not None else None,
         status=MemoryCandidateStatus.NEEDS_REVIEW,
         confidence="unverified",
         source="conversation",
         proposed_memory_text=extracted_candidate.proposed_memory_text,
         user_message_excerpt=extracted_candidate.user_message_excerpt,
         reason=extracted_candidate.reason,
+        memory_type=enrichment.memory_type if enrichment is not None else None,
+        enrichment_status=enrichment.enrichment_status if enrichment is not None else None,
+        privacy_scope=enrichment.privacy_scope if enrichment is not None else None,
+        dispute_status=enrichment.dispute_status if enrichment is not None else None,
+        unresolved_clarification_count=(
+            enrichment.unresolved_clarification_count if enrichment is not None else None
+        ),
     )
 
 
@@ -339,6 +354,7 @@ def _persist_memory_candidate(
     trace_id: str,
     language: str,
     extracted_candidate,
+    enrichment_enabled: bool = False,
 ):
     payload = MemoryCandidateCreate(
         owner_user_id=owner_user_id,
@@ -350,10 +366,23 @@ def _persist_memory_candidate(
         proposed_memory_text=extracted_candidate.proposed_memory_text,
         reason=extracted_candidate.reason,
         language=language,
+        enrichment_status=(
+            EnrichmentStatus.DRAFT
+            if enrichment_enabled
+            else EnrichmentStatus.READY_FOR_OWNER_REVIEW
+        ),
+        finalized_memory_text=(
+            None if enrichment_enabled else extracted_candidate.proposed_memory_text
+        ),
+        privacy_scope=(
+            PrivacyScope.PRIVATE_OWNER if enrichment_enabled else PrivacyScope.PUBLIC_LEGACY
+        ),
+        workflow_version=2 if enrichment_enabled else 1,
     )
     return conversation_memory_candidates_service.create_candidate(
         db,
         payload=payload,
+        commit=not enrichment_enabled,
     )
 
 
@@ -361,15 +390,34 @@ def list_demo_memory_candidates(
     db: Session,
     *,
     profile_id: int | None,
+    actor: DemoFamilyActorContext | None = None,
 ):
     resolved_profile = _resolve_demo_profile(db, profile_id=profile_id)
     avatar_persona = _resolve_demo_avatar_persona()
-    return conversation_memory_candidates_service.list_candidates(
+    candidates = conversation_memory_candidates_service.list_candidates(
         db,
         owner_user_id=resolved_profile.user.id,
         profile_id=resolved_profile.profile.id,
         avatar_id=avatar_persona.avatar_id,
     )
+    visible = []
+    for candidate in candidates:
+        if candidate.workflow_version < 2:
+            visible.append(candidate)
+            continue
+        if actor is None:
+            continue
+        try:
+            family_memory_enrichment_service.get_candidate_enrichment(
+                db,
+                owner_user_id=resolved_profile.user.id,
+                candidate_id=candidate.id,
+                actor=actor,
+            )
+        except family_memory_enrichment_service.FamilyMemoryNotFoundError:
+            continue
+        visible.append(candidate)
+    return visible
 
 
 def get_demo_memory_candidate(
@@ -377,6 +425,8 @@ def get_demo_memory_candidate(
     *,
     profile_id: int | None,
     candidate_id: int,
+    actor: DemoFamilyActorContext | None = None,
+    allow_enriched_internal: bool = False,
 ):
     resolved_profile = _resolve_demo_profile(db, profile_id=profile_id)
     candidate = conversation_memory_candidates_service.get_candidate(
@@ -387,6 +437,17 @@ def get_demo_memory_candidate(
     if candidate.profile_id != resolved_profile.profile.id:
         raise conversation_memory_candidates_service.ConversationMemoryCandidateNotFoundError(
             "Memory candidate not found"
+        )
+    if candidate.workflow_version >= 2 and not allow_enriched_internal:
+        if actor is None:
+            raise family_memory_enrichment_service.FamilyMemoryNotFoundError(
+                "Family memory candidate not found"
+            )
+        family_memory_enrichment_service.get_candidate_enrichment(
+            db,
+            owner_user_id=resolved_profile.user.id,
+            candidate_id=candidate.id,
+            actor=actor,
         )
     return candidate
 
@@ -402,7 +463,12 @@ def approve_demo_memory_candidate(
         db,
         profile_id=profile_id,
         candidate_id=candidate_id,
+        allow_enriched_internal=True,
     )
+    if candidate.workflow_version >= 2:
+        raise family_memory_enrichment_service.FamilyMemoryAuthorizationError(
+            "Enriched candidates require the explicit owner-review endpoint"
+        )
     approval_result = conversation_memory_candidates_service.approve_candidate(
         db,
         owner_user_id=candidate.owner_user_id,
@@ -427,7 +493,12 @@ def reject_demo_memory_candidate(
         db,
         profile_id=profile_id,
         candidate_id=candidate_id,
+        allow_enriched_internal=True,
     )
+    if candidate.workflow_version >= 2:
+        raise family_memory_enrichment_service.FamilyMemoryAuthorizationError(
+            "Enriched candidates require the explicit owner-review endpoint"
+        )
     rejected_candidate = conversation_memory_candidates_service.reject_candidate(
         db,
         owner_user_id=candidate.owner_user_id,
@@ -449,7 +520,12 @@ def archive_demo_memory_candidate(
         db,
         profile_id=profile_id,
         candidate_id=candidate_id,
+        allow_enriched_internal=True,
     )
+    if candidate.workflow_version >= 2:
+        raise family_memory_enrichment_service.FamilyMemoryAuthorizationError(
+            "Enriched candidates require the explicit owner-review endpoint"
+        )
     archived_candidate = conversation_memory_candidates_service.archive_candidate(
         db,
         owner_user_id=candidate.owner_user_id,
@@ -464,15 +540,34 @@ def list_demo_memory_promotions(
     db: Session,
     *,
     profile_id: int | None,
+    actor: DemoFamilyActorContext | None = None,
 ):
     resolved_profile = _resolve_demo_profile(db, profile_id=profile_id)
     avatar_persona = _resolve_demo_avatar_persona()
-    return avatar_memory_promotions_service.list_promotions(
+    promotions = avatar_memory_promotions_service.list_promotions(
         db,
         owner_user_id=resolved_profile.user.id,
         profile_id=resolved_profile.profile.id,
         avatar_id=avatar_persona.avatar_id,
     )
+    visible = []
+    for promotion in promotions:
+        if promotion.candidate.workflow_version < 2:
+            visible.append(promotion)
+            continue
+        if actor is None:
+            continue
+        try:
+            family_memory_enrichment_service.get_candidate_enrichment(
+                db,
+                owner_user_id=resolved_profile.user.id,
+                candidate_id=promotion.candidate_id,
+                actor=actor,
+            )
+        except family_memory_enrichment_service.FamilyMemoryNotFoundError:
+            continue
+        visible.append(promotion)
+    return visible
 
 
 def get_demo_memory_promotion(
@@ -480,6 +575,8 @@ def get_demo_memory_promotion(
     *,
     profile_id: int | None,
     promotion_id: int,
+    actor: DemoFamilyActorContext | None = None,
+    allow_enriched_internal: bool = False,
 ):
     resolved_profile = _resolve_demo_profile(db, profile_id=profile_id)
     avatar_persona = _resolve_demo_avatar_persona()
@@ -495,6 +592,17 @@ def get_demo_memory_promotion(
         raise avatar_memory_promotions_service.AvatarMemoryPromotionNotFoundError(
             "Avatar memory promotion not found"
         )
+    if promotion.candidate.workflow_version >= 2 and not allow_enriched_internal:
+        if actor is None:
+            raise family_memory_enrichment_service.FamilyMemoryNotFoundError(
+                "Family memory promotion not found"
+            )
+        family_memory_enrichment_service.get_candidate_enrichment(
+            db,
+            owner_user_id=resolved_profile.user.id,
+            candidate_id=promotion.candidate_id,
+            actor=actor,
+        )
     return promotion
 
 
@@ -503,12 +611,19 @@ def cancel_demo_memory_promotion(
     *,
     profile_id: int | None,
     promotion_id: int,
+    actor: DemoFamilyActorContext | None = None,
 ):
     promotion = get_demo_memory_promotion(
         db,
         profile_id=profile_id,
         promotion_id=promotion_id,
+        allow_enriched_internal=True,
     )
+    if promotion.candidate.workflow_version >= 2:
+        if actor is None or not family_memory_enrichment_service.is_demo_owner(actor):
+            raise family_memory_enrichment_service.FamilyMemoryAuthorizationError(
+                "Only the avatar owner can cancel an enriched memory promotion"
+            )
     cancelled_promotion = avatar_memory_promotions_service.cancel_promotion(
         db,
         owner_user_id=promotion.owner_user_id,
@@ -523,12 +638,19 @@ def index_demo_memory_promotion(
     *,
     profile_id: int | None,
     promotion_id: int,
+    actor: DemoFamilyActorContext | None = None,
 ):
     promotion = get_demo_memory_promotion(
         db,
         profile_id=profile_id,
         promotion_id=promotion_id,
+        allow_enriched_internal=True,
     )
+    if promotion.candidate.workflow_version >= 2:
+        if actor is None or not family_memory_enrichment_service.is_demo_owner(actor):
+            raise family_memory_enrichment_service.FamilyMemoryAuthorizationError(
+                "Only the avatar owner can index an enriched memory promotion"
+            )
     return avatar_memory_indexing_service.index_promotion(
         db,
         owner_user_id=promotion.owner_user_id,
@@ -560,6 +682,19 @@ def build_demo_memory_candidate_review_response(
         reviewed_by=approval_result.candidate.reviewed_by,
         review_note=approval_result.candidate.review_note,
         rejection_reason=approval_result.candidate.rejection_reason,
+        memory_type=approval_result.candidate.memory_type,
+        enrichment_status=approval_result.candidate.enrichment_status,
+        finalized_memory_text=approval_result.candidate.finalized_memory_text,
+        privacy_scope=approval_result.candidate.privacy_scope,
+        dispute_status=approval_result.candidate.dispute_status,
+        finalized_at=approval_result.candidate.finalized_at,
+        finalized_by=approval_result.candidate.finalized_by,
+        owner_reviewed_at=approval_result.candidate.owner_reviewed_at,
+        owner_reviewed_by=approval_result.candidate.owner_reviewed_by,
+        owner_review_actor_role=approval_result.candidate.owner_review_actor_role,
+        unresolved_clarification_count=approval_result.candidate.unresolved_clarification_count,
+        version=approval_result.candidate.version,
+        workflow_version=approval_result.candidate.workflow_version,
         promotion_created=approval_result.promotion_created,
         promotion_id=promotion.promotion_id,
         promotion_status=promotion.promotion_status,
@@ -574,11 +709,73 @@ def run_demo_fa_chat_message(
     message: str,
     debug: bool,
     trace_id: str,
+    active_memory_candidate_id: int | None = None,
+    actor_id: str | None = None,
+    actor_role: str | None = None,
+    relationship_to_owner: str | None = None,
 ) -> DemoFaChatMessageResponse:
     normalized_message = _normalize_message_text(message)
     message_hash_prefix = _build_message_hash_prefix(normalized_message)
     resolved_profile = _resolve_demo_profile(db, profile_id=profile_id)
     avatar_persona = _resolve_demo_avatar_persona()
+    actor = (
+        DemoFamilyActorContext(
+            actor_id=actor_id,
+            actor_role=actor_role,
+            relationship_to_owner=relationship_to_owner,
+        )
+        if actor_id is not None and actor_role is not None
+        else None
+    )
+    if active_memory_candidate_id is not None:
+        if actor is None:
+            raise DemoFaChatValidationError(
+                "Для продолжения уточнения нужен явный контекст участника семьи."
+            )
+        candidate = family_memory_enrichment_service.repository.get_candidate(
+            db,
+            owner_user_id=resolved_profile.user.id,
+            candidate_id=active_memory_candidate_id,
+        )
+        if (
+            candidate is None
+            or candidate.profile_id != resolved_profile.profile.id
+            or candidate.avatar_id != avatar_persona.avatar_id
+        ):
+            raise family_memory_enrichment_service.FamilyMemoryNotFoundError(
+                "Family memory candidate not found"
+            )
+        enrichment = family_memory_enrichment_service.answer_next_clarification(
+            db,
+            owner_user_id=resolved_profile.user.id,
+            candidate_id=active_memory_candidate_id,
+            payload=ClarificationAnswerRequest(
+                actor_id=actor.actor_id,
+                actor_role=actor.actor_role,
+                relationship_to_owner=actor.relationship_to_owner,
+                answer_text=normalized_message,
+                trace_id=trace_id,
+            ),
+        )
+        next_question = enrichment.next_clarification_question
+        return DemoFaChatMessageResponse(
+            answer=(
+                next_question.question_text
+                if next_question is not None
+                else "Спасибо. Черновик воспоминания готов к проверке владельцем аватара."
+            ),
+            lack_of_evidence=False,
+            retrieval_used=False,
+            persona_applied=False,
+            guard_applied=False,
+            trace_id=trace_id,
+            memory_candidate=None,
+            memory_candidate_persisted=True,
+            active_memory_candidate_id=enrichment.candidate_id,
+            enrichment_status=enrichment.enrichment_status,
+            next_clarification_question=next_question,
+            evidence=[],
+        )
     resolved_runtime = _resolve_demo_runtime(
         db,
         resolved_profile=resolved_profile,
@@ -663,6 +860,7 @@ def run_demo_fa_chat_message(
         lack_of_evidence=lack_of_evidence,
     )
     persisted_memory_candidate = None
+    candidate_enrichment: CandidateEnrichmentRead | None = None
     memory_candidate_persisted: bool | None = None
     if extracted_memory_candidate is not None:
         try:
@@ -674,9 +872,22 @@ def run_demo_fa_chat_message(
                 trace_id=trace_id,
                 language=avatar_persona.language,
                 extracted_candidate=extracted_memory_candidate,
+                enrichment_enabled=actor is not None,
             )
+            if actor is not None:
+                candidate_enrichment = family_memory_enrichment_service.initialize_candidate(
+                    db,
+                    owner_user_id=resolved_profile.user.id,
+                    candidate_id=persisted_memory_candidate.id,
+                    actor=actor,
+                    initial_text=normalized_message,
+                    trace_id=trace_id,
+                )
             memory_candidate_persisted = True
         except Exception as exc:
+            db.rollback()
+            persisted_memory_candidate = None
+            candidate_enrichment = None
             memory_candidate_persisted = False
             log_event(
                 logger,
@@ -689,7 +900,6 @@ def run_demo_fa_chat_message(
                 candidate_persisted=False,
                 candidate_status=MemoryCandidateStatus.NEEDS_REVIEW.value,
                 error_type=exc.__class__.__name__,
-                error_summary=str(exc)[:200],
             )
         observe_memory_candidate_created(
             persisted=bool(memory_candidate_persisted),
@@ -726,8 +936,14 @@ def run_demo_fa_chat_message(
         ),
         emotion_primary=response_directives.emotion.primary,
     )
+    response_answer = orchestrator_response.text
+    if candidate_enrichment is not None:
+        if candidate_enrichment.next_clarification_question is not None:
+            response_answer = candidate_enrichment.next_clarification_question.question_text
+        elif candidate_enrichment.enrichment_status == EnrichmentStatus.READY_FOR_OWNER_REVIEW:
+            response_answer = "Спасибо. Черновик воспоминания готов к проверке владельцем аватара."
     return DemoFaChatMessageResponse(
-        answer=orchestrator_response.text,
+        answer=response_answer,
         lack_of_evidence=lack_of_evidence,
         retrieval_used=bool(retrieval_response.results),
         persona_applied=persona_applied,
@@ -741,14 +957,24 @@ def run_demo_fa_chat_message(
         memory_candidate=(
             _build_demo_memory_candidate(
                 extracted_candidate=extracted_memory_candidate,
-                persisted_candidate_id=(
-                    persisted_memory_candidate.id if persisted_memory_candidate is not None else None
-                ),
+                persisted_candidate=persisted_memory_candidate,
+                enrichment=candidate_enrichment,
             )
             if extracted_memory_candidate is not None
             else None
         ),
         memory_candidate_persisted=memory_candidate_persisted,
+        active_memory_candidate_id=(
+            candidate_enrichment.candidate_id if candidate_enrichment is not None else None
+        ),
+        enrichment_status=(
+            candidate_enrichment.enrichment_status if candidate_enrichment is not None else None
+        ),
+        next_clarification_question=(
+            candidate_enrichment.next_clarification_question
+            if candidate_enrichment is not None
+            else None
+        ),
         emotion=response_directives.emotion,
         face_directives=response_directives.face_directives,
         voice_directives=response_directives.voice_directives,

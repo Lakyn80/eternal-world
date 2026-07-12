@@ -153,9 +153,70 @@ MEMORY_PROMOTIONS_CURRENT = Gauge(
     "Current avatar memory promotions by durable status.",
     labelnames=("status",),
 )
+MEMORY_CONTRIBUTION_CREATED_TOTAL = Counter(
+    "memory_contribution_created_total",
+    "Total append-only family memory contributions created.",
+    labelnames=("role",),
+)
+MEMORY_CLARIFICATION_TOTAL = Counter(
+    "memory_clarification_total",
+    "Total family memory clarification lifecycle events.",
+    labelnames=("status",),
+)
+MEMORY_ENRICHMENT_STATUS_TOTAL = Counter(
+    "memory_enrichment_status_total",
+    "Total family memory enrichment status events.",
+    labelnames=("status",),
+)
+MEMORY_OWNER_REVIEW_TOTAL = Counter(
+    "memory_owner_review_total",
+    "Total explicit owner review actions for family memories.",
+    labelnames=("action",),
+)
+MEMORY_DISPUTE_TOTAL = Counter(
+    "memory_dispute_total",
+    "Total family memory dispute lifecycle events.",
+    labelnames=("result",),
+)
+MEMORY_PROMOTION_BLOCKED_TOTAL = Counter(
+    "memory_promotion_blocked_total",
+    "Total family memory promotion checks blocked by eligibility policy.",
+    labelnames=("reason",),
+)
+MEMORY_ENRICHMENT_CURRENT = Gauge(
+    "memory_enrichment_current",
+    "Current family memory candidates by durable enrichment status.",
+    labelnames=("status",),
+)
+MEMORY_DISPUTES_CURRENT = Gauge(
+    "memory_disputes_current",
+    "Current family memory candidates by durable dispute status.",
+    labelnames=("status",),
+)
 
 _MEMORY_INDEX_RESULTS = frozenset({"indexed", "failed", "skipped"})
 _MEMORY_PROMOTION_STATUSES = ("pending_index", "indexed", "failed", "cancelled")
+_FAMILY_ACTOR_ROLES = frozenset({"owner", "contributor", "trusted_reviewer", "system"})
+_CLARIFICATION_STATUSES = frozenset({"pending", "answered", "skipped", "cancelled"})
+_ENRICHMENT_STATUSES = ("draft", "collecting_details", "ready_for_owner_review")
+_OWNER_REVIEW_ACTIONS = frozenset({
+    "confirm",
+    "edit_and_confirm",
+    "reject",
+    "request_more_details",
+    "mark_disputed",
+    "approve_multiple_perspectives",
+})
+_DISPUTE_RESULTS = ("none", "disputed", "resolved")
+_PROMOTION_BLOCK_REASONS = frozenset({
+    "not_approved",
+    "collecting_details",
+    "incomplete",
+    "unresolved_clarification",
+    "privacy_scope",
+    "disputed",
+    "unauthorized_reviewer",
+})
 
 
 def normalize_http_route_label(route_path: str | None) -> str:
@@ -340,3 +401,60 @@ def observe_memory_indexing_finished(*, result: str, duration_seconds: float) ->
 def set_memory_promotions_current(*, counts_by_status: dict[str, int]) -> None:
     for status in _MEMORY_PROMOTION_STATUSES:
         MEMORY_PROMOTIONS_CURRENT.labels(status).set(max(0, int(counts_by_status.get(status, 0))))
+
+
+def observe_memory_contribution_created(*, role: str) -> None:
+    normalized = role.strip().lower()
+    MEMORY_CONTRIBUTION_CREATED_TOTAL.labels(
+        normalized if normalized in _FAMILY_ACTOR_ROLES else "other"
+    ).inc()
+
+
+def observe_memory_clarification(*, status: str) -> None:
+    normalized = status.strip().lower()
+    MEMORY_CLARIFICATION_TOTAL.labels(
+        normalized if normalized in _CLARIFICATION_STATUSES else "other"
+    ).inc()
+
+
+def observe_memory_enrichment_status(*, status: str) -> None:
+    normalized = status.strip().lower()
+    MEMORY_ENRICHMENT_STATUS_TOTAL.labels(
+        normalized if normalized in _ENRICHMENT_STATUSES else "other"
+    ).inc()
+
+
+def observe_memory_owner_review(*, action: str) -> None:
+    normalized = action.strip().lower()
+    MEMORY_OWNER_REVIEW_TOTAL.labels(
+        normalized if normalized in _OWNER_REVIEW_ACTIONS else "other"
+    ).inc()
+
+
+def observe_memory_dispute(*, result: str) -> None:
+    normalized = result.strip().lower()
+    MEMORY_DISPUTE_TOTAL.labels(
+        normalized if normalized in _DISPUTE_RESULTS else "other"
+    ).inc()
+
+
+def observe_memory_promotion_blocked(*, reason: str) -> None:
+    normalized = reason.strip().lower()
+    MEMORY_PROMOTION_BLOCKED_TOTAL.labels(
+        normalized if normalized in _PROMOTION_BLOCK_REASONS else "other"
+    ).inc()
+
+
+def set_memory_enrichment_current(
+    *,
+    counts_by_status: dict[str, int],
+    disputes_by_status: dict[str, int],
+) -> None:
+    for status in _ENRICHMENT_STATUSES:
+        MEMORY_ENRICHMENT_CURRENT.labels(status).set(
+            max(0, int(counts_by_status.get(status, 0)))
+        )
+    for status in _DISPUTE_RESULTS:
+        MEMORY_DISPUTES_CURRENT.labels(status).set(
+            max(0, int(disputes_by_status.get(status, 0)))
+        )

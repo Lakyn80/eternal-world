@@ -43,6 +43,10 @@ from app.modules.embeddings.providers.bge_m3_hybrid import BgeM3HybridEmbeddingA
 from app.modules.embeddings.runtime import assert_real_embedding_runtime_for_e2e
 from app.modules.qdrant_indexing import repository as qdrant_index_repository
 from app.modules.rag_chunks.validation import estimate_token_count
+from app.modules.family_memory_enrichment.eligibility import (
+    FamilyMemoryEligibilityError,
+    assert_candidate_eligible_for_promotion,
+)
 
 
 INDEX_MODEL_CODE = "bge_m3_dense_sparse"
@@ -140,6 +144,14 @@ def _validate_promotion_identity(db: Session, promotion: AvatarMemoryPromotion) 
         raise AvatarMemoryIndexingEligibilityError("Promotion source identity is invalid")
     if candidate.avatar_id != promotion.avatar_id or candidate.profile_id != promotion.profile_id:
         raise AvatarMemoryIndexingEligibilityError("Promotion target identity is invalid")
+    try:
+        assert_candidate_eligible_for_promotion(db, candidate=candidate)
+    except FamilyMemoryEligibilityError as exc:
+        raise AvatarMemoryIndexingEligibilityError("Promotion source candidate is not enrichment-eligible") from exc
+    if normalize_memory_text(candidate.finalized_memory_text or "") != normalize_memory_text(
+        promotion.approved_memory_text
+    ):
+        raise AvatarMemoryIndexingConflictError("Finalized candidate text does not match promotion snapshot")
     if promotion.cancelled_at is not None:
         raise AvatarMemoryIndexingEligibilityError("Cancelled promotion cannot be indexed")
     if promotion.profile_id is None:
@@ -351,6 +363,9 @@ def _build_payload(
         ),
         "chunk_source_id": f"promotion:{promotion.id}:0",
         "source_title": source.title,
+        "privacy_scope": promotion.candidate.privacy_scope,
+        "workflow_version": promotion.candidate.workflow_version,
+        "dispute_status": promotion.candidate.dispute_status,
     }
     sparse_vector = (embedding.embedding_metadata or {}).get("sparse_vector")
     if isinstance(sparse_vector, dict):

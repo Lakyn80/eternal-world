@@ -4,7 +4,7 @@ import logging as std_logging
 from time import perf_counter
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Path, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request, status
 from sqlalchemy.orm import Session
 
 from app.core.logging import get_logger, log_event
@@ -60,6 +60,14 @@ from app.modules.conversation_memory_candidates.service import (
     ConversationMemoryCandidateInvalidTransitionError,
     ConversationMemoryCandidateNotFoundError,
 )
+from app.modules.family_memory_enrichment.service import (
+    FamilyMemoryAuthorizationError,
+    FamilyMemoryInvalidTransitionError,
+    FamilyMemoryNotFoundError,
+    validate_demo_actor,
+)
+from app.modules.family_memory_enrichment.enums import FamilyMemoryActorRole
+from app.modules.family_memory_enrichment.schemas import DemoFamilyActorContext
 
 
 router = APIRouter(prefix="/api/demo/fa-chat", tags=["demo-fa-chat"])
@@ -71,6 +79,34 @@ CANDIDATE_INVALID_TRANSITION_DETAIL = "Недопустимое изменени
 PROMOTION_NOT_FOUND_DETAIL = "Продвижение воспоминания не найдено."
 PROMOTION_INVALID_TRANSITION_DETAIL = "Недопустимое изменение статуса продвижения."
 PROMOTION_INDEXING_FAILED_DETAIL = "Индексация подтвержденного воспоминания не выполнена."
+
+
+def _optional_actor_context(
+    *,
+    actor_id: str | None,
+    actor_role: FamilyMemoryActorRole | None,
+    relationship_to_owner: str | None,
+) -> DemoFamilyActorContext | None:
+    if actor_id is None and actor_role is None and relationship_to_owner is None:
+        return None
+    if actor_id is None or actor_role is None:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="actor_id and actor_role must be provided together",
+        )
+    actor = DemoFamilyActorContext(
+        actor_id=actor_id,
+        actor_role=actor_role,
+        relationship_to_owner=relationship_to_owner,
+    )
+    try:
+        validate_demo_actor(actor)
+    except FamilyMemoryAuthorizationError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Указанный контекст участника семьи недопустим.",
+        ) from exc
+    return actor
 
 
 @router.post(
@@ -98,6 +134,10 @@ def send_demo_fa_chat_message(
             message=payload.message,
             debug=debug_enabled,
             trace_id=trace_id,
+            active_memory_candidate_id=payload.active_memory_candidate_id,
+            actor_id=payload.actor_id,
+            actor_role=payload.actor_role.value if payload.actor_role is not None else None,
+            relationship_to_owner=payload.relationship_to_owner,
         )
         observe_fa_chat_success(
             duration_seconds=perf_counter() - started_at,
@@ -138,6 +178,21 @@ def send_demo_fa_chat_message(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail=str(exc),
         ) from exc
+    except FamilyMemoryAuthorizationError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Участник семьи не имеет права выполнять это действие.",
+        ) from exc
+    except FamilyMemoryNotFoundError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Кандидат семейного воспоминания не найден.",
+        ) from exc
+    except FamilyMemoryInvalidTransitionError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Для кандидата нет ожидающего уточняющего вопроса.",
+        ) from exc
     except HTTPException:
         raise
     except Exception as exc:
@@ -170,12 +225,21 @@ def send_demo_fa_chat_message(
 )
 def list_demo_memory_candidates_endpoint(
     profile_id: int | None = None,
+    actor_id: str | None = Query(default=None, min_length=1, max_length=120),
+    actor_role: FamilyMemoryActorRole | None = Query(default=None),
+    relationship_to_owner: str | None = Query(default=None, max_length=120),
     db: Session = Depends(get_db),
 ) -> MemoryCandidateListResponse:
     try:
+        actor = _optional_actor_context(
+            actor_id=actor_id,
+            actor_role=actor_role,
+            relationship_to_owner=relationship_to_owner,
+        )
         candidates = list_demo_memory_candidates(
             db,
             profile_id=profile_id,
+            actor=actor,
         )
     except DemoFaChatProfileUnavailableError as exc:
         raise HTTPException(
@@ -197,13 +261,22 @@ def list_demo_memory_candidates_endpoint(
 def get_demo_memory_candidate_endpoint(
     candidate_id: CandidateIdPath,
     profile_id: int | None = None,
+    actor_id: str | None = Query(default=None, min_length=1, max_length=120),
+    actor_role: FamilyMemoryActorRole | None = Query(default=None),
+    relationship_to_owner: str | None = Query(default=None, max_length=120),
     db: Session = Depends(get_db),
 ) -> MemoryCandidateRead:
     try:
+        actor = _optional_actor_context(
+            actor_id=actor_id,
+            actor_role=actor_role,
+            relationship_to_owner=relationship_to_owner,
+        )
         candidate = get_demo_memory_candidate(
             db,
             profile_id=profile_id,
             candidate_id=candidate_id,
+            actor=actor,
         )
     except DemoFaChatProfileUnavailableError as exc:
         raise HTTPException(
@@ -219,6 +292,11 @@ def get_demo_memory_candidate_endpoint(
             candidate_id=candidate_id,
             error_type=exc.__class__.__name__,
         )
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=CANDIDATE_NOT_FOUND_DETAIL,
+        ) from exc
+    except FamilyMemoryNotFoundError as exc:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=CANDIDATE_NOT_FOUND_DETAIL,
@@ -282,6 +360,11 @@ def _review_demo_memory_candidate(
             status_code=status.HTTP_409_CONFLICT,
             detail=CANDIDATE_INVALID_TRANSITION_DETAIL,
         ) from exc
+    except FamilyMemoryAuthorizationError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Для обогащённого воспоминания требуется явная проверка владельцем.",
+        ) from exc
 
     if action == "approve":
         return build_demo_memory_candidate_review_response(candidate)
@@ -320,12 +403,21 @@ def approve_demo_memory_candidate_endpoint(
 )
 def list_demo_memory_promotions_endpoint(
     profile_id: int | None = None,
+    actor_id: str | None = Query(default=None, min_length=1, max_length=120),
+    actor_role: FamilyMemoryActorRole | None = Query(default=None),
+    relationship_to_owner: str | None = Query(default=None, max_length=120),
     db: Session = Depends(get_db),
 ) -> DemoFaChatMemoryPromotionListResponse:
     try:
+        actor = _optional_actor_context(
+            actor_id=actor_id,
+            actor_role=actor_role,
+            relationship_to_owner=relationship_to_owner,
+        )
         promotions = list_demo_memory_promotions(
             db,
             profile_id=profile_id,
+            actor=actor,
         )
     except DemoFaChatProfileUnavailableError as exc:
         raise HTTPException(
@@ -347,13 +439,22 @@ def list_demo_memory_promotions_endpoint(
 def get_demo_memory_promotion_endpoint(
     promotion_id: CandidateIdPath,
     profile_id: int | None = None,
+    actor_id: str | None = Query(default=None, min_length=1, max_length=120),
+    actor_role: FamilyMemoryActorRole | None = Query(default=None),
+    relationship_to_owner: str | None = Query(default=None, max_length=120),
     db: Session = Depends(get_db),
 ) -> AvatarMemoryPromotionRead:
     try:
+        actor = _optional_actor_context(
+            actor_id=actor_id,
+            actor_role=actor_role,
+            relationship_to_owner=relationship_to_owner,
+        )
         promotion = get_demo_memory_promotion(
             db,
             profile_id=profile_id,
             promotion_id=promotion_id,
+            actor=actor,
         )
     except DemoFaChatProfileUnavailableError as exc:
         raise HTTPException(
@@ -373,6 +474,11 @@ def get_demo_memory_promotion_endpoint(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=PROMOTION_NOT_FOUND_DETAIL,
         ) from exc
+    except FamilyMemoryNotFoundError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=PROMOTION_NOT_FOUND_DETAIL,
+        ) from exc
 
     return build_avatar_memory_promotion_read(promotion)
 
@@ -388,13 +494,22 @@ def get_demo_memory_promotion_endpoint(
 def cancel_demo_memory_promotion_endpoint(
     promotion_id: CandidateIdPath,
     profile_id: int | None = None,
+    actor_id: str | None = Query(default=None, min_length=1, max_length=120),
+    actor_role: FamilyMemoryActorRole | None = Query(default=None),
+    relationship_to_owner: str | None = Query(default=None, max_length=120),
     db: Session = Depends(get_db),
 ) -> AvatarMemoryPromotionRead:
     try:
+        actor = _optional_actor_context(
+            actor_id=actor_id,
+            actor_role=actor_role,
+            relationship_to_owner=relationship_to_owner,
+        )
         promotion = cancel_demo_memory_promotion(
             db,
             profile_id=profile_id,
             promotion_id=promotion_id,
+            actor=actor,
         )
     except DemoFaChatProfileUnavailableError as exc:
         raise HTTPException(
@@ -430,6 +545,11 @@ def cancel_demo_memory_promotion_endpoint(
             status_code=status.HTTP_409_CONFLICT,
             detail=PROMOTION_INVALID_TRANSITION_DETAIL,
         ) from exc
+    except FamilyMemoryAuthorizationError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Только владелец аватара может отменить продвижение воспоминания.",
+        ) from exc
 
     return build_avatar_memory_promotion_read(promotion)
 
@@ -446,13 +566,22 @@ def cancel_demo_memory_promotion_endpoint(
 def index_demo_memory_promotion_endpoint(
     promotion_id: CandidateIdPath,
     profile_id: int | None = None,
+    actor_id: str | None = Query(default=None, min_length=1, max_length=120),
+    actor_role: FamilyMemoryActorRole | None = Query(default=None),
+    relationship_to_owner: str | None = Query(default=None, max_length=120),
     db: Session = Depends(get_db),
 ) -> AvatarMemoryIndexingRead:
     try:
+        actor = _optional_actor_context(
+            actor_id=actor_id,
+            actor_role=actor_role,
+            relationship_to_owner=relationship_to_owner,
+        )
         return index_demo_memory_promotion(
             db,
             profile_id=profile_id,
             promotion_id=promotion_id,
+            actor=actor,
         )
     except (AvatarMemoryPromotionNotFoundError, AvatarMemoryIndexingNotFoundError) as exc:
         log_event(
@@ -491,6 +620,11 @@ def index_demo_memory_promotion_endpoint(
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail=PROMOTION_INDEXING_FAILED_DETAIL,
+        ) from exc
+    except FamilyMemoryAuthorizationError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Только владелец аватара может индексировать воспоминание.",
         ) from exc
 
 

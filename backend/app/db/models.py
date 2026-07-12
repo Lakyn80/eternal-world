@@ -652,6 +652,34 @@ class ConversationMemoryCandidate(TimestampMixin, Base):
             "confidence IN ('unverified')",
             name="conversation_memory_candidates_confidence",
         ),
+        CheckConstraint(
+            "memory_type IN ('general', 'bedtime_song')",
+            name="conversation_memory_candidates_memory_type",
+        ),
+        CheckConstraint(
+            "enrichment_status IN ('draft', 'collecting_details', 'ready_for_owner_review')",
+            name="conversation_memory_candidates_enrichment_status",
+        ),
+        CheckConstraint(
+            "privacy_scope IN ('private_owner', 'selected_family', 'all_family', 'public_legacy')",
+            name="conversation_memory_candidates_privacy_scope",
+        ),
+        CheckConstraint(
+            "dispute_status IN ('none', 'disputed', 'resolved')",
+            name="conversation_memory_candidates_dispute_status",
+        ),
+        CheckConstraint(
+            "unresolved_clarification_count >= 0",
+            name="conversation_memory_candidates_unresolved_clarifications_non_negative",
+        ),
+        CheckConstraint(
+            "version >= 1",
+            name="conversation_memory_candidates_version_positive",
+        ),
+        CheckConstraint(
+            "workflow_version IN (1, 2)",
+            name="conversation_memory_candidates_workflow_version",
+        ),
         Index("ix_cmc_created_at", "created_at"),
         Index(
             "ix_cmc_owner_profile_status",
@@ -711,6 +739,30 @@ class ConversationMemoryCandidate(TimestampMixin, Base):
     )
     review_note: Mapped[str | None] = mapped_column(String(500), nullable=True)
     rejection_reason: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    memory_type: Mapped[str] = mapped_column(
+        String(32), nullable=False, default="general", server_default=text("'general'")
+    )
+    enrichment_status: Mapped[str] = mapped_column(
+        String(32), nullable=False, default="draft", server_default=text("'draft'")
+    )
+    finalized_memory_text: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    privacy_scope: Mapped[str] = mapped_column(
+        String(32), nullable=False, default="private_owner", server_default=text("'private_owner'")
+    )
+    dispute_status: Mapped[str] = mapped_column(
+        String(32), nullable=False, default="none", server_default=text("'none'")
+    )
+    finalized_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    finalized_by: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    owner_reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    owner_reviewed_by: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    owner_review_actor_role: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    review_authority_source: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    unresolved_clarification_count: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default=text("0")
+    )
+    version: Mapped[int] = mapped_column(Integer, nullable=False, default=1, server_default=text("1"))
+    workflow_version: Mapped[int] = mapped_column(Integer, nullable=False, default=2, server_default=text("2"))
 
     owner: Mapped[User] = relationship(
         foreign_keys=[owner_user_id],
@@ -727,6 +779,16 @@ class ConversationMemoryCandidate(TimestampMixin, Base):
         back_populates="candidate",
         cascade="all, delete-orphan",
         uselist=False,
+    )
+    family_memory_contributions: Mapped[list[FamilyMemoryContribution]] = relationship(
+        back_populates="candidate",
+        cascade="all, delete-orphan",
+        foreign_keys="FamilyMemoryContribution.candidate_id",
+    )
+    clarification_questions: Mapped[list[MemoryClarificationQuestion]] = relationship(
+        back_populates="candidate",
+        cascade="all, delete-orphan",
+        foreign_keys="MemoryClarificationQuestion.candidate_id",
     )
 
 
@@ -815,6 +877,110 @@ class AvatarMemoryPromotion(TimestampMixin, Base):
     candidate: Mapped[ConversationMemoryCandidate] = relationship(back_populates="avatar_memory_promotion")
     owner: Mapped[User] = relationship(back_populates="avatar_memory_promotions")
     memory_profile: Mapped[MemoryProfile | None] = relationship(back_populates="avatar_memory_promotions")
+
+
+class FamilyMemoryContribution(Base):
+    __tablename__ = "family_memory_contributions"
+    __table_args__ = (
+        CheckConstraint(
+            "actor_role IN ('owner', 'contributor', 'trusted_reviewer', 'system')",
+            name="family_memory_contributions_actor_role",
+        ),
+        CheckConstraint(
+            "contribution_type IN ('initial_claim', 'clarification_answer', 'owner_correction', "
+            "'owner_confirmation', 'reviewer_note', 'dispute_statement', 'system_normalization')",
+            name="family_memory_contributions_type",
+        ),
+        CheckConstraint(
+            "privacy_scope_snapshot IN ('private_owner', 'selected_family', 'all_family', 'public_legacy')",
+            name="family_memory_contributions_privacy_scope",
+        ),
+        Index("ix_fmc_candidate_created", "candidate_id", "created_at"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    candidate_id: Mapped[int] = mapped_column(
+        ForeignKey("conversation_memory_candidates.id", ondelete="CASCADE"), index=True, nullable=False
+    )
+    avatar_id: Mapped[str] = mapped_column(String(120), index=True, nullable=False)
+    profile_id: Mapped[int | None] = mapped_column(
+        ForeignKey("memory_profiles.id", ondelete="SET NULL"), index=True, nullable=True
+    )
+    actor_id: Mapped[str] = mapped_column(String(120), index=True, nullable=False)
+    actor_user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), index=True, nullable=True
+    )
+    actor_role: Mapped[str] = mapped_column(String(32), index=True, nullable=False)
+    relationship_to_owner: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    contribution_type: Mapped[str] = mapped_column(String(32), index=True, nullable=False)
+    contribution_text: Mapped[str] = mapped_column(String(1000), nullable=False)
+    structured_details: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
+    language: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    source_message_hash: Mapped[str | None] = mapped_column(String(64), index=True, nullable=True)
+    trace_id: Mapped[str | None] = mapped_column(String(120), index=True, nullable=True)
+    supersedes_contribution_id: Mapped[int | None] = mapped_column(
+        ForeignKey("family_memory_contributions.id", ondelete="SET NULL"), nullable=True
+    )
+    is_owner_correction: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default=text("false")
+    )
+    is_disputed: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default=text("false")
+    )
+    privacy_scope_snapshot: Mapped[str] = mapped_column(String(32), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+    candidate: Mapped[ConversationMemoryCandidate] = relationship(
+        back_populates="family_memory_contributions",
+        foreign_keys=[candidate_id],
+    )
+    supersedes_contribution: Mapped[FamilyMemoryContribution | None] = relationship(
+        remote_side=[id], foreign_keys=[supersedes_contribution_id]
+    )
+
+
+class MemoryClarificationQuestion(TimestampMixin, Base):
+    __tablename__ = "memory_clarification_questions"
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('pending', 'answered', 'skipped', 'cancelled')",
+            name="memory_clarification_questions_status",
+        ),
+        Index("ix_mcq_candidate_status", "candidate_id", "status"),
+        Index("ix_mcq_candidate_question_key", "candidate_id", "question_key", unique=True),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    candidate_id: Mapped[int] = mapped_column(
+        ForeignKey("conversation_memory_candidates.id", ondelete="CASCADE"), index=True, nullable=False
+    )
+    question_key: Mapped[str] = mapped_column(String(64), nullable=False)
+    question_text: Mapped[str] = mapped_column(String(500), nullable=False)
+    language: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    status: Mapped[str] = mapped_column(
+        String(32), nullable=False, default="pending", server_default=text("'pending'")
+    )
+    required: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=True, server_default=text("true")
+    )
+    asked_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    answered_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    answered_by: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    answer_contribution_id: Mapped[int | None] = mapped_column(
+        ForeignKey("family_memory_contributions.id", ondelete="SET NULL"), nullable=True
+    )
+
+    candidate: Mapped[ConversationMemoryCandidate] = relationship(
+        back_populates="clarification_questions",
+        foreign_keys=[candidate_id],
+    )
+    answer_contribution: Mapped[FamilyMemoryContribution | None] = relationship(
+        foreign_keys=[answer_contribution_id]
+    )
 
 
 class MediaAsset(TimestampMixin, Base):
