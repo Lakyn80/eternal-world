@@ -113,9 +113,16 @@ def _contains_any_marker(text: str, markers: tuple[str, ...]) -> bool:
 
 
 def _looks_like_direct_lack_denial(answer_text: str) -> bool:
-    normalized_answer = _normalize_text(answer_text)
+    # Checked against the opening sentence, not the whole answer, and as a
+    # substring rather than a strict prefix: real answers almost always open
+    # with a warm address ("Деточка, ...", "Милая, ...") before the denial,
+    # so a `.startswith()` check on the raw answer text would never match in
+    # practice. Bounding this to the opening sentence (rather than scanning
+    # the whole answer) still avoids matching a denial phrase buried deep in
+    # an otherwise-substantive answer.
+    normalized_opening_sentence = _normalize_text(next(iter(_split_sentences(answer_text)), ""))
     return any(
-        normalized_answer.startswith(_normalize_text(prefix))
+        _normalize_text(prefix) in normalized_opening_sentence
         for prefix in DIRECT_LACK_DENIAL_PREFIXES
     )
 

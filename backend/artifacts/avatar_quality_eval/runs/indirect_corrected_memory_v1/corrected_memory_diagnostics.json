@@ -1,0 +1,75 @@
+{
+  "task": "64.4.2 - Indirect Corrected-Memory Query Recall",
+  "note": "Full initial diagnostics (root cause measurement) are in backend/artifacts/avatar_quality_eval/runs/corrected_memory_reproduction_v1/corrected_memory_diagnostics.json. This file summarizes the resolution measured against this run's final fix set.",
+  "final_fix_effectiveness_measurements": [
+    {
+      "measurement": "raw retrieval top-5 hit rate for target chunk, before any fix",
+      "sample_size": 20,
+      "hit_rate": 0.65
+    },
+    {
+      "measurement": "simulated top-5 hit rate excluding the two stale artifacts (no code change, pure post-hoc measurement)",
+      "sample_size": 20,
+      "hit_rate": 0.95
+    },
+    {
+      "measurement": "live end-to-end evidence-presence hit rate after data remediation + multi-query pool over-fetch",
+      "sample_size": 20,
+      "hit_rate": 1.00
+    },
+    {
+      "measurement": "live end-to-end full-answer correctness rate, evidence-ordering fix only (before deterministic prioritization)",
+      "sample_size": 10,
+      "pass_rate": 0.60
+    },
+    {
+      "measurement": "live end-to-end full-answer correctness rate, after deterministic evidence prioritization (verified-item-first + evidence cap)",
+      "sample_size": 15,
+      "pass_rate": 1.00
+    },
+    {
+      "measurement": "final frozen 36-run evaluation, owner-corrected-bedtime-song repeats",
+      "sample_size": 3,
+      "pass_rate": 1.00,
+      "detail": "pass, pass, pass"
+    }
+  ],
+  "responsible_layer_classification": {
+    "query_understanding": false,
+    "qdrant_candidate_recall": "partially - see test_data_setup below; not a semantic gap once noise removed",
+    "candidate_truncation": false,
+    "evidence_ranking": true,
+    "duplicate_or_superseded_evidence": true,
+    "evidence_grouping": true,
+    "evidence_contract": "minor - memory_status/provenance were already present from Task 64.4.1, unaffected",
+    "brain_evidence_selection": true,
+    "evaluative_false_failure": "yes, three separate genuine evaluator bugs found and fixed (see below), all confirmed via direct reproduction with the real failing text before any fix, and confirmed resolved with regression tests after",
+    "runtime_provider_nondeterminism": "yes, for the Brain's evidence-use reliability specifically; resolved with deterministic pre-Brain evidence resolution instead of relying on prompt wording, per Part D/L guidance"
+  },
+  "evaluator_bugs_found_and_fixed_during_full_evaluation_iteration": [
+    {
+      "bug": "multi-word marker proximity match spanning an unrelated sentence boundary",
+      "example": "'...пела «Спят усталые игрушки» перед сном. А вот «Катюшу» — нет...' falsely matched forbidden marker 'Катюшу перед сном'",
+      "fix": "_contains_marker's multi-word proximity check now operates within each sentence independently, never across a sentence boundary",
+      "regression_test": "test_contains_marker_does_not_span_a_sentence_boundary"
+    },
+    {
+      "bug": "'но не X' ('but not X') treated as resetting negation scope instead of continuing it",
+      "example": "'я помню, что пела тебе перед сном, но не «Катюшу»' incorrectly flagged as asserting 'пела Катюшу'",
+      "fix": "negation-scope breaker logic now checks whether the breaker is immediately followed by another negation cue, in which case it does not reset the scope",
+      "regression_test": "test_present_asserted_markers_handles_no_ne_as_continued_negation"
+    },
+    {
+      "bug": "DIRECT_LACK_DENIAL_PREFIXES required the denial phrase at the literal start of the answer",
+      "example": "'Деточка, я не была в Париже в 1968 году...' never matched because real answers open with a warm address, not the denial itself",
+      "fix": "output_guard._looks_like_direct_lack_denial now checks the opening sentence as a substring match, not the whole answer as a strict prefix",
+      "regression_test": "test_output_guard_lack_flag_detects_denial_after_a_warm_address"
+    },
+    {
+      "bug": "build_avatar_eval_summary crashed with StopIteration when any single run in a batch had a runtime/provider failure (dimensions=[])",
+      "example": "one transient Brain-provider network timeout among 36 real API calls crashed the entire evaluation run instead of being recorded as one failed run",
+      "fix": "dimension_passed now returns False for a missing dimension instead of raising",
+      "regression_test": "test_summary_survives_a_runtime_failure_run_with_no_dimensions"
+    }
+  ]
+}

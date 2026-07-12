@@ -1,0 +1,38 @@
+{
+  "answer_stability_rate": 0.916667,
+  "corrected_memory_preference_rate": 1.0,
+  "evaluated_case_count": 12,
+  "failed_case_count": 1,
+  "failure_counts": {
+    "evidence_present_but_ignored": 2
+  },
+  "forbidden_style_rate": 0.0,
+  "lack_of_evidence_correctness_rate": 1.0,
+  "learned_memory_answer_support_rate": 1.0,
+  "metric_definitions": {
+    "answer_stability_rate": "Repeated case groups whose factual required/forbidden marker outcome stayed stable.",
+    "corrected_memory_preference_rate": "Owner-corrected runs that used the approved marker and not rejected markers.",
+    "evaluated_case_count": "Number of unique dataset cases evaluated.",
+    "failed_case_count": "Unique cases with at least one failed repeat run.",
+    "forbidden_style_rate": "Runs containing prohibited technical or assistant-style phrasing.",
+    "lack_of_evidence_correctness_rate": "Lack-of-evidence runs that did not use forbidden facts.",
+    "learned_memory_answer_support_rate": "Learned indexed memory runs that used the required learned markers.",
+    "over_refusal_rate": "Grounded runs that answered with lack-of-evidence behavior despite expected support.",
+    "passed_case_count": "Unique cases whose every repeat run passed.",
+    "persona_consistency_rate": "Runs with persona_applied=true and no cold/technical forbidden style.",
+    "perspective_preservation_rate": "Perspective runs that preserved expected attribution behavior.",
+    "profile_contamination_count": "Runs where evidence contained markers forbidden for profile isolation.",
+    "required_marker_rate": "Runs where all required answer markers were present.",
+    "retrieval_evidence_hit_rate": "Grounded runs whose returned evidence matched required evidence markers or metadata.",
+    "unsupported_detail_rate": "Runs containing forbidden unsupported answer markers."
+  },
+  "over_refusal_rate": 0.0,
+  "passed_case_count": 11,
+  "persona_consistency_rate": 1.0,
+  "perspective_preservation_rate": 1.0,
+  "profile_contamination_count": 0,
+  "required_marker_rate": 0.944444,
+  "retrieval_evidence_hit_rate": 1.0,
+  "total_runs": 36,
+  "unsupported_detail_rate": 0.0
+}

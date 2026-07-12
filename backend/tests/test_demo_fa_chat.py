@@ -217,6 +217,154 @@ def test_demo_fa_chat_debug_true_includes_evidence_preview(client, monkeypatch):
     assert "Попице" in body["evidence"][0]["text_preview"]
 
 
+def test_demo_fa_chat_ordinary_question_issues_single_retrieval_call(client, monkeypatch):
+    _user, profile = _create_demo_profile()
+    call_count = {"n": 0}
+
+    def fake_retrieve(db, *, current_user, profile_id, payload):
+        call_count["n"] += 1
+        return _build_retrieval_response(profile_id, payload.query)
+
+    monkeypatch.setattr(
+        "app.modules.demo_fa_chat.service._resolve_demo_runtime",
+        lambda db, *, resolved_profile: SimpleNamespace(
+            collection_name="eternal_world_rag_chunks__bge_m3_dense_sparse__family_novak_ru_e2e_v3_bge_m3_real_cpu",
+            retrieval_mode="bge_m3_dense_sparse",
+            top_k=5,
+            source_id=7,
+            point_count=20,
+        ),
+    )
+    monkeypatch.setattr("app.modules.demo_fa_chat.service.retrieve_profile_rag", fake_retrieve)
+    monkeypatch.setattr(
+        "app.modules.demo_fa_chat.service.get_agent_orchestrator",
+        lambda: SimpleNamespace(
+            generate_chat_response=lambda request: SimpleNamespace(
+                text="В детстве я жила с родителями у Попице. [rag:27618]",
+                provider_name="mock-brain",
+                metadata={
+                    "grounding_status": "grounded",
+                    "output_guard_applied": False,
+                    "output_guard_reason": None,
+                    "output_guard_lack_of_evidence": False,
+                },
+            )
+        ),
+    )
+
+    response = client.post(
+        "/api/demo/fa-chat/message",
+        json={"profile_id": profile.id, "message": "Где ты жила в детстве?"},
+    )
+
+    assert response.status_code == 200
+    assert call_count["n"] == 1
+
+
+def test_demo_fa_chat_corrected_memory_question_merges_two_retrieval_calls(client, monkeypatch):
+    _user, profile = _create_demo_profile()
+    seen_queries: list[str] = []
+
+    verified_item = RagRetrievalResultRead(
+        chunk_id=27640,
+        source_id=10,
+        source_title="Approved conversation memory",
+        embedding_id=99999,
+        score=0.4,
+        text="По словам внука, бабушка часто пела ему песню «Спят усталые игрушки».",
+        chunk_index=0,
+        language="ru",
+        source_type="conversation_candidate",
+        validation_status="valid",
+        text_hash="hash-27640",
+        qdrant_collection="eternal_world_rag_chunks__bge_m3_dense_sparse__family_novak_ru_e2e_v3_bge_m3_real_cpu",
+        payload_metadata={
+            "memory_status": "verified",
+            "provenance": "review_approved_conversation_candidate",
+            "promotion_id": 5,
+            "candidate_id": 14,
+            "indexed_at": "2026-07-11T21:51:58.863798+00:00",
+        },
+    )
+    archival_item = RagRetrievalResultRead(
+        chunk_id=27618,
+        source_id=7,
+        source_title="Family Novak RU E2E Corpus",
+        embedding_id=43591,
+        score=0.99,
+        text="Archival note unrelated to the song.",
+        chunk_index=0,
+        language="ru",
+        source_type="manual_text",
+        validation_status="valid",
+        text_hash="hash-27618",
+        qdrant_collection="eternal_world_rag_chunks__bge_m3_dense_sparse__family_novak_ru_e2e_v3_bge_m3_real_cpu",
+        payload_metadata={},
+    )
+
+    def fake_retrieve(db, *, current_user, profile_id, payload):
+        seen_queries.append(payload.query)
+        # The verified item only surfaces on the expanded (second) query, to
+        # prove the merge step actually combines both result sets.
+        results = [archival_item, verified_item] if len(seen_queries) == 2 else [archival_item]
+        return RagRetrievalResponseRead(
+            profile_id=profile_id,
+            query=payload.query,
+            model_code="bge_m3_dense_sparse",
+            results=results,
+        )
+
+    monkeypatch.setattr(
+        "app.modules.demo_fa_chat.service._resolve_demo_runtime",
+        lambda db, *, resolved_profile: SimpleNamespace(
+            collection_name="eternal_world_rag_chunks__bge_m3_dense_sparse__family_novak_ru_e2e_v3_bge_m3_real_cpu",
+            retrieval_mode="bge_m3_dense_sparse",
+            top_k=5,
+            source_id=7,
+            point_count=20,
+        ),
+    )
+    monkeypatch.setattr("app.modules.demo_fa_chat.service.retrieve_profile_rag", fake_retrieve)
+    monkeypatch.setattr(
+        "app.modules.demo_fa_chat.service.get_agent_orchestrator",
+        lambda: SimpleNamespace(
+            generate_chat_response=lambda request: SimpleNamespace(
+                text="Деточка, я пела тебе «Спят усталые игрушки». [rag:27640]",
+                provider_name="mock-brain",
+                metadata={
+                    "grounding_status": "grounded",
+                    "output_guard_applied": False,
+                    "output_guard_reason": None,
+                    "output_guard_lack_of_evidence": False,
+                },
+            )
+        ),
+    )
+
+    response = client.post(
+        "/api/demo/fa-chat/message",
+        json={
+            "profile_id": profile.id,
+            "message": "Ты помнишь, какую песню я называл, а владелец потом исправил?",
+            "debug": True,
+        },
+    )
+
+    assert response.status_code == 200
+    assert len(seen_queries) == 2
+    assert seen_queries[0] == "Ты помнишь, какую песню я называл, а владелец потом исправил?"
+    assert seen_queries[1] != seen_queries[0]
+    # The expanded query must stay generic and must never contain the
+    # dataset's expected answer.
+    assert "спят усталые игрушки" not in seen_queries[1].casefold()
+    body = response.json()
+    evidence_chunk_ids = [item["chunk_id"] for item in body["evidence"]]
+    assert "27640" in evidence_chunk_ids
+    # The verified learned memory must be floated to the front despite its
+    # lower raw score than the archival item.
+    assert evidence_chunk_ids[0] == "27640"
+
+
 def test_demo_fa_chat_creates_unverified_memory_candidate_for_new_personal_claim(client, monkeypatch):
     _user, profile = _create_demo_profile()
 

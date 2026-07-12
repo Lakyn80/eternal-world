@@ -1,0 +1,21 @@
+{
+  "answer_stability_rate": 0.916667,
+  "corrected_memory_preference_rate": 1.0,
+  "evaluated_case_count": 12,
+  "failed_case_count": 1,
+  "failure_counts": {
+    "evidence_present_but_ignored": 2
+  },
+  "forbidden_style_rate": 0.0,
+  "lack_of_evidence_correctness_rate": 1.0,
+  "learned_memory_answer_support_rate": 1.0,
+  "over_refusal_rate": 0.0,
+  "passed_case_count": 11,
+  "persona_consistency_rate": 1.0,
+  "perspective_preservation_rate": 1.0,
+  "profile_contamination_count": 0,
+  "required_marker_rate": 0.944444,
+  "retrieval_evidence_hit_rate": 1.0,
+  "total_runs": 36,
+  "unsupported_detail_rate": 0.0
+}

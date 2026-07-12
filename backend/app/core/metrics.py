@@ -245,8 +245,28 @@ AVATAR_EVAL_PERSPECTIVE_TOTAL = Counter(
     "Total avatar answer-quality evaluation runs by perspective-preservation gate result.",
     labelnames=("result",),
 )
+AVATAR_MEMORY_QUERY_INTENT_TOTAL = Counter(
+    "avatar_memory_query_intent_total",
+    "Total avatar learned-memory chat turns by classified query intent.",
+    labelnames=("intent",),
+)
+AVATAR_CORRECTED_MEMORY_RESOLUTION_TOTAL = Counter(
+    "avatar_corrected_memory_resolution_total",
+    "Total corrected-memory-intent turns by whether a verified learned memory was found and used.",
+    labelnames=("result",),
+)
 
 _AVATAR_EVAL_GATE_RESULTS = frozenset({"pass", "fail"})
+_AVATAR_MEMORY_QUERY_INTENTS = frozenset(
+    {
+        "direct_factual_memory",
+        "corrected_memory_fact",
+        "correction_history",
+        "multiple_perspective_question",
+        "unknown_or_ambiguous",
+    }
+)
+_AVATAR_CORRECTED_MEMORY_RESOLUTIONS = frozenset({"resolved", "unresolved"})
 
 _MEMORY_INDEX_RESULTS = frozenset({"indexed", "failed", "skipped"})
 _MEMORY_PROMOTION_STATUSES = ("pending_index", "indexed", "failed", "cancelled")
@@ -615,3 +635,15 @@ def observe_avatar_eval_corrected_memory_gate(*, passed: bool) -> None:
 
 def observe_avatar_eval_perspective_gate(*, passed: bool) -> None:
     AVATAR_EVAL_PERSPECTIVE_TOTAL.labels(_normalize_avatar_eval_gate_result(passed)).inc()
+
+
+def observe_avatar_memory_query_intent(*, intent: str) -> None:
+    normalized_intent = intent.strip().lower()
+    if normalized_intent not in _AVATAR_MEMORY_QUERY_INTENTS:
+        normalized_intent = "unknown_or_ambiguous"
+    AVATAR_MEMORY_QUERY_INTENT_TOTAL.labels(normalized_intent).inc()
+
+
+def observe_avatar_corrected_memory_resolution(*, resolved: bool) -> None:
+    result = "resolved" if resolved else "unresolved"
+    AVATAR_CORRECTED_MEMORY_RESOLUTION_TOTAL.labels(result).inc()

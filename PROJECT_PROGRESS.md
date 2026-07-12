@@ -7775,3 +7775,85 @@ Next recommended task:
 - Task 64.5 - Minimal Family Memory Review UI (after 64.4.2, or in parallel if prioritized differently — the hard profile-isolation gate is already satisfied)
 
 ---
+
+## Task 64.4.2 - Indirect Corrected-Memory Query Recall (2026-07-13)
+
+Goal:
+
+- make owner-approved corrected memories reliably retrievable and usable for indirect/meta-referential questions, closing the one Task 64.4.1 quality gate that remained below threshold (`corrected_memory_preference_rate`), without weakening any other gate
+
+Initial failing gate: `corrected_memory_preference_rate = 0.667` (2 of 3 repeats of `owner-corrected-bedtime-song`).
+
+Reproduction: reproduced first in a fresh, non-overwriting run (`corrected_memory_reproduction_v1`). The exact failure did not reproduce on that specific run (provider nondeterminism, as anticipated), but a 20-probe direct retrieval measurement isolated the real, consistent mechanism before any code change: the target memory's raw top-5 retrieval hit rate was only 65%, and a pure post-hoc simulation (no code change) excluding two specific stale Qdrant points raised that to 95% — a concrete, measured root cause rather than "retrieval stochasticity."
+
+Root cause (measured, not assumed):
+
+- Two promotions (`id 2` "swimming championship", `id 4` "smaragd club") were leftover artifacts from Task 64.2's own manual smoke testing of the indexing endpoint. They were approved through the plain candidate path (not `family_memory_enrichment`), so their indexed text retained the raw, unprocessed auto-generated candidate-proposal boilerplate ("Пользователь сообщил о возможном личном воспоминании, которого нет в текущих подтверждённых материалах: ..."), which verbatim-echoes the phrasing pattern of *any* "do you remember..." question, causing spurious high similarity scores unrelated to actual topic.
+- Investigating candidate 14's (the real bedtime-song memory) actual `family_memory_contributions` lineage showed the song title was never literally disputed within that lineage — the contributor's clarification answer already said "Спят усталые игрушки"; only the owner's confirmatory rewording is tagged `is_owner_correction`. The dataset case's "corrected away from a wrong claim" premise is represented by a *separate*, unlineaged fixture (the multiple-perspectives "Катюша" memory added in Task 64.4.1), not a real correction chain — a genuine `test_data_setup` finding, documented but not restructured (out of scope: family review/promotion semantics were not touched).
+- Once the stale artifacts were retired, the *new* dominant noise source became the Task 64.4.1 multiple-perspectives fixture itself and unrelated archival corpus chunks — confirming the deeper, generalizable issue was evidence *ranking and grouping* (a correctly-retrieved verified memory diluted by several unrelated items in a small, fixed evidence window), not a semantic recall gap.
+
+Fix (all narrowly scoped, none touching retrieval ranking/hybrid weighting/top_k/embeddings/Qdrant collections):
+
+1. **Data remediation** (user-approved before executing, since it deletes data from a prior session): retired the two stale promotions via the existing `DefaultAvatarMemoryQdrantWriter.delete_point` primitive and marked them `failed` with a full audit-trail reason. No new deletion capability was built; the existing compensation-rollback primitive from Task 64.2 was reused as-is.
+2. **Deterministic query-intent classification** — new module `avatar_persona/memory_query_intent.py`: a marker-based classifier (`direct_factual_memory` / `corrected_memory_fact` / `correction_history` / `multiple_perspective_question` / `unknown_or_ambiguous`) with zero fact-specific or case-specific content, verified to generalize by testing an unrelated topic phrased identically.
+3. **Scoped multi-query retrieval**, isolated to corrected-memory intent in `demo_fa_chat/service.py` only: the original query is always issued unchanged; for correction-intent turns only, one additional generic, fact-agnostic expansion query ("финальная подтверждённая версия воспоминания", "исправление владельца", "что было на самом деле" — exactly the example wording given in the task brief) is also issued, merged deterministically by chunk_id (`_merge_ranked_retrieval_results`), over-fetching a small bounded pool (`_CORRECTED_MEMORY_CANDIDATE_POOL_OVERFETCH = 5`) so the existing Task 64.4.1 dispute-evidence filter can drop an item without shrinking the delivered evidence set. Ordinary questions take the exact single-query path, byte-for-byte unchanged from before this task.
+4. **Deterministic evidence prioritization** — new function `prioritize_corrected_memory_evidence` in `ai_agents/brain/context.py`: floats a verified learned memory to the front of the (already-filtered) evidence list and caps the count to `CORRECTED_MEMORY_EVIDENCE_CAP = 3` for corrected-memory-intent turns only. This was the single highest-impact fix, found only after directly following the task's own explicit guidance ("prefer deterministic pre-Brain evidence resolution... do not rely only on prompt wording") once prompt-only iteration (an abstract rule, then a per-item inline annotation) plateaued at ~60-80% live answer-correctness. Live measurement after this fix: 15/15 (100%).
+5. **Narrow, versioned prompt refinement** (`learned_memory_answer_policy_v3` → `learned_memory_answer_policy_v3_1`): two targeted clarifications only — being outnumbered by unrelated archival items does not indicate missing evidence; a "what was corrected" question wants the current stored fact, not a narrative describing the correction event. Applied only after evidence-ordering alone was measured (not assumed) to be insufficient. No broad prompt rewrite.
+6. **Four real evaluator/output-guard precision bugs**, each found by reproducing an actual full-evaluation failure against the real Brain provider (never assumed), fixed narrowly, and covered by a regression test reproducing the exact real failing text:
+   - `_contains_marker`'s multi-word proximity window could span an unrelated sentence boundary (e.g. "...перед сном." + "А вот «Катюшу»..." falsely satisfied "Катюшу перед сном").
+   - "но не X" ("but not X") was treated as resetting negation scope instead of continuing it, so `_present_asserted_markers` mis-flagged an explicit denial as an assertion.
+   - `output_guard.DIRECT_LACK_DENIAL_PREFIXES` required the denial phrase at the literal start of the answer; real answers open with a warm address first ("Деточка, ..."), so the check almost never fired in practice. Now checked against the opening sentence as a substring.
+   - `build_avatar_eval_summary` crashed the entire evaluation run with `StopIteration` if any single one of the 36 calls hit a transient runtime/provider failure; now treats a missing dimension as "not passed" instead of crashing.
+
+Why this generalizes beyond the test song: the query-intent classifier and evidence prioritization key off structural signals (marker phrases in the *question*, `memory_status=verified` in the *evidence metadata*) — never a specific song title, case ID, or dataset question. A dedicated test proves the classifier recognizes an unrelated topic ("где мы гуляли... исправила") phrased the same way. No case-specific branch exists anywhere in the new code.
+
+Why unrelated owner memories are not boosted: prioritization only reorders/caps the *already-retrieved, already-filtered* candidate pool for one intent path; it distinguishes verified-vs-archival only, never "owned by X" vs not, and never widens which memories are eligible to be retrieved in the first place. A dedicated test (`test_prioritize_corrected_memory_evidence_is_a_noop_without_verified_items`) proves it is a no-op when no verified item is present.
+
+Why ordinary retrieval is unchanged: the non-expansion branch in `demo_fa_chat/service.py` issues the exact same single `retrieve_profile_rag` call, with the exact same default `top_k` resolved from the profile's active retrieval config, as existed before this task — proven by a dedicated test asserting exactly one retrieval call for an ordinary question.
+
+Tests run:
+
+- `python -m pytest tests/test_avatar_quality_evaluation.py tests/test_avatar_persona_prompt_composer.py tests/test_ai_agents.py tests/test_demo_fa_chat.py tests/test_avatar_memory_query_intent.py -q` → `96 passed`
+- `python -m pytest tests/test_family_memory_enrichment.py tests/test_avatar_memory_indexing.py tests/test_avatar_memory_promotions.py tests/test_conversation_memory_candidates.py -q` → `42 passed`
+- `python -m pytest tests/test_rag_evaluation.py tests/test_metrics.py tests/test_grafana_dashboard_contract.py -q` → `41 passed`
+- `python -m pytest tests/test_embedding_cache.py tests/test_bge_m3_embedding_cache.py tests/test_bge_m3_model_cache.py tests/test_prefetch_embedding_model.py tests/test_alembic.py -q` → `37 passed`
+- `test_rag_retrieval.py`: same 8 pre-existing, network-dependent failures as documented in Task 64.4.1 (an unrelated model, `multilingual-e5-base`, failing DNS/SSL resolution to huggingface.co) — reconfirmed unrelated to and unchanged by this task; no new failure was introduced (all other tests in that file, and every test in every file this task touched, pass)
+- all runs showed only the existing non-blocking `pytest_asyncio` deprecation warning
+
+Docker verification:
+
+- `docker compose up -d backend frontend`, `docker compose ps`: all services healthy
+- `docker compose exec -T backend alembic current`: `20260711_0018 (head)` — no migration needed or added by this task
+- backend logs (last 300 lines): zero secrets, zero CUDA/NVIDIA errors, zero HTTP 500s
+- live focused verification: 20 consecutive end-to-end calls for the exact failing question — 100% evidence-presence hit rate, 100% forbidden-fact-free; 15 consecutive full-answer-correctness probes after the evidence-prioritization fix — 100% pass
+
+Final 36-run evaluation (`backend/artifacts/avatar_quality_eval/runs/indirect_corrected_memory_v1/`):
+
+- profile_contamination = 0, retrieval_hit_rate = 1.00, learned_memory_support = 1.00, **corrected_memory_preference = 1.00**, perspective_preservation = 1.00, lack_of_evidence_correctness = 1.00, unsupported_detail = 0.00, over_refusal = 0.00, persona_consistency = 1.00, answer_stability = 0.917, passed_cases = 11/12
+- `owner-corrected-bedtime-song`: **3/3 pass** (hard requirement met)
+- **Quality gate: PASS — 11 of 11 checks pass.**
+- Remaining non-blocking failure: `sensitive-political-prison` (2 of 3), confirmed via 5 independent live samples to be genuine, pre-existing Brain-provider phrasing nondeterminism (the true fact is stated respectfully in every sample; the literal word "тюрьма" is used in 4 of 5) — not touched by any code path this task modified, and does not affect any required gate.
+
+Metrics added: `avatar_memory_query_intent_total{intent=...}`, `avatar_corrected_memory_resolution_total{result=...}` (both low-cardinality, no case/candidate/promotion/profile/trace/text labels).
+
+Grafana: two new panels added to the existing "Avatar Answer Quality" section of the Eternal World FA Chat dashboard (`eternal-world-fa-chat`, dashboard version 6 → 7). Shared Grafana wiring and NALUS panels/datasources were not touched.
+
+Behavior preserved:
+
+- retrieval ranking, hybrid weighting, top_k, BGE-M3 embedding semantics, Redis embedding-cache key semantics: unchanged
+- Brain provider unchanged; no model downloaded; no fallback embedding introduced
+- Qdrant modified only via the same sanctioned deletion primitive already part of the Task 64.2 indexing service, after explicit user confirmation — no collection rebuild, no re-ingest
+- candidate review / promotion / explicit-indexing semantics unchanged
+- unindexed/pending/rejected/private memory still cannot be used as fact; profile isolation still enforced before the Brain
+
+Known limitations:
+
+- `sensitive-political-prison` remains intermittently sensitive to the Brain provider's exact word choice (uses the true fact but not always the literal expected word) — pre-existing, not part of this task's required gates, and not fixable without touching the Brain provider (forbidden).
+- Candidate 14's contribution lineage does not literally embody the "corrected away from a wrong claim" scenario the dataset case describes; the multiple-perspectives fixture added in Task 64.4.1 remains a separate, unlineaged record rather than a `supersedes_contribution_id`-linked correction. A cleaner `memory_kind`/lineage-linked model (Part F's suggested design) remains a candidate future improvement if more corrected-memory scenarios are added, but was not required to pass this task's gates.
+- The two retired promotions' Qdrant points are gone; their Postgres `RagSource`/`RagChunk`/`RagEmbedding` rows remain as historical audit trail (unindexed, not searchable).
+
+Next recommended task:
+
+- Task 64.5 - Minimal Family Memory Review UI
+
+---

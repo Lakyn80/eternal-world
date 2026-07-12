@@ -7,6 +7,8 @@ from sqlalchemy.orm import Session
 
 from app.core.logging import get_logger, log_event
 from app.core.metrics import (
+    observe_avatar_corrected_memory_resolution,
+    observe_avatar_memory_query_intent,
     observe_memory_candidate_created,
     observe_memory_candidate_reviewed,
     observe_memory_promotion_created,
@@ -22,13 +24,18 @@ from app.modules.active_retrieval_config.service import (
 )
 from app.modules.ai_agents import get_agent_orchestrator
 from app.modules.ai_agents.brain.context import (
+    CORRECTED_MEMORY_EVIDENCE_CAP,
     build_rag_evidence_items,
     build_vector_retrieval_grounded_context,
     filter_learned_memory_results_by_question_intent,
+    prioritize_corrected_memory_evidence,
 )
 from app.modules.ai_agents.schemas import MemoryProfileContext, OrchestratorChatRequest
 from app.modules.avatar_persona import (
+    CORRECTED_MEMORY_EXPANSION_RULE_ID,
+    build_expanded_retrieval_query,
     build_memory_candidate,
+    classify_memory_query_intent,
     derive_avatar_response_directives,
     load_demo_avatar_persona,
 )
@@ -125,6 +132,40 @@ def _normalize_message_text(value: str) -> str:
 
 def _build_message_hash_prefix(message: str) -> str:
     return build_text_hash(message).split(":", 1)[1][:8]
+
+
+# How many extra candidates (beyond the profile's normal top_k) to over-fetch
+# for corrected-memory-intent turns only, so the dispute-shaped-evidence
+# filter has room to drop a filtered item without shrinking the final
+# evidence set below what an ordinary turn would receive. Bounded and small
+# on purpose — this is a pool-then-filter-then-truncate pattern scoped to one
+# intent path, not a change to the profile's configured top_k.
+_CORRECTED_MEMORY_CANDIDATE_POOL_OVERFETCH = 5
+
+
+def _merge_ranked_retrieval_results(
+    *,
+    primary: list[RagRetrievalResultRead],
+    secondary: list[RagRetrievalResultRead],
+    limit: int,
+) -> list[RagRetrievalResultRead]:
+    """Deterministically merge two ranked retrieval result lists.
+
+    Deduplicates by chunk_id (keeping the higher of the two scores when a
+    chunk appears in both), then re-sorts by score and truncates to `limit`
+    — the same top_k the profile's active retrieval config already uses, so
+    the Brain never receives more evidence than an ordinary single-query
+    turn would. This is a downstream merge over two already-independently
+    profile/avatar/privacy-filtered result sets; it does not change how
+    either individual retrieval call itself scores or filters candidates.
+    """
+    merged_by_chunk_id: dict[int, RagRetrievalResultRead] = {}
+    for result in (*primary, *secondary):
+        existing = merged_by_chunk_id.get(result.chunk_id)
+        if existing is None or result.score > existing.score:
+            merged_by_chunk_id[result.chunk_id] = result
+    ranked = sorted(merged_by_chunk_id.values(), key=lambda item: item.score, reverse=True)
+    return ranked[:limit]
 
 
 def _build_expected_demo_collection_name() -> str:
@@ -800,14 +841,74 @@ def run_demo_fa_chat_message(
         debug=debug,
     )
 
+    memory_query_intent = classify_memory_query_intent(normalized_message)
+    observe_avatar_memory_query_intent(intent=memory_query_intent.value)
+    expanded_retrieval_query = build_expanded_retrieval_query(normalized_message, memory_query_intent)
+
     retrieval_started_at = perf_counter()
     try:
-        retrieval_response = retrieve_profile_rag(
-            db,
-            current_user=resolved_profile.user,
-            profile_id=resolved_profile.profile.id,
-            payload=RagRetrievalRequest(query=normalized_message),
-        )
+        if expanded_retrieval_query is not None:
+            # Corrected-memory intent: issue one additional, generic,
+            # fact-agnostic retrieval probe (the original query above is
+            # always issued too, unchanged) and merge deterministically. A
+            # small, bounded candidate pool is over-fetched from both
+            # queries — rather than the profile's normal top_k — so that
+            # the dispute-shaped-evidence filter (applied below, same as
+            # for ordinary turns) can drop an item that would be excluded
+            # from the Brain's evidence anyway *before* truncating to the
+            # real top_k, instead of after. Without this, a dispute-shaped
+            # item could occupy one of only top_k raw slots purely to be
+            # discarded downstream, crowding out a legitimate item that
+            # would otherwise have ranked just below it. This only changes
+            # retrieval for turns classified as corrected-memory intent in
+            # the avatar learned-memory demo path; ordinary questions take
+            # the single-query, unmodified-top_k branch below.
+            pool_limit = resolved_runtime.top_k + _CORRECTED_MEMORY_CANDIDATE_POOL_OVERFETCH
+            retrieval_response = retrieve_profile_rag(
+                db,
+                current_user=resolved_profile.user,
+                profile_id=resolved_profile.profile.id,
+                payload=RagRetrievalRequest(query=normalized_message, limit=pool_limit),
+            )
+            expansion_response = retrieve_profile_rag(
+                db,
+                current_user=resolved_profile.user,
+                profile_id=resolved_profile.profile.id,
+                payload=RagRetrievalRequest(query=expanded_retrieval_query, limit=pool_limit),
+            )
+            merged_pool = _merge_ranked_retrieval_results(
+                primary=retrieval_response.results,
+                secondary=expansion_response.results,
+                limit=pool_limit,
+            )
+            filtered_pool = filter_learned_memory_results_by_question_intent(
+                merged_pool,
+                user_message=normalized_message,
+            )
+            # Deterministically float a verified learned memory to the front
+            # and cap the evidence count for this intent path — reduces
+            # dilution by unrelated archival items instead of relying only
+            # on prompt wording to hold the Brain's attention (see
+            # prioritize_corrected_memory_evidence docstring).
+            prioritized_results = prioritize_corrected_memory_evidence(
+                filtered_pool,
+                limit=min(resolved_runtime.top_k, CORRECTED_MEMORY_EVIDENCE_CAP),
+            )
+            retrieval_response = retrieval_response.model_copy(update={"results": prioritized_results})
+            observe_avatar_corrected_memory_resolution(
+                resolved=any(
+                    result.source_type == "conversation_candidate"
+                    and (result.payload_metadata or {}).get("memory_status") == "verified"
+                    for result in prioritized_results
+                )
+            )
+        else:
+            retrieval_response = retrieve_profile_rag(
+                db,
+                current_user=resolved_profile.user,
+                profile_id=resolved_profile.profile.id,
+                payload=RagRetrievalRequest(query=normalized_message),
+            )
     except Exception:
         observe_rag_retrieval_error(
             retrieval_mode=resolved_runtime.retrieval_mode,
@@ -820,6 +921,23 @@ def run_demo_fa_chat_message(
         top_k=resolved_runtime.top_k,
         duration_seconds=perf_counter() - retrieval_started_at,
         retrieved_chunk_count=len(retrieval_response.results),
+    )
+    log_event(
+        logger,
+        20,
+        "fa_demo_chat_memory_query_intent",
+        trace_id=trace_id,
+        profile_id=resolved_profile.profile.id,
+        memory_query_intent=memory_query_intent.value,
+        normalization_applied=expanded_retrieval_query is not None,
+        normalized_query_hash=(
+            build_text_hash(expanded_retrieval_query).split(":", 1)[1][:8]
+            if expanded_retrieval_query is not None
+            else None
+        ),
+        normalization_rule_id=(
+            CORRECTED_MEMORY_EXPANSION_RULE_ID if expanded_retrieval_query is not None else None
+        ),
     )
     log_event(
         logger,

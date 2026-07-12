@@ -143,7 +143,17 @@ def _contains_marker(text: str, marker: str) -> bool:
     if len(stems) == 1:
         return stems[0] in normalized_text
 
-    return _stems_within_proximity(_tokenize(normalized_text), stems)
+    # The proximity window must not span two unrelated sentences — e.g.
+    # "...пела «Спят усталые игрушки» перед сном. А вот «Катюшу» — нет..."
+    # must not satisfy the marker "Катюшу перед сном" just because the two
+    # halves happen to sit within a token window across the sentence break.
+    # Checking each sentence's own token stream keeps the window meaningful
+    # (a genuine phrase never spans a full stop) without needing a smaller,
+    # harder-to-tune window size.
+    for sentence in _split_into_sentences(text) or [text]:
+        if _stems_within_proximity(_tokenize(_normalize_text(sentence)), stems):
+            return True
+    return False
 
 
 _SENTENCE_SPLIT_PATTERN = re.compile(r"[.!?\n]+")
@@ -183,19 +193,30 @@ def _sentence_denies_marker(sentence: str, marker: str) -> bool:
         return False
 
     negated_before = False
-    for token in tokens[:anchor_index]:
+    prefix_tokens = tokens[:anchor_index]
+    for index, token in enumerate(prefix_tokens):
         if token in _NEGATION_SCOPE_BREAKERS:
+            # "но не X" continues a negation ("but NOT X") rather than
+            # resetting it — only a breaker NOT immediately followed by a
+            # negation cue ends the scope (e.g. "не знаю точно, но X").
+            next_token = prefix_tokens[index + 1] if index + 1 < len(prefix_tokens) else None
+            if next_token in _NEGATION_CUES:
+                continue
             negated_before = False
         elif token in _NEGATION_CUES:
             negated_before = True
     if negated_before:
         return True
 
-    for token in tokens[anchor_index + 1 :]:
-        if token in _NEGATION_SCOPE_BREAKERS:
-            break
+    suffix_tokens = tokens[anchor_index + 1 :]
+    for index, token in enumerate(suffix_tokens):
         if token in _NEGATION_CUES:
             return True
+        if token in _NEGATION_SCOPE_BREAKERS:
+            next_token = suffix_tokens[index + 1] if index + 1 < len(suffix_tokens) else None
+            if next_token in _NEGATION_CUES:
+                continue
+            break
     return False
 
 
@@ -559,7 +580,14 @@ def build_avatar_eval_summary(results: list[AvatarEvalCaseRunResult]) -> AvatarE
     ]
 
     def dimension_passed(result: AvatarEvalCaseRunResult, name: str) -> bool:
-        return next(item.passed for item in result.dimensions if item.name == name)
+        # A run that hit a runtime/provider failure (e.g. a network timeout
+        # calling the Brain provider) has no dimensions at all — see
+        # runner._run_case_once's except-Exception branch, which records
+        # dimensions=[] for exactly this case. Treat a missing dimension as
+        # not passed rather than crashing the whole summary; the run is
+        # already correctly reflected as failed via result.passed=False and
+        # "runtime_failure" in result.failure_types.
+        return next((item.passed for item in result.dimensions if item.name == name), False)
 
     stable_groups = 0
     for case_results in repeat_groups:

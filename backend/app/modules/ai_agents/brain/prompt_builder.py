@@ -11,10 +11,24 @@ PROMPT_SECTION_SEPARATOR = "---"
 SYSTEM_PROMPT_HEADER = "SYSTEM — Eternal World Brain Agent (Production v2)"
 USER_PROMPT_HEADER = "USER — Current turn context"
 
-# Versions the learned-memory evidence-use rules below (Task 64.4.1). Bump
-# this when the rules in the "LEARNED MEMORY" block change so eval run
-# manifests stay traceable to the exact policy that produced their answers.
-LEARNED_MEMORY_ANSWER_POLICY_VERSION = "learned_memory_answer_policy_v3"
+# Versions the learned-memory evidence-use rules below. Bump this when the
+# rules in the "LEARNED MEMORY" block change so eval run manifests stay
+# traceable to the exact policy that produced their answers.
+#
+# v3 (Task 64.4.1): introduced the VERIFIED LEARNED MEMORY / ARCHIVAL
+# DOCUMENT distinction and the "judge each verified item independently"
+# rule.
+# v3_1 (Task 64.4.2): the v3 "judge independently" rule only addressed a
+# *different verified item* casting doubt. Measured live testing (20
+# retrieval probes, 100% recall) showed the Brain still ignored a correctly
+# retrieved, correctly tagged VERIFIED LEARNED MEMORY item in ~40% of turns
+# when it was outnumbered by several unrelated ARCHIVAL DOCUMENT items in
+# the same evidence block, and separately treated "what was corrected"
+# questions as requiring narrative evidence of a correction *event* rather
+# than just the current confirmed fact. v3_1 adds two narrow clarifications
+# for exactly these two observed failure modes; it does not add any new
+# broad prompt content.
+LEARNED_MEMORY_ANSWER_POLICY_VERSION = "learned_memory_answer_policy_v3_1"
 
 
 @dataclass(frozen=True)
@@ -108,17 +122,24 @@ def _build_system_prompt(*, profile, avatar_persona=None) -> str:
             "  lower retrieval score than an unrelated item, and do not call them 'unconfirmed' or 'a report'.",
             "- Judge each VERIFIED LEARNED MEMORY only by what IT states. A different verified item being",
             "  about an unrelated topic, or itself originating from a conversation, must never make you doubt",
-            "  or refuse to use a different verified item that directly answers the current question.",
+            "  or refuse to use a different verified item that directly answers the current question. The same",
+            "  applies to ARCHIVAL DOCUMENT items: being outnumbered by several unrelated archival items in the",
+            "  same evidence block is normal and is not a sign that evidence is missing — evaluate the VERIFIED",
+            "  LEARNED MEMORY item on its own merits regardless of how many other, unrelated items surround it.",
             "- Default to the single, confident, first-person version of a fact. If the user's question is an",
-            "  ordinary direct factual question (it does NOT ask about a disagreement, a correction, what someone",
-            "  else remembers, or differing accounts), answer with the plain settled fact only. Do not volunteer,",
-            "  hedge with, or mention a different person's differing account just because a verified item",
-            "  describing that disagreement is present among the evidence — ignore that item for this answer.",
+            "  ordinary direct factual question (it does NOT ask about a disagreement, differing accounts, or",
+            "  what someone else remembers), answer with the plain settled fact only. Do not volunteer, hedge",
+            "  with, or mention a different person's differing account just because a verified item describing",
+            "  that disagreement is present among the evidence — ignore that item for this answer.",
+            "- A question that asks what was corrected, what the final or confirmed version is, or what really",
+            "  happened is asking for the CURRENT confirmed fact, not for a narrative describing the correction",
+            "  event itself. If a VERIFIED LEARNED MEMORY item states that current fact, answer with it directly",
+            "  and confidently — you do not need separate evidence that narrates 'X was corrected to Y'; the",
+            "  verified item being the one stored, confirmed fact is itself sufficient.",
             "- Only surface a disagreement between VERIFIED LEARNED MEMORY items when the user's current question",
-            "  explicitly asks about it (e.g. asks what was corrected, whether memories differ, or what someone",
-            "  else remembers). In that case, do not silently pick a winner: name who remembers what, briefly and",
-            "  honestly, and say the exact detail is not fully certain — without inventing detail beyond what",
-            "  each item states.",
+            "  explicitly asks about differing memories or what someone else remembers. In that case, do not",
+            "  silently pick a winner: name who remembers what, briefly and honestly, and say the exact detail",
+            "  is not fully certain — without inventing detail beyond what each item states.",
             "- If a single VERIFIED LEARNED MEMORY item's own text already attributes differing accounts to",
             "  different people, apply the same rule: mention that attribution only when the question asks",
             "  about the disagreement; otherwise answer with the plain settled fact from other evidence.",
@@ -238,9 +259,17 @@ def _build_rag_evidence_block(
                 f"candidate_id={evidence_item.candidate_id}, "
                 f"indexed_at={evidence_item.indexed_at or 'unknown'}"
             )
+            allowed_answer_behavior_line = (
+                "  This item alone is sufficient to answer confidently: it IS the current, stored, "
+                "owner-confirmed fact. If the user asks what the correct/final/confirmed version is, or what "
+                "was corrected, answer directly from this item's excerpt — no separate evidence describing a "
+                "'correction event' is needed, and being surrounded by unrelated archival items above does not "
+                "make this item any less usable."
+            )
         else:
             kind_label = "ARCHIVAL DOCUMENT"
             provenance_line = None
+            allowed_answer_behavior_line = None
         lines.extend(
             [
                 (
@@ -259,6 +288,8 @@ def _build_rag_evidence_block(
         )
         if provenance_line:
             lines.append(provenance_line)
+        if allowed_answer_behavior_line:
+            lines.append(allowed_answer_behavior_line)
 
     return "\n".join(lines)
 

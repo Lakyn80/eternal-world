@@ -21,6 +21,7 @@ from app.modules.avatar_quality_evaluation.evaluator import (
 from app.modules.avatar_quality_evaluation.schemas import (
     AvatarEvalAnswerInput,
     AvatarEvalCase,
+    AvatarEvalCaseRunResult,
     AvatarEvalEvidence,
 )
 
@@ -213,6 +214,37 @@ def test_profile_isolation_reports_profile_contamination():
     assert "profile_contamination" in result.failure_types
 
 
+def test_summary_survives_a_runtime_failure_run_with_no_dimensions():
+    # Regression: a run that hit a provider/network error (e.g. a Brain
+    # provider timeout) is recorded with dimensions=[] (see
+    # runner._run_case_once's except-Exception branch). build_avatar_eval_summary
+    # must not crash when computing per-dimension pass rates across a batch
+    # that includes such a run — it must treat the missing dimension as not
+    # passed and still produce a summary for the rest of the batch.
+    passing = evaluate_avatar_answer(case=_case(id="case-a"), answer_input=_answer(), run_index=1)
+    runtime_failure = AvatarEvalCaseRunResult(
+        case_id="case-b",
+        category="learned_indexed_memory",
+        run_index=1,
+        passed=False,
+        answer="",
+        trace_id="trace-runtime-failure",
+        evidence_summary=[],
+        dimensions=[],
+        failure_types=["runtime_failure"],
+        likely_layer="runtime",
+        recommended_fix_layer="runtime_configuration",
+        duration_seconds=0.0,
+        evaluator_error="BrainProviderRequestError: request timed out",
+    )
+
+    summary = build_avatar_eval_summary([passing, runtime_failure])
+
+    assert summary.evaluated_case_count == 2
+    assert summary.failed_case_count == 1
+    assert summary.passed_case_count == 1
+
+
 def test_summary_and_comparison_detect_regression():
     passing = evaluate_avatar_answer(case=_case(id="case-a"), answer_input=_answer(), run_index=1)
     failing = evaluate_avatar_answer(
@@ -275,6 +307,37 @@ def test_present_asserted_markers_still_catches_hedge_then_invented_claim():
     # reported as unsupported.
     hedge_then_claim = "Не знаю точно, но я жила в Париже в 1968 году."
     assert _present_asserted_markers(hedge_then_claim, ["Париже в 1968"]) == ["Париже в 1968"]
+
+
+def test_contains_marker_does_not_span_a_sentence_boundary():
+    # Regression: the multi-word proximity window must not spuriously match
+    # by treating the end of one sentence and the start of an unrelated next
+    # sentence as adjacent. "...пела ... перед сном. А вот «Катюшу» — нет..."
+    # must not satisfy the marker "Катюшу перед сном" even though the two
+    # halves sit within a small token window when sentence boundaries are
+    # ignored — they describe two different, independent claims.
+    answer = (
+        "Миленький, я не помню, чтобы пела тебе «Катюшу». По воспоминаниям, которые у меня "
+        "есть, летом в деревне я часто пела тебе «Спят усталые игрушки» перед сном. "
+        "А вот «Катюшу» — нет, такой памяти у меня нет."
+    )
+    assert _contains_marker(answer, "Катюшу перед сном") is False
+    assert _present_asserted_markers(answer, ["пела Катюшу", "Катюшу перед сном"]) == []
+    # A genuine same-sentence phrase must still match.
+    assert _contains_marker("Расскажи про Катюшу перед сном.", "Катюшу перед сном") is True
+
+
+def test_present_asserted_markers_handles_no_ne_as_continued_negation():
+    # Regression: "но не X" ("but NOT X") continues a negation rather than
+    # resetting it. The forward-scan negation-scope-breaker logic must not
+    # treat "но" as ending the negation scope when it is immediately
+    # followed by another negation cue ("не").
+    answer = (
+        "Деточка, я помню, что пела тебе перед сном, но не «Катюшу». По словам, которые у "
+        "меня сохранились, летом в деревне я часто пела тебе «Спят усталые игрушки». Это "
+        "была наша вечерняя традиция."
+    )
+    assert _present_asserted_markers(answer, ["пела Катюшу", "Катюшу перед сном"]) == []
 
 
 def test_rejected_memory_denial_passes_unsupported_detail_dimension():

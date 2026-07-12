@@ -5,7 +5,11 @@ from app.db.models import RagEmbedding
 from app.db.session import get_db
 from app.core.logging import REDACTED_VALUE, sanitize_log_data
 from app.main import app
-from app.modules.ai_agents.brain.context import MAX_MEMORY_EVIDENCE_ITEMS
+from app.modules.ai_agents.brain.context import (
+    CORRECTED_MEMORY_EVIDENCE_CAP,
+    MAX_MEMORY_EVIDENCE_ITEMS,
+    prioritize_corrected_memory_evidence,
+)
 from app.modules.ai_agents.brain.output_guard import (
     BrainOutputGuardContext,
     apply_brain_output_guard,
@@ -499,6 +503,64 @@ def test_rag_evidence_preview_uses_longer_excerpt_limit(client, monkeypatch):
     assert "Excerpt:" in prompt
 
 
+def _rag_result(
+    *,
+    chunk_id: int,
+    score: float,
+    source_type: str = "document_text",
+    memory_status: str | None = None,
+) -> RagRetrievalResultRead:
+    payload_metadata = {"memory_status": memory_status} if memory_status else {}
+    return RagRetrievalResultRead(
+        chunk_id=chunk_id,
+        source_id=chunk_id,
+        embedding_id=chunk_id,
+        score=score,
+        text="text",
+        chunk_index=0,
+        language="ru",
+        source_type=source_type,
+        validation_status="valid",
+        text_hash=f"hash-{chunk_id}",
+        qdrant_collection="eternal_world_rag_chunks__bge_m3_dense_sparse",
+        payload_metadata=payload_metadata,
+    )
+
+
+def test_prioritize_corrected_memory_evidence_floats_verified_item_to_front():
+    results = [
+        _rag_result(chunk_id=1, score=1.0, source_type="manual_text"),
+        _rag_result(chunk_id=2, score=0.9, source_type="manual_text"),
+        _rag_result(chunk_id=3, score=0.5, source_type="conversation_candidate", memory_status="verified"),
+        _rag_result(chunk_id=4, score=0.4, source_type="manual_text"),
+    ]
+
+    prioritized = prioritize_corrected_memory_evidence(results, limit=3)
+
+    assert [item.chunk_id for item in prioritized] == [3, 1, 2]
+
+
+def test_prioritize_corrected_memory_evidence_caps_at_configured_limit():
+    results = [
+        _rag_result(chunk_id=i, score=1.0 - i * 0.1, source_type="manual_text") for i in range(6)
+    ]
+
+    prioritized = prioritize_corrected_memory_evidence(results)
+
+    assert len(prioritized) == CORRECTED_MEMORY_EVIDENCE_CAP
+
+
+def test_prioritize_corrected_memory_evidence_is_a_noop_without_verified_items():
+    results = [
+        _rag_result(chunk_id=1, score=1.0, source_type="manual_text"),
+        _rag_result(chunk_id=2, score=0.9, source_type="manual_text"),
+    ]
+
+    prioritized = prioritize_corrected_memory_evidence(results, limit=5)
+
+    assert [item.chunk_id for item in prioritized] == [1, 2]
+
+
 def test_verified_learned_memory_is_tagged_with_equal_authority_in_prompt(client, monkeypatch):
     captured = _capture_prompt(monkeypatch)
     token = _register_and_login(client, "ai-learned-memory-tag@example.com")
@@ -557,7 +619,7 @@ def test_verified_learned_memory_is_tagged_with_equal_authority_in_prompt(client
 
     assert response.status_code == 200
     prompt = captured["prompt"]
-    assert "LEARNED MEMORY (learned_memory_answer_policy_v3)" in prompt
+    assert "LEARNED MEMORY (learned_memory_answer_policy_v3_1)" in prompt
     assert "[rag:201] VERIFIED LEARNED MEMORY (owner-approved, first-person, equal authority to B1)" in prompt
     assert "promotion_id=5, candidate_id=14" in prompt
     assert "[rag:202] ARCHIVAL DOCUMENT" in prompt
@@ -1101,6 +1163,25 @@ def test_output_guard_lack_flag_still_true_when_answer_opens_with_refusal():
             "Если хочешь, расскажи мне больше, и мы сможем сохранить это как новое воспоминание."
         ),
         user_message="Какую песню ты пела мне перед сном?",
+        response_metadata={"grounding_status": "grounded"},
+    )
+
+    assert result.lack_of_evidence is True
+
+
+def test_output_guard_lack_flag_detects_denial_after_a_warm_address():
+    # Regression: DIRECT_LACK_DENIAL_PREFIXES ("я не была", "никогда не", ...)
+    # previously only matched if the denial was the very first text in the
+    # answer. Real answers almost always open with a warm address first
+    # ("Деточка, ...", "Милая, ..."), so the strict prefix check never fired
+    # in practice for a perfectly clear direct denial.
+    result = apply_brain_output_guard(
+        answer_text=(
+            "Деточка, я не была в Париже в 1968 году. Весь тот год я провела за учёбой в "
+            "Брно и на практике в Моравии. Так что, к сожалению, названия парижской улицы "
+            "я назвать не могу."
+        ),
+        user_message="Как называлась улица, где ты жила в Париже в 1968 году?",
         response_metadata={"grounding_status": "grounded"},
     )
 

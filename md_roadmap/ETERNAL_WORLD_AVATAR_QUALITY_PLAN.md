@@ -1526,3 +1526,25 @@ zakázána, proto nebyla opravena zde.
 ```
 
 Task 64.4.1 se **nepovažuje za kompletně uzavřený** podle měkkých prahů, ale hard gate (profil izolace) je splněna a nesmí se to prezentovat jako plný úspěch. Doporučené pokračování: úzce vymezený **Task 64.4.2 — Retrieval recall pro nepřímé/meta-referenční dotazy na paměť**, teprve poté případně Task 64.5.
+
+---
+
+## 14. Task 64.4.2 status (2026-07-13)
+
+Task 64.4.2 — Indirect Corrected-Memory Query Recall — byl proveden a **dokončen se všemi bránami splněnými**. Plný root-cause rozbor, srovnávací metriky a přesný stav brány jsou v `PROJECT_PROGRESS.md` a v `backend/artifacts/avatar_quality_eval/runs/indirect_corrected_memory_v1/` (`quality_gate_report.md`, `comparison.md`, `corrected_memory_diagnostics.json`).
+
+Stručně:
+
+```text
+Hard gate (profile contamination = 0): SPLNĚNO
+corrected_memory_preference_rate: 1.00 (bylo 0.667) — SPLNĚNO
+owner-corrected-bedtime-song: 3 z 3 opakování — SPLNĚNO (tvrdý požadavek úlohy)
+Všech 11 kontrolovaných bran: SPLNĚNO
+Passed cases: 11/12
+```
+
+Skutečná měřená příčina (ne domněnka): dva opuštěné, nikdy pořádně finalizované testovací záznamy z Task 64.2 (ruční smoke test indexace) obsahovaly nezpracovaný text šablony kandidáta, který falešně dominoval retrievalu pro jakoukoli otázku ve tvaru "pamatuješ si...". Po jejich vyřazení (smazání Qdrant bodů se souhlasem uživatele, historie zachována v Postgres) a přidání deterministického query-intent rozpoznávání + evidence prioritizace (bez změny retrievalu/rankingu/top_k/embeddingu) se míra nalezení správné vzpomínky zvýšila z 65 % na 100 % (měřeno 20 živými vzorky).
+
+Task 64.4.2 se **považuje za kompletně uzavřený**. Jediné zbývající selhání (`sensitive-political-prison`, 2 ze 3) je potvrzeně nesouvisející nedeterminismus poskytovatele Brain (nedotčená cesta kódu), nikoli chyba této úlohy.
+
+Další doporučený task: **Task 64.5 — Minimal Family Memory Review UI**.

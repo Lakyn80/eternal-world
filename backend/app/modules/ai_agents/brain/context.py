@@ -313,6 +313,41 @@ def _question_asks_about_disagreement(user_message: str) -> bool:
     return any(marker in normalized_message for marker in _DISAGREEMENT_QUESTION_MARKERS)
 
 
+# Bounded evidence count used for corrected-memory-intent turns once a
+# verified learned memory has been floated to the front — small enough to
+# meaningfully cut dilution from unrelated archival items, large enough to
+# still give the Brain real context. Not a change to the profile's
+# configured top_k; only the count of items forwarded into the prompt for
+# this one intent path.
+CORRECTED_MEMORY_EVIDENCE_CAP = 3
+
+
+def _is_verified_learned_memory_result(result) -> bool:
+    payload_metadata: dict = getattr(result, "payload_metadata", None) or {}
+    return (
+        getattr(result, "source_type", None) == _LEARNED_MEMORY_SOURCE_TYPE
+        and payload_metadata.get("memory_status") == _LEARNED_MEMORY_VERIFIED_STATUS
+    )
+
+
+def prioritize_corrected_memory_evidence(results: list, *, limit: int = CORRECTED_MEMORY_EVIDENCE_CAP) -> list:
+    """Deterministically float verified learned-memory items to the front of
+    an already-retrieved, already-filtered evidence list and cap the total
+    count sent to the Brain.
+
+    Scoped to corrected-memory-intent turns (see
+    app.modules.demo_fa_chat.service). This does not change retrieval
+    scoring — it only reorders and trims the candidate pool the Brain
+    receives, addressing measured cases where a correctly retrieved and
+    correctly tagged verified item was inconsistently used by the Brain when
+    outnumbered by several unrelated archival items in the same evidence
+    block (see Task 64.4.2 diagnostics).
+    """
+    verified_first = [result for result in results if _is_verified_learned_memory_result(result)]
+    rest = [result for result in results if not _is_verified_learned_memory_result(result)]
+    return [*verified_first, *rest][:limit]
+
+
 def filter_learned_memory_results_by_question_intent(results: list, *, user_message: str) -> list:
     """Drop dispute-shaped verified learned memories unless the current
     question is itself asking about a disagreement.

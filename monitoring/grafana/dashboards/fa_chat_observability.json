@@ -2031,6 +2031,87 @@
       ],
       "title": "Quality Gate Result (Task 64.4.1)",
       "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "eternal-world-prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 118
+      },
+      "id": 49,
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "expr": "sum(increase(avatar_memory_query_intent_total[$__range])) by (intent)",
+          "legendFormat": "{{intent}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Memory Query Intent (Task 64.4.2)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "eternal-world-prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "decimals": 1,
+          "min": 0,
+          "unit": "percent"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 118
+      },
+      "id": 50,
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      },
+      "targets": [
+        {
+          "expr": "100 * sum(increase(avatar_corrected_memory_resolution_total{result=\"resolved\"}[$__range])) / clamp_min(sum(increase(avatar_corrected_memory_resolution_total[$__range])), 1)",
+          "refId": "A"
+        }
+      ],
+      "title": "Corrected-Memory Resolution Rate (Task 64.4.2)",
+      "type": "stat"
     }
   ],
   "refresh": "15s",
@@ -2053,6 +2134,6 @@
   "timezone": "",
   "title": "Eternal World — FA Chat Observability",
   "uid": "eternal-world-fa-chat",
-  "version": 6,
+  "version": 7,
   "weekStart": ""
 }

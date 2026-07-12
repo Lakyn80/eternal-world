@@ -1,0 +1,16 @@
+{
+  "brain_prompt_version": "learned_memory_answer_policy_v3_1",
+  "completed_at": "2026-07-12T22:28:58.040093Z",
+  "dataset_path": "/app/app/modules/avatar_quality_evaluation/datasets/learned_memory_answer_eval_v1.jsonl",
+  "embedding_changed": false,
+  "model_download_requested": false,
+  "output_dir": "/app/artifacts/avatar_quality_eval/runs/indirect_corrected_memory_v1",
+  "qdrant_collection_changed": false,
+  "real_fa_chat_path": true,
+  "redis_changed": false,
+  "repeat_count": 3,
+  "retrieval_changed": false,
+  "run_id": "20260712_222548Z_8cd472e7",
+  "run_label": "indirect_corrected_memory_v1",
+  "started_at": "2026-07-12T22:25:48.792986Z"
+}
