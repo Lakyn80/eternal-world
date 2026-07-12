@@ -499,6 +499,116 @@ def test_rag_evidence_preview_uses_longer_excerpt_limit(client, monkeypatch):
     assert "Excerpt:" in prompt
 
 
+def test_verified_learned_memory_is_tagged_with_equal_authority_in_prompt(client, monkeypatch):
+    captured = _capture_prompt(monkeypatch)
+    token = _register_and_login(client, "ai-learned-memory-tag@example.com")
+    profile_id = _create_profile(client, token, name="Learned Memory Profile")
+
+    def fake_retrieval_response(db, *, current_user, profile_id, payload):
+        return RagRetrievalResponseRead(
+            profile_id=profile_id,
+            query=payload.query,
+            model_code="bge_m3_dense_sparse",
+            results=[
+                RagRetrievalResultRead(
+                    chunk_id=201,
+                    source_id=101,
+                    embedding_id=301,
+                    score=0.42,
+                    text="По словам внука, бабушка пела ему песню перед сном.",
+                    chunk_index=0,
+                    language="ru",
+                    source_type="conversation_candidate",
+                    validation_status="valid",
+                    text_hash="hash-201",
+                    qdrant_collection="eternal_world_rag_chunks__bge_m3_dense_sparse",
+                    payload_metadata={
+                        "memory_status": "verified",
+                        "provenance": "review_approved_conversation_candidate",
+                        "promotion_id": 5,
+                        "candidate_id": 14,
+                        "indexed_at": "2026-07-11T21:51:58.863798+00:00",
+                    },
+                ),
+                RagRetrievalResultRead(
+                    chunk_id=202,
+                    source_id=102,
+                    embedding_id=302,
+                    score=0.97,
+                    text="Archival note about an unrelated household topic.",
+                    chunk_index=0,
+                    language="ru",
+                    source_type="document_text",
+                    validation_status="valid",
+                    text_hash="hash-202",
+                    qdrant_collection="eternal_world_rag_chunks__bge_m3_dense_sparse",
+                    payload_metadata={},
+                ),
+            ],
+        )
+
+    monkeypatch.setattr("app.modules.chat.service.retrieve_profile_rag", fake_retrieval_response)
+
+    response = client.post(
+        f"/api/chat/{profile_id}/messages",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"message": "Tell me about the song"},
+    )
+
+    assert response.status_code == 200
+    prompt = captured["prompt"]
+    assert "LEARNED MEMORY (learned_memory_answer_policy_v3)" in prompt
+    assert "[rag:201] VERIFIED LEARNED MEMORY (owner-approved, first-person, equal authority to B1)" in prompt
+    assert "promotion_id=5, candidate_id=14" in prompt
+    assert "[rag:202] ARCHIVAL DOCUMENT" in prompt
+    # A higher retrieval score on the unrelated archival item must not be the
+    # only signal in the prompt distinguishing the two evidence kinds.
+    assert "VERIFIED LEARNED MEMORY" in prompt.split("[rag:202]")[0]
+
+
+def test_archival_evidence_is_not_tagged_as_learned_memory(client, monkeypatch):
+    captured = _capture_prompt(monkeypatch)
+    token = _register_and_login(client, "ai-archival-not-learned@example.com")
+    profile_id = _create_profile(client, token, name="Archival Only Profile")
+
+    def fake_retrieval_response(db, *, current_user, profile_id, payload):
+        return RagRetrievalResponseRead(
+            profile_id=profile_id,
+            query=payload.query,
+            model_code="bge_m3_dense_sparse",
+            results=[
+                RagRetrievalResultRead(
+                    chunk_id=301,
+                    source_id=111,
+                    embedding_id=401,
+                    score=0.5,
+                    text="Household chronicle entry from the archive.",
+                    chunk_index=0,
+                    language="ru",
+                    source_type="document_text",
+                    validation_status="valid",
+                    text_hash="hash-301",
+                    qdrant_collection="eternal_world_rag_chunks__bge_m3_dense_sparse",
+                    payload_metadata={},
+                )
+            ],
+        )
+
+    monkeypatch.setattr("app.modules.chat.service.retrieve_profile_rag", fake_retrieval_response)
+
+    response = client.post(
+        f"/api/chat/{profile_id}/messages",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"message": "Tell me about the archive"},
+    )
+
+    assert response.status_code == 200
+    prompt = captured["prompt"]
+    assert "[rag:301] ARCHIVAL DOCUMENT" in prompt
+    assert "[rag:301] VERIFIED LEARNED MEMORY" not in prompt
+    assert "Provenance: promotion_id=" not in prompt
+
+
 def test_only_selected_profiles_memories_are_included(client, monkeypatch):
     captured = _capture_prompt(monkeypatch)
     monkeypatch.setattr(
@@ -963,6 +1073,38 @@ def test_output_guard_does_not_change_grounded_machovo_answer():
 
     assert result.guard_applied is False
     assert result.answer_text == answer_text
+
+
+def test_output_guard_lack_flag_ignores_trailing_aside_after_real_answer():
+    # Regression: a grounded answer that states the requested fact first and
+    # only adds an honest aside about a separate, unconfirmed detail must not
+    # be flagged lack_of_evidence=True just because "не помню" appears later
+    # in the text — that flag feeds memory-candidate extraction and eval
+    # scoring, and previously misfired on this exact pattern.
+    result = apply_brain_output_guard(
+        answer_text=(
+            "Деточка, я пела тебе «Спят усталые игрушки» летом в деревне перед сном. "
+            "Но я не помню, чтобы кто-то это потом исправлял."
+        ),
+        user_message="Ты помнишь, какую песню я называл, а владелец потом исправил?",
+        response_metadata={"grounding_status": "grounded"},
+    )
+
+    assert result.lack_of_evidence is None
+    assert result.guard_applied is False
+
+
+def test_output_guard_lack_flag_still_true_when_answer_opens_with_refusal():
+    result = apply_brain_output_guard(
+        answer_text=(
+            "Я не помню этого по тем воспоминаниям, которые у меня сейчас есть. "
+            "Если хочешь, расскажи мне больше, и мы сможем сохранить это как новое воспоминание."
+        ),
+        user_message="Какую песню ты пела мне перед сном?",
+        response_metadata={"grounding_status": "grounded"},
+    )
+
+    assert result.lack_of_evidence is True
 
 
 def test_output_guard_does_not_change_grounded_reckovice_cherry_answer():

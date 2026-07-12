@@ -47,6 +47,17 @@ class BrainRagEvidence(BaseModel):
     validation_status: str
     text_hash: str
     content_preview: str
+    # Populated only for owner-approved learned memories indexed through the
+    # explicit avatar-memory-promotion pipeline (Task 64.2). These fields let
+    # the prompt distinguish a verified, first-person learned memory from an
+    # ordinary archival document chunk, and let it order conflicting learned
+    # memories about the same topic by recency. They are None for regular
+    # archival RAG chunks.
+    memory_status: str | None = None
+    memory_provenance: str | None = None
+    promotion_id: int | None = None
+    candidate_id: int | None = None
+    indexed_at: str | None = None
 
 
 class BrainGroundedContext(BaseModel):
@@ -212,9 +223,31 @@ def build_grounded_context(
     )
 
 
+_LEARNED_MEMORY_SOURCE_TYPE = "conversation_candidate"
+_LEARNED_MEMORY_VERIFIED_STATUS = "verified"
+
+
+def _coerce_int(value: object) -> int | None:
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, int):
+        return value
+    if isinstance(value, str) and value.strip().isdigit():
+        return int(value)
+    return None
+
+
+def _coerce_str(value: object) -> str | None:
+    if isinstance(value, str) and value.strip():
+        return value.strip()
+    return None
+
+
 def build_rag_evidence_items(results: list) -> list[BrainRagEvidence]:
     rag_evidence_items: list[BrainRagEvidence] = []
     for result in results:
+        payload_metadata: dict = getattr(result, "payload_metadata", None) or {}
+        is_learned_memory = result.source_type == _LEARNED_MEMORY_SOURCE_TYPE
         rag_evidence_items.append(
             BrainRagEvidence(
                 chunk_id=result.chunk_id,
@@ -226,7 +259,75 @@ def build_rag_evidence_items(results: list) -> list[BrainRagEvidence]:
                 validation_status=result.validation_status,
                 text_hash=result.text_hash,
                 content_preview=_build_rag_content_preview(result.text) or "",
+                memory_status=_coerce_str(payload_metadata.get("memory_status")) if is_learned_memory else None,
+                memory_provenance=_coerce_str(payload_metadata.get("provenance")) if is_learned_memory else None,
+                promotion_id=_coerce_int(payload_metadata.get("promotion_id")) if is_learned_memory else None,
+                candidate_id=_coerce_int(payload_metadata.get("candidate_id")) if is_learned_memory else None,
+                indexed_at=_coerce_str(payload_metadata.get("indexed_at")) if is_learned_memory else None,
             )
         )
 
     return rag_evidence_items
+
+
+# A verified learned memory is "dispute-shaped" when its own text attributes
+# two or more distinct quoted alternatives (e.g. two candidate song titles) —
+# a content-agnostic structural signal, not tied to any specific fact.
+_QUOTE_CHARACTERS = "«»\"'"
+_DISPUTE_QUOTE_PATTERN_MIN_COUNT = 2
+
+# Generic Russian phrasing that signals the user is asking about a
+# disagreement, differing recollections, or "what would you say if we
+# remember it differently" — as opposed to an ordinary direct factual
+# question or a question about a past correction (a past correction expects
+# the single settled answer, not a live disagreement; see prompt_builder's
+# LEARNED MEMORY rules). This list is about question *shape*, not about any
+# specific fact, so it generalizes across profiles and topics.
+_DISAGREEMENT_QUESTION_MARKERS = (
+    "по-разному",
+    "по разному",
+    "различ",
+    "каждый по-своему",
+    "каждый по своему",
+    "кто из нас прав",
+    "что ты скажешь если",
+    "что скажешь если",
+)
+
+
+def _is_dispute_shaped_learned_memory(result) -> bool:
+    if getattr(result, "source_type", None) != _LEARNED_MEMORY_SOURCE_TYPE:
+        return False
+    payload_metadata: dict = getattr(result, "payload_metadata", None) or {}
+    if payload_metadata.get("memory_status") != _LEARNED_MEMORY_VERIFIED_STATUS:
+        return False
+    text = getattr(result, "text", "") or ""
+    quote_count = sum(text.count(char) for char in _QUOTE_CHARACTERS)
+    # Each quoted phrase contributes an opening and closing character, so two
+    # distinct quoted alternatives show up as at least four quote characters.
+    return quote_count >= _DISPUTE_QUOTE_PATTERN_MIN_COUNT * 2
+
+
+def _question_asks_about_disagreement(user_message: str) -> bool:
+    normalized_message = " ".join(user_message.casefold().split())
+    return any(marker in normalized_message for marker in _DISAGREEMENT_QUESTION_MARKERS)
+
+
+def filter_learned_memory_results_by_question_intent(results: list, *, user_message: str) -> list:
+    """Drop dispute-shaped verified learned memories unless the current
+    question is itself asking about a disagreement.
+
+    `results` is the raw retrieval result list (duck-typed: each item needs
+    `.source_type`, `.text`, and `.payload_metadata`, e.g. RagRetrievalResultRead).
+    This is a downstream evidence-packaging decision over items Qdrant already
+    returned for this turn — it does not change retrieval, ranking, or top_k.
+    Without it, a verified memory that records "person A remembers X, person B
+    remembers Y" would be shown to the Brain (and could leak into the answer)
+    even for an unrelated plain factual question that should get a single
+    confident answer from a different verified item. Applying the filter once,
+    upstream of both the Brain prompt and the debug evidence list, keeps what
+    the Brain sees and what is shown to the caller consistent.
+    """
+    if _question_asks_about_disagreement(user_message):
+        return results
+    return [result for result in results if not _is_dispute_shaped_learned_memory(result)]

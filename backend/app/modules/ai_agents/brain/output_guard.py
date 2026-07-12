@@ -181,7 +181,13 @@ def _looks_like_lack_of_evidence_answer(
     grounding_status = str((response_metadata or {}).get("grounding_status") or "").strip().lower()
     if grounding_status == "no_evidence":
         return True
-    if _contains_any_marker(answer_text, LACK_OF_EVIDENCE_MARKERS):
+    # Only the opening sentence is checked for a lack-of-evidence marker.
+    # Checking the whole answer would flag a real, grounded answer that adds
+    # an honest trailing aside about a separate, unconfirmed detail (e.g.
+    # "...«Спят усталые игрушки»... Но я не помню, чтобы кто-то это потом
+    # исправлял.") as if the avatar had refused to answer at all.
+    opening_sentence = next(iter(_split_sentences(answer_text)), "")
+    if _contains_any_marker(opening_sentence, LACK_OF_EVIDENCE_MARKERS):
         return True
     if _looks_like_direct_lack_denial(answer_text):
         return True

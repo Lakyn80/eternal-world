@@ -225,6 +225,28 @@ AVATAR_EVAL_OVER_REFUSAL_RATIO = Gauge(
     "avatar_eval_over_refusal_ratio",
     "Last avatar answer-quality evaluation over-refusal ratio.",
 )
+AVATAR_EVAL_QUALITY_GATE_TOTAL = Counter(
+    "avatar_eval_quality_gate_total",
+    "Total avatar answer-quality evaluation runs by overall quality-gate result.",
+    labelnames=("result",),
+)
+AVATAR_EVAL_PROFILE_ISOLATION_TOTAL = Counter(
+    "avatar_eval_profile_isolation_total",
+    "Total avatar answer-quality evaluation runs by profile-isolation gate result.",
+    labelnames=("result",),
+)
+AVATAR_EVAL_CORRECTED_MEMORY_TOTAL = Counter(
+    "avatar_eval_corrected_memory_total",
+    "Total avatar answer-quality evaluation runs by corrected-memory-preference gate result.",
+    labelnames=("result",),
+)
+AVATAR_EVAL_PERSPECTIVE_TOTAL = Counter(
+    "avatar_eval_perspective_total",
+    "Total avatar answer-quality evaluation runs by perspective-preservation gate result.",
+    labelnames=("result",),
+)
+
+_AVATAR_EVAL_GATE_RESULTS = frozenset({"pass", "fail"})
 
 _MEMORY_INDEX_RESULTS = frozenset({"indexed", "failed", "skipped"})
 _MEMORY_PROMOTION_STATUSES = ("pending_index", "indexed", "failed", "cancelled")
@@ -573,3 +595,23 @@ def observe_avatar_eval_ratios(
     AVATAR_EVAL_OVER_REFUSAL_RATIO.set(
         min(1.0, max(0.0, float(over_refusal)))
     )
+
+
+def _normalize_avatar_eval_gate_result(passed: bool) -> str:
+    return "pass" if passed else "fail"
+
+
+def observe_avatar_eval_quality_gate(*, passed: bool) -> None:
+    AVATAR_EVAL_QUALITY_GATE_TOTAL.labels(_normalize_avatar_eval_gate_result(passed)).inc()
+
+
+def observe_avatar_eval_profile_isolation_gate(*, passed: bool) -> None:
+    AVATAR_EVAL_PROFILE_ISOLATION_TOTAL.labels(_normalize_avatar_eval_gate_result(passed)).inc()
+
+
+def observe_avatar_eval_corrected_memory_gate(*, passed: bool) -> None:
+    AVATAR_EVAL_CORRECTED_MEMORY_TOTAL.labels(_normalize_avatar_eval_gate_result(passed)).inc()
+
+
+def observe_avatar_eval_perspective_gate(*, passed: bool) -> None:
+    AVATAR_EVAL_PERSPECTIVE_TOTAL.labels(_normalize_avatar_eval_gate_result(passed)).inc()

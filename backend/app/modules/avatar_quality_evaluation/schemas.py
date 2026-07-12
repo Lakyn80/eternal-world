@@ -219,6 +219,7 @@ class AvatarEvalRunManifest(BaseModel):
     redis_changed: bool = False
     qdrant_collection_changed: bool = False
     model_download_requested: bool = False
+    brain_prompt_version: str | None = None
 
 
 class AvatarEvalRunResult(BaseModel):
@@ -236,3 +237,18 @@ class AvatarEvalComparison(BaseModel):
     unchanged_failures: list[str] = Field(default_factory=list)
     metric_deltas: dict[str, float] = Field(default_factory=dict)
     accepted: bool
+
+
+class AvatarEvalGateCheck(BaseModel):
+    name: str
+    required: str
+    actual: str
+    passed: bool
+
+
+class AvatarEvalQualityGateResult(BaseModel):
+    checks: list[AvatarEvalGateCheck]
+    profile_isolation_passed: bool
+    corrected_memory_passed: bool
+    perspective_passed: bool
+    overall_passed: bool

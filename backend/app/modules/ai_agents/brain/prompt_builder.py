@@ -11,6 +11,11 @@ PROMPT_SECTION_SEPARATOR = "---"
 SYSTEM_PROMPT_HEADER = "SYSTEM — Eternal World Brain Agent (Production v2)"
 USER_PROMPT_HEADER = "USER — Current turn context"
 
+# Versions the learned-memory evidence-use rules below (Task 64.4.1). Bump
+# this when the rules in the "LEARNED MEMORY" block change so eval run
+# manifests stay traceable to the exact policy that produced their answers.
+LEARNED_MEMORY_ANSWER_POLICY_VERSION = "learned_memory_answer_policy_v3"
+
 
 @dataclass(frozen=True)
 class BrainPromptMessages:
@@ -95,6 +100,28 @@ def _build_system_prompt(*, profile, avatar_persona=None) -> str:
             "  the first or highest-scored item. If any single evidence item directly states the fact the",
             "  user asked about, answer normally from that item and cite it — even when other provided",
             "  evidence items are about unrelated facts or state that different things did not happen.",
+            "",
+            f"LEARNED MEMORY ({LEARNED_MEMORY_ANSWER_POLICY_VERSION})",
+            "- Some B2 items are tagged 'VERIFIED LEARNED MEMORY': a fact a family member told the avatar",
+            "  in conversation, which the profile owner reviewed and explicitly approved. Treat these with",
+            "  EQUAL authority to B1 for the specific fact they state — do not discount them for having a",
+            "  lower retrieval score than an unrelated item, and do not call them 'unconfirmed' or 'a report'.",
+            "- Judge each VERIFIED LEARNED MEMORY only by what IT states. A different verified item being",
+            "  about an unrelated topic, or itself originating from a conversation, must never make you doubt",
+            "  or refuse to use a different verified item that directly answers the current question.",
+            "- Default to the single, confident, first-person version of a fact. If the user's question is an",
+            "  ordinary direct factual question (it does NOT ask about a disagreement, a correction, what someone",
+            "  else remembers, or differing accounts), answer with the plain settled fact only. Do not volunteer,",
+            "  hedge with, or mention a different person's differing account just because a verified item",
+            "  describing that disagreement is present among the evidence — ignore that item for this answer.",
+            "- Only surface a disagreement between VERIFIED LEARNED MEMORY items when the user's current question",
+            "  explicitly asks about it (e.g. asks what was corrected, whether memories differ, or what someone",
+            "  else remembers). In that case, do not silently pick a winner: name who remembers what, briefly and",
+            "  honestly, and say the exact detail is not fully certain — without inventing detail beyond what",
+            "  each item states.",
+            "- If a single VERIFIED LEARNED MEMORY item's own text already attributes differing accounts to",
+            "  different people, apply the same rule: mention that attribution only when the question asks",
+            "  about the disagreement; otherwise answer with the plain settled fact from other evidence.",
             "",
             "WHEN EVIDENCE IS MISSING",
             "- If the user asks a factual question and no supporting evidence exists, say clearly that",
@@ -185,6 +212,16 @@ def _build_memory_evidence_block(
     return "\n".join(lines)
 
 
+_VERIFIED_LEARNED_MEMORY_STATUS = "verified"
+
+
+def _is_verified_learned_memory(evidence_item: BrainRagEvidence) -> bool:
+    return (
+        evidence_item.source_document_type == "conversation_candidate"
+        and evidence_item.memory_status == _VERIFIED_LEARNED_MEMORY_STATUS
+    )
+
+
 def _build_rag_evidence_block(
     rag_evidence_items: list[BrainRagEvidence],
 ) -> str:
@@ -193,10 +230,21 @@ def _build_rag_evidence_block(
 
     lines: list[str] = []
     for evidence_item in rag_evidence_items:
+        if _is_verified_learned_memory(evidence_item):
+            kind_label = "VERIFIED LEARNED MEMORY (owner-approved, first-person, equal authority to B1)"
+            provenance_line = (
+                "  Provenance: "
+                f"promotion_id={evidence_item.promotion_id}, "
+                f"candidate_id={evidence_item.candidate_id}, "
+                f"indexed_at={evidence_item.indexed_at or 'unknown'}"
+            )
+        else:
+            kind_label = "ARCHIVAL DOCUMENT"
+            provenance_line = None
         lines.extend(
             [
                 (
-                    f"- [rag:{evidence_item.chunk_id}] score={evidence_item.score:.4f} | "
+                    f"- [rag:{evidence_item.chunk_id}] {kind_label} | score={evidence_item.score:.4f} | "
                     f"source_id={evidence_item.source_id} | type={evidence_item.source_document_type}"
                 ),
                 f"  Excerpt: {evidence_item.content_preview or 'none'}",
@@ -209,6 +257,8 @@ def _build_rag_evidence_block(
                 ),
             ]
         )
+        if provenance_line:
+            lines.append(provenance_line)
 
     return "\n".join(lines)
 

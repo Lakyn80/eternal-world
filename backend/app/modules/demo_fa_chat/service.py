@@ -21,7 +21,11 @@ from app.modules.active_retrieval_config.service import (
     get_production_recommended_active_retrieval_config,
 )
 from app.modules.ai_agents import get_agent_orchestrator
-from app.modules.ai_agents.brain.context import build_rag_evidence_items, build_vector_retrieval_grounded_context
+from app.modules.ai_agents.brain.context import (
+    build_rag_evidence_items,
+    build_vector_retrieval_grounded_context,
+    filter_learned_memory_results_by_question_intent,
+)
 from app.modules.ai_agents.schemas import MemoryProfileContext, OrchestratorChatRequest
 from app.modules.avatar_persona import (
     build_memory_candidate,
@@ -834,7 +838,11 @@ def run_demo_fa_chat_message(
         top_source_titles=[result.source_title for result in retrieval_response.results[:3] if result.source_title],
         top_text_hash_prefixes=[result.text_hash[:12] for result in retrieval_response.results[:5]],
     )
-    retrieved_evidence_items = build_rag_evidence_items(retrieval_response.results)
+    evidence_source_results = filter_learned_memory_results_by_question_intent(
+        retrieval_response.results,
+        user_message=normalized_message,
+    )
+    retrieved_evidence_items = build_rag_evidence_items(evidence_source_results)
     grounded_context = build_vector_retrieval_grounded_context(
         profile=resolved_profile.profile,
         retrieved_evidence_items=retrieved_evidence_items,
@@ -978,5 +986,5 @@ def run_demo_fa_chat_message(
         emotion=response_directives.emotion,
         face_directives=response_directives.face_directives,
         voice_directives=response_directives.voice_directives,
-        evidence=_build_evidence_items(retrieval_response.results, debug=debug),
+        evidence=_build_evidence_items(evidence_source_results, debug=debug),
     )

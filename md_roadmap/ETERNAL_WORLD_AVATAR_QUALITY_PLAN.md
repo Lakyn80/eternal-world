@@ -1506,3 +1506,23 @@ Face/Voice agents later consume derived directives only.
 
 Implement persona schema, seeded Eva persona, prompt composer, safe memory candidate schema, tests, and FA demo integration.
 ```
+
+---
+
+## 13. Task 64.4.1 status (2026-07-12)
+
+Task 64.4.1 — Avatar Answer Quality Gate Remediation — byl proveden. Plný root-cause rozbor, srovnávací metriky a přesný stav brány jsou v `PROJECT_PROGRESS.md` a v `backend/artifacts/avatar_quality_eval/runs/quality_gate_remediation_v1/` (`quality_gate_report.md`, `comparison.md`, `root_cause_matrix.json`).
+
+Stručně:
+
+```text
+Hard gate (profile contamination = 0): SPLNĚNO
+Ostatní měkké brány: 7 z 8 splněno
+Nesplněno: corrected_memory_preference_rate (0.667 místo >= 1.00)
+Příčina nesplnění: skutečná hranice relevance retrievalu pro jednu konkrétní
+nepřímo formulovanou otázku (potvrzeno živým vzorkováním), ne chyba v kódu
+této úlohy. Změna retrievalu/rankingu/top_k byla touto úlohou výslovně
+zakázána, proto nebyla opravena zde.
+```
+
+Task 64.4.1 se **nepovažuje za kompletně uzavřený** podle měkkých prahů, ale hard gate (profil izolace) je splněna a nesmí se to prezentovat jako plný úspěch. Doporučené pokračování: úzce vymezený **Task 64.4.2 — Retrieval recall pro nepřímé/meta-referenční dotazy na paměť**, teprve poté případně Task 64.5.

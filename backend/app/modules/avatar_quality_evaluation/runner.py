@@ -8,8 +8,12 @@ from sqlalchemy.orm import Session
 
 from app.core.metrics import (
     observe_avatar_eval_case,
+    observe_avatar_eval_corrected_memory_gate,
     observe_avatar_eval_duration,
     observe_avatar_eval_failure,
+    observe_avatar_eval_perspective_gate,
+    observe_avatar_eval_profile_isolation_gate,
+    observe_avatar_eval_quality_gate,
     observe_avatar_eval_ratios,
     observe_avatar_eval_run,
 )
@@ -17,7 +21,9 @@ from app.modules.avatar_quality_evaluation.dataset_loader import load_avatar_eva
 from app.modules.avatar_quality_evaluation.evaluator import (
     build_avatar_eval_summary,
     evaluate_avatar_answer,
+    evaluate_quality_gates,
 )
+from app.modules.ai_agents.brain.prompt_builder import LEARNED_MEMORY_ANSWER_POLICY_VERSION
 from app.modules.avatar_quality_evaluation.reporting import attach_artifacts
 from app.modules.avatar_quality_evaluation.schemas import (
     AvatarEvalAnswerInput,
@@ -113,6 +119,11 @@ def _record_prometheus_metrics(results: list[AvatarEvalCaseRunResult]) -> None:
         unsupported_detail=summary.unsupported_detail_rate,
         over_refusal=summary.over_refusal_rate,
     )
+    gate_result = evaluate_quality_gates(summary)
+    observe_avatar_eval_quality_gate(passed=gate_result.overall_passed)
+    observe_avatar_eval_profile_isolation_gate(passed=gate_result.profile_isolation_passed)
+    observe_avatar_eval_corrected_memory_gate(passed=gate_result.corrected_memory_passed)
+    observe_avatar_eval_perspective_gate(passed=gate_result.perspective_passed)
     for result in results:
         observe_avatar_eval_case(
             category=result.category,
@@ -156,6 +167,7 @@ def run_avatar_quality_evaluation(
         started_at=started_at,
         completed_at=completed_at,
         real_fa_chat_path=True,
+        brain_prompt_version=LEARNED_MEMORY_ANSWER_POLICY_VERSION,
     )
     run_result = AvatarEvalRunResult(
         manifest=manifest,
