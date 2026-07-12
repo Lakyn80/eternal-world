@@ -5,7 +5,15 @@ from types import SimpleNamespace
 from prometheus_client.parser import text_string_to_metric_families
 
 from app.main import app
-from app.core.metrics import observe_memory_indexing_finished, observe_memory_indexing_started
+from app.core.metrics import (
+    observe_avatar_eval_case,
+    observe_avatar_eval_duration,
+    observe_avatar_eval_failure,
+    observe_avatar_eval_ratios,
+    observe_avatar_eval_run,
+    observe_memory_indexing_finished,
+    observe_memory_indexing_started,
+)
 from app.modules.auth.schemas import RegisterRequest
 from app.modules.auth.service import register_user
 from app.modules.memory_profiles.schemas import MemoryProfileCreate
@@ -108,6 +116,13 @@ def test_metrics_endpoint_exists(client):
     assert "memory_indexing_duration_seconds" in body
     assert "memory_promotion_index_status_total" in body
     assert "memory_promotions_current" in body
+    assert "avatar_eval_runs_total" in body
+    assert "avatar_eval_cases_total" in body
+    assert "avatar_eval_failure_total" in body
+    assert "avatar_eval_duration_seconds" in body
+    assert "avatar_eval_persona_consistency_ratio" in body
+    assert "avatar_eval_unsupported_detail_ratio" in body
+    assert "avatar_eval_over_refusal_ratio" in body
 
 
 def test_fa_chat_metrics_increment_for_successful_request(client, monkeypatch):
@@ -450,6 +465,53 @@ def test_memory_indexing_metrics_increment_without_high_cardinality_labels(clien
     ) == before_failed_status + 1
     assert "approved memory text" not in after.lower()
     forbidden_labels = {"candidate_id", "promotion_id", "trace_id", "avatar_id", "profile_id"}
+    for family in text_string_to_metric_families(after):
+        for sample in family.samples:
+            assert forbidden_labels.isdisjoint(sample.labels.keys())
+
+
+def test_avatar_eval_metrics_increment_without_high_cardinality_labels(client):
+    before = _metrics_text(client)
+    before_runs = _sample_value(before, "avatar_eval_runs_total", {"result": "failed"})
+    before_cases = _sample_value(
+        before,
+        "avatar_eval_cases_total",
+        {"category": "learned_indexed_memory", "result": "failed"},
+    )
+    before_failures = _sample_value(
+        before,
+        "avatar_eval_failure_total",
+        {"failure_type": "over_refusal"},
+    )
+
+    observe_avatar_eval_run(result="failed")
+    observe_avatar_eval_case(category="learned_indexed_memory", result="failed")
+    observe_avatar_eval_failure(failure_type="over_refusal")
+    observe_avatar_eval_duration(duration_seconds=0.25)
+    observe_avatar_eval_ratios(
+        persona_consistency=0.75,
+        unsupported_detail=0.1,
+        over_refusal=0.2,
+    )
+
+    after = _metrics_text(client)
+
+    assert _sample_value(after, "avatar_eval_runs_total", {"result": "failed"}) == before_runs + 1
+    assert _sample_value(
+        after,
+        "avatar_eval_cases_total",
+        {"category": "learned_indexed_memory", "result": "failed"},
+    ) == before_cases + 1
+    assert _sample_value(
+        after,
+        "avatar_eval_failure_total",
+        {"failure_type": "over_refusal"},
+    ) == before_failures + 1
+    assert _sample_value(after, "avatar_eval_persona_consistency_ratio", {}) == 0.75
+    assert _sample_value(after, "avatar_eval_unsupported_detail_ratio", {}) == 0.1
+    assert _sample_value(after, "avatar_eval_over_refusal_ratio", {}) == 0.2
+
+    forbidden_labels = {"case_id", "answer", "candidate_id", "promotion_id", "trace_id"}
     for family in text_string_to_metric_families(after):
         for sample in family.samples:
             assert forbidden_labels.isdisjoint(sample.labels.keys())

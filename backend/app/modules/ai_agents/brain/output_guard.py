@@ -43,6 +43,10 @@ DIRECT_LACK_DENIAL_PREFIXES = (
     "there was no",
 )
 EVIDENCE_CITATION_PREFIXES = ("[memory:", "[rag:")
+INTERNAL_EVIDENCE_CITATION_PATTERN = re.compile(
+    r"\s*\[(?:memory|rag):[^\]]+\]",
+    flags=re.IGNORECASE,
+)
 
 
 _CYRILLIC_PATTERN = re.compile(r"[А-Яа-яЁё]")
@@ -123,6 +127,13 @@ def _has_evidence_citation(answer_text: str) -> bool:
 
 def _strip_citations(text: str) -> str:
     return re.sub(r"\[(?:memory|rag):[^\]]+\]", "", text, flags=re.IGNORECASE).strip()
+
+
+def strip_internal_evidence_citations(answer_text: str) -> str:
+    sanitized = INTERNAL_EVIDENCE_CITATION_PATTERN.sub("", answer_text)
+    sanitized = re.sub(r"\s+([.,!?;:])", r"\1", sanitized)
+    sanitized = re.sub(r"[ \t]{2,}", " ", sanitized)
+    return sanitized.strip()
 
 
 def _sentence_contains_inline_detail(sentence: str) -> bool:

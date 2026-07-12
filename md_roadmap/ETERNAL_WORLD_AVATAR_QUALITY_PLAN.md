@@ -1236,6 +1236,17 @@ zamítnutí
 převod do dlouhodobé paměti až po potvrzení
 ```
 
+### Task 64.5 — Minimal Family Memory Review UI
+
+Cíl:
+
+```text
+zobrazit family memory candidates
+zobrazit příspěvky a owner draft
+umožnit owner edit/confirm/reject/request_more_details
+zobrazit promotion/indexing stav bez automatického zápisu do Qdrant
+```
+
 ### Task 65 — Profile Onboarding / Memory Upload Pipeline
 
 Až potom.

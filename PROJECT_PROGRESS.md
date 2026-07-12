@@ -7516,3 +7516,171 @@ Next recommendation:
 - move shared Grafana into a dedicated observability-stack repository only when more projects need to be added
 
 ---
+
+## Task 64.4 - Learned Memory Answer Evaluation & Persona Tuning (2026-07-12)
+
+Goal:
+
+- create a repeatable answer-quality harness for the FA avatar after the family-contributed memory workflow
+- measure current behavior before tuning
+- classify whether failures come from retrieval, evidence use, persona style, perspective handling, safety, or runtime
+- make only the smallest accepted tuning change and rerun the exact same dataset
+
+Baseline dataset:
+
+- added `backend/app/modules/avatar_quality_evaluation/datasets/learned_memory_answer_eval_v1.jsonl`
+- 12 required categories are covered:
+  - original seeded memory
+  - learned indexed memory
+  - owner-corrected memory
+  - multiple perspectives
+  - pending/unindexed memory
+  - rejected memory
+  - private memory blocked from indexing
+  - unknown factual question
+  - emotional persona question
+  - sensitive subject
+  - repeat-answer stability
+  - profile isolation
+- dataset rows use controlled markers and safe metadata expectations only; no secrets are stored
+
+Evaluator architecture:
+
+- added `backend/app/modules/avatar_quality_evaluation/`
+- deterministic checks cover:
+  - evidence marker/source/metadata presence
+  - required answer markers
+  - forbidden answer markers
+  - lack-of-evidence behavior
+  - persona/technical-style leakage
+  - perspective preservation
+  - corrected-memory preference
+  - profile contamination
+- runner uses the real FA chat service path and records trace IDs, safe evidence metadata, guard status, persona status, durations, and failure taxonomy
+- unit tests do not contact Redis, Qdrant, external models, or external APIs
+
+Metrics:
+
+- added low-cardinality Prometheus metrics:
+  - `avatar_eval_runs_total{result=...}`
+  - `avatar_eval_cases_total{category=...,result=...}`
+  - `avatar_eval_failure_total{failure_type=...}`
+  - `avatar_eval_duration_seconds`
+  - `avatar_eval_persona_consistency_ratio`
+  - `avatar_eval_unsupported_detail_ratio`
+  - `avatar_eval_over_refusal_ratio`
+- no case ID, answer text, candidate ID, promotion ID, profile ID, avatar ID, or trace ID is used as a metric label
+
+Grafana:
+
+- updated `monitoring/grafana/dashboards/fa_chat_observability.json` to version 5
+- added `Avatar Answer Quality` row with panels for:
+  - eval pass rate
+  - learned-memory support rate
+  - unsupported-detail rate
+  - over-refusal rate
+  - persona consistency
+  - perspective preservation
+  - answer stability
+  - failures by type
+- dashboard continues to use only datasource UID `eternal-world-prometheus`
+- NALUS datasource and dashboard wiring were not touched
+
+Baseline run:
+
+- command ran inside the backend container against the real FA chat path
+- dataset: `/app/app/modules/avatar_quality_evaluation/datasets/learned_memory_answer_eval_v1.jsonl`
+- output: `/app/artifacts/avatar_quality_eval/runs/learned_memory_baseline`
+- repeat count: 3
+- total cases: 12
+- total runs: 36
+- passed cases: 0
+- failed cases: 12
+- retrieval hit rate: `0.750`
+- learned-memory support rate: `0.000`
+- unsupported-detail rate: `0.416667`
+- over-refusal rate: `0.250`
+- persona consistency: `0.111111`
+- perspective preservation: `0.000`
+- answer stability: `0.666667`
+- profile contamination count: `3`
+- baseline showed that retrieved learned evidence could be present while the answer still exposed internal `[rag:...]` citations or ignored/over-refused the evidence
+
+Accepted tuning:
+
+- rejected an initial broad prompt wording change after the tuned run showed worse lack-of-evidence correctness and stability risk
+- accepted a narrower deterministic output-format guard:
+  - for avatar-persona responses only, remove internal `[memory:...]` and `[rag:...]` citations from the final answer
+  - generic Brain/RAG evaluation behavior keeps citation output unchanged
+  - metadata records `output_guard_reason=avatar_internal_citation_removed`
+- no retrieval, ranking, top-k, embeddings, Redis cache, Qdrant collection, database migration, candidate workflow, promotion workflow, or indexing workflow was changed
+
+Tuned comparison:
+
+- tuned output: `/app/artifacts/avatar_quality_eval/runs/learned_memory_tuned_v2`
+- same dataset: yes
+- same repeat count: yes
+- total cases: 12
+- total runs: 36
+- passed cases: 3
+- failed cases: 9
+- retrieval hit rate: `0.750`
+- learned-memory support rate: `1.000`
+- unsupported-detail rate: `0.305556`
+- over-refusal rate: `0.250`
+- persona consistency: `0.416667`
+- perspective preservation: `0.000`
+- answer stability: `0.750`
+- profile contamination count: `3`
+- improved cases:
+  - `original-popice-childhood`
+  - `learned-bedtime-song-indexed`
+  - `repeat-learned-bedtime-song`
+- regressed cases: none at case-result level
+- unchanged failures remain in owner-corrected memory, multiple perspectives, pending/unindexed, rejected/private/unknown factual, sensitive subject, and profile isolation
+
+Tests:
+
+- focused eval/metrics/dashboard suite:
+  - `python -m pytest tests/test_avatar_quality_evaluation.py tests/test_metrics.py tests/test_grafana_dashboard_contract.py -q`
+  - result: `21 passed`
+- required Task 64.4 behavior suite:
+  - `python -m pytest tests/test_avatar_quality_evaluation.py tests/test_family_memory_enrichment.py tests/test_avatar_memory_indexing.py tests/test_avatar_memory_promotions.py tests/test_demo_fa_chat.py -q`
+  - result: `61 passed`
+- AI/RAG/FA regression suite:
+  - `python -m pytest tests/test_ai_agents.py tests/test_rag_evaluation.py tests/test_demo_fa_chat.py -q`
+  - result: `80 passed`
+- cache/model regression suite:
+  - `python -m pytest tests/test_embedding_cache.py tests/test_bge_m3_embedding_cache.py tests/test_bge_m3_model_cache.py tests/test_prefetch_embedding_model.py -q`
+  - result: `33 passed`
+- Alembic / metrics / dashboard regression suite:
+  - `python -m pytest tests/test_alembic.py tests/test_metrics.py tests/test_grafana_dashboard_contract.py -q`
+  - result: `15 passed`
+- final focused changed-code suite:
+  - `python -m pytest tests/test_avatar_persona_prompt_composer.py tests/test_ai_agents.py tests/test_avatar_quality_evaluation.py tests/test_metrics.py -q`
+  - result: `52 passed`
+- all pytest runs showed only the existing non-blocking `pytest_asyncio` default-loop-scope deprecation warning
+
+Docker smoke:
+
+- `docker compose up -d backend frontend`: passed
+- `docker compose exec -T backend alembic upgrade head`: passed
+- baseline and tuned eval runs used the real backend container, real BGE-M3 local snapshot, Redis cache, Qdrant retrieval, and the configured Brain provider
+- no model download was requested; BGE-M3 loaded from the existing local snapshot
+- direct per-question API smoke remains covered by the eval run artifacts and trace IDs
+
+Known limitations:
+
+- evaluator cannot fully capture human emotional quality; Russian phrasing still needs human review
+- small Eva demo profile is not representative of all avatars
+- clarification policies remain specialized, especially for bedtime-song memories
+- production family authentication is still missing
+- permission-aware retrieval remains deferred, so private/selected-family memories stay unindexed
+- owner-corrected and multiple-perspective answer behavior still needs a later, more targeted evidence-use policy pass
+- profile isolation test uses marker-based detection; a true multi-profile runtime fixture remains deferred unless it can be added without unrelated architecture
+
+Next recommended task:
+
+- Task 64.5 - Minimal Family Memory Review UI
+
+---

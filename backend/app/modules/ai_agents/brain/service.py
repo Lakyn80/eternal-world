@@ -4,7 +4,10 @@ from time import perf_counter
 
 from app.core.config import settings
 from app.core.metrics import observe_brain_answer_error, observe_brain_answer_success
-from app.modules.ai_agents.brain.output_guard import apply_brain_output_guard
+from app.modules.ai_agents.brain.output_guard import (
+    apply_brain_output_guard,
+    strip_internal_evidence_citations,
+)
 from app.modules.ai_agents.brain.provider import BrainAgentProvider, build_brain_provider
 from app.modules.ai_agents.brain.prompt_builder import build_brain_prompt_messages
 from app.modules.ai_agents.schemas import (
@@ -49,13 +52,22 @@ class BrainAgentService:
             response_metadata=provider_response.metadata,
             guard_context=request.output_guard_context,
         )
+        answer_text = guard_result.answer_text
+        avatar_style_guard_applied = False
+        avatar_style_guard_reason = None
+        if request.avatar_persona is not None:
+            sanitized_answer_text = strip_internal_evidence_citations(answer_text)
+            avatar_style_guard_applied = sanitized_answer_text != answer_text
+            if avatar_style_guard_applied:
+                answer_text = sanitized_answer_text
+                avatar_style_guard_reason = "avatar_internal_citation_removed"
         observe_brain_answer_success(
             provider=settings.ai_brain_provider,
             model=settings.ai_brain_model,
             duration_seconds=perf_counter() - started_at,
         )
         return BrainAgentResponse(
-            text=guard_result.answer_text,
+            text=answer_text,
             provider_name=provider_response.provider_name,
             metadata={
                 **provider_response.metadata,
@@ -65,8 +77,8 @@ class BrainAgentService:
                     if request.avatar_persona is not None
                     else None
                 ),
-                "output_guard_applied": guard_result.guard_applied,
-                "output_guard_reason": guard_result.reason,
+                "output_guard_applied": guard_result.guard_applied or avatar_style_guard_applied,
+                "output_guard_reason": guard_result.reason or avatar_style_guard_reason,
                 "output_guard_detected_unsupported_terms": list(guard_result.detected_unsupported_terms),
                 "output_guard_lack_of_evidence": guard_result.lack_of_evidence,
             },

@@ -952,23 +952,49 @@
       },
       "fieldConfig": {
         "defaults": {
-          "color": {"mode": "thresholds"},
+          "color": {
+            "mode": "thresholds"
+          },
           "decimals": 0,
-          "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}]}
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          }
         },
         "overrides": []
       },
-      "gridPos": {"h": 8, "w": 6, "x": 0, "y": 57},
+      "gridPos": {
+        "h": 8,
+        "w": 6,
+        "x": 0,
+        "y": 57
+      },
       "id": 21,
       "options": {
         "colorMode": "value",
         "graphMode": "area",
         "justifyMode": "auto",
         "orientation": "auto",
-        "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false},
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
         "textMode": "auto"
       },
-      "targets": [{"expr": "sum(memory_promotions_current{status=\"indexed\"}) or vector(0)", "refId": "A"}],
+      "targets": [
+        {
+          "expr": "sum(memory_promotions_current{status=\"indexed\"}) or vector(0)",
+          "refId": "A"
+        }
+      ],
       "title": "Avatar Learning - Indexed Promotions",
       "type": "stat"
     },
@@ -979,23 +1005,53 @@
       },
       "fieldConfig": {
         "defaults": {
-          "color": {"mode": "thresholds"},
+          "color": {
+            "mode": "thresholds"
+          },
           "decimals": 0,
-          "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}, {"color": "red", "value": 1}]}
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 1
+              }
+            ]
+          }
         },
         "overrides": []
       },
-      "gridPos": {"h": 8, "w": 6, "x": 6, "y": 57},
+      "gridPos": {
+        "h": 8,
+        "w": 6,
+        "x": 6,
+        "y": 57
+      },
       "id": 22,
       "options": {
         "colorMode": "value",
         "graphMode": "area",
         "justifyMode": "auto",
         "orientation": "auto",
-        "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false},
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
         "textMode": "auto"
       },
-      "targets": [{"expr": "sum(memory_promotions_current{status=\"failed\"}) or vector(0)", "refId": "A"}],
+      "targets": [
+        {
+          "expr": "sum(memory_promotions_current{status=\"failed\"}) or vector(0)",
+          "refId": "A"
+        }
+      ],
       "title": "Avatar Learning - Failed Indexing",
       "type": "stat"
     },
@@ -1004,14 +1060,41 @@
         "type": "prometheus",
         "uid": "eternal-world-prometheus"
       },
-      "fieldConfig": {"defaults": {"color": {"mode": "palette-classic"}, "unit": "s"}, "overrides": []},
-      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 57},
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 57
+      },
       "id": 23,
       "options": {
-        "legend": {"calcs": [], "displayMode": "list", "placement": "bottom", "showLegend": true},
-        "tooltip": {"mode": "multi", "sort": "desc"}
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
       },
-      "targets": [{"expr": "histogram_quantile(0.95, sum(rate(memory_indexing_duration_seconds_bucket{result=\"indexed\"}[5m])) by (le))", "legendFormat": "p95", "refId": "A"}],
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(memory_indexing_duration_seconds_bucket{result=\"indexed\"}[5m])) by (le))",
+          "legendFormat": "p95",
+          "refId": "A"
+        }
+      ],
       "title": "Avatar Learning - Indexing Duration",
       "type": "timeseries"
     },
@@ -1020,20 +1103,52 @@
         "type": "prometheus",
         "uid": "eternal-world-prometheus"
       },
-      "fieldConfig": {"defaults": {"color": {"mode": "palette-classic"}, "unit": "ops"}, "overrides": []},
-      "gridPos": {"h": 8, "w": 24, "x": 0, "y": 65},
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "unit": "ops"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 65
+      },
       "id": 24,
       "options": {
-        "legend": {"calcs": [], "displayMode": "list", "placement": "bottom", "showLegend": true},
-        "tooltip": {"mode": "multi", "sort": "desc"}
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
       },
-      "targets": [{"expr": "sum(rate(memory_promotion_index_status_total{status=~\"indexed|failed\"}[5m])) by (status)", "legendFormat": "{{status}}", "refId": "A"}],
+      "targets": [
+        {
+          "expr": "sum(rate(memory_promotion_index_status_total{status=~\"indexed|failed\"}[5m])) by (status)",
+          "legendFormat": "{{status}}",
+          "refId": "A"
+        }
+      ],
       "title": "Avatar Learning - Indexing Success / Failure Rate",
       "type": "timeseries"
     },
     {
       "collapsed": false,
-      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 73},
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 73
+      },
       "id": 25,
       "panels": [],
       "title": "Family Memory Enrichment",
@@ -1044,11 +1159,35 @@
         "type": "prometheus",
         "uid": "eternal-world-prometheus"
       },
-      "fieldConfig": {"defaults": {"decimals": 0, "unit": "short"}, "overrides": []},
-      "gridPos": {"h": 7, "w": 6, "x": 0, "y": 74},
+      "fieldConfig": {
+        "defaults": {
+          "decimals": 0,
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 6,
+        "x": 0,
+        "y": 74
+      },
       "id": 26,
-      "options": {"reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}},
-      "targets": [{"expr": "sum(increase(memory_contribution_created_total[$__range])) or vector(0)", "refId": "A"}],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      },
+      "targets": [
+        {
+          "expr": "sum(increase(memory_contribution_created_total[$__range])) or vector(0)",
+          "refId": "A"
+        }
+      ],
       "title": "Family Contributions Created",
       "type": "stat"
     },
@@ -1057,11 +1196,35 @@
         "type": "prometheus",
         "uid": "eternal-world-prometheus"
       },
-      "fieldConfig": {"defaults": {"decimals": 0, "unit": "short"}, "overrides": []},
-      "gridPos": {"h": 7, "w": 6, "x": 6, "y": 74},
+      "fieldConfig": {
+        "defaults": {
+          "decimals": 0,
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 6,
+        "x": 6,
+        "y": 74
+      },
       "id": 27,
-      "options": {"reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}},
-      "targets": [{"expr": "sum(memory_enrichment_current{status=\"collecting_details\"}) or vector(0)", "refId": "A"}],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      },
+      "targets": [
+        {
+          "expr": "sum(memory_enrichment_current{status=\"collecting_details\"}) or vector(0)",
+          "refId": "A"
+        }
+      ],
       "title": "Active Collecting Details",
       "type": "stat"
     },
@@ -1070,11 +1233,35 @@
         "type": "prometheus",
         "uid": "eternal-world-prometheus"
       },
-      "fieldConfig": {"defaults": {"decimals": 0, "unit": "short"}, "overrides": []},
-      "gridPos": {"h": 7, "w": 6, "x": 12, "y": 74},
+      "fieldConfig": {
+        "defaults": {
+          "decimals": 0,
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 6,
+        "x": 12,
+        "y": 74
+      },
       "id": 28,
-      "options": {"reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}},
-      "targets": [{"expr": "sum(memory_enrichment_current{status=\"ready_for_owner_review\"}) or vector(0)", "refId": "A"}],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      },
+      "targets": [
+        {
+          "expr": "sum(memory_enrichment_current{status=\"ready_for_owner_review\"}) or vector(0)",
+          "refId": "A"
+        }
+      ],
       "title": "Ready for Owner Review",
       "type": "stat"
     },
@@ -1083,11 +1270,35 @@
         "type": "prometheus",
         "uid": "eternal-world-prometheus"
       },
-      "fieldConfig": {"defaults": {"decimals": 0, "unit": "short"}, "overrides": []},
-      "gridPos": {"h": 7, "w": 6, "x": 18, "y": 74},
+      "fieldConfig": {
+        "defaults": {
+          "decimals": 0,
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 6,
+        "x": 18,
+        "y": 74
+      },
       "id": 29,
-      "options": {"reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}},
-      "targets": [{"expr": "sum(increase(memory_owner_review_total{action=~\"confirm|approve_multiple_perspectives\"}[$__range])) or vector(0)", "refId": "A"}],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      },
+      "targets": [
+        {
+          "expr": "sum(increase(memory_owner_review_total{action=~\"confirm|approve_multiple_perspectives\"}[$__range])) or vector(0)",
+          "refId": "A"
+        }
+      ],
       "title": "Owner Confirmations",
       "type": "stat"
     },
@@ -1096,11 +1307,35 @@
         "type": "prometheus",
         "uid": "eternal-world-prometheus"
       },
-      "fieldConfig": {"defaults": {"decimals": 0, "unit": "short"}, "overrides": []},
-      "gridPos": {"h": 7, "w": 6, "x": 0, "y": 81},
+      "fieldConfig": {
+        "defaults": {
+          "decimals": 0,
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 6,
+        "x": 0,
+        "y": 81
+      },
       "id": 30,
-      "options": {"reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}},
-      "targets": [{"expr": "sum(increase(memory_owner_review_total{action=\"edit_and_confirm\"}[$__range])) or vector(0)", "refId": "A"}],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      },
+      "targets": [
+        {
+          "expr": "sum(increase(memory_owner_review_total{action=\"edit_and_confirm\"}[$__range])) or vector(0)",
+          "refId": "A"
+        }
+      ],
       "title": "Owner Corrections",
       "type": "stat"
     },
@@ -1109,11 +1344,35 @@
         "type": "prometheus",
         "uid": "eternal-world-prometheus"
       },
-      "fieldConfig": {"defaults": {"decimals": 0, "unit": "short"}, "overrides": []},
-      "gridPos": {"h": 7, "w": 6, "x": 6, "y": 81},
+      "fieldConfig": {
+        "defaults": {
+          "decimals": 0,
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 6,
+        "x": 6,
+        "y": 81
+      },
       "id": 31,
-      "options": {"reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}},
-      "targets": [{"expr": "sum(increase(memory_owner_review_total{action=\"reject\"}[$__range])) or vector(0)", "refId": "A"}],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      },
+      "targets": [
+        {
+          "expr": "sum(increase(memory_owner_review_total{action=\"reject\"}[$__range])) or vector(0)",
+          "refId": "A"
+        }
+      ],
       "title": "Owner Rejections",
       "type": "stat"
     },
@@ -1122,11 +1381,35 @@
         "type": "prometheus",
         "uid": "eternal-world-prometheus"
       },
-      "fieldConfig": {"defaults": {"decimals": 0, "unit": "short"}, "overrides": []},
-      "gridPos": {"h": 7, "w": 6, "x": 12, "y": 81},
+      "fieldConfig": {
+        "defaults": {
+          "decimals": 0,
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 6,
+        "x": 12,
+        "y": 81
+      },
       "id": 32,
-      "options": {"reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}},
-      "targets": [{"expr": "sum(increase(memory_owner_review_total{action=\"request_more_details\"}[$__range])) or vector(0)", "refId": "A"}],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      },
+      "targets": [
+        {
+          "expr": "sum(increase(memory_owner_review_total{action=\"request_more_details\"}[$__range])) or vector(0)",
+          "refId": "A"
+        }
+      ],
       "title": "Requested More Details",
       "type": "stat"
     },
@@ -1135,11 +1418,35 @@
         "type": "prometheus",
         "uid": "eternal-world-prometheus"
       },
-      "fieldConfig": {"defaults": {"decimals": 0, "unit": "short"}, "overrides": []},
-      "gridPos": {"h": 7, "w": 6, "x": 18, "y": 81},
+      "fieldConfig": {
+        "defaults": {
+          "decimals": 0,
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 6,
+        "x": 18,
+        "y": 81
+      },
       "id": 33,
-      "options": {"reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}},
-      "targets": [{"expr": "sum(memory_disputes_current{status=\"disputed\"}) or vector(0)", "refId": "A"}],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      },
+      "targets": [
+        {
+          "expr": "sum(memory_disputes_current{status=\"disputed\"}) or vector(0)",
+          "refId": "A"
+        }
+      ],
       "title": "Disputed Memories",
       "type": "stat"
     },
@@ -1148,11 +1455,35 @@
         "type": "prometheus",
         "uid": "eternal-world-prometheus"
       },
-      "fieldConfig": {"defaults": {"decimals": 0, "unit": "short"}, "overrides": []},
-      "gridPos": {"h": 7, "w": 12, "x": 0, "y": 88},
+      "fieldConfig": {
+        "defaults": {
+          "decimals": 0,
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 12,
+        "x": 0,
+        "y": 88
+      },
       "id": 34,
-      "options": {"reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}},
-      "targets": [{"expr": "sum(increase(memory_promotion_blocked_total{reason=~\"collecting_details|incomplete|unresolved_clarification\"}[$__range])) or vector(0)", "refId": "A"}],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      },
+      "targets": [
+        {
+          "expr": "sum(increase(memory_promotion_blocked_total{reason=~\"collecting_details|incomplete|unresolved_clarification\"}[$__range])) or vector(0)",
+          "refId": "A"
+        }
+      ],
       "title": "Promotion Blocked by Incomplete Enrichment",
       "type": "stat"
     },
@@ -1161,13 +1492,361 @@
         "type": "prometheus",
         "uid": "eternal-world-prometheus"
       },
-      "fieldConfig": {"defaults": {"decimals": 1, "max": 100, "min": 0, "unit": "percent"}, "overrides": []},
-      "gridPos": {"h": 7, "w": 12, "x": 12, "y": 88},
+      "fieldConfig": {
+        "defaults": {
+          "decimals": 1,
+          "max": 100,
+          "min": 0,
+          "unit": "percent"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 12,
+        "x": 12,
+        "y": 88
+      },
       "id": 35,
-      "options": {"reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}},
-      "targets": [{"expr": "100 * sum(increase(memory_enrichment_status_total{status=\"ready_for_owner_review\"}[$__range])) / clamp_min(sum(increase(memory_enrichment_status_total{status=~\"collecting_details|ready_for_owner_review\"}[$__range])), 1)", "refId": "A"}],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      },
+      "targets": [
+        {
+          "expr": "100 * sum(increase(memory_enrichment_status_total{status=\"ready_for_owner_review\"}[$__range])) / clamp_min(sum(increase(memory_enrichment_status_total{status=~\"collecting_details|ready_for_owner_review\"}[$__range])), 1)",
+          "refId": "A"
+        }
+      ],
       "title": "Enrichment Completion Rate",
       "type": "stat"
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 95
+      },
+      "id": 36,
+      "panels": [],
+      "title": "Avatar Answer Quality",
+      "type": "row"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "eternal-world-prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "decimals": 1,
+          "min": 0,
+          "unit": "percent"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 6,
+        "x": 0,
+        "y": 96
+      },
+      "id": 37,
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      },
+      "targets": [
+        {
+          "expr": "100 * sum(increase(avatar_eval_cases_total{result=\"passed\"}[$__range])) / clamp_min(sum(increase(avatar_eval_cases_total[$__range])), 1)",
+          "refId": "A"
+        }
+      ],
+      "title": "Eval Pass Rate",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "eternal-world-prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "decimals": 1,
+          "min": 0,
+          "unit": "percent"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 6,
+        "x": 6,
+        "y": 96
+      },
+      "id": 38,
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      },
+      "targets": [
+        {
+          "expr": "100 * sum(increase(avatar_eval_cases_total{category=\"learned_indexed_memory\",result=\"passed\"}[$__range])) / clamp_min(sum(increase(avatar_eval_cases_total{category=\"learned_indexed_memory\"}[$__range])), 1)",
+          "refId": "A"
+        }
+      ],
+      "title": "Learned-Memory Support Rate",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "eternal-world-prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "decimals": 1,
+          "min": 0,
+          "unit": "percent"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 6,
+        "x": 12,
+        "y": 96
+      },
+      "id": 39,
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      },
+      "targets": [
+        {
+          "expr": "100 * avatar_eval_unsupported_detail_ratio",
+          "refId": "A"
+        }
+      ],
+      "title": "Unsupported-Detail Rate",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "eternal-world-prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "decimals": 1,
+          "min": 0,
+          "unit": "percent"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 6,
+        "x": 18,
+        "y": 96
+      },
+      "id": 40,
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      },
+      "targets": [
+        {
+          "expr": "100 * avatar_eval_over_refusal_ratio",
+          "refId": "A"
+        }
+      ],
+      "title": "Over-Refusal Rate",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "eternal-world-prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "decimals": 1,
+          "min": 0,
+          "unit": "percent"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 6,
+        "x": 0,
+        "y": 103
+      },
+      "id": 41,
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      },
+      "targets": [
+        {
+          "expr": "100 * avatar_eval_persona_consistency_ratio",
+          "refId": "A"
+        }
+      ],
+      "title": "Persona Consistency",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "eternal-world-prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "decimals": 1,
+          "min": 0,
+          "unit": "percent"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 6,
+        "x": 6,
+        "y": 103
+      },
+      "id": 42,
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      },
+      "targets": [
+        {
+          "expr": "100 * sum(increase(avatar_eval_cases_total{category=\"multiple_perspectives\",result=\"passed\"}[$__range])) / clamp_min(sum(increase(avatar_eval_cases_total{category=\"multiple_perspectives\"}[$__range])), 1)",
+          "refId": "A"
+        }
+      ],
+      "title": "Perspective Preservation",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "eternal-world-prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "decimals": 1,
+          "min": 0,
+          "unit": "percent"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 6,
+        "x": 12,
+        "y": 103
+      },
+      "id": 43,
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      },
+      "targets": [
+        {
+          "expr": "100 * sum(increase(avatar_eval_cases_total{category=\"repeat_answer_stability\",result=\"passed\"}[$__range])) / clamp_min(sum(increase(avatar_eval_cases_total{category=\"repeat_answer_stability\"}[$__range])), 1)",
+          "refId": "A"
+        }
+      ],
+      "title": "Answer Stability",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "eternal-world-prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 6,
+        "x": 18,
+        "y": 103
+      },
+      "id": 44,
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "expr": "sum(increase(avatar_eval_failure_total[$__range])) by (failure_type)",
+          "legendFormat": "{{failure_type}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Failures by Type",
+      "type": "timeseries"
     }
   ],
   "refresh": "15s",
@@ -1190,6 +1869,6 @@
   "timezone": "",
   "title": "Eternal World — FA Chat Observability",
   "uid": "eternal-world-fa-chat",
-  "version": 4,
+  "version": 5,
   "weekStart": ""
 }

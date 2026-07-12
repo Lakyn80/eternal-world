@@ -9,6 +9,7 @@ from app.modules.ai_agents.brain.context import MAX_MEMORY_EVIDENCE_ITEMS
 from app.modules.ai_agents.brain.output_guard import (
     BrainOutputGuardContext,
     apply_brain_output_guard,
+    strip_internal_evidence_citations,
 )
 from app.modules.ai_agents.brain.provider import (
     BrainProviderConfigurationError,
@@ -23,6 +24,7 @@ from app.modules.ai_agents.schemas import (
     MemoryProfileContext,
     OrchestratorChatRequest,
 )
+from app.modules.avatar_persona import load_demo_avatar_persona
 from app.modules.rag_retrieval.schemas import RagRetrievalResponseRead, RagRetrievalResultRead
 
 
@@ -109,6 +111,15 @@ def _capture_prompt(monkeypatch):
 
     monkeypatch.setattr(MockBrainAgentProvider, "generate_response", capture_generate_response)
     return captured
+
+
+class CitationStubProvider:
+    def generate_response(self, request: BrainAgentRequest) -> BrainAgentResponse:
+        return BrainAgentResponse(
+            text="Деточка, я жила у Попице. [rag:27618]",
+            provider_name="citation-stub",
+            metadata={"grounding_status": "grounded"},
+        )
 
 
 def _get_test_db_session():
@@ -967,6 +978,39 @@ def test_output_guard_does_not_change_grounded_reckovice_cherry_answer():
 
     assert result.guard_applied is False
     assert result.answer_text == answer_text
+
+
+def test_strip_internal_evidence_citations_removes_memory_and_rag_labels():
+    assert strip_internal_evidence_citations(
+        "Да, я жила у Попице [rag:27618], а потом вспоминала семью [memory:7]."
+    ) == "Да, я жила у Попице, а потом вспоминала семью."
+
+
+def test_brain_service_removes_internal_citations_only_for_avatar_persona():
+    service = BrainAgentService(provider=CitationStubProvider())
+
+    generic_response = service.generate_chat_response(
+        OrchestratorChatRequest(
+            profile=MemoryProfileContext(id=1, name="Ева"),
+            user_message="Где ты жила?",
+            recent_history=[],
+        )
+    )
+    avatar_response = service.generate_chat_response(
+        OrchestratorChatRequest(
+            profile=MemoryProfileContext(id=1, name="Ева"),
+            avatar_persona=load_demo_avatar_persona(),
+            user_message="Где ты жила?",
+            recent_history=[],
+        )
+    )
+
+    assert "[rag:27618]" in generic_response.text
+    assert generic_response.metadata["output_guard_applied"] is False
+    assert "[rag:27618]" not in avatar_response.text
+    assert avatar_response.text == "Деточка, я жила у Попице."
+    assert avatar_response.metadata["output_guard_applied"] is True
+    assert avatar_response.metadata["output_guard_reason"] == "avatar_internal_citation_removed"
 
 
 def test_brain_service_guard_metadata_does_not_store_original_answer_text():

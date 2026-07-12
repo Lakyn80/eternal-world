@@ -9,6 +9,7 @@ _NORMALIZED_GUARD_REASONS = {
     "": "none",
     "forbidden_claim_in_lack_case": "forbidden_claim_in_lack_case",
     "no_evidence_answer_with_extra_detail": "no_evidence_answer_with_extra_detail",
+    "avatar_internal_citation_removed": "avatar_internal_citation_removed",
 }
 
 _NORMALIZED_BRAIN_PROVIDERS = {
@@ -193,6 +194,37 @@ MEMORY_DISPUTES_CURRENT = Gauge(
     "Current family memory candidates by durable dispute status.",
     labelnames=("status",),
 )
+AVATAR_EVAL_RUNS_TOTAL = Counter(
+    "avatar_eval_runs_total",
+    "Total avatar answer-quality evaluation runs.",
+    labelnames=("result",),
+)
+AVATAR_EVAL_CASES_TOTAL = Counter(
+    "avatar_eval_cases_total",
+    "Total avatar answer-quality evaluation case executions.",
+    labelnames=("category", "result"),
+)
+AVATAR_EVAL_FAILURE_TOTAL = Counter(
+    "avatar_eval_failure_total",
+    "Total avatar answer-quality evaluation failures by taxonomy type.",
+    labelnames=("failure_type",),
+)
+AVATAR_EVAL_DURATION_SECONDS = Histogram(
+    "avatar_eval_duration_seconds",
+    "Avatar answer-quality evaluation case duration in seconds.",
+)
+AVATAR_EVAL_PERSONA_CONSISTENCY_RATIO = Gauge(
+    "avatar_eval_persona_consistency_ratio",
+    "Last avatar answer-quality evaluation persona consistency ratio.",
+)
+AVATAR_EVAL_UNSUPPORTED_DETAIL_RATIO = Gauge(
+    "avatar_eval_unsupported_detail_ratio",
+    "Last avatar answer-quality evaluation unsupported detail ratio.",
+)
+AVATAR_EVAL_OVER_REFUSAL_RATIO = Gauge(
+    "avatar_eval_over_refusal_ratio",
+    "Last avatar answer-quality evaluation over-refusal ratio.",
+)
 
 _MEMORY_INDEX_RESULTS = frozenset({"indexed", "failed", "skipped"})
 _MEMORY_PROMOTION_STATUSES = ("pending_index", "indexed", "failed", "cancelled")
@@ -216,6 +248,36 @@ _PROMOTION_BLOCK_REASONS = frozenset({
     "privacy_scope",
     "disputed",
     "unauthorized_reviewer",
+})
+_AVATAR_EVAL_RESULTS = frozenset({"passed", "failed"})
+_AVATAR_EVAL_CATEGORIES = frozenset({
+    "original_seeded_memory",
+    "learned_indexed_memory",
+    "owner_corrected_memory",
+    "multiple_perspectives",
+    "pending_unindexed_memory",
+    "rejected_memory",
+    "private_memory_blocked",
+    "unknown_factual_question",
+    "emotional_persona_question",
+    "sensitive_subject",
+    "repeat_answer_stability",
+    "profile_isolation",
+})
+_AVATAR_EVAL_FAILURE_TYPES = frozenset({
+    "retrieval_failure",
+    "profile_contamination",
+    "evidence_present_but_ignored",
+    "unsupported_detail",
+    "over_refusal",
+    "wrong_corrected_version",
+    "perspective_collapsed",
+    "persona_cold_or_technical",
+    "persona_inconsistent",
+    "incorrect_lack_of_evidence",
+    "guard_regression",
+    "evaluator_failure",
+    "runtime_failure",
 })
 
 
@@ -458,3 +520,56 @@ def set_memory_enrichment_current(
         MEMORY_DISPUTES_CURRENT.labels(status).set(
             max(0, int(disputes_by_status.get(status, 0)))
         )
+
+
+def _normalize_avatar_eval_result(value: str) -> str:
+    normalized = value.strip().lower()
+    return normalized if normalized in _AVATAR_EVAL_RESULTS else "failed"
+
+
+def _normalize_avatar_eval_category(value: str) -> str:
+    normalized = value.strip().lower()
+    return normalized if normalized in _AVATAR_EVAL_CATEGORIES else "other"
+
+
+def _normalize_avatar_eval_failure_type(value: str) -> str:
+    normalized = value.strip().lower()
+    return normalized if normalized in _AVATAR_EVAL_FAILURE_TYPES else "other"
+
+
+def observe_avatar_eval_run(*, result: str) -> None:
+    AVATAR_EVAL_RUNS_TOTAL.labels(_normalize_avatar_eval_result(result)).inc()
+
+
+def observe_avatar_eval_case(*, category: str, result: str) -> None:
+    AVATAR_EVAL_CASES_TOTAL.labels(
+        _normalize_avatar_eval_category(category),
+        _normalize_avatar_eval_result(result),
+    ).inc()
+
+
+def observe_avatar_eval_failure(*, failure_type: str) -> None:
+    AVATAR_EVAL_FAILURE_TOTAL.labels(
+        _normalize_avatar_eval_failure_type(failure_type)
+    ).inc()
+
+
+def observe_avatar_eval_duration(*, duration_seconds: float) -> None:
+    AVATAR_EVAL_DURATION_SECONDS.observe(max(0.0, duration_seconds))
+
+
+def observe_avatar_eval_ratios(
+    *,
+    persona_consistency: float,
+    unsupported_detail: float,
+    over_refusal: float,
+) -> None:
+    AVATAR_EVAL_PERSONA_CONSISTENCY_RATIO.set(
+        min(1.0, max(0.0, float(persona_consistency)))
+    )
+    AVATAR_EVAL_UNSUPPORTED_DETAIL_RATIO.set(
+        min(1.0, max(0.0, float(unsupported_detail)))
+    )
+    AVATAR_EVAL_OVER_REFUSAL_RATIO.set(
+        min(1.0, max(0.0, float(over_refusal)))
+    )

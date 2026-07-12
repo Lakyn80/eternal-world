@@ -1,0 +1,15 @@
+{
+  "completed_at": "2026-07-12T14:34:03.526247Z",
+  "dataset_path": "/app/app/modules/avatar_quality_evaluation/datasets/learned_memory_answer_eval_v1.jsonl",
+  "embedding_changed": false,
+  "model_download_requested": false,
+  "output_dir": "/app/artifacts/avatar_quality_eval/runs/learned_memory_baseline",
+  "qdrant_collection_changed": false,
+  "real_fa_chat_path": true,
+  "redis_changed": false,
+  "repeat_count": 3,
+  "retrieval_changed": false,
+  "run_id": "20260712_143048Z_dfaa9fa0",
+  "run_label": "baseline",
+  "started_at": "2026-07-12T14:30:48.194826Z"
+}
