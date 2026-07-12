@@ -7441,3 +7441,78 @@ Next recommended task:
 1. Task 64.4 - Learned Memory Answer Evaluation & Persona Tuning
 
 ---
+
+## Shared Grafana integration (2026-07-12)
+
+Goal:
+
+- use the NALUS Grafana instance at `http://localhost:3002` as the shared dashboard UI
+- keep NALUS and Eternal World Prometheus storage, scrape configuration, and metrics isolated
+- preserve the standalone Eternal World Grafana configuration as an explicit troubleshooting option
+
+Architecture:
+
+- shared Grafana: `http://localhost:3002`
+- Eternal World dashboard folder: `Eternal World`
+- dashboard title: `Eternal World — FA Chat Observability`
+- dashboard UID: `eternal-world-fa-chat`
+- Eternal World datasource name: `Eternal World Prometheus`
+- Eternal World datasource UID: `eternal-world-prometheus`
+- Eternal World Prometheus remains independently available at `http://localhost:9090`
+- NALUS Prometheus remains independent at `http://localhost:9091`; it does not ingest Eternal World metrics
+- the shared Grafana mounts this repository's dashboard directory read-only, so this JSON remains the single source of truth
+
+Changes:
+
+- all 33 Prometheus data panels now use the explicit datasource object:
+  - `type=prometheus`
+  - `uid=eternal-world-prometheus`
+- the built-in Grafana annotation datasource remains unchanged
+- the standalone Eternal World datasource provisioning uses the same stable datasource UID
+- the `grafana` Compose service now has profile `standalone-grafana`
+- normal `docker compose up -d` no longer starts Grafana on port `3001`
+- root `README.md` now documents shared Grafana `3002` as the primary path and standalone `3001` as troubleshooting-only
+- standalone troubleshooting remains available with:
+
+```powershell
+docker compose --profile standalone-grafana up -d grafana
+```
+
+Tests and static validation:
+
+- `docker compose config --quiet`: passed
+- `docker compose --profile standalone-grafana config --quiet`: passed
+- `python -m pytest tests/test_grafana_dashboard_contract.py -q`: `4 passed`
+- `python -m pytest tests/test_metrics.py -q`: `6 passed`
+- dashboard JSON validation with `python -m json.tool`: passed
+- the dashboard contract test rejects generic `Prometheus` strings, wrong UIDs, duplicate panel IDs, and duplicate target refIds
+
+Runtime smoke:
+
+- shared Grafana `11.4.0` became healthy on port `3002`
+- datasource `eternal-world-prometheus` health: `OK`
+- dashboard loaded under folder `Eternal World` with the preserved UID
+- Grafana datasource proxy returned `fa_chat_requests_total` only through Eternal World Prometheus
+- NALUS-only `legal_answer_eval_gold` returned no series through the Eternal World datasource
+- standalone Grafana profile started successfully on `3001`, reported a healthy database, and was stopped again
+- final port state has only shared Grafana on `3002`; port `3001` is unoccupied
+- named volume `eternal-world_eternal_world_grafana_data` was preserved; no volume or configuration was deleted
+
+Behavior preserved:
+
+- application metrics were not changed
+- PromQL expressions were not changed
+- Prometheus scrape configuration and TSDB storage were not changed
+- backend, RAG, retrieval ranking, embeddings, Qdrant, Redis, Postgres, and learning workflows were not changed
+
+Known limitations:
+
+- the local cross-project datasource defaults to `host.docker.internal:9090`; Linux/server deployments must provide an `ETERNAL_WORLD_PROMETHEUS_URL` reachable from the shared Grafana container
+- shared Grafana startup depends on access to the Eternal World dashboard checkout; the NALUS Compose configuration supports an override for that directory
+- authentication hardening and moving shared observability into a dedicated repository are deferred
+
+Next recommendation:
+
+- move shared Grafana into a dedicated observability-stack repository only when more projects need to be added
+
+---

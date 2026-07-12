@@ -23,7 +23,10 @@
   "liveNow": false,
   "panels": [
     {
-      "datasource": "Prometheus",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "eternal-world-prometheus"
+      },
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -63,7 +66,10 @@
       "type": "timeseries"
     },
     {
-      "datasource": "Prometheus",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "eternal-world-prometheus"
+      },
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -121,7 +127,10 @@
       "type": "stat"
     },
     {
-      "datasource": "Prometheus",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "eternal-world-prometheus"
+      },
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -161,7 +170,10 @@
       "type": "timeseries"
     },
     {
-      "datasource": "Prometheus",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "eternal-world-prometheus"
+      },
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -201,7 +213,10 @@
       "type": "timeseries"
     },
     {
-      "datasource": "Prometheus",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "eternal-world-prometheus"
+      },
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -241,7 +256,10 @@
       "type": "timeseries"
     },
     {
-      "datasource": "Prometheus",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "eternal-world-prometheus"
+      },
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -281,7 +299,10 @@
       "type": "timeseries"
     },
     {
-      "datasource": "Prometheus",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "eternal-world-prometheus"
+      },
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -321,7 +342,10 @@
       "type": "timeseries"
     },
     {
-      "datasource": "Prometheus",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "eternal-world-prometheus"
+      },
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -361,7 +385,10 @@
       "type": "timeseries"
     },
     {
-      "datasource": "Prometheus",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "eternal-world-prometheus"
+      },
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -419,7 +446,10 @@
       "type": "stat"
     },
     {
-      "datasource": "Prometheus",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "eternal-world-prometheus"
+      },
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -459,7 +489,10 @@
       "type": "timeseries"
     },
     {
-      "datasource": "Prometheus",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "eternal-world-prometheus"
+      },
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -499,7 +532,10 @@
       "type": "timeseries"
     },
     {
-      "datasource": "Prometheus",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "eternal-world-prometheus"
+      },
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -560,7 +596,10 @@
       "type": "stat"
     },
     {
-      "datasource": "Prometheus",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "eternal-world-prometheus"
+      },
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -618,7 +657,10 @@
       "type": "stat"
     },
     {
-      "datasource": "Prometheus",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "eternal-world-prometheus"
+      },
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -671,7 +713,10 @@
       "type": "row"
     },
     {
-      "datasource": "Prometheus",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "eternal-world-prometheus"
+      },
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -711,7 +756,10 @@
       "type": "timeseries"
     },
     {
-      "datasource": "Prometheus",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "eternal-world-prometheus"
+      },
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -751,7 +799,10 @@
       "type": "timeseries"
     },
     {
-      "datasource": "Prometheus",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "eternal-world-prometheus"
+      },
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -809,7 +860,10 @@
       "type": "stat"
     },
     {
-      "datasource": "Prometheus",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "eternal-world-prometheus"
+      },
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -849,7 +903,10 @@
       "type": "timeseries"
     },
     {
-      "datasource": "Prometheus",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "eternal-world-prometheus"
+      },
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -889,7 +946,10 @@
       "type": "timeseries"
     },
     {
-      "datasource": "Prometheus",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "eternal-world-prometheus"
+      },
       "fieldConfig": {
         "defaults": {
           "color": {"mode": "thresholds"},
@@ -913,7 +973,10 @@
       "type": "stat"
     },
     {
-      "datasource": "Prometheus",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "eternal-world-prometheus"
+      },
       "fieldConfig": {
         "defaults": {
           "color": {"mode": "thresholds"},
@@ -937,7 +1000,10 @@
       "type": "stat"
     },
     {
-      "datasource": "Prometheus",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "eternal-world-prometheus"
+      },
       "fieldConfig": {"defaults": {"color": {"mode": "palette-classic"}, "unit": "s"}, "overrides": []},
       "gridPos": {"h": 8, "w": 12, "x": 12, "y": 57},
       "id": 23,
@@ -950,7 +1016,10 @@
       "type": "timeseries"
     },
     {
-      "datasource": "Prometheus",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "eternal-world-prometheus"
+      },
       "fieldConfig": {"defaults": {"color": {"mode": "palette-classic"}, "unit": "ops"}, "overrides": []},
       "gridPos": {"h": 8, "w": 24, "x": 0, "y": 65},
       "id": 24,
@@ -971,7 +1040,10 @@
       "type": "row"
     },
     {
-      "datasource": "Prometheus",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "eternal-world-prometheus"
+      },
       "fieldConfig": {"defaults": {"decimals": 0, "unit": "short"}, "overrides": []},
       "gridPos": {"h": 7, "w": 6, "x": 0, "y": 74},
       "id": 26,
@@ -981,7 +1053,10 @@
       "type": "stat"
     },
     {
-      "datasource": "Prometheus",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "eternal-world-prometheus"
+      },
       "fieldConfig": {"defaults": {"decimals": 0, "unit": "short"}, "overrides": []},
       "gridPos": {"h": 7, "w": 6, "x": 6, "y": 74},
       "id": 27,
@@ -991,7 +1066,10 @@
       "type": "stat"
     },
     {
-      "datasource": "Prometheus",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "eternal-world-prometheus"
+      },
       "fieldConfig": {"defaults": {"decimals": 0, "unit": "short"}, "overrides": []},
       "gridPos": {"h": 7, "w": 6, "x": 12, "y": 74},
       "id": 28,
@@ -1001,7 +1079,10 @@
       "type": "stat"
     },
     {
-      "datasource": "Prometheus",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "eternal-world-prometheus"
+      },
       "fieldConfig": {"defaults": {"decimals": 0, "unit": "short"}, "overrides": []},
       "gridPos": {"h": 7, "w": 6, "x": 18, "y": 74},
       "id": 29,
@@ -1011,7 +1092,10 @@
       "type": "stat"
     },
     {
-      "datasource": "Prometheus",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "eternal-world-prometheus"
+      },
       "fieldConfig": {"defaults": {"decimals": 0, "unit": "short"}, "overrides": []},
       "gridPos": {"h": 7, "w": 6, "x": 0, "y": 81},
       "id": 30,
@@ -1021,7 +1105,10 @@
       "type": "stat"
     },
     {
-      "datasource": "Prometheus",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "eternal-world-prometheus"
+      },
       "fieldConfig": {"defaults": {"decimals": 0, "unit": "short"}, "overrides": []},
       "gridPos": {"h": 7, "w": 6, "x": 6, "y": 81},
       "id": 31,
@@ -1031,7 +1118,10 @@
       "type": "stat"
     },
     {
-      "datasource": "Prometheus",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "eternal-world-prometheus"
+      },
       "fieldConfig": {"defaults": {"decimals": 0, "unit": "short"}, "overrides": []},
       "gridPos": {"h": 7, "w": 6, "x": 12, "y": 81},
       "id": 32,
@@ -1041,7 +1131,10 @@
       "type": "stat"
     },
     {
-      "datasource": "Prometheus",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "eternal-world-prometheus"
+      },
       "fieldConfig": {"defaults": {"decimals": 0, "unit": "short"}, "overrides": []},
       "gridPos": {"h": 7, "w": 6, "x": 18, "y": 81},
       "id": 33,
@@ -1051,7 +1144,10 @@
       "type": "stat"
     },
     {
-      "datasource": "Prometheus",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "eternal-world-prometheus"
+      },
       "fieldConfig": {"defaults": {"decimals": 0, "unit": "short"}, "overrides": []},
       "gridPos": {"h": 7, "w": 12, "x": 0, "y": 88},
       "id": 34,
@@ -1061,7 +1157,10 @@
       "type": "stat"
     },
     {
-      "datasource": "Prometheus",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "eternal-world-prometheus"
+      },
       "fieldConfig": {"defaults": {"decimals": 1, "max": 100, "min": 0, "unit": "percent"}, "overrides": []},
       "gridPos": {"h": 7, "w": 12, "x": 12, "y": 88},
       "id": 35,

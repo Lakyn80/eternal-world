@@ -16,23 +16,29 @@ Production-ready MVP base for AI memory social platform.
 
 The backend exposes Prometheus metrics at `http://localhost:8033/metrics`.
 
-To start the local monitoring stack:
+Start Eternal World metrics collection without a second Grafana:
 
 ```bash
-docker compose up -d backend prometheus grafana
+docker compose up -d backend prometheus
 ```
 
 Local URLs:
 
 - Prometheus: `http://localhost:9090`
-- Grafana: `http://localhost:3001`
+- Shared Grafana (owned by the sibling NALUS stack): `http://localhost:3002`
+- Eternal World dashboard: `http://localhost:3002/d/eternal-world-fa-chat`
 
-Local Grafana login:
+The shared Grafana reads Eternal World Prometheus through datasource UID
+`eternal-world-prometheus`; NALUS and Eternal World retain separate Prometheus storage.
 
-- username: `admin`
-- password: `admin`
+The standalone Eternal World Grafana remains available for troubleshooting only:
 
-This default Grafana credential pair is for local development only and must be changed for production.
+```bash
+docker compose --profile standalone-grafana up -d grafana
+```
+
+It uses `http://localhost:3001` and the configured local-development credentials. Stop it
+after troubleshooting with `docker compose stop grafana`. Do not remove its named volume.
 
 Provisioned files:
 
@@ -43,8 +49,9 @@ Provisioned files:
 Verification:
 
 ```bash
-docker compose config
+docker compose config --quiet
+docker compose --profile standalone-grafana config --quiet
 curl http://localhost:8033/metrics
 curl http://localhost:9090/-/ready
-curl http://localhost:3001/api/health
+curl http://localhost:3002/api/health
 ```

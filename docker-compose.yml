@@ -142,6 +142,8 @@ services:
   grafana:
     image: grafana/grafana:11.1.5
     container_name: eternal_world_grafana
+    profiles:
+      - standalone-grafana
     restart: unless-stopped
     environment:
       GF_SECURITY_ADMIN_USER: admin
