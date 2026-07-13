@@ -1548,3 +1548,29 @@ Skutečná měřená příčina (ne domněnka): dva opuštěné, nikdy pořádn�
 Task 64.4.2 se **považuje za kompletně uzavřený**. Jediné zbývající selhání (`sensitive-political-prison`, 2 ze 3) je potvrzeně nesouvisející nedeterminismus poskytovatele Brain (nedotčená cesta kódu), nikoli chyba této úlohy.
 
 Další doporučený task: **Task 64.5 — Minimal Family Memory Review UI**.
+
+## 15. Task 64.5 status (2026-07-13)
+
+Task 64.5 — Minimal Family Memory Review UI — byl proveden a **dokončen**. Plný popis (backend inspekce, přidané endpointy, frontend architektura, testy, Docker ověření) je v `PROJECT_PROGRESS.md`, sekce "Task 64.5 - Minimal Family Memory Review UI (2026-07-13)".
+
+Stručně:
+
+```text
+Route: http://localhost:8017/family-memory-review
+Backend: 2 nové read-only/aggregační endpointy (clarifications list, review-detail),
+         žádná doménová logika nebyla duplikována ani přepsána v Reactu
+DB migrace: žádná nebyla potřeba
+Frontend testy: 18 passed (14 nových + 4 existující, beze změny chování)
+Backend testy: 73 passed (8 nových + 65 existujících v dotčených souborech, beze změny)
+next build: OK, typy i lint bez chyb
+Docker: backend + frontend znovu sestaveny a spuštěny, alembic na head, žádná migrace
+Živé end-to-end ověření (reálné Postgres/Qdrant/BGE-M3): kandidát bedtime-song ->
+  vlastník potvrdil -> Qdrant beze změny (23 -> 23) -> explicitní indexace -> Qdrant +1 (23 -> 24) ->
+  opakovaná indexace je idempotentní (already_indexed, počet zůstal 24)
+```
+
+Ověřeno explicitně: přispěvatel (role "contributor") nemůže sám schválit vlastní vzpomínku (403 na backendu, tlačítka zakázaná na frontendu); indexace se nikdy nespouští automaticky po schválení; oblast soukromí (`private_owner`/`selected_family`) blokuje indexaci beze změny backendového pravidla; žádný přímý přístup frontendu do Qdrant nebo PostgreSQL.
+
+Task 64.5 se **považuje za kompletně uzavřený** v rozsahu definovaném zadáním (minimální, ale produkčně použitelné UI nad existujícím backendovým workflow). Známá omezení (demo autorizace místo produkční autentizace, chybějící správa rodinných vztahů, filtry v inboxu jsou zatím na straně klienta) jsou zdokumentována v `PROJECT_PROGRESS.md`.
+
+Další doporučený task: **Task 65 — AI Biographer & Living Memory Onboarding**.

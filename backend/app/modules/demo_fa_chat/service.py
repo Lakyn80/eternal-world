@@ -47,6 +47,7 @@ from app.modules.conversation_memory_candidates.schemas import (
     MemoryCandidateCreate,
     MemoryCandidateReviewUpdate,
     MemoryCandidateStatus,
+    build_memory_candidate_read,
 )
 from app.modules.family_memory_enrichment import service as family_memory_enrichment_service
 from app.modules.family_memory_enrichment.enums import EnrichmentStatus, PrivacyScope
@@ -74,7 +75,9 @@ from app.modules.users.repository import get_user_by_email
 from .schemas import (
     DemoFaChatEvidenceItem,
     DemoFaChatMemoryCandidate,
+    DemoFaChatMemoryCandidateReviewDetail,
     DemoFaChatMemoryCandidateReviewResponse,
+    DemoFaChatMemoryCandidateSummary,
     DemoFaChatMessageResponse,
 )
 
@@ -495,6 +498,182 @@ def get_demo_memory_candidate(
             actor=actor,
         )
     return candidate
+
+
+def list_demo_memory_candidate_summaries(
+    db: Session,
+    *,
+    profile_id: int | None,
+    actor: DemoFamilyActorContext | None = None,
+) -> list[DemoFaChatMemoryCandidateSummary]:
+    """Review-inbox card projection (Task 64.5). Reuses existing visibility and
+    contribution-privacy rules; adds no new business logic."""
+    resolved_profile = _resolve_demo_profile(db, profile_id=profile_id)
+    candidates = list_demo_memory_candidates(db, profile_id=profile_id, actor=actor)
+    summaries: list[DemoFaChatMemoryCandidateSummary] = []
+    for candidate in candidates:
+        promotion = candidate.avatar_memory_promotion
+        contributor_actor_id = None
+        contributor_actor_role = None
+        contributor_relationship_to_owner = None
+        if candidate.workflow_version >= 2 and actor is not None:
+            visible_contributions = family_memory_enrichment_service.list_contributions(
+                db,
+                owner_user_id=resolved_profile.user.id,
+                candidate_id=candidate.id,
+                actor=actor,
+            )
+            earliest = next(
+                (item for item in visible_contributions if item.contribution_type == "initial_claim"),
+                visible_contributions[0] if visible_contributions else None,
+            )
+            if earliest is not None:
+                contributor_actor_id = earliest.actor_id
+                contributor_actor_role = earliest.actor_role
+                contributor_relationship_to_owner = earliest.relationship_to_owner
+        summaries.append(
+            DemoFaChatMemoryCandidateSummary(
+                candidate_id=candidate.id,
+                status=candidate.status,
+                workflow_version=candidate.workflow_version,
+                memory_type=candidate.memory_type,
+                enrichment_status=candidate.enrichment_status,
+                privacy_scope=candidate.privacy_scope,
+                dispute_status=candidate.dispute_status,
+                unresolved_clarification_count=candidate.unresolved_clarification_count,
+                finalized_memory_text=candidate.finalized_memory_text,
+                user_message_excerpt=candidate.user_message_excerpt,
+                created_at=candidate.created_at,
+                updated_at=candidate.updated_at,
+                contributor_actor_id=contributor_actor_id,
+                contributor_actor_role=contributor_actor_role,
+                contributor_relationship_to_owner=contributor_relationship_to_owner,
+                promotion_id=promotion.id if promotion is not None else None,
+                promotion_status=promotion.promotion_status if promotion is not None else None,
+                searchable_as_fact=bool(promotion and promotion.promotion_status == "indexed"),
+            )
+        )
+    return summaries
+
+
+def get_demo_memory_candidate_review_detail(
+    db: Session,
+    *,
+    profile_id: int | None,
+    candidate_id: int,
+    actor: DemoFamilyActorContext | None = None,
+) -> DemoFaChatMemoryCandidateReviewDetail:
+    """Aggregated review-detail read model (Task 64.5, Part M.32).
+
+    Combines existing reads (candidate / enrichment / contributions /
+    clarifications / promotion) and previews which owner-review / indexing
+    actions are currently available, purely by projecting already-computed
+    backend state. It does not re-implement or replace the real transition
+    checks in ``family_memory_enrichment.service.owner_review`` or
+    ``avatar_memory_indexing.service.index_promotion`` - those remain the
+    sole source of truth and are re-validated independently on every call.
+    """
+    resolved_profile = _resolve_demo_profile(db, profile_id=profile_id)
+    candidate = get_demo_memory_candidate(
+        db,
+        profile_id=profile_id,
+        candidate_id=candidate_id,
+        actor=actor,
+    )
+    candidate_read = build_memory_candidate_read(candidate)
+
+    enrichment = None
+    contributions = []
+    clarifications = []
+    if candidate.workflow_version >= 2:
+        enrichment = family_memory_enrichment_service.get_candidate_enrichment(
+            db,
+            owner_user_id=resolved_profile.user.id,
+            candidate_id=candidate.id,
+            actor=actor,
+        )
+        contributions = family_memory_enrichment_service.list_contributions(
+            db,
+            owner_user_id=resolved_profile.user.id,
+            candidate_id=candidate.id,
+            actor=actor,
+        )
+        clarifications = family_memory_enrichment_service.list_clarifications(
+            db,
+            owner_user_id=resolved_profile.user.id,
+            candidate_id=candidate.id,
+            actor=actor,
+        )
+
+    promotion_row = candidate.avatar_memory_promotion
+    promotion = build_avatar_memory_promotion_read(promotion_row) if promotion_row is not None else None
+
+    is_owner_actor = actor is not None and family_memory_enrichment_service.is_demo_owner(actor)
+    is_legacy = candidate.workflow_version < 2
+    is_needs_review = candidate.status == "needs_review"
+    enrichment_status = enrichment.enrichment_status.value if enrichment else candidate.enrichment_status
+    dispute_status = enrichment.dispute_status.value if enrichment else candidate.dispute_status
+    unresolved_count = enrichment.unresolved_clarification_count if enrichment else candidate.unresolved_clarification_count
+    ready_for_owner_review = enrichment_status == "ready_for_owner_review" and unresolved_count == 0
+    privacy_scope_value = enrichment.privacy_scope.value if enrichment else candidate.privacy_scope
+    promotion_status_value = promotion.promotion_status.value if promotion else None
+
+    can_confirm = (
+        not is_legacy
+        and is_owner_actor
+        and is_needs_review
+        and ready_for_owner_review
+        and dispute_status != "disputed"
+    )
+    can_edit_and_confirm = not is_legacy and is_owner_actor and is_needs_review and ready_for_owner_review
+    can_reject = not is_legacy and is_owner_actor and is_needs_review
+    can_request_more_details = not is_legacy and is_owner_actor and is_needs_review
+    can_mark_disputed = not is_legacy and is_owner_actor and is_needs_review
+    can_approve_multiple_perspectives = (
+        not is_legacy
+        and is_owner_actor
+        and is_needs_review
+        and ready_for_owner_review
+        and dispute_status == "disputed"
+    )
+    can_index = is_owner_actor and promotion_status_value == "pending_index"
+
+    blocked_reasons: list[str] = []
+    if is_legacy:
+        blocked_reasons.append("legacy_workflow_not_supported_in_review_ui")
+    if not is_owner_actor:
+        blocked_reasons.append("actor_is_not_owner")
+    if not is_legacy and not is_needs_review:
+        blocked_reasons.append("candidate_review_already_terminal")
+    if not is_legacy and is_needs_review and not ready_for_owner_review:
+        blocked_reasons.append(
+            "collecting_details" if enrichment_status == "collecting_details" else "not_ready_for_review"
+        )
+    if not is_legacy and dispute_status == "disputed":
+        blocked_reasons.append("disputed")
+    if promotion_status_value is None:
+        blocked_reasons.append("not_promoted_yet")
+    elif promotion_status_value != "pending_index":
+        blocked_reasons.append(f"promotion_status_{promotion_status_value}")
+    if privacy_scope_value not in {"all_family", "public_legacy"}:
+        blocked_reasons.append("privacy_scope_not_indexable")
+
+    return DemoFaChatMemoryCandidateReviewDetail(
+        candidate=candidate_read,
+        enrichment=enrichment,
+        contributions=contributions,
+        clarifications=clarifications,
+        promotion=promotion,
+        is_owner_actor=is_owner_actor,
+        can_confirm=can_confirm,
+        can_edit_and_confirm=can_edit_and_confirm,
+        can_reject=can_reject,
+        can_request_more_details=can_request_more_details,
+        can_mark_disputed=can_mark_disputed,
+        can_approve_multiple_perspectives=can_approve_multiple_perspectives,
+        can_index=can_index,
+        blocked_reasons=blocked_reasons,
+    )
 
 
 def approve_demo_memory_candidate(

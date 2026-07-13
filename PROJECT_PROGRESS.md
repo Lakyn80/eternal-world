@@ -7857,3 +7857,85 @@ Next recommended task:
 - Task 64.5 - Minimal Family Memory Review UI
 
 ---
+
+## Task 64.5 - Minimal Family Memory Review UI (2026-07-13)
+
+Product purpose: give the avatar owner a real, usable web interface to review memory episodes contributed by family members - see the original claim, the clarification and contribution history, the proposed finalized text, edit or accept it, choose a privacy scope, confirm/reject/request more details/mark disputed/approve multiple perspectives, and explicitly index an approved memory - using the existing Task 64.3/64.2 backend workflow as the sole source of truth. No domain decision (eligibility, transition rules, privacy enforcement) was re-implemented in React.
+
+Route: `http://localhost:8017/family-memory-review` (Next.js 14 App Router: `frontend/app/family-memory-review/{page,loading,error}.tsx`). `/fa-chat` was left behavioraly unchanged except for one added navigation link; the home page gained a second entry point.
+
+Frontend architecture (inspected first, nothing duplicated): plain Next.js App Router, TypeScript, CSS Modules, no state-management library, no React Query/SWR, no dialog/toast library, no path aliases, `vitest` + `react-dom/client` (no `@testing-library`) for tests. All of that was reused as-is - a bespoke `fetch`-based API client, `useState`/`useEffect` for server state, and a hand-built accessible confirmation dialog, matching the existing `fa-chat-demo-page.tsx` pattern rather than introducing a new framework.
+
+### Backend inspection findings (Part A.3)
+
+Read the actual routers/services/schemas before writing any frontend contract:
+
+- `conversation_memory_candidates` and `family_memory_enrichment` operate on the **same** `ConversationMemoryCandidate` row; `workflow_version` (1 legacy / 2 enriched) selects which review path applies. Legacy candidates go through `demo_fa_chat_router`'s `approve`/`reject`/`archive`; enriched candidates must go through `family_memory_enrichment_router`'s `/owner-review`.
+- There is **no** dedicated HTTP router for `avatar_memory_promotions`, `avatar_memory_indexing`, or `conversation_memory_candidates` - all HTTP access for those goes through `demo_fa_chat_router`.
+- Actor identity has no header/session/JWT anywhere on this surface: it is passed explicitly as query params (GET/simple POST) or JSON body fields (POST bodies subclassing `DemoFamilyActorContext`), and the only real gate is `actor_id == "demo-owner-eva" and actor_role == "owner"` for owner-only actions. This is a hardcoded demo fixture, confirmed not production auth.
+- `family_memory_enrichment/service.py::list_clarifications` already existed and was already imported into the router file, but **no endpoint exposed it** - only `/clarifications/next` (single pending question) existed. This was a genuine missing read endpoint (Part D.11 requires the full clarification timeline).
+- `eligibility.py::get_promotion_block_reason` computes a single block reason string but there was no equivalent per-action (`can_confirm`, `can_reject`, ...) read model anywhere, and the real per-action transition rules live inline inside `owner_review()`, not in a separate reusable function.
+
+### Backend changes (Part M - narrow, additive only, no domain logic duplicated)
+
+1. **`GET /api/demo/fa-chat/memory-candidates/{candidate_id}/clarifications`** (`family_memory_enrichment/router.py`) - thin new endpoint over the already-existing `service.list_clarifications`. No new logic.
+2. **`GET /api/demo/fa-chat/memory-candidates/review-summary`** (`demo_fa_chat/router.py` + `service.list_demo_memory_candidate_summaries`) - review-inbox card projection. Reuses `list_demo_memory_candidates` for visibility filtering and `family_memory_enrichment_service.list_contributions` (which already enforces contribution-level privacy - a contributor never sees another contributor's identity on a `private_owner` candidate) to surface the contributor's actor id/role/relationship for the earliest visible contribution, plus the linked promotion status. Registered before the `{candidate_id}` route to avoid the literal-segment-vs-path-param collision.
+3. **`GET /api/demo/fa-chat/memory-candidates/{candidate_id}/review-detail`** (`demo_fa_chat/service.get_demo_memory_candidate_review_detail`) - the aggregated read model suggested in Part M.32. Combines the existing candidate/enrichment/contribution/clarification/promotion reads and previews `can_confirm` / `can_edit_and_confirm` / `can_reject` / `can_request_more_details` / `can_mark_disputed` / `can_approve_multiple_perspectives` / `can_index` / `blocked_reasons` purely by projecting already-computed backend state (`enrichment_status`, `dispute_status`, `unresolved_clarification_count`, `promotion_status`, `privacy_scope`, `review_status`, `is_demo_owner`). This is explicitly a **preview**, not an authority: `owner_review()` and `index_promotion()` independently re-validate every transition on the real write path, exactly as before this task.
+
+No database migration was needed (`alembic upgrade head` produced no output; confirmed via `test_alembic.py`).
+
+### Frontend
+
+- `frontend/lib/api-config.ts` - extracted the single `API_BASE_URL`/`buildApiUrl` pair that `fa-chat-demo-page.tsx` previously declared inline; the FA chat component now imports it instead of duplicating it (behavior-preserving, its own 3 tests still pass unchanged).
+- `frontend/types/family-memory.ts` - full typed domain model mirroring every backend schema field-for-field (no `any`).
+- `frontend/lib/api/family-memory-review.ts` - typed fetch client (`fetchMemoryCandidateSummaries`, `fetchMemoryCandidateReviewDetail`, `submitOwnerReview`, `submitIndexMemoryPromotion`) with a single `ApiRequestError` class and a status-code -> safe Russian message map (400/401/403/404/409/422/500/503); never renders a raw backend payload or stack trace.
+- `frontend/components/family-memory-review-page.tsx` (+ `.module.css`) - the whole review UI: two-column desktop layout (single-column below 920px), inbox with 9 status filters (client-side, documented as such since `review-summary` has no server-side filter params and this demo's candidate volume is small), candidate cards with contributor/relationship/status/privacy/promotion badges and no raw ID unless a "технические детали" debug toggle is on, candidate detail with a read-only append-only contribution timeline, a clarification timeline (required/unresolved highlighted), a finalized-memory textarea (500-char limit, edited-vs-server distinction, reset-to-server), a privacy-scope radio group with the exact per-scope indexing-availability copy from the task brief, owner-review action buttons gated purely by the backend's `can_*` flags, a dedicated multiple-perspectives section+warning that is only reachable via `approve_multiple_perspectives` (never merged into plain `confirm`), a promotion/indexing panel with an explicit "Индексировать воспоминание" button that only renders when `can_index` is true, and a hand-built accessible confirmation dialog (`role="dialog"`, `aria-modal`, `aria-labelledby`, Escape-to-close, focus-on-open) required before every consequential action (confirm/edit_and_confirm/reject/mark_disputed/approve_multiple_perspectives/index).
+- A visible, non-blocking demo-authorization banner and an explicit demo actor selector (Owner vs. Contributor) are always shown; switching actor never implies production security.
+- FA chat gained one added link to `/family-memory-review`; the home page gained a second entry point. Deep-linking via `?candidate=<id>` is supported and re-validated by the real `review-detail` fetch (a bad id surfaces the normal not-found state, nothing is trusted from the URL).
+
+### Contributor cannot self-approve (verified two ways)
+
+- Backend: `family_memory_enrichment/service.py::owner_review` rejects any actor whose `actor_id != "demo-owner-eva"` before any state change (403), unchanged by this task.
+- Frontend: the review-detail response's `is_owner_actor` and `can_*` flags come entirely from the backend; when the demo actor selector is set to "contributor", every action button is disabled and a plain-language note explains why - verified by `test_review_detail_contributor_actor_sees_no_owner_actions` (backend) and `hides active owner actions for a contributor actor...` (frontend).
+
+### Indexing stays explicit (verified two ways)
+
+- No code path calls `index_promotion`/`submitIndexMemoryPromotion` automatically after approval - `owner_review()` only ever creates a `pending_index` promotion; the button click is the only trigger, and it always goes through the confirmation dialog first.
+- The Docker smoke script (see below) measured the real Qdrant point count before and after approval (23 -> 23, unchanged) and only after the explicit index call (23 -> 24, exactly one new point), then confirmed a repeated index call is idempotent (`result: "already_indexed"`, count stayed 24).
+
+### Tests
+
+- Backend (new): `backend/tests/test_family_memory_review_detail.py` - 8 tests: review-summary shows contributor+promotion info to the owner and hides a private candidate from an unrelated actor; review-detail correctly blocks owner actions while `collecting_details`; a contributor actor sees every `can_*` flag false; the full ready-for-review -> owner confirm -> `pending_index` -> (simulated) `indexed` lifecycle is reflected correctly including `blocked_reasons`; a disputed candidate allows `approve_multiple_perspectives` but not plain `confirm`; 404 for a missing candidate; the new `/clarifications` endpoint returns the full history (not just the next pending one).
+  - `python -m pytest tests/test_family_memory_enrichment.py tests/test_avatar_memory_promotions.py tests/test_avatar_memory_indexing.py tests/test_conversation_memory_candidates.py tests/test_demo_fa_chat.py tests/test_family_memory_review_detail.py tests/test_alembic.py` -> **73 passed** (65 pre-existing across those files/alembic + 8 new in `test_family_memory_review_detail.py`), zero regressions.
+- Frontend (new): `frontend/tests/family-memory-review-page.test.tsx` - 14 tests covering inbox (loading skeleton, empty state, safe error+retry, status filtering), candidate detail (contribution/clarification timelines, finalized text, privacy scope, multiple-perspectives section kept separate from plain confirm), authorization (contributor sees no active owner actions, demo warning visible), owner actions (`edit_and_confirm` sends the exact edited text through a confirmation dialog first; `reject` requires confirmation before any request is sent; a `409` response refreshes state instead of showing a raw error), indexing (button only renders when `can_index`, single request, `already_indexed` shown as success not error), privacy (per-scope indexing-availability copy present), accessibility (dialog `role`/`aria-modal`/`aria-labelledby`, textarea has an associated `<label>`).
+  - `npm test` -> **18 passed** (3 pre-existing `fa-chat-demo-page` + 1 smoke + 14 new), zero regressions.
+  - `npm run build` -> compiled and type-checked successfully; all 4 routes (`/`, `/fa-chat`, `/family-memory-review`, `/_not-found`) pre-rendered as static shells.
+
+### Docker verification
+
+- `docker compose up -d --build backend frontend` -> both rebuilt and started cleanly; `docker compose exec -T backend alembic upgrade head` -> no output (already at head); `docker compose ps` -> backend/db/frontend/grafana/prometheus/qdrant/redis all `Up`. (This project's own Grafana already runs on host port 3001 as pre-existing infrastructure, unrelated to and untouched by this task; the shared NALUS Grafana on 3002 was not touched.)
+- Live route smoke: `GET /`, `/fa-chat`, `/family-memory-review` on `localhost:8017` all returned `200`; the review page's server-rendered shell contained the expected Russian title text; frontend container logs showed clean compiles with no hydration or server errors.
+- Live end-to-end backend smoke (real Postgres, real Qdrant, real BGE-M3, run directly against the running `eternal_world_backend` container, not mocked): created a `workflow_version=2` candidate with the exact contributor claim from the task's bedtime-song scenario ("Бабушка, ты пела мне песню перед сном."), answered all three required clarifications, confirmed the resulting `ready_for_owner_review` draft, then ran the owner-review `confirm` action with `privacy_scope="all_family"`. Measured Qdrant point count: **23 before and 23 immediately after approval** (promotion created as `pending_index`, confirming indexing did not happen automatically), then called the real `index_promotion` (real BGE-M3 encode, real Qdrant upsert) and measured **24** - exactly one new point - with `searchable_as_fact=true`. A second index call returned `already_indexed` with the count still at 24 (idempotent, no duplicate point). The new `review-detail` and `review-summary` HTTP endpoints were then queried live and returned exactly this state (`promotion_status="indexed"`, `searchable_as_fact=true`, `can_index=false`, `blocked_reasons=["candidate_review_already_terminal","promotion_status_indexed"]`, correct contributor attribution `family-anna-smoke`/`внучка`).
+- One transient `BrainProviderRequestError` (external LLM provider network call) was observed on an unrelated chat-message smoke attempt and succeeded on retry - the same pre-existing, code-independent flakiness pattern documented in Tasks 64.4.1/64.4.2, not something this task's code path is responsible for or changed.
+
+### Behavior preserved
+
+- Retrieval ranking, `top_k`, BGE-M3, embedding semantics, Redis behavior, Qdrant collection names/schema, Brain prompts, evaluation datasets: **all untouched**. This task added zero new AI-agent or retrieval code paths.
+- Qdrant is written to only by the pre-existing `index_promotion` service function, only after an explicit HTTP call to `POST /memory-promotions/{id}/index`, only when the backend's own eligibility re-validation passes - never from any GET/read endpoint added by this task.
+- No new authentication system was built; the existing hardcoded demo-actor pattern is reused as-is and is visibly labeled as a demo mechanism in the UI itself.
+
+### Known limitations
+
+- Demo actor context is not production authentication - the owner/contributor selector is a UI convenience over the backend's existing hardcoded `demo-owner-eva` check, not a real identity system.
+- Family relationship management UI (adding/removing family members, defining roles) is not implemented.
+- Permission-aware retrieval remains unavailable; `private_owner` and `selected_family` candidates can be reviewed and approved but still cannot be indexed (enforced by the pre-existing `INDEXABLE_PRIVACY_SCOPES` backend rule, surfaced verbatim in the UI copy).
+- There is no retry workflow in the UI for a promotion that reaches `failed` status - the panel shows a safe message and stops there, matching the backend's own lack of a retry endpoint.
+- No biography/photo/audio upload, no Voice/Face/Director agent work, no onboarding, and no production legal/death-activation workflow were touched or implied.
+- The review-inbox filters are client-side over the full `review-summary` result set (no server-side filter/pagination params exist on that endpoint); acceptable at the current small demo data volume but documented as a scaling limitation for a future task.
+- UI language is Russian only, matching the rest of the FA chat product; no i18n framework exists in this project yet.
+
+Next recommended task:
+
+- Task 65 - AI Biographer & Living Memory Onboarding
+
+---

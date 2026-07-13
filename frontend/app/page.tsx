@@ -28,20 +28,34 @@ export default function HomePage() {
         <p style={{ lineHeight: 1.6 }}>
           Откройте тестовый чат с цифровым аватаром и задайте вопрос на русском языке.
         </p>
-        <Link
-          href="/fa-chat"
-          style={{
-            display: "inline-block",
-            marginTop: 12,
-            borderRadius: 999,
-            background: "#5f3f23",
-            color: "#fff7ee",
-            padding: "12px 18px",
-            textDecoration: "none",
-          }}
-        >
-          Перейти в чат
-        </Link>
+        <div style={{ display: "flex", gap: 12, justifyContent: "center", flexWrap: "wrap", marginTop: 12 }}>
+          <Link
+            href="/fa-chat"
+            style={{
+              display: "inline-block",
+              borderRadius: 999,
+              background: "#5f3f23",
+              color: "#fff7ee",
+              padding: "12px 18px",
+              textDecoration: "none",
+            }}
+          >
+            Перейти в чат
+          </Link>
+          <Link
+            href="/family-memory-review"
+            style={{
+              display: "inline-block",
+              borderRadius: 999,
+              border: "1px solid #5f3f23",
+              color: "#5f3f23",
+              padding: "12px 18px",
+              textDecoration: "none",
+            }}
+          >
+            Проверка семейных воспоминаний
+          </Link>
+        </div>
       </div>
     </main>
   );

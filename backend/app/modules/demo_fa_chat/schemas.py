@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Any
 
 from pydantic import BaseModel, Field, model_validator
@@ -26,7 +27,11 @@ from app.modules.family_memory_enrichment.enums import (
     MemoryType,
     PrivacyScope,
 )
-from app.modules.family_memory_enrichment.schemas import ClarificationQuestionRead
+from app.modules.family_memory_enrichment.schemas import (
+    CandidateEnrichmentRead,
+    ClarificationQuestionRead,
+    FamilyMemoryContributionRead,
+)
 
 
 class DemoFaChatMessageRequest(BaseModel):
@@ -108,3 +113,62 @@ class DemoFaChatMemoryCandidateReviewResponse(MemoryCandidateRead):
 class DemoFaChatMemoryPromotionListResponse(BaseModel):
     items: list[AvatarMemoryPromotionRead]
     total: int
+
+
+class DemoFaChatMemoryCandidateSummary(BaseModel):
+    """Lightweight per-candidate inbox card projection (review UI only, Task 64.5).
+
+    Reuses existing candidate/contribution/promotion data; does not compute or
+    store anything new, and duplicates no owner-review or eligibility logic.
+    """
+
+    candidate_id: int
+    status: MemoryCandidateStatus
+    workflow_version: int
+    memory_type: MemoryType
+    enrichment_status: EnrichmentStatus
+    privacy_scope: PrivacyScope
+    dispute_status: DisputeStatus
+    unresolved_clarification_count: int
+    finalized_memory_text: str | None = None
+    user_message_excerpt: str
+    created_at: datetime
+    updated_at: datetime
+    contributor_actor_id: str | None = None
+    contributor_actor_role: FamilyMemoryActorRole | None = None
+    contributor_relationship_to_owner: str | None = None
+    promotion_id: int | None = None
+    promotion_status: AvatarMemoryPromotionStatus | None = None
+    searchable_as_fact: bool = False
+
+
+class DemoFaChatMemoryCandidateSummaryListResponse(BaseModel):
+    items: list[DemoFaChatMemoryCandidateSummary]
+    total: int
+
+
+class DemoFaChatMemoryCandidateReviewDetail(BaseModel):
+    """Aggregated read model for the family memory review UI (Task 64.5, Part M).
+
+    Combines existing candidate / enrichment / contribution / clarification /
+    promotion reads plus a server-calculated preview of which owner-review and
+    indexing actions are currently available, so the frontend never has to
+    re-derive backend transition or eligibility rules. This is a read-only
+    projection: the actual owner-review and indexing endpoints independently
+    re-validate every transition, so this preview cannot itself grant access.
+    """
+
+    candidate: MemoryCandidateRead
+    enrichment: CandidateEnrichmentRead | None = None
+    contributions: list[FamilyMemoryContributionRead] = Field(default_factory=list)
+    clarifications: list[ClarificationQuestionRead] = Field(default_factory=list)
+    promotion: AvatarMemoryPromotionRead | None = None
+    is_owner_actor: bool
+    can_confirm: bool
+    can_edit_and_confirm: bool
+    can_reject: bool
+    can_request_more_details: bool
+    can_mark_disputed: bool
+    can_approve_multiple_perspectives: bool
+    can_index: bool
+    blocked_reasons: list[str] = Field(default_factory=list)

@@ -34,7 +34,9 @@ from app.modules.conversation_memory_candidates.schemas import (
 
 from .schemas import (
     DemoFaChatErrorResponse,
+    DemoFaChatMemoryCandidateReviewDetail,
     DemoFaChatMemoryCandidateReviewResponse,
+    DemoFaChatMemoryCandidateSummaryListResponse,
     DemoFaChatMemoryPromotionListResponse,
     DemoFaChatMessageRequest,
     DemoFaChatMessageResponse,
@@ -49,8 +51,10 @@ from .service import (
     build_demo_memory_candidate_review_response,
     cancel_demo_memory_promotion,
     get_demo_memory_candidate,
+    get_demo_memory_candidate_review_detail,
     get_demo_memory_promotion,
     index_demo_memory_promotion,
+    list_demo_memory_candidate_summaries,
     list_demo_memory_candidates,
     list_demo_memory_promotions,
     reject_demo_memory_candidate,
@@ -252,6 +256,39 @@ def list_demo_memory_candidates_endpoint(
 
 
 @router.get(
+    "/memory-candidates/review-summary",
+    response_model=DemoFaChatMemoryCandidateSummaryListResponse,
+    responses={
+        status.HTTP_404_NOT_FOUND: {"model": DemoFaChatErrorResponse},
+    },
+)
+def list_demo_memory_candidate_summaries_endpoint(
+    profile_id: int | None = None,
+    actor_id: str | None = Query(default=None, min_length=1, max_length=120),
+    actor_role: FamilyMemoryActorRole | None = Query(default=None),
+    relationship_to_owner: str | None = Query(default=None, max_length=120),
+    db: Session = Depends(get_db),
+) -> DemoFaChatMemoryCandidateSummaryListResponse:
+    """Review-inbox card list (Task 64.5). Must be registered before the
+    ``{candidate_id}`` path so the literal ``review-summary`` segment is not
+    swallowed by the int path parameter."""
+    try:
+        actor = _optional_actor_context(
+            actor_id=actor_id,
+            actor_role=actor_role,
+            relationship_to_owner=relationship_to_owner,
+        )
+        items = list_demo_memory_candidate_summaries(db, profile_id=profile_id, actor=actor)
+    except DemoFaChatProfileUnavailableError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(exc),
+        ) from exc
+
+    return DemoFaChatMemoryCandidateSummaryListResponse(items=items, total=len(items))
+
+
+@router.get(
     "/memory-candidates/{candidate_id}",
     response_model=MemoryCandidateRead,
     responses={
@@ -303,6 +340,59 @@ def get_demo_memory_candidate_endpoint(
         ) from exc
 
     return build_memory_candidate_read(candidate)
+
+
+@router.get(
+    "/memory-candidates/{candidate_id}/review-detail",
+    response_model=DemoFaChatMemoryCandidateReviewDetail,
+    responses={
+        status.HTTP_404_NOT_FOUND: {"model": DemoFaChatErrorResponse},
+    },
+)
+def get_demo_memory_candidate_review_detail_endpoint(
+    candidate_id: CandidateIdPath,
+    profile_id: int | None = None,
+    actor_id: str | None = Query(default=None, min_length=1, max_length=120),
+    actor_role: FamilyMemoryActorRole | None = Query(default=None),
+    relationship_to_owner: str | None = Query(default=None, max_length=120),
+    db: Session = Depends(get_db),
+) -> DemoFaChatMemoryCandidateReviewDetail:
+    try:
+        actor = _optional_actor_context(
+            actor_id=actor_id,
+            actor_role=actor_role,
+            relationship_to_owner=relationship_to_owner,
+        )
+        return get_demo_memory_candidate_review_detail(
+            db,
+            profile_id=profile_id,
+            candidate_id=candidate_id,
+            actor=actor,
+        )
+    except DemoFaChatProfileUnavailableError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(exc),
+        ) from exc
+    except ConversationMemoryCandidateNotFoundError as exc:
+        log_event(
+            logger,
+            std_logging.INFO,
+            "fa_demo_chat_memory_candidate_not_found",
+            profile_id=profile_id,
+            candidate_id=candidate_id,
+            action="review-detail",
+            error_type=exc.__class__.__name__,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=CANDIDATE_NOT_FOUND_DETAIL,
+        ) from exc
+    except FamilyMemoryNotFoundError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=CANDIDATE_NOT_FOUND_DETAIL,
+        ) from exc
 
 
 def _review_demo_memory_candidate(

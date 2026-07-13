@@ -109,6 +109,19 @@ def list_contributions_endpoint(
         _raise_http(exc)
 
 
+@router.get("/{candidate_id}/clarifications", response_model=list[ClarificationQuestionRead])
+def list_clarifications_endpoint(
+    candidate_id: CandidateIdPath,
+    actor: DemoFamilyActorContext = Depends(get_demo_actor_context),
+    db: Session = Depends(get_db),
+) -> list[ClarificationQuestionRead]:
+    try:
+        owner_user_id, _ = _resolve_candidate_scope(db, candidate_id)
+        return list_clarifications(db, owner_user_id=owner_user_id, candidate_id=candidate_id, actor=actor)
+    except Exception as exc:
+        _raise_http(exc)
+
+
 @router.post("/{candidate_id}/contributions", response_model=CandidateEnrichmentRead)
 def add_contribution_endpoint(
     candidate_id: CandidateIdPath,

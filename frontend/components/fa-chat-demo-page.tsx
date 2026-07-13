@@ -1,7 +1,9 @@
 "use client";
 
 import { FormEvent, useState } from "react";
+import Link from "next/link";
 
+import { buildApiUrl } from "../lib/api-config";
 import styles from "./fa-chat-demo-page.module.css";
 
 
@@ -71,16 +73,11 @@ type ChatMessage = {
   evidence: DemoEvidenceItem[];
 };
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8033";
 const EXAMPLE_QUESTIONS = [
   "Где ты жила в детстве?",
   "Бабушка, мне сегодня тяжело.",
   "Ты помнишь, как пела мне песню перед сном?",
 ];
-
-function buildApiUrl(path: string): string {
-  return `${API_BASE_URL.replace(/\/$/, "")}${path}`;
-}
 
 async function readErrorDetail(response: Response): Promise<string> {
   try {
@@ -220,6 +217,9 @@ export function FaChatDemoPage() {
                 <div className={styles.chatSubhead}>Ева рядом, когда нужен голос памяти</div>
               </div>
               <div className={styles.chatTools}>
+                <Link className={styles.reviewLink} href="/family-memory-review">
+                  Семейные воспоминания на проверке
+                </Link>
                 <label className={styles.toggle}>
                   <input
                     checked={debugEnabled}
