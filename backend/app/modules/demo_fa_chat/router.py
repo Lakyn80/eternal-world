@@ -82,11 +82,61 @@ router = APIRouter(prefix="/api/demo/fa-chat", tags=["demo-fa-chat"])
 logger = get_logger("demo_fa_chat_router")
 CandidateIdPath = Annotated[int, Path(gt=0)]
 
-CANDIDATE_NOT_FOUND_DETAIL = "Кандидат воспоминания не найден."
-CANDIDATE_INVALID_TRANSITION_DETAIL = "Недопустимое изменение статуса кандидата."
-PROMOTION_NOT_FOUND_DETAIL = "Продвижение воспоминания не найдено."
-PROMOTION_INVALID_TRANSITION_DETAIL = "Недопустимое изменение статуса продвижения."
-PROMOTION_INDEXING_FAILED_DETAIL = "Индексация подтвержденного воспоминания не выполнена."
+def _detail(locale: str, *, cs: str, ru: str) -> str:
+    """Pick the right-language error detail. Defaults to ``ru`` for any
+    ``locale`` other than ``"cs"``, matching this demo's original Russian-only
+    behavior for any caller that doesn't pass a locale."""
+    return cs if locale == "cs" else ru
+
+
+def _validate_locale_param(locale: str) -> str:
+    if locale not in {"cs", "ru"}:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Unsupported locale. Supported values: cs, ru.",
+        )
+    return locale
+
+
+def _candidate_not_found_detail(locale: str) -> str:
+    return _detail(locale, cs="Kandidát vzpomínky nebyl nalezen.", ru="Кандидат воспоминания не найден.")
+
+
+def _candidate_invalid_transition_detail(locale: str) -> str:
+    return _detail(
+        locale,
+        cs="Nepřípustná změna stavu kandidáta.",
+        ru="Недопустимое изменение статуса кандидата.",
+    )
+
+
+def _promotion_not_found_detail(locale: str) -> str:
+    return _detail(locale, cs="Postoupení vzpomínky nebylo nalezeno.", ru="Продвижение воспоминания не найдено.")
+
+
+def _promotion_invalid_transition_detail(locale: str) -> str:
+    return _detail(
+        locale,
+        cs="Nepřípustná změna stavu postoupení.",
+        ru="Недопустимое изменение статуса продвижения.",
+    )
+
+
+def _promotion_indexing_failed_detail(locale: str) -> str:
+    return _detail(
+        locale,
+        cs="Indexace potvrzené vzpomínky se nezdařila.",
+        ru="Индексация подтвержденного воспоминания не выполнена.",
+    )
+
+
+# Backward-compatible Russian-default module-level aliases, for any caller
+# that still imports the old constant names directly.
+CANDIDATE_NOT_FOUND_DETAIL = _candidate_not_found_detail("ru")
+CANDIDATE_INVALID_TRANSITION_DETAIL = _candidate_invalid_transition_detail("ru")
+PROMOTION_NOT_FOUND_DETAIL = _promotion_not_found_detail("ru")
+PROMOTION_INVALID_TRANSITION_DETAIL = _promotion_invalid_transition_detail("ru")
+PROMOTION_INDEXING_FAILED_DETAIL = _promotion_indexing_failed_detail("ru")
 
 
 def _optional_actor_context(
@@ -94,6 +144,7 @@ def _optional_actor_context(
     actor_id: str | None,
     actor_role: FamilyMemoryActorRole | None,
     relationship_to_owner: str | None,
+    locale: str = "ru",
 ) -> DemoFamilyActorContext | None:
     if actor_id is None and actor_role is None and relationship_to_owner is None:
         return None
@@ -112,7 +163,11 @@ def _optional_actor_context(
     except FamilyMemoryAuthorizationError as exc:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Указанный контекст участника семьи недопустим.",
+            detail=_detail(
+                locale,
+                cs="Zadaný kontext rodinného účastníka je neplatný.",
+                ru="Указанный контекст участника семьи недопустим.",
+            ),
         ) from exc
     return actor
 
@@ -190,17 +245,29 @@ def send_demo_fa_chat_message(
     except FamilyMemoryAuthorizationError as exc:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Участник семьи не имеет права выполнять это действие.",
+            detail=_detail(
+                payload.locale,
+                cs="Rodinný účastník nemá oprávnění provést tuto akci.",
+                ru="Участник семьи не имеет права выполнять это действие.",
+            ),
         ) from exc
     except FamilyMemoryNotFoundError as exc:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Кандидат семейного воспоминания не найден.",
+            detail=_detail(
+                payload.locale,
+                cs="Kandidát rodinné vzpomínky nebyl nalezen.",
+                ru="Кандидат семейного воспоминания не найден.",
+            ),
         ) from exc
     except FamilyMemoryInvalidTransitionError as exc:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail="Для кандидата нет ожидающего уточняющего вопроса.",
+            detail=_detail(
+                payload.locale,
+                cs="Pro kandidáta není žádná čekající doplňující otázka.",
+                ru="Для кандидата нет ожидающего уточняющего вопроса.",
+            ),
         ) from exc
     except HTTPException:
         raise
@@ -221,7 +288,11 @@ def send_demo_fa_chat_message(
         )
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=DEMO_FA_CHAT_INTERNAL_ERROR_DETAIL,
+            detail=_detail(
+                payload.locale,
+                cs="Nepodařilo se získat odpověď avatara. Zkuste to prosím znovu.",
+                ru=DEMO_FA_CHAT_INTERNAL_ERROR_DETAIL,
+            ),
         ) from exc
 
 
@@ -237,18 +308,22 @@ def list_demo_memory_candidates_endpoint(
     actor_id: str | None = Query(default=None, min_length=1, max_length=120),
     actor_role: FamilyMemoryActorRole | None = Query(default=None),
     relationship_to_owner: str | None = Query(default=None, max_length=120),
+    locale: str = Query(default="ru"),
     db: Session = Depends(get_db),
 ) -> MemoryCandidateListResponse:
+    locale = _validate_locale_param(locale)
     try:
         actor = _optional_actor_context(
             actor_id=actor_id,
             actor_role=actor_role,
             relationship_to_owner=relationship_to_owner,
+            locale=locale,
         )
         candidates = list_demo_memory_candidates(
             db,
             profile_id=profile_id,
             actor=actor,
+            locale=locale,
         )
     except DemoFaChatProfileUnavailableError as exc:
         raise HTTPException(
@@ -272,18 +347,21 @@ def list_demo_memory_candidate_summaries_endpoint(
     actor_id: str | None = Query(default=None, min_length=1, max_length=120),
     actor_role: FamilyMemoryActorRole | None = Query(default=None),
     relationship_to_owner: str | None = Query(default=None, max_length=120),
+    locale: str = Query(default="ru"),
     db: Session = Depends(get_db),
 ) -> DemoFaChatMemoryCandidateSummaryListResponse:
     """Review-inbox card list (Task 64.5). Must be registered before the
     ``{candidate_id}`` path so the literal ``review-summary`` segment is not
     swallowed by the int path parameter."""
+    locale = _validate_locale_param(locale)
     try:
         actor = _optional_actor_context(
             actor_id=actor_id,
             actor_role=actor_role,
             relationship_to_owner=relationship_to_owner,
+            locale=locale,
         )
-        items = list_demo_memory_candidate_summaries(db, profile_id=profile_id, actor=actor)
+        items = list_demo_memory_candidate_summaries(db, profile_id=profile_id, actor=actor, locale=locale)
     except DemoFaChatProfileUnavailableError as exc:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -306,19 +384,23 @@ def get_demo_memory_candidate_endpoint(
     actor_id: str | None = Query(default=None, min_length=1, max_length=120),
     actor_role: FamilyMemoryActorRole | None = Query(default=None),
     relationship_to_owner: str | None = Query(default=None, max_length=120),
+    locale: str = Query(default="ru"),
     db: Session = Depends(get_db),
 ) -> MemoryCandidateRead:
+    locale = _validate_locale_param(locale)
     try:
         actor = _optional_actor_context(
             actor_id=actor_id,
             actor_role=actor_role,
             relationship_to_owner=relationship_to_owner,
+            locale=locale,
         )
         candidate = get_demo_memory_candidate(
             db,
             profile_id=profile_id,
             candidate_id=candidate_id,
             actor=actor,
+            locale=locale,
         )
     except DemoFaChatProfileUnavailableError as exc:
         raise HTTPException(
@@ -336,12 +418,12 @@ def get_demo_memory_candidate_endpoint(
         )
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=CANDIDATE_NOT_FOUND_DETAIL,
+            detail=_candidate_not_found_detail(locale),
         ) from exc
     except FamilyMemoryNotFoundError as exc:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=CANDIDATE_NOT_FOUND_DETAIL,
+            detail=_candidate_not_found_detail(locale),
         ) from exc
 
     return build_memory_candidate_read(candidate)
@@ -363,16 +445,13 @@ def get_demo_memory_candidate_review_detail_endpoint(
     locale: str = Query(default="ru"),
     db: Session = Depends(get_db),
 ) -> DemoFaChatMemoryCandidateReviewDetail:
-    if locale not in {"cs", "ru"}:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="Unsupported locale. Supported values: cs, ru.",
-        )
+    locale = _validate_locale_param(locale)
     try:
         actor = _optional_actor_context(
             actor_id=actor_id,
             actor_role=actor_role,
             relationship_to_owner=relationship_to_owner,
+            locale=locale,
         )
         return get_demo_memory_candidate_review_detail(
             db,
@@ -398,12 +477,12 @@ def get_demo_memory_candidate_review_detail_endpoint(
         )
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=CANDIDATE_NOT_FOUND_DETAIL,
+            detail=_candidate_not_found_detail(locale),
         ) from exc
     except FamilyMemoryNotFoundError as exc:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=CANDIDATE_NOT_FOUND_DETAIL,
+            detail=_candidate_not_found_detail(locale),
         ) from exc
 
 
@@ -420,13 +499,16 @@ def list_demo_memory_candidate_translations_endpoint(
     actor_id: str | None = Query(default=None, min_length=1, max_length=120),
     actor_role: FamilyMemoryActorRole | None = Query(default=None),
     relationship_to_owner: str | None = Query(default=None, max_length=120),
+    locale: str = Query(default="ru"),
     db: Session = Depends(get_db),
 ) -> DemoFaChatTranslationListResponse:
+    locale = _validate_locale_param(locale)
     try:
         actor = _optional_actor_context(
             actor_id=actor_id,
             actor_role=actor_role,
             relationship_to_owner=relationship_to_owner,
+            locale=locale,
         )
         items = list_demo_memory_candidate_translations(
             db,
@@ -437,7 +519,7 @@ def list_demo_memory_candidate_translations_endpoint(
     except (DemoFaChatProfileUnavailableError, ConversationMemoryCandidateNotFoundError, FamilyMemoryNotFoundError) as exc:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=CANDIDATE_NOT_FOUND_DETAIL,
+            detail=_candidate_not_found_detail(locale),
         ) from exc
     return DemoFaChatTranslationListResponse(items=items, total=len(items))
 
@@ -458,10 +540,12 @@ def retry_demo_memory_candidate_translation_endpoint(
     actor_id: str | None = Query(default=None, min_length=1, max_length=120),
     actor_role: FamilyMemoryActorRole | None = Query(default=None),
     relationship_to_owner: str | None = Query(default=None, max_length=120),
+    locale: str = Query(default="ru"),
     db: Session = Depends(get_db),
 ) -> MemoryContentTranslationRead:
     """Explicit owner-only translation retry (Part G.29). Never approves or
     indexes the candidate; safe to call repeatedly."""
+    locale = _validate_locale_param(locale)
     if target_language not in {"cs", "ru"}:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
@@ -472,6 +556,7 @@ def retry_demo_memory_candidate_translation_endpoint(
             actor_id=actor_id,
             actor_role=actor_role,
             relationship_to_owner=relationship_to_owner,
+            locale=locale,
         )
         return retry_demo_memory_candidate_translation(
             db,
@@ -483,12 +568,16 @@ def retry_demo_memory_candidate_translation_endpoint(
     except (DemoFaChatProfileUnavailableError, ConversationMemoryCandidateNotFoundError, FamilyMemoryNotFoundError) as exc:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=CANDIDATE_NOT_FOUND_DETAIL,
+            detail=_candidate_not_found_detail(locale),
         ) from exc
     except FamilyMemoryAuthorizationError as exc:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Только владелец аватара может повторить перевод воспоминания.",
+            detail=_detail(
+                locale,
+                cs="Pouze vlastník avatara může znovu spustit překlad vzpomínky.",
+                ru="Только владелец аватара может повторить перевод воспоминания.",
+            ),
         ) from exc
     except DemoFaChatValidationError as exc:
         raise HTTPException(
@@ -504,6 +593,7 @@ def _review_demo_memory_candidate(
     candidate_id: int,
     payload: MemoryCandidateReviewUpdate | None,
     action: str,
+    locale: str = "ru",
  ) -> MemoryCandidateRead | DemoFaChatMemoryCandidateReviewResponse:
     action_map = {
         "approve": approve_demo_memory_candidate,
@@ -535,7 +625,7 @@ def _review_demo_memory_candidate(
         )
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=CANDIDATE_NOT_FOUND_DETAIL,
+            detail=_candidate_not_found_detail(locale),
         ) from exc
     except ConversationMemoryCandidateInvalidTransitionError as exc:
         log_event(
@@ -550,12 +640,16 @@ def _review_demo_memory_candidate(
         )
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail=CANDIDATE_INVALID_TRANSITION_DETAIL,
+            detail=_candidate_invalid_transition_detail(locale),
         ) from exc
     except FamilyMemoryAuthorizationError as exc:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Для обогащённого воспоминания требуется явная проверка владельцем.",
+            detail=_detail(
+                locale,
+                cs="Pro obohacenou vzpomínku je vyžadována výslovná kontrola vlastníkem.",
+                ru="Для обогащённого воспоминания требуется явная проверка владельцем.",
+            ),
         ) from exc
 
     if action == "approve":
@@ -575,6 +669,7 @@ def approve_demo_memory_candidate_endpoint(
     candidate_id: CandidateIdPath,
     payload: MemoryCandidateReviewUpdate | None = None,
     profile_id: int | None = None,
+    locale: str = Query(default="ru"),
     db: Session = Depends(get_db),
 ) -> DemoFaChatMemoryCandidateReviewResponse:
     return _review_demo_memory_candidate(
@@ -583,6 +678,7 @@ def approve_demo_memory_candidate_endpoint(
         candidate_id=candidate_id,
         payload=payload,
         action="approve",
+        locale=_validate_locale_param(locale),
     )
 
 
@@ -598,18 +694,22 @@ def list_demo_memory_promotions_endpoint(
     actor_id: str | None = Query(default=None, min_length=1, max_length=120),
     actor_role: FamilyMemoryActorRole | None = Query(default=None),
     relationship_to_owner: str | None = Query(default=None, max_length=120),
+    locale: str = Query(default="ru"),
     db: Session = Depends(get_db),
 ) -> DemoFaChatMemoryPromotionListResponse:
+    locale = _validate_locale_param(locale)
     try:
         actor = _optional_actor_context(
             actor_id=actor_id,
             actor_role=actor_role,
             relationship_to_owner=relationship_to_owner,
+            locale=locale,
         )
         promotions = list_demo_memory_promotions(
             db,
             profile_id=profile_id,
             actor=actor,
+            locale=locale,
         )
     except DemoFaChatProfileUnavailableError as exc:
         raise HTTPException(
@@ -634,19 +734,23 @@ def get_demo_memory_promotion_endpoint(
     actor_id: str | None = Query(default=None, min_length=1, max_length=120),
     actor_role: FamilyMemoryActorRole | None = Query(default=None),
     relationship_to_owner: str | None = Query(default=None, max_length=120),
+    locale: str = Query(default="ru"),
     db: Session = Depends(get_db),
 ) -> AvatarMemoryPromotionRead:
+    locale = _validate_locale_param(locale)
     try:
         actor = _optional_actor_context(
             actor_id=actor_id,
             actor_role=actor_role,
             relationship_to_owner=relationship_to_owner,
+            locale=locale,
         )
         promotion = get_demo_memory_promotion(
             db,
             profile_id=profile_id,
             promotion_id=promotion_id,
             actor=actor,
+            locale=locale,
         )
     except DemoFaChatProfileUnavailableError as exc:
         raise HTTPException(
@@ -664,12 +768,12 @@ def get_demo_memory_promotion_endpoint(
         )
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=PROMOTION_NOT_FOUND_DETAIL,
+            detail=_promotion_not_found_detail(locale),
         ) from exc
     except FamilyMemoryNotFoundError as exc:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=PROMOTION_NOT_FOUND_DETAIL,
+            detail=_promotion_not_found_detail(locale),
         ) from exc
 
     return build_avatar_memory_promotion_read(promotion)
@@ -689,19 +793,23 @@ def cancel_demo_memory_promotion_endpoint(
     actor_id: str | None = Query(default=None, min_length=1, max_length=120),
     actor_role: FamilyMemoryActorRole | None = Query(default=None),
     relationship_to_owner: str | None = Query(default=None, max_length=120),
+    locale: str = Query(default="ru"),
     db: Session = Depends(get_db),
 ) -> AvatarMemoryPromotionRead:
+    locale = _validate_locale_param(locale)
     try:
         actor = _optional_actor_context(
             actor_id=actor_id,
             actor_role=actor_role,
             relationship_to_owner=relationship_to_owner,
+            locale=locale,
         )
         promotion = cancel_demo_memory_promotion(
             db,
             profile_id=profile_id,
             promotion_id=promotion_id,
             actor=actor,
+            locale=locale,
         )
     except DemoFaChatProfileUnavailableError as exc:
         raise HTTPException(
@@ -720,7 +828,7 @@ def cancel_demo_memory_promotion_endpoint(
         )
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=PROMOTION_NOT_FOUND_DETAIL,
+            detail=_promotion_not_found_detail(locale),
         ) from exc
     except AvatarMemoryPromotionInvalidTransitionError as exc:
         log_event(
@@ -735,12 +843,16 @@ def cancel_demo_memory_promotion_endpoint(
         )
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail=PROMOTION_INVALID_TRANSITION_DETAIL,
+            detail=_promotion_invalid_transition_detail(locale),
         ) from exc
     except FamilyMemoryAuthorizationError as exc:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Только владелец аватара может отменить продвижение воспоминания.",
+            detail=_detail(
+                locale,
+                cs="Pouze vlastník avatara může zrušit postoupení vzpomínky.",
+                ru="Только владелец аватара может отменить продвижение воспоминания.",
+            ),
         ) from exc
 
     return build_avatar_memory_promotion_read(promotion)
@@ -761,19 +873,23 @@ def index_demo_memory_promotion_endpoint(
     actor_id: str | None = Query(default=None, min_length=1, max_length=120),
     actor_role: FamilyMemoryActorRole | None = Query(default=None),
     relationship_to_owner: str | None = Query(default=None, max_length=120),
+    locale: str = Query(default="ru"),
     db: Session = Depends(get_db),
 ) -> AvatarMemoryIndexingRead:
+    locale = _validate_locale_param(locale)
     try:
         actor = _optional_actor_context(
             actor_id=actor_id,
             actor_role=actor_role,
             relationship_to_owner=relationship_to_owner,
+            locale=locale,
         )
         return index_demo_memory_promotion(
             db,
             profile_id=profile_id,
             promotion_id=promotion_id,
             actor=actor,
+            locale=locale,
         )
     except (AvatarMemoryPromotionNotFoundError, AvatarMemoryIndexingNotFoundError) as exc:
         log_event(
@@ -787,7 +903,7 @@ def index_demo_memory_promotion_endpoint(
         )
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=PROMOTION_NOT_FOUND_DETAIL,
+            detail=_promotion_not_found_detail(locale),
         ) from exc
     except DemoFaChatProfileUnavailableError as exc:
         raise HTTPException(
@@ -806,17 +922,21 @@ def index_demo_memory_promotion_endpoint(
         )
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail=PROMOTION_INVALID_TRANSITION_DETAIL,
+            detail=_promotion_invalid_transition_detail(locale),
         ) from exc
     except AvatarMemoryIndexingExecutionError as exc:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=PROMOTION_INDEXING_FAILED_DETAIL,
+            detail=_promotion_indexing_failed_detail(locale),
         ) from exc
     except FamilyMemoryAuthorizationError as exc:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Только владелец аватара может индексировать воспоминание.",
+            detail=_detail(
+                locale,
+                cs="Pouze vlastník avatara může vzpomínku indexovat.",
+                ru="Только владелец аватара может индексировать воспоминание.",
+            ),
         ) from exc
 
 
@@ -832,6 +952,7 @@ def reject_demo_memory_candidate_endpoint(
     candidate_id: CandidateIdPath,
     payload: MemoryCandidateReviewUpdate | None = None,
     profile_id: int | None = None,
+    locale: str = Query(default="ru"),
     db: Session = Depends(get_db),
 ) -> MemoryCandidateRead:
     return _review_demo_memory_candidate(
@@ -840,6 +961,7 @@ def reject_demo_memory_candidate_endpoint(
         candidate_id=candidate_id,
         payload=payload,
         action="reject",
+        locale=_validate_locale_param(locale),
     )
 
 
@@ -855,6 +977,7 @@ def archive_demo_memory_candidate_endpoint(
     candidate_id: CandidateIdPath,
     payload: MemoryCandidateReviewUpdate | None = None,
     profile_id: int | None = None,
+    locale: str = Query(default="ru"),
     db: Session = Depends(get_db),
 ) -> MemoryCandidateRead:
     return _review_demo_memory_candidate(
@@ -863,4 +986,5 @@ def archive_demo_memory_candidate_endpoint(
         candidate_id=candidate_id,
         payload=payload,
         action="archive",
+        locale=_validate_locale_param(locale),
     )

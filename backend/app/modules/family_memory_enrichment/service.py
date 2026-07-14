@@ -807,7 +807,8 @@ def owner_review(
             candidate=candidate,
             actor=payload,
             contribution_type=ContributionType.OWNER_CONFIRMATION,
-            contribution_text=payload.review_note or "Владелец подтвердил финальный вариант воспоминания.",
+            contribution_text=payload.review_note
+            or _localized_default_text(_DEFAULT_OWNER_CONFIRMATION_TEXT, language=candidate.language),
             structured_details=None,
             language=candidate.language,
             trace_id=None,

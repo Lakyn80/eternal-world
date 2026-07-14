@@ -114,7 +114,7 @@ def test_demo_fa_chat_valid_message_returns_answer_with_default_profile_and_trac
 
     monkeypatch.setattr(
         "app.modules.demo_fa_chat.service._resolve_demo_runtime",
-        lambda db, *, resolved_profile: SimpleNamespace(
+        lambda db, *, resolved_profile, locale="ru": SimpleNamespace(
             collection_name="eternal_world_rag_chunks__bge_m3_dense_sparse__family_novak_ru_e2e_v3_bge_m3_real_cpu",
             retrieval_mode="bge_m3_dense_sparse",
             top_k=5,
@@ -170,7 +170,7 @@ def test_demo_fa_chat_debug_true_includes_evidence_preview(client, monkeypatch):
 
     monkeypatch.setattr(
         "app.modules.demo_fa_chat.service._resolve_demo_runtime",
-        lambda db, *, resolved_profile: SimpleNamespace(
+        lambda db, *, resolved_profile, locale="ru": SimpleNamespace(
             collection_name="eternal_world_rag_chunks__bge_m3_dense_sparse__family_novak_ru_e2e_v3_bge_m3_real_cpu",
             retrieval_mode="bge_m3_dense_sparse",
             top_k=5,
@@ -227,7 +227,7 @@ def test_demo_fa_chat_ordinary_question_issues_single_retrieval_call(client, mon
 
     monkeypatch.setattr(
         "app.modules.demo_fa_chat.service._resolve_demo_runtime",
-        lambda db, *, resolved_profile: SimpleNamespace(
+        lambda db, *, resolved_profile, locale="ru": SimpleNamespace(
             collection_name="eternal_world_rag_chunks__bge_m3_dense_sparse__family_novak_ru_e2e_v3_bge_m3_real_cpu",
             retrieval_mode="bge_m3_dense_sparse",
             top_k=5,
@@ -316,7 +316,7 @@ def test_demo_fa_chat_corrected_memory_question_merges_two_retrieval_calls(clien
 
     monkeypatch.setattr(
         "app.modules.demo_fa_chat.service._resolve_demo_runtime",
-        lambda db, *, resolved_profile: SimpleNamespace(
+        lambda db, *, resolved_profile, locale="ru": SimpleNamespace(
             collection_name="eternal_world_rag_chunks__bge_m3_dense_sparse__family_novak_ru_e2e_v3_bge_m3_real_cpu",
             retrieval_mode="bge_m3_dense_sparse",
             top_k=5,
@@ -370,7 +370,7 @@ def test_demo_fa_chat_creates_unverified_memory_candidate_for_new_personal_claim
 
     monkeypatch.setattr(
         "app.modules.demo_fa_chat.service._resolve_demo_runtime",
-        lambda db, *, resolved_profile: SimpleNamespace(
+        lambda db, *, resolved_profile, locale="ru": SimpleNamespace(
             collection_name="eternal_world_rag_chunks__bge_m3_dense_sparse__family_novak_ru_e2e_v3_bge_m3_real_cpu",
             retrieval_mode="bge_m3_dense_sparse",
             top_k=5,
@@ -434,7 +434,7 @@ def test_demo_fa_chat_candidate_persistence_failure_does_not_break_answer(client
 
     monkeypatch.setattr(
         "app.modules.demo_fa_chat.service._resolve_demo_runtime",
-        lambda db, *, resolved_profile: SimpleNamespace(
+        lambda db, *, resolved_profile, locale="ru": SimpleNamespace(
             collection_name="eternal_world_rag_chunks__bge_m3_dense_sparse__family_novak_ru_e2e_v3_bge_m3_real_cpu",
             retrieval_mode="bge_m3_dense_sparse",
             top_k=5,
@@ -504,7 +504,7 @@ def test_demo_fa_chat_memory_candidate_endpoints_cover_review_workflow(client, m
 
     monkeypatch.setattr(
         "app.modules.demo_fa_chat.service._resolve_demo_runtime",
-        lambda db, *, resolved_profile: SimpleNamespace(
+        lambda db, *, resolved_profile, locale="ru": SimpleNamespace(
             collection_name="eternal_world_rag_chunks__bge_m3_dense_sparse__family_novak_ru_e2e_v3_bge_m3_real_cpu",
             retrieval_mode="bge_m3_dense_sparse",
             top_k=5,
@@ -597,7 +597,7 @@ def test_demo_fa_chat_memory_candidate_reject_and_archive_endpoints(client, monk
 
     monkeypatch.setattr(
         "app.modules.demo_fa_chat.service._resolve_demo_runtime",
-        lambda db, *, resolved_profile: SimpleNamespace(
+        lambda db, *, resolved_profile, locale="ru": SimpleNamespace(
             collection_name="eternal_world_rag_chunks__bge_m3_dense_sparse__family_novak_ru_e2e_v3_bge_m3_real_cpu",
             retrieval_mode="bge_m3_dense_sparse",
             top_k=5,
@@ -674,7 +674,7 @@ def test_demo_fa_chat_memory_promotion_endpoints_cover_cancel_workflow(client, m
 
     monkeypatch.setattr(
         "app.modules.demo_fa_chat.service._resolve_demo_runtime",
-        lambda db, *, resolved_profile: SimpleNamespace(
+        lambda db, *, resolved_profile, locale="ru": SimpleNamespace(
             collection_name="eternal_world_rag_chunks__bge_m3_dense_sparse__family_novak_ru_e2e_v3_bge_m3_real_cpu",
             retrieval_mode="bge_m3_dense_sparse",
             top_k=5,
@@ -765,7 +765,7 @@ def test_pending_index_promotion_is_not_used_as_factual_evidence(client, monkeyp
 
     monkeypatch.setattr(
         "app.modules.demo_fa_chat.service._resolve_demo_runtime",
-        lambda db, *, resolved_profile: SimpleNamespace(
+        lambda db, *, resolved_profile, locale="ru": SimpleNamespace(
             collection_name="eternal_world_rag_chunks__bge_m3_dense_sparse__family_novak_ru_e2e_v3_bge_m3_real_cpu",
             retrieval_mode="bge_m3_dense_sparse",
             top_k=5,
@@ -945,7 +945,7 @@ def test_demo_fa_chat_internal_errors_return_safe_russian_response(client, monke
 
     monkeypatch.setattr(
         "app.modules.demo_fa_chat.service._resolve_demo_runtime",
-        lambda db, *, resolved_profile: SimpleNamespace(
+        lambda db, *, resolved_profile, locale="ru": SimpleNamespace(
             collection_name="eternal_world_rag_chunks__bge_m3_dense_sparse__family_novak_ru_e2e_v3_bge_m3_real_cpu",
             retrieval_mode="bge_m3_dense_sparse",
             top_k=5,

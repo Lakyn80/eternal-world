@@ -89,15 +89,61 @@ from .schemas import (
 
 DEMO_FA_CHAT_MESSAGE_MAX_LENGTH = 4000
 DEMO_FA_CHAT_EVIDENCE_PREVIEW_LENGTH = 220
-DEMO_FA_CHAT_PROFILE_UNAVAILABLE_DETAIL = "Тестовый профиль аватара сейчас недоступен."
-DEMO_FA_CHAT_NOT_INITIALIZED_DETAIL = (
-    "Демо-профиль ещё не инициализирован. Пожалуйста, запустите подготовку тестовой памяти."
-)
-DEMO_FA_CHAT_EMBEDDING_UNAVAILABLE_DETAIL = (
-    "Демо временно недоступно: модель эмбеддингов BGE-M3 не инициализирована. "
-    "Запустите подготовку модели и повторите запрос."
-)
-DEMO_FA_CHAT_INTERNAL_ERROR_DETAIL = "Не удалось получить ответ аватара. Попробуйте ещё раз."
+
+
+def _bilingual_detail(locale: str, *, cs: str, ru: str) -> str:
+    """Pick the right-language error detail (Part J/backend error behavior).
+
+    Defaults to ``ru`` for any ``locale`` other than ``"cs"`` so every
+    existing caller that doesn't pass a locale keeps its prior behavior.
+    """
+    return cs if locale == "cs" else ru
+
+
+def demo_fa_chat_profile_unavailable_detail(locale: str = "ru") -> str:
+    return _bilingual_detail(
+        locale,
+        cs="Testovací profil avatara momentálně není dostupný.",
+        ru="Тестовый профиль аватара сейчас недоступен.",
+    )
+
+
+def demo_fa_chat_not_initialized_detail(locale: str = "ru") -> str:
+    return _bilingual_detail(
+        locale,
+        cs="Demo profil zatím není inicializován. Spusťte prosím přípravu testové paměti.",
+        ru="Демо-профиль ещё не инициализирован. Пожалуйста, запустите подготовку тестовой памяти.",
+    )
+
+
+def demo_fa_chat_embedding_unavailable_detail(locale: str = "ru") -> str:
+    return _bilingual_detail(
+        locale,
+        cs=(
+            "Demo je dočasně nedostupné: model embeddingů BGE-M3 není inicializován. "
+            "Spusťte přípravu modelu a zkuste to znovu."
+        ),
+        ru=(
+            "Демо временно недоступно: модель эмбеддингов BGE-M3 не инициализирована. "
+            "Запустите подготовку модели и повторите запрос."
+        ),
+    )
+
+
+def demo_fa_chat_internal_error_detail(locale: str = "ru") -> str:
+    return _bilingual_detail(
+        locale,
+        cs="Nepodařilo se získat odpověď avatara. Zkuste to prosím znovu.",
+        ru="Не удалось получить ответ аватара. Попробуйте ещё раз.",
+    )
+
+
+# Backward-compatible module-level aliases (Russian default) for any caller
+# that still imports the old constant names directly.
+DEMO_FA_CHAT_PROFILE_UNAVAILABLE_DETAIL = demo_fa_chat_profile_unavailable_detail()
+DEMO_FA_CHAT_NOT_INITIALIZED_DETAIL = demo_fa_chat_not_initialized_detail()
+DEMO_FA_CHAT_EMBEDDING_UNAVAILABLE_DETAIL = demo_fa_chat_embedding_unavailable_detail()
+DEMO_FA_CHAT_INTERNAL_ERROR_DETAIL = demo_fa_chat_internal_error_detail()
 
 logger = get_logger("demo_fa_chat")
 
@@ -153,12 +199,24 @@ class DemoFaChatResolvedRuntime:
     point_count: int
 
 
-def _normalize_message_text(value: str) -> str:
+def _normalize_message_text(value: str, *, locale: str = "ru") -> str:
     normalized_value = value.strip()
     if not normalized_value:
-        raise DemoFaChatValidationError("Сообщение не должно быть пустым.")
+        raise DemoFaChatValidationError(
+            _bilingual_detail(
+                locale,
+                cs="Zpráva nesmí být prázdná.",
+                ru="Сообщение не должно быть пустым.",
+            )
+        )
     if len(normalized_value) > DEMO_FA_CHAT_MESSAGE_MAX_LENGTH:
-        raise DemoFaChatValidationError("Сообщение слишком длинное для демо-чата.")
+        raise DemoFaChatValidationError(
+            _bilingual_detail(
+                locale,
+                cs="Zpráva je pro demo-chat příliš dlouhá.",
+                ru="Сообщение слишком длинное для демо-чата.",
+            )
+        )
     return normalized_value
 
 
@@ -228,10 +286,11 @@ def _resolve_demo_profile(
     db: Session,
     *,
     profile_id: int | None,
+    locale: str = "ru",
 ) -> DemoFaChatResolvedProfile:
     user = get_user_by_email(db, FAMILY_AVATAR_RU_E2E_EMAIL)
     if user is None:
-        raise DemoFaChatProfileUnavailableError(DEMO_FA_CHAT_PROFILE_UNAVAILABLE_DETAIL)
+        raise DemoFaChatProfileUnavailableError(demo_fa_chat_profile_unavailable_detail(locale))
 
     if profile_id is not None:
         profile = get_memory_profile_for_user(
@@ -247,7 +306,7 @@ def _resolve_demo_profile(
         )
 
     if profile is None:
-        raise DemoFaChatProfileUnavailableError(DEMO_FA_CHAT_PROFILE_UNAVAILABLE_DETAIL)
+        raise DemoFaChatProfileUnavailableError(demo_fa_chat_profile_unavailable_detail(locale))
 
     return DemoFaChatResolvedProfile(user=user, profile=profile)
 
@@ -267,7 +326,7 @@ def _build_qdrant_demo_source_filter(
     }
 
 
-def _assert_embedding_runtime_ready(*, model_code: str, collection_name: str) -> None:
+def _assert_embedding_runtime_ready(*, model_code: str, collection_name: str, locale: str = "ru") -> None:
     diagnostics = resolve_embedding_runtime_diagnostics(
         model_code=model_code,
         collection_name=collection_name,
@@ -286,13 +345,14 @@ def _assert_embedding_runtime_ready(*, model_code: str, collection_name: str) ->
             bge_m3_snapshot_path=diagnostics.bge_m3_snapshot_path,
             huggingface_offline_mode=diagnostics.huggingface_offline_mode,
         )
-        raise DemoFaChatInitializationError(DEMO_FA_CHAT_EMBEDDING_UNAVAILABLE_DETAIL)
+        raise DemoFaChatInitializationError(demo_fa_chat_embedding_unavailable_detail(locale))
 
 
 def _resolve_demo_runtime(
     db: Session,
     *,
     resolved_profile: DemoFaChatResolvedProfile,
+    locale: str = "ru",
 ) -> DemoFaChatResolvedRuntime:
     expected_collection_name = _build_expected_demo_collection_name()
     recommendation = get_production_recommended_active_retrieval_config()
@@ -303,18 +363,19 @@ def _resolve_demo_runtime(
             profile_id=resolved_profile.profile.id,
         )
     except ActiveRetrievalConfigNotFoundError as exc:
-        raise DemoFaChatInitializationError(DEMO_FA_CHAT_NOT_INITIALIZED_DETAIL) from exc
+        raise DemoFaChatInitializationError(demo_fa_chat_not_initialized_detail(locale)) from exc
 
     if (
         active_config.model_code != recommendation.model_code
         or active_config.collection_name != expected_collection_name
         or active_config.retrieval_mode != recommendation.retrieval_mode
     ):
-        raise DemoFaChatInitializationError(DEMO_FA_CHAT_NOT_INITIALIZED_DETAIL)
+        raise DemoFaChatInitializationError(demo_fa_chat_not_initialized_detail(locale))
 
     _assert_embedding_runtime_ready(
         model_code=active_config.model_code,
         collection_name=active_config.collection_name,
+        locale=locale,
     )
 
     sources = list_rag_sources_for_profile(
@@ -333,7 +394,7 @@ def _resolve_demo_runtime(
         None,
     )
     if source is None:
-        raise DemoFaChatInitializationError(DEMO_FA_CHAT_NOT_INITIALIZED_DETAIL)
+        raise DemoFaChatInitializationError(demo_fa_chat_not_initialized_detail(locale))
 
     qdrant_point_count = build_qdrant_client().count_points(
         collection_name=active_config.collection_name,
@@ -344,7 +405,7 @@ def _resolve_demo_runtime(
         ),
     )
     if qdrant_point_count <= 0:
-        raise DemoFaChatInitializationError(DEMO_FA_CHAT_NOT_INITIALIZED_DETAIL)
+        raise DemoFaChatInitializationError(demo_fa_chat_not_initialized_detail(locale))
 
     return DemoFaChatResolvedRuntime(
         collection_name=active_config.collection_name,
@@ -468,8 +529,9 @@ def list_demo_memory_candidates(
     *,
     profile_id: int | None,
     actor: DemoFamilyActorContext | None = None,
+    locale: str = "ru",
 ):
-    resolved_profile = _resolve_demo_profile(db, profile_id=profile_id)
+    resolved_profile = _resolve_demo_profile(db, profile_id=profile_id, locale=locale)
     avatar_persona = _resolve_demo_avatar_persona()
     candidates = conversation_memory_candidates_service.list_candidates(
         db,
@@ -504,8 +566,9 @@ def get_demo_memory_candidate(
     candidate_id: int,
     actor: DemoFamilyActorContext | None = None,
     allow_enriched_internal: bool = False,
+    locale: str = "ru",
 ):
-    resolved_profile = _resolve_demo_profile(db, profile_id=profile_id)
+    resolved_profile = _resolve_demo_profile(db, profile_id=profile_id, locale=locale)
     candidate = conversation_memory_candidates_service.get_candidate(
         db,
         owner_user_id=resolved_profile.user.id,
@@ -534,11 +597,12 @@ def list_demo_memory_candidate_summaries(
     *,
     profile_id: int | None,
     actor: DemoFamilyActorContext | None = None,
+    locale: str = "ru",
 ) -> list[DemoFaChatMemoryCandidateSummary]:
     """Review-inbox card projection (Task 64.5). Reuses existing visibility and
     contribution-privacy rules; adds no new business logic."""
-    resolved_profile = _resolve_demo_profile(db, profile_id=profile_id)
-    candidates = list_demo_memory_candidates(db, profile_id=profile_id, actor=actor)
+    resolved_profile = _resolve_demo_profile(db, profile_id=profile_id, locale=locale)
+    candidates = list_demo_memory_candidates(db, profile_id=profile_id, actor=actor, locale=locale)
     summaries: list[DemoFaChatMemoryCandidateSummary] = []
     for candidate in candidates:
         promotion = candidate.avatar_memory_promotion
@@ -603,7 +667,7 @@ def get_demo_memory_candidate_review_detail(
     ``avatar_memory_indexing.service.index_promotion`` - those remain the
     sole source of truth and are re-validated independently on every call.
     """
-    resolved_profile = _resolve_demo_profile(db, profile_id=profile_id)
+    resolved_profile = _resolve_demo_profile(db, profile_id=profile_id, locale=locale)
     candidate = get_demo_memory_candidate(
         db,
         profile_id=profile_id,
@@ -863,8 +927,9 @@ def list_demo_memory_promotions(
     *,
     profile_id: int | None,
     actor: DemoFamilyActorContext | None = None,
+    locale: str = "ru",
 ):
-    resolved_profile = _resolve_demo_profile(db, profile_id=profile_id)
+    resolved_profile = _resolve_demo_profile(db, profile_id=profile_id, locale=locale)
     avatar_persona = _resolve_demo_avatar_persona()
     promotions = avatar_memory_promotions_service.list_promotions(
         db,
@@ -899,8 +964,9 @@ def get_demo_memory_promotion(
     promotion_id: int,
     actor: DemoFamilyActorContext | None = None,
     allow_enriched_internal: bool = False,
+    locale: str = "ru",
 ):
-    resolved_profile = _resolve_demo_profile(db, profile_id=profile_id)
+    resolved_profile = _resolve_demo_profile(db, profile_id=profile_id, locale=locale)
     avatar_persona = _resolve_demo_avatar_persona()
     promotion = avatar_memory_promotions_service.get_promotion(
         db,
@@ -934,12 +1000,14 @@ def cancel_demo_memory_promotion(
     profile_id: int | None,
     promotion_id: int,
     actor: DemoFamilyActorContext | None = None,
+    locale: str = "ru",
 ):
     promotion = get_demo_memory_promotion(
         db,
         profile_id=profile_id,
         promotion_id=promotion_id,
         allow_enriched_internal=True,
+        locale=locale,
     )
     if promotion.candidate.workflow_version >= 2:
         if actor is None or not family_memory_enrichment_service.is_demo_owner(actor):
@@ -961,12 +1029,14 @@ def index_demo_memory_promotion(
     profile_id: int | None,
     promotion_id: int,
     actor: DemoFamilyActorContext | None = None,
+    locale: str = "ru",
 ):
     promotion = get_demo_memory_promotion(
         db,
         profile_id=profile_id,
         promotion_id=promotion_id,
         allow_enriched_internal=True,
+        locale=locale,
     )
     if promotion.candidate.workflow_version >= 2:
         if actor is None or not family_memory_enrichment_service.is_demo_owner(actor):
@@ -1060,9 +1130,9 @@ def run_demo_fa_chat_message(
     and new-memory-candidate creation than on Russian text - see the
     "Known Limitations" note in PROJECT_PROGRESS.md for this task.
     """
-    normalized_message = _normalize_message_text(message)
+    normalized_message = _normalize_message_text(message, locale=locale)
     message_hash_prefix = _build_message_hash_prefix(normalized_message)
-    resolved_profile = _resolve_demo_profile(db, profile_id=profile_id)
+    resolved_profile = _resolve_demo_profile(db, profile_id=profile_id, locale=locale)
     avatar_persona = _resolve_demo_avatar_persona()
     actor = (
         DemoFamilyActorContext(
@@ -1133,6 +1203,7 @@ def run_demo_fa_chat_message(
     resolved_runtime = _resolve_demo_runtime(
         db,
         resolved_profile=resolved_profile,
+        locale=locale,
     )
     log_event(
         logger,

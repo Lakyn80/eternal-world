@@ -152,6 +152,7 @@ export async function submitIndexMemoryPromotion(
   if (profileId !== null) {
     params.set("profile_id", String(profileId));
   }
+  params.set("locale", locale);
   const query = params.toString();
   return requestJson<AvatarMemoryIndexingRead>(
     buildApiUrl(`/api/demo/fa-chat/memory-promotions/${promotionId}/index${query ? `?${query}` : ""}`),
@@ -173,6 +174,7 @@ export async function retryMemoryCandidateTranslation(
   if (profileId !== null) {
     params.set("profile_id", String(profileId));
   }
+  params.set("locale", locale);
   const query = params.toString();
   return requestJson<MemoryContentTranslation>(
     buildApiUrl(

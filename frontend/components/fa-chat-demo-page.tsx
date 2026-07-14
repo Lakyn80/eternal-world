@@ -213,7 +213,7 @@ export function FaChatDemoPage({ locale }: { locale: AppLocale }) {
                 <div className={styles.chatSubhead}>{dictionary.chat.subhead}</div>
               </div>
               <div className={styles.chatTools}>
-                <LanguageSwitcher currentLocale={locale} />
+                <LanguageSwitcher currentLocale={locale} variant="dark" />
                 <Link className={styles.reviewLink} href={`/${locale}/family-memory-review`}>
                   {dictionary.chat.reviewLink}
                 </Link>

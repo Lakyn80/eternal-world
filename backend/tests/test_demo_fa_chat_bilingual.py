@@ -110,7 +110,7 @@ class RecordingChatTranslationProvider:
 def _patch_chat_runtime(monkeypatch, *, recorded_queries: list[str], recorded_requests: list):
     monkeypatch.setattr(
         "app.modules.demo_fa_chat.service._resolve_demo_runtime",
-        lambda db, *, resolved_profile: SimpleNamespace(
+        lambda db, *, resolved_profile, locale="ru": SimpleNamespace(
             collection_name="eternal_world_rag_chunks__bge_m3_dense_sparse__family_novak_ru_e2e_v3_bge_m3_real_cpu",
             retrieval_mode="bge_m3_dense_sparse",
             top_k=5,

@@ -17,7 +17,14 @@ const LOCALE_LABELS: Record<AppLocale, string> = {
  * (e.g. `?candidate=14`), and never calls any API or mutates stored data -
  * it is a pure client-side navigation link.
  */
-export function LanguageSwitcher({ currentLocale }: { currentLocale: AppLocale }) {
+export function LanguageSwitcher({
+  currentLocale,
+  variant = "light",
+}: {
+  currentLocale: AppLocale;
+  /** "dark" is for use on a dark background (e.g. the fa-chat hero panel). */
+  variant?: "light" | "dark";
+}) {
   const pathname = usePathname() ?? `/${currentLocale}`;
   const searchParams = useSearchParams();
   const queryString = searchParams?.toString();
@@ -34,7 +41,10 @@ export function LanguageSwitcher({ currentLocale }: { currentLocale: AppLocale }
   }
 
   return (
-    <nav aria-label="Language switcher / Přepínač jazyka" className={styles.switcher}>
+    <nav
+      aria-label="Language switcher / Přepínač jazyka"
+      className={variant === "dark" ? `${styles.switcher} ${styles.switcherOnDark}` : styles.switcher}
+    >
       {SUPPORTED_LOCALES.map((locale, index) => (
         <span key={locale}>
           {index > 0 ? <span className={styles.separator}>|</span> : null}
