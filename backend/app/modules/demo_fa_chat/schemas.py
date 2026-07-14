@@ -43,12 +43,15 @@ class DemoFaChatMessageRequest(BaseModel):
     actor_id: str | None = Field(default=None, min_length=1, max_length=120)
     actor_role: FamilyMemoryActorRole | None = None
     relationship_to_owner: str | None = Field(default=None, max_length=120)
-    #: Frontend interface locale for this chat turn (Task 64.5.1). Defaults
-    #: to "ru" so existing Russian-only clients that never send this field
-    #: keep their exact current behavior. When "cs", the user's message is
-    #: translated to Russian for the (unchanged) Russian retrieval/Brain
-    #: pipeline, and the final answer is translated back to Czech for
-    #: display - see demo_fa_chat.service.run_demo_fa_chat_message.
+    #: Frontend interface locale for this chat turn. Defaults to "ru" so
+    #: existing Russian-only clients that never send this field keep their
+    #: exact current behavior. Direct-locale architecture (Task 64.5.2,
+    #: replacing the Task 64.5.1 double-translation design): the user's
+    #: original-language message is used unmodified for BGE-M3 multilingual
+    #: retrieval and passed as-is to the Brain, which is told
+    #: ``response_language=locale`` and answers directly in that language -
+    #: no query-translation or answer-translation call for either locale.
+    #: See demo_fa_chat.service.run_demo_fa_chat_message.
     locale: Literal["cs", "ru"] = "ru"
 
     @model_validator(mode="after")

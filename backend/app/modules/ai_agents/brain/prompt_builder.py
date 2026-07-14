@@ -59,7 +59,42 @@ def _format_profile_date(value: date | None) -> str:
     return value.isoformat() if value is not None else "unknown"
 
 
-def _build_system_prompt(*, profile, avatar_persona=None) -> str:
+_RESPONSE_LANGUAGE_NAMES = {
+    "cs": "Czech (čeština)",
+    "ru": "Russian (русский)",
+}
+
+
+def _build_response_language_directive(response_language: str | None) -> str | None:
+    """Authoritative answer-language override (direct-locale Brain answers).
+
+    When the caller (currently only ``demo_fa_chat``) knows the user's
+    interface locale, it passes it here so the Brain answers directly in
+    that language from whatever-language evidence it retrieved - no separate
+    query-translation or answer-translation call. ``None`` (every other
+    caller: the generic authenticated chat endpoint, RAG eval harness)
+    leaves the pre-existing "match the user's message language" instruction
+    in the LANGUAGE section as the only language guidance, unchanged.
+    """
+    language_name = _RESPONSE_LANGUAGE_NAMES.get(response_language)
+    if language_name is None:
+        return None
+    return "\n".join(
+        [
+            "RESPONSE LANGUAGE (authoritative — overrides the general LANGUAGE section below)",
+            f"- You MUST write your entire answer in natural, fluent {language_name}, regardless of what",
+            "  language the retrieved B1/B2 evidence excerpts happen to be written in.",
+            "- Understand the evidence internally regardless of its language, then compose the answer in",
+            f"  {language_name} in your own words - do not quote or paste foreign-language evidence text",
+            "  verbatim as the final answer.",
+            "- Keep personal names, place names, and quoted work/song titles in their original form.",
+            "- Lack-of-evidence wording and every other reply this turn must also be in "
+            f"{language_name}, not the evidence's source language.",
+        ]
+    )
+
+
+def _build_system_prompt(*, profile, avatar_persona=None, response_language: str | None = None) -> str:
     profile_name = profile.name
     personality = _format_optional_profile_field(
         profile.personality,
@@ -196,6 +231,9 @@ def _build_system_prompt(*, profile, avatar_persona=None) -> str:
             "- No JSON. No roleplay outside the memorial context.",
             "- End factual answers with the key fact; citations may appear inline where the fact is stated.",
         ]
+    response_language_directive = _build_response_language_directive(response_language)
+    if response_language_directive is not None:
+        sections.extend(["", response_language_directive])
     if avatar_persona is not None:
         sections.extend(
             [
@@ -364,6 +402,7 @@ def build_brain_prompt_messages(request: OrchestratorChatRequest) -> BrainPrompt
     system_prompt = _build_system_prompt(
         profile=profile,
         avatar_persona=request.avatar_persona,
+        response_language=request.response_language,
     )
     user_prompt = _build_user_prompt(
         memory_evidence_block=_build_memory_evidence_block(memory_evidence_items),

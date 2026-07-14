@@ -34,6 +34,7 @@ class BrainAgentService:
             recent_history=request.recent_history,
             grounded_context=request.grounded_context,
             output_guard_context=request.output_guard_context,
+            response_language=request.response_language,
             system_prompt=prompt_messages.system_prompt,
             user_prompt=prompt_messages.user_prompt,
             prompt=prompt_messages.combined_prompt,

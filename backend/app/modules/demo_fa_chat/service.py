@@ -43,7 +43,7 @@ from app.modules.avatar_memory_promotions import service as avatar_memory_promot
 from app.modules.avatar_memory_indexing import service as avatar_memory_indexing_service
 from app.modules.avatar_memory_promotions.schemas import build_avatar_memory_promotion_read
 from app.modules.content_translation import service as content_translation_service
-from app.modules.content_translation.schemas import MemoryContentTranslationRead, TranslationFieldRequest
+from app.modules.content_translation.schemas import MemoryContentTranslationRead
 from app.modules.conversation_memory_candidates import service as conversation_memory_candidates_service
 from app.modules.conversation_memory_candidates.schemas import (
     MemoryCandidateCreate,
@@ -98,20 +98,8 @@ DEMO_FA_CHAT_EMBEDDING_UNAVAILABLE_DETAIL = (
     "Запустите подготовку модели и повторите запрос."
 )
 DEMO_FA_CHAT_INTERNAL_ERROR_DETAIL = "Не удалось получить ответ аватара. Попробуйте ещё раз."
-DEMO_FA_CHAT_TRANSLATION_FAILED_DETAIL_CS = (
-    "Překlad zprávy se nezdařil. Zkuste to prosím znovu."
-)
-DEMO_FA_CHAT_TRANSLATION_FAILED_DETAIL_RU = (
-    "Не удалось перевести сообщение. Попробуйте ещё раз."
-)
 
 logger = get_logger("demo_fa_chat")
-
-#: Chat turns are ephemeral (not a durable DB row of their own), so
-#: translation rows for them are addressed by trace_id rather than a
-#: candidate/contribution id - see MemoryContentTranslation.entity_type
-#: "fa_chat_turn" (backend/app/db/models.py).
-_CHAT_TRANSLATION_ENTITY_TYPE = "fa_chat_turn"
 
 
 class DemoFaChatValidationError(Exception):
@@ -124,58 +112,6 @@ class DemoFaChatProfileUnavailableError(Exception):
 
 class DemoFaChatInitializationError(Exception):
     pass
-
-
-class DemoFaChatTranslationError(Exception):
-    """Raised when a required Czech<->Russian chat-turn translation fails.
-
-    Never silently falls back to showing the untranslated (wrong-language)
-    text - the caller (router) turns this into a safe 503 with a
-    locale-appropriate message and no fabricated content.
-    """
-
-    def __init__(self, *, locale: str) -> None:
-        detail = (
-            DEMO_FA_CHAT_TRANSLATION_FAILED_DETAIL_CS
-            if locale == "cs"
-            else DEMO_FA_CHAT_TRANSLATION_FAILED_DETAIL_RU
-        )
-        super().__init__(detail)
-        self.locale = locale
-
-
-def _translate_chat_text(
-    db: Session,
-    *,
-    trace_id: str,
-    field_name: str,
-    source_language: str,
-    target_language: str,
-    source_text: str,
-) -> str:
-    """Translate one ephemeral chat-turn field; raise on any failure.
-
-    Unlike the family-memory content translations (which persist a failed
-    row and let the Czech source remain safely visible), a chat answer has
-    no meaningful partial state to show the user in the wrong language, so
-    a failed chat-turn translation is raised as an explicit error instead of
-    silently returned untranslated.
-    """
-    row = content_translation_service.translate_content_field(
-        db,
-        TranslationFieldRequest(
-            candidate_id=None,
-            entity_type=_CHAT_TRANSLATION_ENTITY_TYPE,
-            entity_id=trace_id,
-            field_name=field_name,
-            source_language=source_language,
-            target_language=target_language,
-            source_text=source_text,
-        ),
-    )
-    if row.translation_status not in {"translated", "human_reviewed"} or not (row.translated_text or "").strip():
-        raise DemoFaChatTranslationError(locale=target_language if target_language == "cs" else source_language)
-    return row.translated_text
 
 
 def _localize_clarification_question_for_locale(
@@ -1103,16 +1039,26 @@ def run_demo_fa_chat_message(
 ) -> DemoFaChatMessageResponse:
     """Run one FA-chat turn.
 
-    Bilingual behavior (Task 64.5.1, Part E.22-23): when ``locale == "cs"``,
-    ``normalized_message`` (the exact Czech text the user typed) is what
-    gets persisted as the source of any memory-candidate/contribution, and
-    ``retrieval_message`` (its backend-translated Russian equivalent) is
-    what is used for retrieval, memory-candidate detection/classification,
-    and the Brain prompt - the existing Russian retrieval/Brain pipeline is
-    otherwise completely unchanged. The final answer is translated back to
-    Czech before being returned. When ``locale == "ru"`` (default),
-    ``retrieval_message is normalized_message`` and behavior is byte-for-byte
-    identical to before this task.
+    Direct-locale bilingual architecture (Task 64.5.2, replacing the
+    double-translation design from Task 64.5.1 Part E.22-23):
+    ``normalized_message`` (the exact text the user typed, in whatever
+    locale) is used, completely unmodified, for BGE-M3 retrieval, memory-
+    query-intent classification, expanded-query building, and the Brain
+    call - there is no query-translation call for either locale.
+    ``response_language`` (equal to ``locale``) is passed to the Brain so it
+    answers directly in natural Czech or Russian from whichever-language
+    evidence BGE-M3's multilingual retrieval returns; there is no separate
+    answer-translation call either. Total AI calls per chat turn: exactly
+    one (the Brain), for both locales - see prompt_builder's
+    ``RESPONSE LANGUAGE`` directive for how the Brain is instructed.
+
+    Known limitation: ``classify_memory_query_intent``/``build_memory_candidate``
+    (and their expansion-query sibling) are Russian-keyword-tuned heuristics.
+    They now run directly against ``normalized_message`` for both locales
+    (no more routing through a Russian translation), so on raw Czech text
+    they may be less accurate at detecting corrected-memory/dispute intent
+    and new-memory-candidate creation than on Russian text - see the
+    "Known Limitations" note in PROJECT_PROGRESS.md for this task.
     """
     normalized_message = _normalize_message_text(message)
     message_hash_prefix = _build_message_hash_prefix(normalized_message)
@@ -1188,17 +1134,6 @@ def run_demo_fa_chat_message(
         db,
         resolved_profile=resolved_profile,
     )
-    if locale == "cs":
-        retrieval_message = _translate_chat_text(
-            db,
-            trace_id=trace_id,
-            field_name="user_message",
-            source_language="cs",
-            target_language="ru",
-            source_text=normalized_message,
-        )
-    else:
-        retrieval_message = normalized_message
     log_event(
         logger,
         20,
@@ -1215,9 +1150,9 @@ def run_demo_fa_chat_message(
         debug=debug,
     )
 
-    memory_query_intent = classify_memory_query_intent(retrieval_message)
+    memory_query_intent = classify_memory_query_intent(normalized_message)
     observe_avatar_memory_query_intent(intent=memory_query_intent.value)
-    expanded_retrieval_query = build_expanded_retrieval_query(retrieval_message, memory_query_intent)
+    expanded_retrieval_query = build_expanded_retrieval_query(normalized_message, memory_query_intent)
 
     retrieval_started_at = perf_counter()
     try:
@@ -1242,7 +1177,7 @@ def run_demo_fa_chat_message(
                 db,
                 current_user=resolved_profile.user,
                 profile_id=resolved_profile.profile.id,
-                payload=RagRetrievalRequest(query=retrieval_message, limit=pool_limit),
+                payload=RagRetrievalRequest(query=normalized_message, limit=pool_limit),
             )
             expansion_response = retrieve_profile_rag(
                 db,
@@ -1257,7 +1192,7 @@ def run_demo_fa_chat_message(
             )
             filtered_pool = filter_learned_memory_results_by_question_intent(
                 merged_pool,
-                user_message=retrieval_message,
+                user_message=normalized_message,
             )
             # Deterministically float a verified learned memory to the front
             # and cap the evidence count for this intent path — reduces
@@ -1281,7 +1216,7 @@ def run_demo_fa_chat_message(
                 db,
                 current_user=resolved_profile.user,
                 profile_id=resolved_profile.profile.id,
-                payload=RagRetrievalRequest(query=retrieval_message),
+                payload=RagRetrievalRequest(query=normalized_message),
             )
     except Exception:
         observe_rag_retrieval_error(
@@ -1332,7 +1267,7 @@ def run_demo_fa_chat_message(
     )
     evidence_source_results = filter_learned_memory_results_by_question_intent(
         retrieval_response.results,
-        user_message=retrieval_message,
+        user_message=normalized_message,
     )
     retrieved_evidence_items = build_rag_evidence_items(evidence_source_results)
     grounded_context = build_vector_retrieval_grounded_context(
@@ -1345,9 +1280,15 @@ def run_demo_fa_chat_message(
         OrchestratorChatRequest(
             profile=_build_profile_context(resolved_profile.profile),
             avatar_persona=avatar_persona,
-            user_message=retrieval_message,
+            user_message=normalized_message,
             recent_history=[],
             grounded_context=grounded_context,
+            # Direct-locale architecture (Task 64.5.2): the Brain receives the
+            # ORIGINAL untranslated user_message above plus this explicit
+            # response_language, and answers directly in that language - no
+            # separate query-translation or answer-translation call. See
+            # prompt_builder._build_response_language_directive.
+            response_language=locale,
         )
     )
     metadata = dict(orchestrator_response.metadata)
@@ -1355,12 +1296,19 @@ def run_demo_fa_chat_message(
     lack_of_evidence = bool(metadata.get("output_guard_lack_of_evidence")) or (
         str(metadata.get("grounding_status") or "").strip().lower() == "no_evidence"
     )
-    # Detection/classification heuristics are Russian-keyword based, so they
-    # run against retrieval_message (the Russian translation for Czech
-    # turns); the text actually stored below is always normalized_message
-    # (the original Czech, when locale == "cs").
+    # Known limitation (Task 64.5.2): these detection/classification
+    # heuristics (avatar_persona.build_memory_candidate /
+    # classify_memory_query_intent / build_expanded_retrieval_query above)
+    # are Russian-keyword-tuned. They now run directly against
+    # normalized_message for BOTH locales (no more indirection through a
+    # Russian translation) - on raw Czech text they may be less accurate at
+    # detecting corrected-memory/dispute intent or a new memory candidate
+    # than on Russian text. This is an accepted v1 tradeoff to keep the
+    # architecture to exactly one AI call per chat turn; a narrow
+    # Czech-keyword extension is a documented follow-up if evaluation shows
+    # it is needed (see PROJECT_PROGRESS.md Known Limitations).
     extracted_memory_candidate = build_memory_candidate(
-        user_message=retrieval_message,
+        user_message=normalized_message,
         lack_of_evidence=lack_of_evidence,
     )
     persisted_memory_candidate = None
@@ -1391,7 +1339,7 @@ def run_demo_fa_chat_message(
                     actor=actor,
                     initial_text=normalized_message,
                     trace_id=trace_id,
-                    classification_hint_text=retrieval_message,
+                    classification_hint_text=normalized_message,
                 )
             memory_candidate_persisted = True
         except Exception as exc:
@@ -1417,7 +1365,7 @@ def run_demo_fa_chat_message(
         )
     response_directives = derive_avatar_response_directives(
         persona=avatar_persona,
-        user_message=retrieval_message,
+        user_message=normalized_message,
         lack_of_evidence=lack_of_evidence,
     )
 
@@ -1460,18 +1408,11 @@ def run_demo_fa_chat_message(
                 if locale == "cs"
                 else "Спасибо. Черновик воспоминания готов к проверке владельцем аватара."
             )
-    elif locale == "cs":
-        # Ordinary grounded/lack-of-evidence answer (no clarification in
-        # progress): translate the Russian Brain answer back to Czech for
-        # display. Never silently show the Russian text if this fails.
-        response_answer = _translate_chat_text(
-            db,
-            trace_id=trace_id,
-            field_name="answer_text",
-            source_language="ru",
-            target_language="cs",
-            source_text=response_answer,
-        )
+    # Ordinary grounded/lack-of-evidence answer: orchestrator_response.text is
+    # final as-is. The Brain answered directly in `locale` (via
+    # response_language above) - there is no separate answer-translation call
+    # for either locale (Task 64.5.2, replacing the Task 64.5.1 double-
+    # translation design).
     return DemoFaChatMessageResponse(
         answer=response_answer,
         locale=locale,

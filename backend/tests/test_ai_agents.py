@@ -15,6 +15,7 @@ from app.modules.ai_agents.brain.output_guard import (
     apply_brain_output_guard,
     strip_internal_evidence_citations,
 )
+from app.modules.ai_agents.brain.prompt_builder import build_brain_prompt_messages
 from app.modules.ai_agents.brain.provider import (
     BrainProviderConfigurationError,
     MockBrainAgentProvider,
@@ -1265,3 +1266,78 @@ def test_brain_service_guard_metadata_does_not_store_original_answer_text():
     assert response.metadata["output_guard_reason"] == "forbidden_claim_in_lack_case"
     assert response.metadata["output_guard_detected_unsupported_terms"] == ["часы", "гараж", "луп"]
     assert "original_answer_text" not in response.metadata
+
+
+def test_response_language_none_preserves_generic_language_matching_behavior():
+    """Every caller that never sets response_language (the generic
+    authenticated chat endpoint, the RAG eval harness) must get byte-for-byte
+    the same prompt as before Task 64.5.2 - no RESPONSE LANGUAGE directive at
+    all, just the pre-existing generic LANGUAGE section."""
+    messages = build_brain_prompt_messages(
+        OrchestratorChatRequest(
+            profile=MemoryProfileContext(id=1, name="Eva"),
+            user_message="Tell me about yourself",
+            recent_history=[],
+        )
+    )
+    assert "RESPONSE LANGUAGE" not in messages.system_prompt
+    assert "LANGUAGE" in messages.system_prompt
+
+
+def test_response_language_cs_adds_authoritative_czech_directive():
+    """Task 64.5.2 direct-locale architecture: demo_fa_chat passes
+    response_language="cs" so the Brain answers directly in Czech from
+    whatever-language evidence it retrieved, with no separate translation
+    call."""
+    messages = build_brain_prompt_messages(
+        OrchestratorChatRequest(
+            profile=MemoryProfileContext(id=1, name="Babička"),
+            user_message="Kde jsi žila v dětství?",
+            recent_history=[],
+            response_language="cs",
+        )
+    )
+    assert "RESPONSE LANGUAGE" in messages.system_prompt
+    assert "Czech" in messages.system_prompt
+    assert "You MUST write your entire answer in natural, fluent Czech" in messages.system_prompt
+
+
+def test_response_language_ru_adds_authoritative_russian_directive():
+    messages = build_brain_prompt_messages(
+        OrchestratorChatRequest(
+            profile=MemoryProfileContext(id=1, name="Babička"),
+            user_message="Где ты жила в детстве?",
+            recent_history=[],
+            response_language="ru",
+        )
+    )
+    assert "RESPONSE LANGUAGE" in messages.system_prompt
+    assert "You MUST write your entire answer in natural, fluent Russian" in messages.system_prompt
+
+
+def test_brain_agent_request_carries_response_language_through_service():
+    """response_language must survive from OrchestratorChatRequest into the
+    BrainAgentRequest the provider layer/logs see, even though the actual
+    instruction is already baked into system_prompt by prompt_builder."""
+
+    class CapturingProvider:
+        def __init__(self):
+            self.captured_request: BrainAgentRequest | None = None
+
+        def generate_response(self, request: BrainAgentRequest) -> BrainAgentResponse:
+            self.captured_request = request
+            return BrainAgentResponse(text="Ahoj.", provider_name="stub")
+
+    provider = CapturingProvider()
+    service = BrainAgentService(provider=provider)
+    service.generate_chat_response(
+        OrchestratorChatRequest(
+            profile=MemoryProfileContext(id=1, name="Babička"),
+            user_message="Kde jsi žila v dětství?",
+            recent_history=[],
+            response_language="cs",
+        )
+    )
+
+    assert provider.captured_request is not None
+    assert provider.captured_request.response_language == "cs"

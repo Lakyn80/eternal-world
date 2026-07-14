@@ -33,6 +33,11 @@ class BrainAgentRequest(BaseModel):
     recent_history: list[ChatHistoryEntry] = Field(default_factory=list)
     grounded_context: BrainGroundedContext | None = None
     output_guard_context: Any | None = None
+    #: See ``OrchestratorChatRequest.response_language`` - threaded through so
+    #: the provider layer/logs can see which language was requested, even
+    #: though the actual instruction is baked into ``system_prompt`` by
+    #: ``prompt_builder`` before this request is built.
+    response_language: str | None = None
     system_prompt: str
     user_prompt: str
     prompt: str
@@ -51,6 +56,16 @@ class OrchestratorChatRequest(BaseModel):
     recent_history: list[ChatHistoryEntry] = Field(default_factory=list)
     grounded_context: BrainGroundedContext | None = None
     output_guard_context: Any | None = None
+    #: Explicit target language for the Brain's answer (e.g. "cs", "ru"),
+    #: independent of what language the retrieved evidence text happens to
+    #: be stored in. ``None`` (the default, used by every caller that does
+    #: not set it - the generic authenticated chat endpoint and the RAG
+    #: evaluation harness) preserves the pre-existing behavior of
+    #: instructing the Brain to match the user's own message language.
+    #: Set explicitly by demo_fa_chat for the bilingual Czech/Russian FA
+    #: chat direct-locale architecture (no separate query/answer translation
+    #: call - see demo_fa_chat.service.run_demo_fa_chat_message).
+    response_language: str | None = None
 
 
 class OrchestratorChatResponse(BaseModel):

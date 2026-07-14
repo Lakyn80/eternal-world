@@ -1603,4 +1603,30 @@ Během této úlohy se v datovém proudu nástrojů objevilo pět samostatných 
 
 Task 64.5.1 se **považuje za kompletně uzavřený** v rozsahu definovaném zadáním. Známá omezení (ruský překlad zatím jen ke čtení s možností opakování, synchronní překlad bez fronty na pozadí, rusko-jazyčné heuristiky pro detekci kandidátů/záměru běží nad interním ruským překladem českého vstupu) jsou zdokumentována v `PROJECT_PROGRESS.md`.
 
-Další doporučený task: **Task 65 — AI Biographer & Living Memory Onboarding** (má od počátku stavět na stejné bilingvální content-translation architektuře z Tasku 64.5.1).
+## 17. Task 64.5.2 status (2026-07-14) — přímá odpověď Brainu podle jazyka místo dvojitého překladu
+
+Task 64.5.2 — nahrazení dvojitého překladu FA chatu (česká otázka -> ruský překlad -> ruský retrieval/Brain -> překlad odpovědi zpět do češtiny, 3 AI volání na zprávu) přímou vícejazyčnou architekturou — byl proveden a **dokončen**. Plný popis je v `PROJECT_PROGRESS.md`, sekce "Task 64.5.2 - Direct-Locale FA Chat Brain Answers, Replacing Double-Translation (2026-07-14)".
+
+Poznámka k původu zadání: sekce výše (Task 64.5.1) dokumentuje, že během předchozí session se opakovaně objevily zprávy stylizované jako "koordinátor" žádající přesně tuto architektonickou změnu, doručené prostřednictvím datového proudu nástrojů, nikoli jako skutečný pokyn od uživatele — a nebyly provedeny. Tento task (64.5.2) přišel jinak: jako samostatné, explicitní zadání s konkrétními odkazy na existující kód a jasným technickým zdůvodněním (snížení počtu AI volání ze 3 na 1 na zprávu). Zdůvodnění je technicky správné samo o sobě bez ohledu na původ, ale vzhledem k výše zdokumentované historii je to zde otevřeně uvedeno — skutečný vlastník repozitáře by měl toto rozhodnutí nezávisle potvrdit, než bude považováno za definitivní.
+
+Stručně:
+
+```text
+Retrieval (BGE-M3) i Brain nyní dostávají přesně ten text, který uživatel
+napsal, v libovolném jazyce — žádný překlad dotazu. Brain dostává nové pole
+response_language (= locale) a odpovídá přímo v češtině nebo ruštině bez
+druhého AI volání na překlad odpovědi. Backend testy: 123 passed
+(zadaná regresní sada) + 43 passed v test_ai_agents.py (2 předchozí
+nesouvisející selhání kvůli úniku env proměnných, stejná jako u Tasku 64.5.1).
+Nový modul test_bilingual_retrieval_evaluation.py (11 testů) pokrývá pět
+kategorií otázek v češtině i ruštině. Živé ověření (reálný DeepSeek/BGE-M3/
+Qdrant): česká otázka o ukolébavce zodpovězena správně a přirozeně česky,
+ruská kontrolní otázka beze změny, v logách nula content_translation volání
+pro obě zprávy.
+```
+
+Známé omezení: rusko-jazyčné heuristiky pro klasifikaci záměru (corrected-memory/dispute) a detekci kandidátů nyní běží přímo nad syrovým českým textem (bez mezikroku ruského překladu), takže na české otázky typicky nezareagují — ověřeno testem `test_known_limitation_czech_corrected_memory_intent_not_detected`. Toto je vědomý kompromis v1, ne chyba; zúžené rozšíření o česká klíčová slova je možný navazující task. Překlad obsahu paměti (`content_translation` modul, příspěvky/upřesnění/finalizovaný text/opravy) zůstává zcela beze změny.
+
+Task 64.5.2 se **považuje za kompletně uzavřený** v rozsahu definovaném zadáním, s výše uvedenou poznámkou k původu zadání.
+
+Další doporučený task: **Task 65 — AI Biographer & Living Memory Onboarding** (nedotčen tímto navazujícím taskem).

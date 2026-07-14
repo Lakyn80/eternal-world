@@ -47,7 +47,6 @@ from .service import (
     DEMO_FA_CHAT_INTERNAL_ERROR_DETAIL,
     DemoFaChatInitializationError,
     DemoFaChatProfileUnavailableError,
-    DemoFaChatTranslationError,
     DemoFaChatValidationError,
     approve_demo_memory_candidate,
     archive_demo_memory_candidate,
@@ -181,16 +180,6 @@ def send_demo_fa_chat_message(
     except DemoFaChatInitializationError as exc:
         observe_fa_chat_error(
             outcome="not_initialized",
-            debug=debug_enabled,
-            duration_seconds=perf_counter() - started_at,
-        )
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=str(exc),
-        ) from exc
-    except DemoFaChatTranslationError as exc:
-        observe_fa_chat_error(
-            outcome="translation_failed",
             debug=debug_enabled,
             duration_seconds=perf_counter() - started_at,
         )
