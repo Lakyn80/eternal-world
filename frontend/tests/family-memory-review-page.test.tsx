@@ -4,9 +4,11 @@ import { createRoot, Root } from "react-dom/client";
 
 vi.mock("next/navigation", () => ({
   useSearchParams: () => new URLSearchParams(),
+  usePathname: () => "/ru/family-memory-review",
 }));
 
 import { FamilyMemoryReviewPage } from "../components/family-memory-review-page";
+import type { AppLocale } from "../lib/i18n/locales";
 import type {
   MemoryCandidateReviewDetail,
   MemoryCandidateSummary,
@@ -21,12 +23,12 @@ type RenderHandle = {
   unmount: () => void;
 };
 
-function renderComponent(): RenderHandle {
+function renderComponent(locale: AppLocale = "ru"): RenderHandle {
   const container = document.createElement("div");
   document.body.appendChild(container);
   const root = createRoot(container);
   act(() => {
-    root.render(<FamilyMemoryReviewPage />);
+    root.render(<FamilyMemoryReviewPage locale={locale} />);
   });
   return {
     container,
@@ -177,6 +179,10 @@ function buildDetail(overrides: Partial<MemoryCandidateReviewDetail> = {}): Memo
     can_approve_multiple_perspectives: false,
     can_index: false,
     blocked_reasons: ["not_promoted_yet", "privacy_scope_not_indexable"],
+    requested_locale: "ru",
+    source_language: "ru",
+    translations: [],
+    translation_block_reason: null,
     ...overrides,
   };
 }

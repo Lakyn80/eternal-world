@@ -4,6 +4,9 @@ import { FormEvent, useState } from "react";
 import Link from "next/link";
 
 import { buildApiUrl } from "../lib/api-config";
+import { getDictionary } from "../lib/i18n/get-dictionary";
+import type { AppLocale } from "../lib/i18n/locales";
+import { LanguageSwitcher } from "./language-switcher";
 import styles from "./fa-chat-demo-page.module.css";
 
 
@@ -43,6 +46,7 @@ type DemoVoiceDirectives = {
 
 type DemoFaChatResponse = {
   answer: string;
+  locale?: AppLocale;
   lack_of_evidence: boolean;
   retrieval_used: boolean;
   persona_applied: boolean;
@@ -73,25 +77,8 @@ type ChatMessage = {
   evidence: DemoEvidenceItem[];
 };
 
-const EXAMPLE_QUESTIONS = [
-  "Где ты жила в детстве?",
-  "Бабушка, мне сегодня тяжело.",
-  "Ты помнишь, как пела мне песню перед сном?",
-];
-
-async function readErrorDetail(response: Response): Promise<string> {
-  try {
-    const payload = (await response.json()) as { detail?: string };
-    if (payload.detail) {
-      return payload.detail;
-    }
-  } catch {
-    // Ignore JSON parsing errors and fall back to a generic message.
-  }
-  return "Не удалось получить ответ. Попробуйте ещё раз.";
-}
-
-export function FaChatDemoPage() {
+export function FaChatDemoPage({ locale }: { locale: AppLocale }) {
+  const dictionary = getDictionary(locale);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [inputValue, setInputValue] = useState("");
   const [debugEnabled, setDebugEnabled] = useState(false);
@@ -99,6 +86,18 @@ export function FaChatDemoPage() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const emptyStateVisible = messages.length === 0;
+
+  async function readErrorDetail(response: Response): Promise<string> {
+    try {
+      const payload = (await response.json()) as { detail?: string };
+      if (payload.detail) {
+        return payload.detail;
+      }
+    } catch {
+      // Ignore JSON parsing errors and fall back to a generic message.
+    }
+    return dictionary.chat.genericError;
+  }
 
   async function sendMessage(messageText: string) {
     const trimmedMessage = messageText.trim();
@@ -128,6 +127,7 @@ export function FaChatDemoPage() {
         body: JSON.stringify({
           message: trimmedMessage,
           debug: debugEnabled,
+          locale,
         }),
       });
       if (!response.ok) {
@@ -158,7 +158,7 @@ export function FaChatDemoPage() {
       if (error instanceof Error && error.message.trim()) {
         setErrorMessage(error.message);
       } else {
-        setErrorMessage("Не удалось получить ответ. Попробуйте ещё раз.");
+        setErrorMessage(dictionary.chat.genericError);
       }
     } finally {
       setLoading(false);
@@ -180,23 +180,19 @@ export function FaChatDemoPage() {
               <div className={styles.heroMist} />
               <div className={styles.avatarHalo}>
                 <div className={styles.avatarCore}>
-                  <div className={styles.avatarMonogram}>ЕН</div>
-                  <div className={styles.avatarName}>Ева Новакова</div>
-                  <div className={styles.avatarRole}>Тёплый семейный аватар</div>
+                  <div className={styles.avatarMonogram}>{dictionary.chat.avatarMonogram}</div>
+                  <div className={styles.avatarName}>{dictionary.chat.avatarName}</div>
+                  <div className={styles.avatarRole}>{dictionary.chat.avatarRole}</div>
                 </div>
               </div>
             </div>
 
             <div className={styles.heroCopy}>
-              <p className={styles.eyebrow}>Аватар Евы Новаковой</p>
-              <h1 className={styles.title}>Тестовый чат с цифровым аватаром</h1>
-              <p className={styles.lead}>
-                Этот демо-аватар отвечает по-русски, держится тёплого человеческого тона и
-                опирается только на сохранённые воспоминания. Если подтверждения нет, он не
-                придумывает факты и мягко скажет об этом.
-              </p>
+              <p className={styles.eyebrow}>{dictionary.chat.eyebrow}</p>
+              <h1 className={styles.title}>{dictionary.chat.title}</h1>
+              <p className={styles.lead}>{dictionary.chat.lead}</p>
               <div className={styles.exampleCluster}>
-                {EXAMPLE_QUESTIONS.map((exampleQuestion) => (
+                {dictionary.chat.examples.map((exampleQuestion) => (
                   <button
                     key={exampleQuestion}
                     className={styles.exampleChip}
@@ -213,12 +209,13 @@ export function FaChatDemoPage() {
           <section className={styles.chatPanel}>
             <header className={styles.chatHeader}>
               <div>
-                <div className={styles.chatBrand}>Вечный мир</div>
-                <div className={styles.chatSubhead}>Ева рядом, когда нужен голос памяти</div>
+                <div className={styles.chatBrand}>{dictionary.chat.brand}</div>
+                <div className={styles.chatSubhead}>{dictionary.chat.subhead}</div>
               </div>
               <div className={styles.chatTools}>
-                <Link className={styles.reviewLink} href="/family-memory-review">
-                  Семейные воспоминания на проверке
+                <LanguageSwitcher currentLocale={locale} />
+                <Link className={styles.reviewLink} href={`/${locale}/family-memory-review`}>
+                  {dictionary.chat.reviewLink}
                 </Link>
                 <label className={styles.toggle}>
                   <input
@@ -226,7 +223,7 @@ export function FaChatDemoPage() {
                     onChange={(event) => setDebugEnabled(event.target.checked)}
                     type="checkbox"
                   />
-                  <span>debug</span>
+                  <span>{dictionary.chat.debugLabel}</span>
                 </label>
                 <button
                   className={styles.clearButton}
@@ -236,7 +233,7 @@ export function FaChatDemoPage() {
                   }}
                   type="button"
                 >
-                  Очистить
+                  {dictionary.chat.clear}
                 </button>
               </div>
             </header>
@@ -244,11 +241,8 @@ export function FaChatDemoPage() {
             <div className={styles.chatBody}>
               {emptyStateVisible ? (
                 <section className={styles.emptyCard}>
-                  <div className={styles.emptyTitle}>С чего начать</div>
-                  <p className={styles.emptyText}>
-                    Спроси о детстве, поддержке или о возможном семейном воспоминании. Если
-                    воспоминание не подтверждено, чат отметит его как эпизод для проверки.
-                  </p>
+                  <div className={styles.emptyTitle}>{dictionary.chat.emptyTitle}</div>
+                  <p className={styles.emptyText}>{dictionary.chat.emptyText}</p>
                 </section>
               ) : null}
 
@@ -265,19 +259,17 @@ export function FaChatDemoPage() {
                     }`}
                   >
                     <div className={styles.messageRole}>
-                      {message.role === "user" ? "Вы" : "Ева"}
+                      {message.role === "user" ? dictionary.chat.you : dictionary.chat.avatarName.split(" ")[0]}
                     </div>
                     <div className={styles.messageText}>{message.text}</div>
 
                     {message.role === "assistant" && message.lackOfEvidence ? (
-                      <div className={styles.messageHint}>
-                        Точного подтверждения в доступных воспоминаниях сейчас нет.
-                      </div>
+                      <div className={styles.messageHint}>{dictionary.chat.lackOfEvidenceHint}</div>
                     ) : null}
 
                     {message.role === "assistant" && message.memoryCandidate ? (
                       <section className={styles.candidateCard}>
-                        <div className={styles.candidateTitle}>Новый эпизод для проверки</div>
+                        <div className={styles.candidateTitle}>{dictionary.chat.newEpisodeCardTitle}</div>
                         <div className={styles.candidateText}>
                           {message.memoryCandidate.proposed_memory_text}
                         </div>
@@ -302,7 +294,7 @@ export function FaChatDemoPage() {
 
                     {message.role === "assistant" && debugEnabled && message.evidence.length > 0 ? (
                       <details className={styles.detailsBlock}>
-                        <summary>Использованные воспоминания</summary>
+                        <summary>{dictionary.chat.usedMemoriesSummary}</summary>
                         <div className={styles.evidenceList}>
                           {message.evidence.map((evidenceItem) => (
                             <div
@@ -319,7 +311,7 @@ export function FaChatDemoPage() {
                                 <div className={styles.evidenceTitle}>{evidenceItem.source_title}</div>
                               ) : null}
                               <div className={styles.evidenceText}>
-                                {evidenceItem.text_preview ?? "Короткий фрагмент недоступен."}
+                                {evidenceItem.text_preview ?? dictionary.chat.noPreview}
                               </div>
                             </div>
                           ))}
@@ -340,7 +332,7 @@ export function FaChatDemoPage() {
                 </article>
               ))}
 
-              {loading ? <div className={styles.loadingState}>Ева подбирает ответ...</div> : null}
+              {loading ? <div className={styles.loadingState}>{dictionary.chat.loading}</div> : null}
 
               {errorMessage ? (
                 <div className={styles.errorBanner} role="alert">
@@ -351,19 +343,17 @@ export function FaChatDemoPage() {
 
             <form className={styles.composer} onSubmit={handleSubmit}>
               <textarea
-                aria-label="Сообщение для аватара"
+                aria-label={dictionary.chat.composerAriaLabel}
                 className={styles.textarea}
                 onChange={(event) => setInputValue(event.target.value)}
-                placeholder="Напишите Еве вопрос или тёплое сообщение..."
+                placeholder={dictionary.chat.composerPlaceholder}
                 rows={3}
                 value={inputValue}
               />
               <div className={styles.composerFooter}>
-                <div className={styles.composerHint}>
-                  Для strongest grounded ответа лучше спрашивать Еву в первом лице.
-                </div>
+                <div className={styles.composerHint}>{dictionary.chat.composerHint}</div>
                 <button className={styles.sendButton} disabled={loading} type="submit">
-                  Отправить
+                  {dictionary.chat.send}
                 </button>
               </div>
             </form>

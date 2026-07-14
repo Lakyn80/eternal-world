@@ -29,6 +29,13 @@
   font-size: 1.9rem;
 }
 
+.headerTools {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
 .backLink {
   border: 1px solid #d9c8a8;
   border-radius: 999px;
@@ -306,11 +313,37 @@
 .editorCard,
 .privacyCard,
 .actionsCard,
-.promotionCard {
+.promotionCard,
+.translationCard {
   border: 1px solid #e6d9bc;
   border-radius: 16px;
   padding: 16px;
   background: #fffdf9;
+}
+
+.translationGrid {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: 1fr;
+}
+
+@media (min-width: 760px) {
+  .translationGrid {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+.translationColumn {
+  border: 1px solid #efe6d3;
+  border-radius: 12px;
+  padding: 12px;
+  background: #fffaf0;
+}
+
+.translationColumnHeading {
+  margin: 0 0 8px;
+  font-size: 0.92rem;
+  color: #5f3f23;
 }
 
 .sectionTitle {

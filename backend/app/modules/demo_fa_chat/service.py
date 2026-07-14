@@ -42,6 +42,8 @@ from app.modules.avatar_persona import (
 from app.modules.avatar_memory_promotions import service as avatar_memory_promotions_service
 from app.modules.avatar_memory_indexing import service as avatar_memory_indexing_service
 from app.modules.avatar_memory_promotions.schemas import build_avatar_memory_promotion_read
+from app.modules.content_translation import service as content_translation_service
+from app.modules.content_translation.schemas import MemoryContentTranslationRead, TranslationFieldRequest
 from app.modules.conversation_memory_candidates import service as conversation_memory_candidates_service
 from app.modules.conversation_memory_candidates.schemas import (
     MemoryCandidateCreate,
@@ -50,10 +52,13 @@ from app.modules.conversation_memory_candidates.schemas import (
     build_memory_candidate_read,
 )
 from app.modules.family_memory_enrichment import service as family_memory_enrichment_service
+from app.modules.family_memory_enrichment import eligibility as family_memory_eligibility
+from app.modules.family_memory_enrichment.clarification import localize_question_text
 from app.modules.family_memory_enrichment.enums import EnrichmentStatus, PrivacyScope
 from app.modules.family_memory_enrichment.schemas import (
     CandidateEnrichmentRead,
     ClarificationAnswerRequest,
+    ClarificationQuestionRead,
     DemoFamilyActorContext,
 )
 from app.modules.embeddings.embedding_cache import build_text_hash
@@ -93,8 +98,20 @@ DEMO_FA_CHAT_EMBEDDING_UNAVAILABLE_DETAIL = (
     "Запустите подготовку модели и повторите запрос."
 )
 DEMO_FA_CHAT_INTERNAL_ERROR_DETAIL = "Не удалось получить ответ аватара. Попробуйте ещё раз."
+DEMO_FA_CHAT_TRANSLATION_FAILED_DETAIL_CS = (
+    "Překlad zprávy se nezdařil. Zkuste to prosím znovu."
+)
+DEMO_FA_CHAT_TRANSLATION_FAILED_DETAIL_RU = (
+    "Не удалось перевести сообщение. Попробуйте ещё раз."
+)
 
 logger = get_logger("demo_fa_chat")
+
+#: Chat turns are ephemeral (not a durable DB row of their own), so
+#: translation rows for them are addressed by trace_id rather than a
+#: candidate/contribution id - see MemoryContentTranslation.entity_type
+#: "fa_chat_turn" (backend/app/db/models.py).
+_CHAT_TRANSLATION_ENTITY_TYPE = "fa_chat_turn"
 
 
 class DemoFaChatValidationError(Exception):
@@ -107,6 +124,82 @@ class DemoFaChatProfileUnavailableError(Exception):
 
 class DemoFaChatInitializationError(Exception):
     pass
+
+
+class DemoFaChatTranslationError(Exception):
+    """Raised when a required Czech<->Russian chat-turn translation fails.
+
+    Never silently falls back to showing the untranslated (wrong-language)
+    text - the caller (router) turns this into a safe 503 with a
+    locale-appropriate message and no fabricated content.
+    """
+
+    def __init__(self, *, locale: str) -> None:
+        detail = (
+            DEMO_FA_CHAT_TRANSLATION_FAILED_DETAIL_CS
+            if locale == "cs"
+            else DEMO_FA_CHAT_TRANSLATION_FAILED_DETAIL_RU
+        )
+        super().__init__(detail)
+        self.locale = locale
+
+
+def _translate_chat_text(
+    db: Session,
+    *,
+    trace_id: str,
+    field_name: str,
+    source_language: str,
+    target_language: str,
+    source_text: str,
+) -> str:
+    """Translate one ephemeral chat-turn field; raise on any failure.
+
+    Unlike the family-memory content translations (which persist a failed
+    row and let the Czech source remain safely visible), a chat answer has
+    no meaningful partial state to show the user in the wrong language, so
+    a failed chat-turn translation is raised as an explicit error instead of
+    silently returned untranslated.
+    """
+    row = content_translation_service.translate_content_field(
+        db,
+        TranslationFieldRequest(
+            candidate_id=None,
+            entity_type=_CHAT_TRANSLATION_ENTITY_TYPE,
+            entity_id=trace_id,
+            field_name=field_name,
+            source_language=source_language,
+            target_language=target_language,
+            source_text=source_text,
+        ),
+    )
+    if row.translation_status not in {"translated", "human_reviewed"} or not (row.translated_text or "").strip():
+        raise DemoFaChatTranslationError(locale=target_language if target_language == "cs" else source_language)
+    return row.translated_text
+
+
+def _localize_clarification_question_for_locale(
+    question: ClarificationQuestionRead | None,
+    *,
+    locale: str,
+) -> ClarificationQuestionRead | None:
+    """Display-only Czech projection of a clarification question (Part E.17).
+
+    Both locales still refer to the exact same clarification record
+    (``clarification_id``/``question_key`` unchanged) - only the rendered
+    ``question_text`` differs.
+    """
+    if question is None or locale != "cs":
+        return question
+    return question.model_copy(
+        update={
+            "question_text": localize_question_text(
+                question_key=question.question_key,
+                source_text=question.question_text,
+                locale=locale,
+            )
+        }
+    )
 
 
 @dataclass(frozen=True)
@@ -562,6 +655,7 @@ def get_demo_memory_candidate_review_detail(
     profile_id: int | None,
     candidate_id: int,
     actor: DemoFamilyActorContext | None = None,
+    locale: str = "ru",
 ) -> DemoFaChatMemoryCandidateReviewDetail:
     """Aggregated review-detail read model (Task 64.5, Part M.32).
 
@@ -658,6 +752,18 @@ def get_demo_memory_candidate_review_detail(
     if privacy_scope_value not in {"all_family", "public_legacy"}:
         blocked_reasons.append("privacy_scope_not_indexable")
 
+    translation_block_reason = family_memory_eligibility.get_finalized_memory_translation_block_reason(
+        db, candidate=candidate
+    )
+    if translation_block_reason is not None:
+        can_index = False
+        blocked_reasons.append(translation_block_reason)
+
+    translations = [
+        MemoryContentTranslationRead.model_validate(row)
+        for row in content_translation_service.get_translations_for_candidate(db, candidate_id=candidate.id)
+    ]
+
     return DemoFaChatMemoryCandidateReviewDetail(
         candidate=candidate_read,
         enrichment=enrichment,
@@ -673,7 +779,63 @@ def get_demo_memory_candidate_review_detail(
         can_approve_multiple_perspectives=can_approve_multiple_perspectives,
         can_index=can_index,
         blocked_reasons=blocked_reasons,
+        requested_locale=locale if locale in {"cs", "ru"} else "ru",
+        source_language=candidate.language,
+        translations=translations,
+        translation_block_reason=translation_block_reason,
     )
+
+
+def list_demo_memory_candidate_translations(
+    db: Session,
+    *,
+    profile_id: int | None,
+    candidate_id: int,
+    actor: DemoFamilyActorContext | None = None,
+) -> list[MemoryContentTranslationRead]:
+    candidate = get_demo_memory_candidate(db, profile_id=profile_id, candidate_id=candidate_id, actor=actor)
+    return [
+        MemoryContentTranslationRead.model_validate(row)
+        for row in content_translation_service.get_translations_for_candidate(db, candidate_id=candidate.id)
+    ]
+
+
+def retry_demo_memory_candidate_translation(
+    db: Session,
+    *,
+    profile_id: int | None,
+    candidate_id: int,
+    target_language: str,
+    actor: DemoFamilyActorContext | None = None,
+) -> MemoryContentTranslationRead:
+    """Explicit, owner-only retry of the candidate's finalized-memory translation.
+
+    Idempotent in effect: re-running it when the source has not changed
+    since the last successful translation simply reproduces the same
+    current state (see content_translation.service.translate_content_field).
+    Never approves the candidate and never triggers indexing.
+    """
+    if actor is None or not family_memory_enrichment_service.is_demo_owner(actor):
+        raise family_memory_enrichment_service.FamilyMemoryAuthorizationError(
+            "Only the avatar owner can retry a memory translation"
+        )
+    candidate = get_demo_memory_candidate(
+        db, profile_id=profile_id, candidate_id=candidate_id, actor=actor, allow_enriched_internal=True
+    )
+    finalized_text = (candidate.finalized_memory_text or "").strip()
+    if not finalized_text:
+        raise DemoFaChatValidationError("Candidate has no finalized memory text to translate yet.")
+    row = content_translation_service.retry_translation(
+        db,
+        entity_type="memory_candidate",
+        entity_id=str(candidate.id),
+        field_name=family_memory_eligibility.FINALIZED_MEMORY_FIELD_NAME,
+        source_language=candidate.language or "cs",
+        target_language=target_language,
+        source_text=finalized_text,
+        candidate_id=candidate.id,
+    )
+    return MemoryContentTranslationRead.model_validate(row)
 
 
 def approve_demo_memory_candidate(
@@ -937,7 +1099,21 @@ def run_demo_fa_chat_message(
     actor_id: str | None = None,
     actor_role: str | None = None,
     relationship_to_owner: str | None = None,
+    locale: str = "ru",
 ) -> DemoFaChatMessageResponse:
+    """Run one FA-chat turn.
+
+    Bilingual behavior (Task 64.5.1, Part E.22-23): when ``locale == "cs"``,
+    ``normalized_message`` (the exact Czech text the user typed) is what
+    gets persisted as the source of any memory-candidate/contribution, and
+    ``retrieval_message`` (its backend-translated Russian equivalent) is
+    what is used for retrieval, memory-candidate detection/classification,
+    and the Brain prompt - the existing Russian retrieval/Brain pipeline is
+    otherwise completely unchanged. The final answer is translated back to
+    Czech before being returned. When ``locale == "ru"`` (default),
+    ``retrieval_message is normalized_message`` and behavior is byte-for-byte
+    identical to before this task.
+    """
     normalized_message = _normalize_message_text(message)
     message_hash_prefix = _build_message_hash_prefix(normalized_message)
     resolved_profile = _resolve_demo_profile(db, profile_id=profile_id)
@@ -981,13 +1157,21 @@ def run_demo_fa_chat_message(
                 trace_id=trace_id,
             ),
         )
-        next_question = enrichment.next_clarification_question
+        localized_next_question = _localize_clarification_question_for_locale(
+            enrichment.next_clarification_question, locale=locale
+        )
+        draft_ready_message = (
+            "Děkuji. Návrh vzpomínky je připraven ke kontrole vlastníkem avatara."
+            if locale == "cs"
+            else "Спасибо. Черновик воспоминания готов к проверке владельцем аватара."
+        )
         return DemoFaChatMessageResponse(
             answer=(
-                next_question.question_text
-                if next_question is not None
-                else "Спасибо. Черновик воспоминания готов к проверке владельцем аватара."
+                localized_next_question.question_text
+                if localized_next_question is not None
+                else draft_ready_message
             ),
+            locale=locale,
             lack_of_evidence=False,
             retrieval_used=False,
             persona_applied=False,
@@ -997,13 +1181,24 @@ def run_demo_fa_chat_message(
             memory_candidate_persisted=True,
             active_memory_candidate_id=enrichment.candidate_id,
             enrichment_status=enrichment.enrichment_status,
-            next_clarification_question=next_question,
+            next_clarification_question=localized_next_question,
             evidence=[],
         )
     resolved_runtime = _resolve_demo_runtime(
         db,
         resolved_profile=resolved_profile,
     )
+    if locale == "cs":
+        retrieval_message = _translate_chat_text(
+            db,
+            trace_id=trace_id,
+            field_name="user_message",
+            source_language="cs",
+            target_language="ru",
+            source_text=normalized_message,
+        )
+    else:
+        retrieval_message = normalized_message
     log_event(
         logger,
         20,
@@ -1020,9 +1215,9 @@ def run_demo_fa_chat_message(
         debug=debug,
     )
 
-    memory_query_intent = classify_memory_query_intent(normalized_message)
+    memory_query_intent = classify_memory_query_intent(retrieval_message)
     observe_avatar_memory_query_intent(intent=memory_query_intent.value)
-    expanded_retrieval_query = build_expanded_retrieval_query(normalized_message, memory_query_intent)
+    expanded_retrieval_query = build_expanded_retrieval_query(retrieval_message, memory_query_intent)
 
     retrieval_started_at = perf_counter()
     try:
@@ -1047,7 +1242,7 @@ def run_demo_fa_chat_message(
                 db,
                 current_user=resolved_profile.user,
                 profile_id=resolved_profile.profile.id,
-                payload=RagRetrievalRequest(query=normalized_message, limit=pool_limit),
+                payload=RagRetrievalRequest(query=retrieval_message, limit=pool_limit),
             )
             expansion_response = retrieve_profile_rag(
                 db,
@@ -1062,7 +1257,7 @@ def run_demo_fa_chat_message(
             )
             filtered_pool = filter_learned_memory_results_by_question_intent(
                 merged_pool,
-                user_message=normalized_message,
+                user_message=retrieval_message,
             )
             # Deterministically float a verified learned memory to the front
             # and cap the evidence count for this intent path — reduces
@@ -1086,7 +1281,7 @@ def run_demo_fa_chat_message(
                 db,
                 current_user=resolved_profile.user,
                 profile_id=resolved_profile.profile.id,
-                payload=RagRetrievalRequest(query=normalized_message),
+                payload=RagRetrievalRequest(query=retrieval_message),
             )
     except Exception:
         observe_rag_retrieval_error(
@@ -1137,7 +1332,7 @@ def run_demo_fa_chat_message(
     )
     evidence_source_results = filter_learned_memory_results_by_question_intent(
         retrieval_response.results,
-        user_message=normalized_message,
+        user_message=retrieval_message,
     )
     retrieved_evidence_items = build_rag_evidence_items(evidence_source_results)
     grounded_context = build_vector_retrieval_grounded_context(
@@ -1150,7 +1345,7 @@ def run_demo_fa_chat_message(
         OrchestratorChatRequest(
             profile=_build_profile_context(resolved_profile.profile),
             avatar_persona=avatar_persona,
-            user_message=normalized_message,
+            user_message=retrieval_message,
             recent_history=[],
             grounded_context=grounded_context,
         )
@@ -1160,8 +1355,12 @@ def run_demo_fa_chat_message(
     lack_of_evidence = bool(metadata.get("output_guard_lack_of_evidence")) or (
         str(metadata.get("grounding_status") or "").strip().lower() == "no_evidence"
     )
+    # Detection/classification heuristics are Russian-keyword based, so they
+    # run against retrieval_message (the Russian translation for Czech
+    # turns); the text actually stored below is always normalized_message
+    # (the original Czech, when locale == "cs").
     extracted_memory_candidate = build_memory_candidate(
-        user_message=normalized_message,
+        user_message=retrieval_message,
         lack_of_evidence=lack_of_evidence,
     )
     persisted_memory_candidate = None
@@ -1175,7 +1374,12 @@ def run_demo_fa_chat_message(
                 avatar_id=avatar_persona.avatar_id,
                 profile_id=resolved_profile.profile.id,
                 trace_id=trace_id,
-                language=avatar_persona.language,
+                # The candidate's source language must reflect the language the
+                # user actually typed in (locale), not the persona's own
+                # response language, so the bilingual translation gate above
+                # (family_memory_enrichment.eligibility) is triggered correctly
+                # for Czech-origin chat-created candidates.
+                language=locale,
                 extracted_candidate=extracted_memory_candidate,
                 enrichment_enabled=actor is not None,
             )
@@ -1187,6 +1391,7 @@ def run_demo_fa_chat_message(
                     actor=actor,
                     initial_text=normalized_message,
                     trace_id=trace_id,
+                    classification_hint_text=retrieval_message,
                 )
             memory_candidate_persisted = True
         except Exception as exc:
@@ -1212,7 +1417,7 @@ def run_demo_fa_chat_message(
         )
     response_directives = derive_avatar_response_directives(
         persona=avatar_persona,
-        user_message=normalized_message,
+        user_message=retrieval_message,
         lack_of_evidence=lack_of_evidence,
     )
 
@@ -1242,13 +1447,34 @@ def run_demo_fa_chat_message(
         emotion_primary=response_directives.emotion.primary,
     )
     response_answer = orchestrator_response.text
+    localized_next_question_for_response = _localize_clarification_question_for_locale(
+        candidate_enrichment.next_clarification_question if candidate_enrichment is not None else None,
+        locale=locale,
+    )
     if candidate_enrichment is not None:
-        if candidate_enrichment.next_clarification_question is not None:
-            response_answer = candidate_enrichment.next_clarification_question.question_text
+        if localized_next_question_for_response is not None:
+            response_answer = localized_next_question_for_response.question_text
         elif candidate_enrichment.enrichment_status == EnrichmentStatus.READY_FOR_OWNER_REVIEW:
-            response_answer = "Спасибо. Черновик воспоминания готов к проверке владельцем аватара."
+            response_answer = (
+                "Děkuji. Návrh vzpomínky je připraven ke kontrole vlastníkem avatara."
+                if locale == "cs"
+                else "Спасибо. Черновик воспоминания готов к проверке владельцем аватара."
+            )
+    elif locale == "cs":
+        # Ordinary grounded/lack-of-evidence answer (no clarification in
+        # progress): translate the Russian Brain answer back to Czech for
+        # display. Never silently show the Russian text if this fails.
+        response_answer = _translate_chat_text(
+            db,
+            trace_id=trace_id,
+            field_name="answer_text",
+            source_language="ru",
+            target_language="cs",
+            source_text=response_answer,
+        )
     return DemoFaChatMessageResponse(
         answer=response_answer,
+        locale=locale,
         lack_of_evidence=lack_of_evidence,
         retrieval_used=bool(retrieval_response.results),
         persona_applied=persona_applied,
@@ -1275,11 +1501,7 @@ def run_demo_fa_chat_message(
         enrichment_status=(
             candidate_enrichment.enrichment_status if candidate_enrichment is not None else None
         ),
-        next_clarification_question=(
-            candidate_enrichment.next_clarification_question
-            if candidate_enrichment is not None
-            else None
-        ),
+        next_clarification_question=localized_next_question_for_response,
         emotion=response_directives.emotion,
         face_directives=response_directives.face_directives,
         voice_directives=response_directives.voice_directives,

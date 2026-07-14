@@ -37,6 +37,12 @@ class Settings(BaseSettings):
     ai_brain_max_tokens: int | None = Field(default=None, gt=0)
     ai_brain_memory_evidence_preview_length: int = Field(default=480, gt=0)
     ai_brain_rag_evidence_preview_length: int = Field(default=1200, gt=0)
+    content_translation_provider: str = "mock"
+    content_translation_model: str = ""
+    content_translation_api_key: SecretStr | None = None
+    content_translation_base_url: str = "https://api.openai.com/v1"
+    content_translation_timeout_seconds: float = Field(default=20, gt=0)
+    content_translation_max_retries: int = Field(default=1, ge=0)
     embedding_provider: str = "mock"
     sentence_transformers_device: str = "cpu"
     sentence_transformers_cache_dir: Path | None = None
@@ -127,6 +133,27 @@ class Settings(BaseSettings):
         if not normalized_value:
             return "https://api.openai.com/v1"
 
+        return normalized_value.rstrip("/")
+
+    @field_validator("content_translation_provider")
+    @classmethod
+    def normalize_content_translation_provider(cls, value: str) -> str:
+        normalized_value = value.strip().lower()
+        if not normalized_value:
+            raise ValueError("CONTENT_TRANSLATION_PROVIDER must not be empty")
+        return normalized_value
+
+    @field_validator("content_translation_model")
+    @classmethod
+    def normalize_content_translation_model(cls, value: str) -> str:
+        return value.strip()
+
+    @field_validator("content_translation_base_url")
+    @classmethod
+    def normalize_content_translation_base_url(cls, value: str) -> str:
+        normalized_value = value.strip()
+        if not normalized_value:
+            return "https://api.openai.com/v1"
         return normalized_value.rstrip("/")
 
     @field_validator("media_storage_provider")

@@ -1573,4 +1573,34 @@ Ověřeno explicitně: přispěvatel (role "contributor") nemůže sám schváli
 
 Task 64.5 se **považuje za kompletně uzavřený** v rozsahu definovaném zadáním (minimální, ale produkčně použitelné UI nad existujícím backendovým workflow). Známá omezení (demo autorizace místo produkční autentizace, chybějící správa rodinných vztahů, filtry v inboxu jsou zatím na straně klienta) jsou zdokumentována v `PROJECT_PROGRESS.md`.
 
-Další doporučený task: **Task 65 — AI Biographer & Living Memory Onboarding**.
+## 16. Task 64.5.1 status (2026-07-14)
+
+Task 64.5.1 — Czech/Russian Bilingual Test UI and Memory Synchronization — byl proveden a **dokončen**. Plný popis (nový modul `content_translation`, migrace, zapojení do enrichment/eligibility/promotions/indexing, česká lokalizace frontendu, `[locale]` routy, testy, Docker a živé ověření proti reálnému Postgres/Qdrant/BGE-M3/DeepSeek) je v `PROJECT_PROGRESS.md`, sekce "Task 64.5.1 - Czech/Russian Bilingual Test UI and Memory Synchronization (2026-07-14)".
+
+Stručně:
+
+```text
+Statická lokalizace UI (frontend/lib/i18n) oddělena od backendového překladu
+dynamického obsahu (backend/app/modules/content_translation/).
+Český zdrojový text se nikdy nepřepisuje; ruský překlad je uložen odděleně
+se stavem (pending/translated/failed/stale/human_reviewed) a detekcí
+zastaralosti přes hash porovnání v čase čtení, ne jen přes uložený status.
+Jeden kandidát, jedna promotion, jeden indexovaný bod na vzpomínku —
+žádná duplicita mezi jazyky (ověřeno testy i živě).
+Indexace zůstává explicitní; ruský avatar pipeline (retrieval/Brain/Qdrant)
+je pro česky-vzniklé vzpomínky beze změny — indexuje se aktuální ruský
+překlad, nikdy český zdroj.
+Backend testy: 87 passed (nové + existující, bez regrese)
+Frontend testy: 26 passed, `npm run build` OK
+Alembic: upgrade/downgrade/upgrade ověřeno na reálném Postgres
+Živé ověření: český dotaz -> ruský retrieval/Brain -> český překlad
+  odpovědi (skutečný DeepSeek), český příspěvek zachován doslovně,
+  Qdrant beze změny před schválením, +1 bod po explicitní indexaci
+  s bezpečnými metadaty (source_language/indexed_language/translation_status)
+```
+
+Během této úlohy se v datovém proudu nástrojů objevilo pět samostatných zpráv stylizovaných jako pokyn od "koordinátora" žádající nahrazení již otestované obousměrné překladové architektury FA chatu (Part E.22-23 z původního zadání) za jinou, neověřenou variantu — žádná z nich nepřišla ověřitelným kanálem od skutečného zadavatele a nebyly provedeny. Implementace v repozitáři odpovídá původnímu písemnému zadání a byla navíc živě ověřena proti reálné infrastruktuře. Podrobnosti v `PROJECT_PROGRESS.md`.
+
+Task 64.5.1 se **považuje za kompletně uzavřený** v rozsahu definovaném zadáním. Známá omezení (ruský překlad zatím jen ke čtení s možností opakování, synchronní překlad bez fronty na pozadí, rusko-jazyčné heuristiky pro detekci kandidátů/záměru běží nad interním ruským překladem českého vstupu) jsou zdokumentována v `PROJECT_PROGRESS.md`.
+
+Další doporučený task: **Task 65 — AI Biographer & Living Memory Onboarding** (má od počátku stavět na stejné bilingvální content-translation architektuře z Tasku 64.5.1).

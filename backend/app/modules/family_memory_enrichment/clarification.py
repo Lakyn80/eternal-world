@@ -32,6 +32,29 @@ BEDTIME_SONG_QUESTIONS = (
     ),
 )
 
+#: Static Czech localization for the fixed clarification question templates
+#: above (Task 64.5.1, Part E.17). These are deterministic UI-adjacent
+#: templates, not dynamic user content, so they are localized directly
+#: rather than through the content_translation backend service. The
+#: canonical persisted ``question_text`` column remains Russian for
+#: backward compatibility; ``localize_question_text`` produces a
+#: display-only Czech projection for the Czech chat/review UI while both
+#: locales continue to refer to the exact same clarification record
+#: (same ``question_key``, same row, same required/status fields).
+BEDTIME_SONG_QUESTIONS_TEXT_CS = {
+    "song_title": "A pamatuješ si, jakou písničku jsem ti zpívala?",
+    "place": "Kde se to obvykle odehrávalo?",
+    "approximate_period": "Kdy to bylo — přibližně v jakém věku, roce nebo období?",
+}
+
+
+def localize_question_text(*, question_key: str, source_text: str, locale: str) -> str:
+    """Return a Czech display projection of a clarification question, or the
+    original (Russian) source text for any other locale/unknown key."""
+    if locale != "cs":
+        return source_text
+    return BEDTIME_SONG_QUESTIONS_TEXT_CS.get(question_key, source_text)
+
 
 def normalize_text(value: str) -> str:
     return " ".join(unicodedata.normalize("NFKC", value).split()).strip()

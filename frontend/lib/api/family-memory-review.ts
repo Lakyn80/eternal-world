@@ -1,9 +1,11 @@
 import { buildApiUrl } from "../api-config";
+import type { AppLocale } from "../i18n/locales";
 import type {
   ActorContext,
   AvatarMemoryIndexingRead,
   MemoryCandidateReviewDetail,
   MemoryCandidateSummaryListResponse,
+  MemoryContentTranslation,
   OwnerReviewRequestPayload,
   OwnerReviewResponse,
 } from "../../types/family-memory";
@@ -20,19 +22,38 @@ export class ApiRequestError extends Error {
   }
 }
 
-const FALLBACK_MESSAGES: Record<number, string> = {
-  400: "Некорректный запрос. Проверьте введённые данные и попробуйте ещё раз.",
-  401: "Это действие недоступно для текущего участника.",
-  403: "Это действие недоступно для текущего участника.",
-  404: "Запись не найдена. Возможно, она была удалена или ещё не создана.",
-  409: "Состояние записи изменилось на сервере. Данные будут обновлены.",
-  422: "Введённые данные не прошли проверку.",
-  500: "Временная ошибка сервиса. Попробуйте ещё раз через момент.",
-  503: "Сервис индексации временно недоступен. Попробуйте ещё раз позже.",
+const FALLBACK_MESSAGES: Record<AppLocale, Record<number, string>> = {
+  ru: {
+    400: "Некорректный запрос. Проверьте введённые данные и попробуйте ещё раз.",
+    401: "Это действие недоступно для текущего участника.",
+    403: "Это действие недоступно для текущего участника.",
+    404: "Запись не найдена. Возможно, она была удалена или ещё не создана.",
+    409: "Состояние записи изменилось на сервере. Данные будут обновлены.",
+    422: "Введённые данные не прошли проверку.",
+    500: "Временная ошибка сервиса. Попробуйте ещё раз через момент.",
+    503: "Сервис индексации временно недоступен. Попробуйте ещё раз позже.",
+  },
+  cs: {
+    400: "Neplatný požadavek. Zkontrolujte zadané údaje a zkuste to znovu.",
+    401: "Tato akce není pro současného účastníka dostupná.",
+    403: "Tato akce není pro současného účastníka dostupná.",
+    404: "Záznam nebyl nalezen. Možná byl odstraněn nebo ještě nebyl vytvořen.",
+    409: "Stav záznamu se na serveru změnil. Data budou aktualizována.",
+    422: "Zadané údaje neprošly ověřením.",
+    500: "Dočasná chyba služby. Zkuste to prosím za chvíli znovu.",
+    503: "Služba indexace je momentálně nedostupná. Zkuste to prosím později.",
+  },
 };
-const DEFAULT_FALLBACK_MESSAGE = "Не удалось выполнить действие. Попробуйте ещё раз.";
+const DEFAULT_FALLBACK_MESSAGE: Record<AppLocale, string> = {
+  ru: "Не удалось выполнить действие. Попробуйте ещё раз.",
+  cs: "Akci se nepodařilo provést. Zkuste to prosím znovu.",
+};
+const NETWORK_ERROR_MESSAGE: Record<AppLocale, string> = {
+  ru: "Не удалось связаться с сервером. Проверьте подключение.",
+  cs: "Nepodařilo se spojit se serverem. Zkontrolujte připojení.",
+};
 
-async function parseErrorDetail(response: Response): Promise<string> {
+async function parseErrorDetail(response: Response, locale: AppLocale): Promise<string> {
   try {
     const payload = (await response.json()) as { detail?: unknown };
     if (payload && typeof payload.detail === "string" && payload.detail.trim()) {
@@ -41,18 +62,18 @@ async function parseErrorDetail(response: Response): Promise<string> {
   } catch {
     // Body was not JSON (e.g. network gateway page) - fall back to a safe generic message.
   }
-  return FALLBACK_MESSAGES[response.status] ?? DEFAULT_FALLBACK_MESSAGE;
+  return FALLBACK_MESSAGES[locale][response.status] ?? DEFAULT_FALLBACK_MESSAGE[locale];
 }
 
-async function requestJson<T>(url: string, init?: RequestInit): Promise<T> {
+async function requestJson<T>(url: string, init?: RequestInit, locale: AppLocale = "ru"): Promise<T> {
   let response: Response;
   try {
     response = await fetch(url, init);
   } catch {
-    throw new ApiRequestError(0, "Не удалось связаться с сервером. Проверьте подключение.");
+    throw new ApiRequestError(0, NETWORK_ERROR_MESSAGE[locale]);
   }
   if (!response.ok) {
-    throw new ApiRequestError(response.status, await parseErrorDetail(response));
+    throw new ApiRequestError(response.status, await parseErrorDetail(response, locale));
   }
   return (await response.json()) as T;
 }
@@ -71,7 +92,8 @@ function actorSearchParams(actor: ActorContext | null): URLSearchParams {
 
 export async function fetchMemoryCandidateSummaries(
   profileId: number | null,
-  actor: ActorContext | null
+  actor: ActorContext | null,
+  locale: AppLocale = "ru"
 ): Promise<MemoryCandidateSummaryListResponse> {
   const params = actorSearchParams(actor);
   if (profileId !== null) {
@@ -79,28 +101,35 @@ export async function fetchMemoryCandidateSummaries(
   }
   const query = params.toString();
   return requestJson<MemoryCandidateSummaryListResponse>(
-    buildApiUrl(`/api/demo/fa-chat/memory-candidates/review-summary${query ? `?${query}` : ""}`)
+    buildApiUrl(`/api/demo/fa-chat/memory-candidates/review-summary${query ? `?${query}` : ""}`),
+    undefined,
+    locale
   );
 }
 
 export async function fetchMemoryCandidateReviewDetail(
   candidateId: number,
   profileId: number | null,
-  actor: ActorContext | null
+  actor: ActorContext | null,
+  locale: AppLocale = "ru"
 ): Promise<MemoryCandidateReviewDetail> {
   const params = actorSearchParams(actor);
   if (profileId !== null) {
     params.set("profile_id", String(profileId));
   }
+  params.set("locale", locale);
   const query = params.toString();
   return requestJson<MemoryCandidateReviewDetail>(
-    buildApiUrl(`/api/demo/fa-chat/memory-candidates/${candidateId}/review-detail${query ? `?${query}` : ""}`)
+    buildApiUrl(`/api/demo/fa-chat/memory-candidates/${candidateId}/review-detail${query ? `?${query}` : ""}`),
+    undefined,
+    locale
   );
 }
 
 export async function submitOwnerReview(
   candidateId: number,
-  payload: OwnerReviewRequestPayload
+  payload: OwnerReviewRequestPayload,
+  locale: AppLocale = "ru"
 ): Promise<OwnerReviewResponse> {
   return requestJson<OwnerReviewResponse>(
     buildApiUrl(`/api/demo/fa-chat/memory-candidates/${candidateId}/owner-review`),
@@ -108,14 +137,16 @@ export async function submitOwnerReview(
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
-    }
+    },
+    locale
   );
 }
 
 export async function submitIndexMemoryPromotion(
   promotionId: number,
   profileId: number | null,
-  actor: ActorContext
+  actor: ActorContext,
+  locale: AppLocale = "ru"
 ): Promise<AvatarMemoryIndexingRead> {
   const params = actorSearchParams(actor);
   if (profileId !== null) {
@@ -124,6 +155,32 @@ export async function submitIndexMemoryPromotion(
   const query = params.toString();
   return requestJson<AvatarMemoryIndexingRead>(
     buildApiUrl(`/api/demo/fa-chat/memory-promotions/${promotionId}/index${query ? `?${query}` : ""}`),
-    { method: "POST" }
+    { method: "POST" },
+    locale
+  );
+}
+
+/** Explicit, owner-only translation retry (Task 64.5.1, Part G.29). Never
+ * approves or indexes the candidate; safe to call repeatedly. */
+export async function retryMemoryCandidateTranslation(
+  candidateId: number,
+  targetLanguage: AppLocale,
+  profileId: number | null,
+  actor: ActorContext,
+  locale: AppLocale = "ru"
+): Promise<MemoryContentTranslation> {
+  const params = actorSearchParams(actor);
+  if (profileId !== null) {
+    params.set("profile_id", String(profileId));
+  }
+  const query = params.toString();
+  return requestJson<MemoryContentTranslation>(
+    buildApiUrl(
+      `/api/demo/fa-chat/memory-candidates/${candidateId}/translations/${targetLanguage}/retry${
+        query ? `?${query}` : ""
+      }`
+    ),
+    { method: "POST" },
+    locale
   );
 }

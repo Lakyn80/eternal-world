@@ -1,0 +1,25 @@
+.switcher {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.85rem;
+}
+
+.separator {
+  color: #9a8f7a;
+  padding: 0 0.15rem;
+}
+
+.localeLink {
+  color: #6b5209;
+  text-decoration: underline;
+}
+
+.localeLink:hover {
+  color: #4a3800;
+}
+
+.activeLocale {
+  font-weight: 700;
+  color: #2f2a1f;
+}

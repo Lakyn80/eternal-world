@@ -196,6 +196,32 @@ export type AvatarMemoryIndexingRead = {
   result: "indexed" | "already_indexed";
 };
 
+export type TranslationStatus = "pending" | "translated" | "failed" | "stale" | "human_reviewed";
+
+export type MemoryContentTranslation = {
+  id: number;
+  candidate_id: number;
+  contribution_id: number | null;
+  clarification_id: number | null;
+  entity_type: string;
+  entity_id: string;
+  field_name: string;
+  source_language: string;
+  target_language: string;
+  source_text: string;
+  translated_text: string | null;
+  source_hash: string;
+  translation_status: TranslationStatus;
+  translation_provider: string | null;
+  translation_model: string | null;
+  translation_version: number;
+  translated_at: string | null;
+  reviewed_at: string | null;
+  reviewed_by: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
 export type MemoryCandidateReviewDetail = {
   candidate: MemoryCandidateRead;
   enrichment: CandidateEnrichmentRead | null;
@@ -211,6 +237,11 @@ export type MemoryCandidateReviewDetail = {
   can_approve_multiple_perspectives: boolean;
   can_index: boolean;
   blocked_reasons: string[];
+  // Task 64.5.1 bilingual additions.
+  requested_locale: "cs" | "ru";
+  source_language: string | null;
+  translations: MemoryContentTranslation[];
+  translation_block_reason: string | null;
 };
 
 export type OwnerReviewRequestPayload = {

@@ -983,6 +983,107 @@ class MemoryClarificationQuestion(TimestampMixin, Base):
     )
 
 
+class MemoryContentTranslation(TimestampMixin, Base):
+    """Current backend-computed translation state for one translatable field.
+
+    Task 64.5.1 (Czech/Russian bilingual memory workflow). Holds the source
+    text (never overwritten by a translation), the current translated text
+    for one target language, and the translation lifecycle status. One row
+    represents the *current* translation state for
+    ``(entity_type, entity_id, field_name, target_language)`` - it is not a
+    full historical log. Historical text itself is already append-only via
+    ``FamilyMemoryContribution`` (each edit is a new contribution row); this
+    table only needs to track "what is the current translation of the
+    current source text", which it does via ``source_hash`` comparison and
+    a monotonically increasing ``translation_version``. Re-translations
+    update the row in place after first marking it ``stale``.
+
+    A narrow ``entity_type`` + string ``entity_id`` addressing scheme is
+    used instead of a generic polymorphic foreign key, because the
+    translatable entities are heterogeneous: a candidate's finalized text
+    (integer id), an append-only contribution (integer id, immutable after
+    creation), or an ephemeral FA-chat turn addressed by ``trace_id``
+    (no persistent row at all). ``candidate_id``/``contribution_id``/
+    ``clarification_id`` remain real nullable foreign keys wherever the
+    entity does have a durable row, purely for efficient lookups/joins.
+    """
+
+    __tablename__ = "memory_content_translations"
+    __table_args__ = (
+        CheckConstraint(
+            "entity_type IN ('memory_candidate', 'family_memory_contribution', "
+            "'clarification_question', 'fa_chat_turn')",
+            name="memory_content_translations_entity_type",
+        ),
+        CheckConstraint(
+            "source_language IN ('cs', 'ru')",
+            name="memory_content_translations_source_language",
+        ),
+        CheckConstraint(
+            "target_language IN ('cs', 'ru')",
+            name="memory_content_translations_target_language",
+        ),
+        CheckConstraint(
+            "translation_status IN ('pending', 'translated', 'failed', 'stale', 'human_reviewed')",
+            name="memory_content_translations_status",
+        ),
+        CheckConstraint(
+            "translation_version >= 1",
+            name="memory_content_translations_version_positive",
+        ),
+        Index(
+            "ix_mct_entity_field_target_unique",
+            "entity_type",
+            "entity_id",
+            "field_name",
+            "target_language",
+            unique=True,
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    candidate_id: Mapped[int | None] = mapped_column(
+        ForeignKey("conversation_memory_candidates.id", ondelete="CASCADE"),
+        index=True,
+        nullable=True,
+    )
+    contribution_id: Mapped[int | None] = mapped_column(
+        ForeignKey("family_memory_contributions.id", ondelete="CASCADE"),
+        index=True,
+        nullable=True,
+    )
+    clarification_id: Mapped[int | None] = mapped_column(
+        ForeignKey("memory_clarification_questions.id", ondelete="CASCADE"),
+        index=True,
+        nullable=True,
+    )
+    entity_type: Mapped[str] = mapped_column(String(32), nullable=False)
+    entity_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    field_name: Mapped[str] = mapped_column(String(64), nullable=False)
+    source_language: Mapped[str] = mapped_column(String(8), nullable=False)
+    target_language: Mapped[str] = mapped_column(String(8), nullable=False)
+    source_text: Mapped[str] = mapped_column(Text, nullable=False)
+    translated_text: Mapped[str | None] = mapped_column(Text, nullable=True)
+    source_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    translation_status: Mapped[str] = mapped_column(
+        String(32), nullable=False, default="pending", server_default=text("'pending'")
+    )
+    translation_provider: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    translation_model: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    translation_version: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=1, server_default=text("1")
+    )
+    translated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    reviewed_by: Mapped[str | None] = mapped_column(String(120), nullable=True)
+
+    candidate: Mapped[ConversationMemoryCandidate | None] = relationship(foreign_keys=[candidate_id])
+    contribution: Mapped[FamilyMemoryContribution | None] = relationship(foreign_keys=[contribution_id])
+    clarification: Mapped[MemoryClarificationQuestion | None] = relationship(
+        foreign_keys=[clarification_id]
+    )
+
+
 class MediaAsset(TimestampMixin, Base):
     __tablename__ = "media_assets"
     __table_args__ = (

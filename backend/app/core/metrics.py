@@ -194,6 +194,27 @@ MEMORY_DISPUTES_CURRENT = Gauge(
     "Current family memory candidates by durable dispute status.",
     labelnames=("status",),
 )
+CONTENT_TRANSLATION_TOTAL = Counter(
+    "content_translation_total",
+    "Total backend content translation attempts (Task 64.5.1 bilingual workflow).",
+    labelnames=("source_language", "target_language", "result"),
+)
+CONTENT_TRANSLATION_DURATION_SECONDS = Histogram(
+    "content_translation_duration_seconds",
+    "Backend content translation attempt duration in seconds.",
+    labelnames=("source_language", "target_language"),
+)
+CONTENT_TRANSLATION_STATUS_CURRENT = Gauge(
+    "content_translation_status_current",
+    "Current count of translatable-field rows by translation status.",
+    labelnames=("status",),
+)
+CONTENT_TRANSLATION_RETRY_TOTAL = Counter(
+    "content_translation_retry_total",
+    "Total explicit content translation retries.",
+    labelnames=("result",),
+)
+
 AVATAR_EVAL_RUNS_TOTAL = Counter(
     "avatar_eval_runs_total",
     "Total avatar answer-quality evaluation runs.",
@@ -290,7 +311,15 @@ _PROMOTION_BLOCK_REASONS = frozenset({
     "privacy_scope",
     "disputed",
     "unauthorized_reviewer",
+    "russian_translation_missing",
+    "russian_translation_failed",
+    "russian_translation_stale",
 })
+_CONTENT_TRANSLATION_LANGUAGE_PAIRS = frozenset({"cs_ru", "ru_cs"})
+_CONTENT_TRANSLATION_RESULTS = frozenset({"success", "failed"})
+_CONTENT_TRANSLATION_STATUSES = frozenset(
+    {"pending", "translated", "failed", "stale", "human_reviewed"}
+)
 _AVATAR_EVAL_RESULTS = frozenset({"passed", "failed"})
 _AVATAR_EVAL_CATEGORIES = frozenset({
     "original_seeded_memory",
@@ -547,6 +576,44 @@ def observe_memory_promotion_blocked(*, reason: str) -> None:
     MEMORY_PROMOTION_BLOCKED_TOTAL.labels(
         normalized if normalized in _PROMOTION_BLOCK_REASONS else "other"
     ).inc()
+
+
+def _normalize_content_translation_language_pair(*, source_language: str, target_language: str) -> tuple[str, str]:
+    pair_key = f"{source_language.strip().lower()}_{target_language.strip().lower()}"
+    if pair_key not in _CONTENT_TRANSLATION_LANGUAGE_PAIRS:
+        return "other", "other"
+    return source_language.strip().lower(), target_language.strip().lower()
+
+
+def observe_content_translation_attempt(
+    *,
+    source_language: str,
+    target_language: str,
+    result: str,
+    duration_seconds: float,
+) -> None:
+    normalized_source, normalized_target = _normalize_content_translation_language_pair(
+        source_language=source_language, target_language=target_language
+    )
+    normalized_result = result.strip().lower()
+    if normalized_result not in _CONTENT_TRANSLATION_RESULTS:
+        normalized_result = "other"
+    CONTENT_TRANSLATION_TOTAL.labels(normalized_source, normalized_target, normalized_result).inc()
+    CONTENT_TRANSLATION_DURATION_SECONDS.labels(normalized_source, normalized_target).observe(
+        max(0.0, duration_seconds)
+    )
+
+
+def observe_content_translation_retry(*, result: str) -> None:
+    normalized_result = result.strip().lower()
+    CONTENT_TRANSLATION_RETRY_TOTAL.labels(
+        normalized_result if normalized_result in _CONTENT_TRANSLATION_RESULTS else "other"
+    ).inc()
+
+
+def set_content_translation_status_current(*, counts_by_status: dict[str, int]) -> None:
+    for status in _CONTENT_TRANSLATION_STATUSES:
+        CONTENT_TRANSLATION_STATUS_CURRENT.labels(status).set(max(0, int(counts_by_status.get(status, 0))))
 
 
 def set_memory_enrichment_current(

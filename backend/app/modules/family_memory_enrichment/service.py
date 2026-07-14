@@ -16,6 +16,8 @@ from app.core.metrics import (
 )
 from app.db.models import ConversationMemoryCandidate, FamilyMemoryContribution, MemoryClarificationQuestion
 from app.modules.avatar_memory_promotions import service as promotion_service
+from app.modules.content_translation import service as content_translation_service
+from app.modules.content_translation.schemas import TranslationFieldRequest
 from app.modules.family_memory_enrichment import repository
 from app.modules.family_memory_enrichment.clarification import (
     classify_memory_type,
@@ -54,6 +56,100 @@ from app.modules.family_memory_enrichment.schemas import (
 
 DEMO_OWNER_ACTOR_ID = "demo-owner-eva"
 logger = get_logger("family_memory_enrichment")
+
+#: The only source language that currently triggers automatic backend
+#: translation of dynamic content (Task 64.5.1). Russian remains the
+#: canonical avatar pipeline language, so Russian-origin content is never
+#: auto-translated to Czech - a Czech view of a Russian-origin record can
+#: only be produced through the explicit translation-retry endpoint.
+CZECH_SOURCE_LANGUAGE = "cs"
+RUSSIAN_TARGET_LANGUAGE = "ru"
+FINALIZED_MEMORY_FIELD_NAME = "finalized_memory_text"
+
+#: Default owner-authored texts shown when the owner does not type a note,
+#: localized by the candidate's source language so a Czech-origin candidate
+#: never surfaces a Russian-only default string in a Czech interface. These
+#: are static UI-adjacent defaults (not free-form content), so they are
+#: localized directly rather than through the content_translation service.
+_DEFAULT_REQUEST_MORE_DETAILS_TEXT = {
+    "ru": "Пожалуйста, добавьте ещё одну важную деталь об этом воспоминании.",
+    "cs": "Prosím, doplňte ještě jeden důležitý detail k této vzpomínce.",
+}
+_DEFAULT_DISPUTE_TEXT = {
+    "ru": "Владелец отметил воспоминание как спорное.",
+    "cs": "Vlastník označil tuto vzpomínku jako spornou.",
+}
+_DEFAULT_OWNER_CONFIRMATION_TEXT = {
+    "ru": "Владелец подтвердил финальный вариант воспоминания.",
+    "cs": "Vlastník potvrdil finální verzi vzpomínky.",
+}
+
+
+def _localized_default_text(mapping: dict[str, str], *, language: str | None) -> str:
+    return mapping.get(language or "ru", mapping["ru"])
+
+
+def _translate_contribution_if_czech_origin(
+    db: Session,
+    *,
+    candidate: ConversationMemoryCandidate,
+    contribution: FamilyMemoryContribution,
+) -> None:
+    """Backend-only translation of a newly created contribution (Part E.16-21).
+
+    A translation-provider failure is captured and recorded as a
+    ``failed``-status row by the translation service itself; it never
+    raises here and never rolls back the (already flushed) contribution.
+    """
+    if candidate.language != CZECH_SOURCE_LANGUAGE:
+        return
+    content_translation_service.translate_content_field(
+        db,
+        TranslationFieldRequest(
+            candidate_id=candidate.id,
+            contribution_id=contribution.id,
+            entity_type="family_memory_contribution",
+            entity_id=str(contribution.id),
+            field_name="contribution_text",
+            source_language=CZECH_SOURCE_LANGUAGE,
+            target_language=RUSSIAN_TARGET_LANGUAGE,
+            source_text=contribution.contribution_text,
+        ),
+    )
+
+
+def _translate_finalized_memory_if_czech_origin(
+    db: Session,
+    *,
+    candidate: ConversationMemoryCandidate,
+) -> None:
+    """Backend-only translation of the candidate's finalized memory text.
+
+    Called every time ``finalized_memory_text`` is (re)computed. If the
+    source text changed since the last translation, the previous
+    translation row is superseded (see ``content_translation.repository``)
+    and a fresh translation attempt is made automatically - the owner never
+    has to manually request a translation for it to exist, but indexing
+    still independently re-validates freshness via
+    ``eligibility.get_finalized_memory_translation_block_reason``.
+    """
+    if candidate.language != CZECH_SOURCE_LANGUAGE:
+        return
+    finalized_text = (candidate.finalized_memory_text or "").strip()
+    if not finalized_text:
+        return
+    content_translation_service.translate_content_field(
+        db,
+        TranslationFieldRequest(
+            candidate_id=candidate.id,
+            entity_type="memory_candidate",
+            entity_id=str(candidate.id),
+            field_name=FINALIZED_MEMORY_FIELD_NAME,
+            source_language=CZECH_SOURCE_LANGUAGE,
+            target_language=RUSSIAN_TARGET_LANGUAGE,
+            source_text=finalized_text,
+        ),
+    )
 
 
 class FamilyMemoryNotFoundError(Exception):
@@ -198,6 +294,7 @@ def _append_contribution(
     )
     db.flush()
     observe_memory_contribution_created(role=actor.actor_role.value)
+    _translate_contribution_if_czech_origin(db, candidate=candidate, contribution=contribution)
     return contribution
 
 
@@ -260,6 +357,7 @@ def _synchronize_candidate(
     if draft.has_conflict:
         candidate.dispute_status = DisputeStatus.DISPUTED.value
         observe_memory_dispute(result=candidate.dispute_status)
+    _translate_finalized_memory_if_czech_origin(db, candidate=candidate)
     return None
 
 
@@ -271,7 +369,18 @@ def initialize_candidate(
     actor: DemoFamilyActorContext,
     initial_text: str,
     trace_id: str | None = None,
+    classification_hint_text: str | None = None,
 ) -> CandidateEnrichmentRead:
+    """Create the candidate's first contribution and run the deterministic finalizer.
+
+    ``classification_hint_text`` lets a caller run ``classify_memory_type``
+    (a Russian-keyword heuristic) against a different string than the text
+    that is actually stored - used by the Czech FA chat path, which
+    classifies against the Russian retrieval translation of the message
+    while still persisting the original Czech text verbatim as
+    ``initial_text``. Defaults to ``initial_text`` (unchanged behavior for
+    every existing Russian-origin caller).
+    """
     started_at = perf_counter()
     validate_demo_actor(actor)
     candidate = repository.get_candidate(
@@ -285,7 +394,7 @@ def initialize_candidate(
     if candidate.status != "needs_review":
         raise FamilyMemoryInvalidTransitionError("Only needs-review candidates can be enriched")
     if repository.count_contributions(db, candidate_id=candidate.id) == 0:
-        candidate.memory_type = classify_memory_type(initial_text).value
+        candidate.memory_type = classify_memory_type(classification_hint_text or initial_text).value
         candidate.enrichment_status = EnrichmentStatus.DRAFT.value
         candidate.finalized_memory_text = None
         candidate.privacy_scope = "private_owner"
@@ -543,6 +652,7 @@ def finalize_candidate(
     candidate.unresolved_clarification_count = 0
     candidate.dispute_status = "disputed" if draft.has_conflict else candidate.dispute_status
     candidate.version += 1
+    _translate_finalized_memory_if_czech_origin(db, candidate=candidate)
     db.commit()
     log_event(
         logger,
@@ -594,7 +704,8 @@ def owner_review(
             db,
             candidate_id=candidate.id,
             question_key=f"owner_request_{candidate.version}",
-            question_text=payload.review_note or "Пожалуйста, добавьте ещё одну важную деталь об этом воспоминании.",
+            question_text=payload.review_note
+            or _localized_default_text(_DEFAULT_REQUEST_MORE_DETAILS_TEXT, language=candidate.language),
             language=candidate.language or "ru",
             status="pending",
             required=True,
@@ -612,7 +723,8 @@ def owner_review(
             candidate=candidate,
             actor=payload,
             contribution_type=ContributionType.DISPUTE_STATEMENT,
-            contribution_text=payload.review_note or "Владелец отметил воспоминание как спорное.",
+            contribution_text=payload.review_note
+            or _localized_default_text(_DEFAULT_DISPUTE_TEXT, language=candidate.language),
             structured_details=None,
             language=candidate.language,
             trace_id=None,
@@ -649,6 +761,7 @@ def owner_review(
             candidate.finalized_by = payload.actor_id
             candidate.dispute_status = DisputeStatus.RESOLVED.value
             observe_memory_dispute(result=candidate.dispute_status)
+            _translate_finalized_memory_if_czech_origin(db, candidate=candidate)
         elif action == OwnerReviewAction.APPROVE_MULTIPLE_PERSPECTIVES:
             if candidate.dispute_status != "disputed":
                 raise FamilyMemoryInvalidTransitionError("Candidate has no unresolved dispute")
@@ -669,9 +782,19 @@ def owner_review(
                 candidate.finalized_memory_text = payload.finalized_memory_text
                 candidate.finalized_at = now
                 candidate.finalized_by = payload.actor_id
+                _translate_finalized_memory_if_czech_origin(db, candidate=candidate)
             if not candidate.finalized_memory_text or not any(
                 marker in candidate.finalized_memory_text.casefold()
-                for marker in ("указывает", "вспоминает", "точка зрения", "спор")
+                for marker in (
+                    "указывает",
+                    "вспоминает",
+                    "точка зрения",
+                    "спор",
+                    "uvádí",
+                    "vzpomíná",
+                    "pohled",
+                    "spor",
+                )
             ):
                 raise FamilyMemoryInvalidTransitionError("Attributed multiple-perspective text is required")
             candidate.dispute_status = DisputeStatus.RESOLVED.value

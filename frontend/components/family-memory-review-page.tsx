@@ -8,9 +8,13 @@ import {
   ApiRequestError,
   fetchMemoryCandidateReviewDetail,
   fetchMemoryCandidateSummaries,
+  retryMemoryCandidateTranslation,
   submitIndexMemoryPromotion,
   submitOwnerReview,
 } from "../lib/api/family-memory-review";
+import { getDictionary, type Dictionary } from "../lib/i18n/get-dictionary";
+import { toIntlLocaleTag, type AppLocale } from "../lib/i18n/locales";
+import { LanguageSwitcher } from "./language-switcher";
 import type {
   ActorContext,
   ClarificationQuestionRead,
@@ -18,6 +22,7 @@ import type {
   FamilyMemoryContributionRead,
   MemoryCandidateReviewDetail,
   MemoryCandidateSummary,
+  MemoryContentTranslation,
   OwnerReviewAction,
   PrivacyScope,
 } from "../types/family-memory";
@@ -26,18 +31,20 @@ import styles from "./family-memory-review-page.module.css";
 const FINALIZED_TEXT_MAX_LENGTH = 500;
 const NOTE_MAX_LENGTH = 500;
 
-const DEMO_ACTORS: { key: string; actor: ActorContext; label: string }[] = [
-  {
-    key: "owner",
-    actor: { actorId: "demo-owner-eva", actorRole: "owner" },
-    label: "Владелец аватара (Ева)",
-  },
-  {
-    key: "contributor",
-    actor: { actorId: "family-anna", actorRole: "contributor", relationshipToOwner: "внучка" },
-    label: "Внучка Анна (участник семьи)",
-  },
-];
+function buildDemoActors(dictionary: Dictionary): { key: string; actor: ActorContext; label: string }[] {
+  return [
+    {
+      key: "owner",
+      actor: { actorId: "demo-owner-eva", actorRole: "owner" },
+      label: dictionary.actorBar.ownerLabel,
+    },
+    {
+      key: "contributor",
+      actor: { actorId: "family-anna", actorRole: "contributor", relationshipToOwner: "внучка" },
+      label: dictionary.actorBar.contributorLabel,
+    },
+  ];
+}
 
 type FilterValue =
   | "all"
@@ -50,115 +57,32 @@ type FilterValue =
   | "pending_index"
   | "indexed";
 
-const FILTER_OPTIONS: { value: FilterValue; label: string }[] = [
-  { value: "all", label: "Все" },
-  { value: "needs_review", label: "Требует проверки" },
-  { value: "collecting_details", label: "Сбор деталей" },
-  { value: "ready_for_owner_review", label: "Готово к проверке" },
-  { value: "approved", label: "Подтверждено" },
-  { value: "rejected", label: "Отклонено" },
-  { value: "disputed", label: "Спорное" },
-  { value: "pending_index", label: "Ожидает индексации" },
-  { value: "indexed", label: "Проиндексировано" },
+const FILTER_VALUES: FilterValue[] = [
+  "all",
+  "needs_review",
+  "collecting_details",
+  "ready_for_owner_review",
+  "approved",
+  "rejected",
+  "disputed",
+  "pending_index",
+  "indexed",
 ];
 
-const REVIEW_STATUS_LABELS: Record<string, string> = {
-  needs_review: "Требует проверки",
-  approved: "Подтверждено",
-  rejected: "Отклонено",
-  archived: "В архиве",
-};
-
-const ENRICHMENT_STATUS_LABELS: Record<string, string> = {
-  draft: "Черновик",
-  collecting_details: "Сбор деталей",
-  ready_for_owner_review: "Готово к проверке",
-};
-
-const DISPUTE_STATUS_LABELS: Record<string, string> = {
-  none: "Без спора",
-  disputed: "Спорное",
-  resolved: "Спор разрешён",
-};
-
-const PROMOTION_STATUS_LABELS: Record<string, string> = {
-  pending_index: "Ожидает индексации",
-  indexed: "Проиндексировано",
-  failed: "Ошибка индексации",
-  cancelled: "Отменено",
-};
-
-const CONTRIBUTION_TYPE_LABELS: Record<ContributionType, string> = {
-  initial_claim: "Первоначальный рассказ",
-  clarification_answer: "Ответ на уточнение",
-  owner_correction: "Правка владельца",
-  owner_confirmation: "Подтверждение владельца",
-  reviewer_note: "Заметка проверяющего",
-  dispute_statement: "Заявление о споре",
-  system_normalization: "Системная нормализация",
-};
-
-const CLARIFICATION_STATUS_LABELS: Record<string, string> = {
-  pending: "Ожидает ответа",
-  answered: "Отвечено",
-  skipped: "Пропущено",
-  cancelled: "Отменено",
-};
-
-const PRIVACY_SCOPE_OPTIONS: {
-  value: PrivacyScope;
-  label: string;
-  indexable: boolean;
-  description: string;
-}[] = [
-  {
-    value: "private_owner",
-    label: "Только владелец",
-    indexable: false,
-    description: "Можно подтвердить, но пока нельзя проиндексировать.",
-  },
-  {
-    value: "selected_family",
-    label: "Выбранные родственники",
-    indexable: false,
-    description:
-      "Можно подтвердить, но индексация недоступна, пока не появится учёт прав доступа по кругу семьи.",
-  },
-  {
-    value: "all_family",
-    label: "Вся семья",
-    indexable: true,
-    description: "Может быть проиндексировано после подтверждения.",
-  },
-  {
-    value: "public_legacy",
-    label: "Публичное наследие",
-    indexable: true,
-    description: "Может быть проиндексировано после подтверждения.",
-  },
-];
-
-const BLOCKED_REASON_LABELS: Record<string, string> = {
-  legacy_workflow_not_supported_in_review_ui: "Это старый формат эпизода без семейной проверки.",
-  actor_is_not_owner: "Только владелец аватара может выполнять это действие.",
-  candidate_review_already_terminal: "Проверка этого эпизода уже завершена.",
-  collecting_details: "Ожидаются ответы на уточняющие вопросы.",
-  not_ready_for_review: "Эпизод ещё не готов к проверке владельцем.",
-  disputed: "Есть неразрешённое расхождение во мнениях.",
-  not_promoted_yet: "Эпизод ещё не подтверждён владельцем.",
-  privacy_scope_not_indexable: "При текущей области приватности индексация недоступна.",
-};
-
-function blockedReasonLabel(reason: string): string {
-  return BLOCKED_REASON_LABELS[reason] ?? (reason.startsWith("promotion_status_") ? "" : reason);
+function blockedReasonLabel(dictionary: Dictionary, reason: string): string {
+  const known = (dictionary.blockedReasons as Record<string, string>)[reason];
+  if (known) {
+    return known;
+  }
+  return reason.startsWith("promotion_status_") ? "" : reason;
 }
 
-function formatDateTime(value: string | null): string {
+function formatDateTime(value: string | null, locale: AppLocale): string {
   if (!value) {
     return "—";
   }
   try {
-    return new Date(value).toLocaleString("ru-RU", {
+    return new Date(value).toLocaleString(toIntlLocaleTag(locale), {
       day: "2-digit",
       month: "2-digit",
       year: "numeric",
@@ -186,23 +110,55 @@ type PendingAction =
   | { type: OwnerReviewAction }
   | { type: "index" };
 
-const ACTION_LABELS: Record<OwnerReviewAction, string> = {
-  confirm: "Подтвердить",
-  edit_and_confirm: "Сохранить и подтвердить",
-  reject: "Отклонить",
-  request_more_details: "Запросить больше деталей",
-  mark_disputed: "Отметить как спорное",
-  approve_multiple_perspectives: "Подтвердить с разными точками зрения",
-};
+function translationStatusLabel(
+  dictionary: Dictionary,
+  status: MemoryContentTranslation["translation_status"] | "source"
+): string {
+  switch (status) {
+    case "source":
+      return dictionary.translationPanel.statusOriginal;
+    case "translated":
+      return dictionary.translationPanel.statusTranslated;
+    case "pending":
+      return dictionary.translationPanel.statusPending;
+    case "failed":
+      return dictionary.translationPanel.statusFailed;
+    case "stale":
+      return dictionary.translationPanel.statusStale;
+    case "human_reviewed":
+      return dictionary.translationPanel.statusHumanReviewed;
+    default:
+      return status;
+  }
+}
 
-export function FamilyMemoryReviewPage() {
+/** Finds the current translation row for the candidate's finalized memory
+ * text targeting the given language, if one exists. */
+function findFinalizedTranslation(
+  translations: MemoryContentTranslation[] | undefined,
+  targetLanguage: AppLocale
+): MemoryContentTranslation | null {
+  return (
+    (translations ?? []).find(
+      (row) =>
+        row.entity_type === "memory_candidate" &&
+        row.field_name === "finalized_memory_text" &&
+        row.target_language === targetLanguage
+    ) ?? null
+  );
+}
+
+export function FamilyMemoryReviewPage({ locale }: { locale: AppLocale }) {
+  const dictionary = getDictionary(locale);
+  const demoActors = useMemo(() => buildDemoActors(dictionary), [dictionary]);
+
   const searchParams = useSearchParams();
   const deepLinkCandidateId = searchParams?.get("candidate");
 
   const [actorKey, setActorKey] = useState<string>("owner");
   const actor = useMemo(
-    () => DEMO_ACTORS.find((item) => item.key === actorKey)?.actor ?? DEMO_ACTORS[0].actor,
-    [actorKey]
+    () => demoActors.find((item) => item.key === actorKey)?.actor ?? demoActors[0].actor,
+    [actorKey, demoActors]
   );
   const isOwnerSelected = actor.actorRole === "owner";
 
@@ -225,6 +181,7 @@ export function FamilyMemoryReviewPage() {
   const [actionBusy, setActionBusy] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [lastResultMessage, setLastResultMessage] = useState<string | null>(null);
+  const [translationRetryBusy, setTranslationRetryBusy] = useState(false);
   const actionBusyRef = useRef(false);
 
   const deepLinkAppliedRef = useRef(false);
@@ -233,24 +190,22 @@ export function FamilyMemoryReviewPage() {
     setSummariesLoading(true);
     setSummariesError(null);
     try {
-      const response = await fetchMemoryCandidateSummaries(null, actor);
+      const response = await fetchMemoryCandidateSummaries(null, actor, locale);
       setSummaries(response.items);
     } catch (error) {
       setSummaries(null);
-      setSummariesError(
-        error instanceof ApiRequestError ? error.detail : "Не удалось загрузить список эпизодов."
-      );
+      setSummariesError(error instanceof ApiRequestError ? error.detail : dictionary.inbox.loadError);
     } finally {
       setSummariesLoading(false);
     }
-  }, [actor]);
+  }, [actor, locale, dictionary.inbox.loadError]);
 
   const loadDetail = useCallback(
     async (candidateId: number) => {
       setDetailLoading(true);
       setDetailError(null);
       try {
-        const response = await fetchMemoryCandidateReviewDetail(candidateId, null, actor);
+        const response = await fetchMemoryCandidateReviewDetail(candidateId, null, actor, locale);
         setDetail(response);
         setEditableFinalizedText(response.candidate.finalized_memory_text ?? "");
         setPrivacyScope(
@@ -260,14 +215,12 @@ export function FamilyMemoryReviewPage() {
         setRejectionReason("");
       } catch (error) {
         setDetail(null);
-        setDetailError(
-          error instanceof ApiRequestError ? error.detail : "Не удалось загрузить карточку эпизода."
-        );
+        setDetailError(error instanceof ApiRequestError ? error.detail : dictionary.detail.loadError);
       } finally {
         setDetailLoading(false);
       }
     },
-    [actor]
+    [actor, locale, dictionary.detail.loadError]
   );
 
   useEffect(() => {
@@ -355,23 +308,21 @@ export function FamilyMemoryReviewPage() {
     setActionBusy(true);
     setActionError(null);
     try {
-      const response = await submitOwnerReview(detail.candidate.candidate_id, payload);
+      const response = await submitOwnerReview(detail.candidate.candidate_id, payload, locale);
       setLastResultMessage(
         response.review_status === "approved"
-          ? "Эпизод подтверждён владельцем."
+          ? dictionary.resultMessages.approved
           : response.review_status === "rejected"
-            ? "Эпизод отклонён."
-            : "Статус эпизода обновлён."
+            ? dictionary.resultMessages.rejected
+            : dictionary.resultMessages.statusUpdated
       );
       await refreshAfterAction();
     } catch (error) {
       if (error instanceof ApiRequestError && error.status === 409) {
-        setActionError("Состояние эпизода изменилось на сервере. Данные обновлены, проверьте текущий статус.");
+        setActionError(dictionary.errors.statusChanged);
         await refreshAfterAction();
       } else {
-        setActionError(
-          error instanceof ApiRequestError ? error.detail : "Не удалось выполнить действие. Попробуйте ещё раз."
-        );
+        setActionError(error instanceof ApiRequestError ? error.detail : dictionary.errors.genericAction);
       }
     } finally {
       setActionBusy(false);
@@ -390,30 +341,42 @@ export function FamilyMemoryReviewPage() {
     setActionBusy(true);
     setActionError(null);
     try {
-      const result = await submitIndexMemoryPromotion(detail.promotion.promotion_id, null, actor);
+      const result = await submitIndexMemoryPromotion(detail.promotion.promotion_id, null, actor, locale);
       setLastResultMessage(
         result.result === "already_indexed"
-          ? "Это воспоминание уже было проиндексировано ранее."
-          : "Аватар теперь может использовать это воспоминание."
+          ? dictionary.resultMessages.alreadyIndexed
+          : dictionary.resultMessages.indexed
       );
       await refreshAfterAction();
     } catch (error) {
       if (error instanceof ApiRequestError && error.status === 409) {
-        setActionError("Состояние продвижения изменилось на сервере. Данные обновлены.");
+        setActionError(dictionary.errors.promotionStateChanged);
         await refreshAfterAction();
       } else if (error instanceof ApiRequestError && error.status === 503) {
-        setActionError(
-          "Индексация подтверждённого воспоминания не выполнена. Повторная попытка сейчас недоступна в этом интерфейсе."
-        );
+        setActionError(dictionary.detail.promotionIndexFailed);
       } else {
-        setActionError(
-          error instanceof ApiRequestError ? error.detail : "Не удалось выполнить индексацию. Попробуйте ещё раз."
-        );
+        setActionError(error instanceof ApiRequestError ? error.detail : dictionary.errors.genericAction);
       }
     } finally {
       actionBusyRef.current = false;
       setActionBusy(false);
       setPendingAction(null);
+    }
+  }
+
+  async function runTranslationRetry() {
+    if (!detail || translationRetryBusy) {
+      return;
+    }
+    setTranslationRetryBusy(true);
+    setActionError(null);
+    try {
+      await retryMemoryCandidateTranslation(detail.candidate.candidate_id, "ru", null, actor, locale);
+      await refreshAfterAction();
+    } catch (error) {
+      setActionError(error instanceof ApiRequestError ? error.detail : dictionary.errors.translationFailed);
+    } finally {
+      setTranslationRetryBusy(false);
     }
   }
 
@@ -433,26 +396,31 @@ export function FamilyMemoryReviewPage() {
     ? (isTextEdited ? detail.can_edit_and_confirm : detail.can_confirm)
     : false;
 
+  const isCzechOrigin = detail?.source_language === "cs";
+  const russianTranslation = detail ? findFinalizedTranslation(detail.translations, "ru") : null;
+
   return (
     <main className={styles.page}>
       <header className={styles.pageHeader}>
         <div>
-          <p className={styles.eyebrow}>Вечный мир</p>
-          <h1 className={styles.title}>Проверка семейных воспоминаний</h1>
+          <p className={styles.eyebrow}>{dictionary.eyebrow}</p>
+          <h1 className={styles.title}>{dictionary.reviewTitle}</h1>
         </div>
-        <Link className={styles.backLink} href="/fa-chat">
-          Вернуться в чат
-        </Link>
+        <div className={styles.headerTools}>
+          <LanguageSwitcher currentLocale={locale} />
+          <Link className={styles.backLink} href={`/${locale}/fa-chat`}>
+            {dictionary.nav.backToChat}
+          </Link>
+        </div>
       </header>
 
       <div className={styles.demoWarning} role="note">
-        Демо-режим: личность и семейная роль участника имитируются выбором ниже. Не используйте этот
-        интерфейс с реальными приватными семейными данными.
+        {dictionary.demoWarning}
       </div>
 
       <div className={styles.actorBar}>
         <label className={styles.actorLabel} htmlFor="demo-actor-select">
-          Демо-роль участника
+          {dictionary.actorBar.label}
         </label>
         <select
           className={styles.actorSelect}
@@ -460,7 +428,7 @@ export function FamilyMemoryReviewPage() {
           onChange={(event) => setActorKey(event.target.value)}
           value={actorKey}
         >
-          {DEMO_ACTORS.map((item) => (
+          {demoActors.map((item) => (
             <option key={item.key} value={item.key}>
               {item.label}
             </option>
@@ -472,22 +440,22 @@ export function FamilyMemoryReviewPage() {
             onChange={(event) => setDebugEnabled(event.target.checked)}
             type="checkbox"
           />
-          <span>технические детали</span>
+          <span>{dictionary.actorBar.technicalDetails}</span>
         </label>
       </div>
 
       <div className={styles.layout}>
-        <section aria-label="Список эпизодов на проверке" className={styles.inboxColumn}>
+        <section aria-label={dictionary.inbox.ariaLabel} className={styles.inboxColumn}>
           <div className={styles.filterRow}>
-            {FILTER_OPTIONS.map((option) => (
+            {FILTER_VALUES.map((value) => (
               <button
-                aria-pressed={filterValue === option.value}
-                className={`${styles.filterChip} ${filterValue === option.value ? styles.filterChipActive : ""}`}
-                key={option.value}
-                onClick={() => setFilterValue(option.value)}
+                aria-pressed={filterValue === value}
+                className={`${styles.filterChip} ${filterValue === value ? styles.filterChipActive : ""}`}
+                key={value}
+                onClick={() => setFilterValue(value)}
                 type="button"
               >
-                {option.label}
+                {dictionary.inbox.filters[value]}
               </button>
             ))}
           </div>
@@ -502,14 +470,12 @@ export function FamilyMemoryReviewPage() {
             <div className={styles.errorBanner} role="alert">
               <p>{summariesError}</p>
               <button className={styles.retryButton} onClick={() => void loadSummaries()} type="button">
-                Повторить попытку
+                {dictionary.inbox.retry}
               </button>
             </div>
           ) : filteredSummaries.length === 0 ? (
             <div className={styles.emptyCard}>
-              {summaries && summaries.length === 0
-                ? "Пока нет эпизодов, предложенных членами семьи."
-                : "Нет эпизодов с выбранным статусом."}
+              {summaries && summaries.length === 0 ? dictionary.inbox.emptyNoEpisodes : dictionary.inbox.emptyFiltered}
             </div>
           ) : (
             <ul className={styles.candidateList}>
@@ -527,28 +493,30 @@ export function FamilyMemoryReviewPage() {
                     <div className={styles.candidateCardMeta}>
                       {item.contributor_actor_id ? (
                         <span>
-                          от {item.contributor_actor_id}
+                          {dictionary.inbox.contributorFrom} {item.contributor_actor_id}
                           {item.contributor_relationship_to_owner
                             ? ` (${item.contributor_relationship_to_owner})`
                             : ""}
                         </span>
                       ) : (
-                        <span>участник неизвестен</span>
+                        <span>{dictionary.inbox.contributorUnknown}</span>
                       )}
-                      <span>{formatDateTime(item.updated_at)}</span>
+                      <span>{formatDateTime(item.updated_at, locale)}</span>
                     </div>
                     <div className={styles.badgeRow}>
-                      <span className={styles.badge}>{REVIEW_STATUS_LABELS[item.status]}</span>
-                      <span className={styles.badge}>{ENRICHMENT_STATUS_LABELS[item.enrichment_status]}</span>
+                      <span className={styles.badge}>{dictionary.reviewStatus[item.status]}</span>
+                      <span className={styles.badge}>{dictionary.enrichmentStatus[item.enrichment_status]}</span>
                       {item.dispute_status === "disputed" ? (
-                        <span className={`${styles.badge} ${styles.badgeWarning}`}>Спорное</span>
+                        <span className={`${styles.badge} ${styles.badgeWarning}`}>
+                          {dictionary.disputeStatus.disputed}
+                        </span>
                       ) : null}
                       {item.promotion_status ? (
-                        <span className={styles.badge}>{PROMOTION_STATUS_LABELS[item.promotion_status]}</span>
+                        <span className={styles.badge}>{dictionary.promotionStatus[item.promotion_status]}</span>
                       ) : null}
                       {item.unresolved_clarification_count > 0 ? (
                         <span className={`${styles.badge} ${styles.badgeInfo}`}>
-                          вопросов без ответа: {item.unresolved_clarification_count}
+                          {dictionary.inbox.unresolvedQuestions}: {item.unresolved_clarification_count}
                         </span>
                       ) : null}
                     </div>
@@ -562,9 +530,9 @@ export function FamilyMemoryReviewPage() {
           )}
         </section>
 
-        <section aria-label="Карточка эпизода" className={styles.detailColumn}>
+        <section aria-label={dictionary.detail.ariaLabel} className={styles.detailColumn}>
           {selectedCandidateId === null ? (
-            <div className={styles.emptyCard}>Выберите эпизод слева, чтобы увидеть подробности.</div>
+            <div className={styles.emptyCard}>{dictionary.detail.selectPrompt}</div>
           ) : detailLoading ? (
             <div className={styles.skeletonList} data-testid="detail-loading">
               <div className={styles.skeletonCard} />
@@ -578,7 +546,7 @@ export function FamilyMemoryReviewPage() {
                 onClick={() => void loadDetail(selectedCandidateId)}
                 type="button"
               >
-                Повторить попытку
+                {dictionary.inbox.retry}
               </button>
             </div>
           ) : detail ? (
@@ -596,60 +564,125 @@ export function FamilyMemoryReviewPage() {
 
               {!isOwnerSelected ? (
                 <div className={styles.contributorNotice} role="note">
-                  Вы просматриваете эпизод как участник семьи. Подтверждение, отклонение и другие решения
-                  доступны только владельцу аватара.
+                  {dictionary.detail.contributorNotice}
                 </div>
               ) : null}
 
               <section className={styles.overviewCard}>
                 <div className={styles.badgeRow}>
-                  <span className={styles.badge}>{REVIEW_STATUS_LABELS[detail.candidate.status]}</span>
+                  <span className={styles.badge}>{dictionary.reviewStatus[detail.candidate.status]}</span>
                   <span className={styles.badge}>
-                    {ENRICHMENT_STATUS_LABELS[detail.candidate.enrichment_status]}
+                    {dictionary.enrichmentStatus[detail.candidate.enrichment_status]}
                   </span>
-                  <span className={styles.badge}>{DISPUTE_STATUS_LABELS[detail.candidate.dispute_status]}</span>
+                  <span className={styles.badge}>{dictionary.disputeStatus[detail.candidate.dispute_status]}</span>
                   {detail.promotion ? (
                     <span className={styles.badge}>
-                      {PROMOTION_STATUS_LABELS[detail.promotion.promotion_status]}
+                      {dictionary.promotionStatus[detail.promotion.promotion_status]}
                     </span>
                   ) : null}
                   <span className={detail.promotion?.searchable_as_fact ? styles.badgeSuccess : styles.badge}>
-                    {detail.promotion?.searchable_as_fact ? "Доступно аватару" : "Пока не используется аватаром"}
+                    {detail.promotion?.searchable_as_fact
+                      ? dictionary.detail.availableToAvatar
+                      : dictionary.detail.notYetAvailableToAvatar}
                   </span>
+                  {isCzechOrigin ? (
+                    <span className={styles.badge}>{dictionary.translationPanel.sourceOfCzechOrigin}</span>
+                  ) : null}
                 </div>
                 <p className={styles.overviewExcerpt}>{detail.candidate.user_message_excerpt}</p>
                 {debugEnabled ? (
                   <details className={styles.debugDetails}>
-                    <summary>Технические данные</summary>
+                    <summary>{dictionary.detail.technicalData}</summary>
                     <ul>
                       <li>candidate_id: {detail.candidate.candidate_id}</li>
                       <li>promotion_id: {detail.promotion?.promotion_id ?? "—"}</li>
                       <li>target_collection_name: {detail.promotion?.target_collection_name ?? "—"}</li>
                       <li>qdrant_point_id: {detail.promotion?.qdrant_point_id ?? "—"}</li>
+                      <li>source_language: {detail.source_language ?? "—"}</li>
                     </ul>
                   </details>
                 ) : null}
               </section>
 
-              <section aria-label="История дополнений" className={styles.timelineCard}>
-                <h2 className={styles.sectionTitle}>История дополнений (только для чтения)</h2>
+              {isCzechOrigin || russianTranslation ? (
+                <section aria-label={dictionary.translationPanel.title} className={styles.translationCard}>
+                  <h2 className={styles.sectionTitle}>{dictionary.translationPanel.title}</h2>
+                  <div className={styles.translationGrid}>
+                    <div className={styles.translationColumn}>
+                      <h3 className={styles.translationColumnHeading}>
+                        {dictionary.translationPanel.czechSourceHeading}
+                      </h3>
+                      <p className={styles.timelineText}>
+                        {isCzechOrigin ? detail.candidate.finalized_memory_text : "—"}
+                      </p>
+                      <span className={styles.badge}>{dictionary.translationPanel.statusOriginal}</span>
+                    </div>
+                    <div className={styles.translationColumn}>
+                      <h3 className={styles.translationColumnHeading}>
+                        {dictionary.translationPanel.russianVersionHeading}
+                      </h3>
+                      <p className={styles.timelineText}>
+                        {russianTranslation?.translated_text ?? dictionary.translationPanel.noTranslationYet}
+                      </p>
+                      <span
+                        className={
+                          russianTranslation?.translation_status === "translated" ||
+                          russianTranslation?.translation_status === "human_reviewed"
+                            ? styles.badgeSuccess
+                            : russianTranslation?.translation_status === "failed"
+                              ? `${styles.badge} ${styles.badgeWarning}`
+                              : styles.badge
+                        }
+                      >
+                        {russianTranslation
+                          ? translationStatusLabel(dictionary, russianTranslation.translation_status)
+                          : translationStatusLabel(dictionary, "pending")}
+                      </span>
+                      {russianTranslation?.translated_at ? (
+                        <p className={styles.mutedText}>
+                          {dictionary.translationPanel.lastTranslatedAt}{" "}
+                          {formatDateTime(russianTranslation.translated_at, locale)}
+                        </p>
+                      ) : null}
+                    </div>
+                  </div>
+                  {detail.translation_block_reason ? (
+                    <p className={styles.errorBanner} role="alert">
+                      {dictionary.translationPanel.cannotIndexNotice}
+                    </p>
+                  ) : null}
+                  {isOwnerSelected ? (
+                    <button
+                      className={styles.secondaryButton}
+                      disabled={translationRetryBusy}
+                      onClick={() => void runTranslationRetry()}
+                      type="button"
+                    >
+                      {dictionary.translationPanel.retryTranslation}
+                    </button>
+                  ) : null}
+                </section>
+              ) : null}
+
+              <section aria-label={dictionary.detail.contributionHistoryTitle} className={styles.timelineCard}>
+                <h2 className={styles.sectionTitle}>{dictionary.detail.contributionHistoryTitle}</h2>
                 {detail.contributions.length === 0 ? (
-                  <p className={styles.mutedText}>Пока нет записей истории.</p>
+                  <p className={styles.mutedText}>{dictionary.detail.contributionHistoryEmpty}</p>
                 ) : (
                   <ol className={styles.timelineList}>
                     {detail.contributions.map((item: FamilyMemoryContributionRead) => (
                       <li className={styles.timelineItem} key={item.contribution_id}>
                         <div className={styles.timelineItemHeader}>
                           <span className={styles.timelineType}>
-                            {CONTRIBUTION_TYPE_LABELS[item.contribution_type]}
+                            {dictionary.contributionType[item.contribution_type as ContributionType]}
                           </span>
-                          <span className={styles.timelineDate}>{formatDateTime(item.created_at)}</span>
+                          <span className={styles.timelineDate}>{formatDateTime(item.created_at, locale)}</span>
                         </div>
                         <div className={styles.timelineActor}>
                           {item.actor_id}
                           {item.relationship_to_owner ? ` (${item.relationship_to_owner})` : ""}
-                          {item.is_owner_correction ? " · правка владельца" : ""}
-                          {item.is_disputed ? " · спорно" : ""}
+                          {item.is_owner_correction ? ` · ${dictionary.detail.ownerCorrection}` : ""}
+                          {item.is_disputed ? ` · ${dictionary.detail.disputedSuffix}` : ""}
                         </div>
                         <p className={styles.timelineText}>{item.contribution_text}</p>
                       </li>
@@ -658,10 +691,10 @@ export function FamilyMemoryReviewPage() {
                 )}
               </section>
 
-              <section aria-label="Уточняющие вопросы" className={styles.timelineCard}>
-                <h2 className={styles.sectionTitle}>Уточняющие вопросы</h2>
+              <section aria-label={dictionary.detail.clarificationsTitle} className={styles.timelineCard}>
+                <h2 className={styles.sectionTitle}>{dictionary.detail.clarificationsTitle}</h2>
                 {detail.clarifications.length === 0 ? (
-                  <p className={styles.mutedText}>Дополнительных вопросов не задавалось.</p>
+                  <p className={styles.mutedText}>{dictionary.detail.clarificationsEmpty}</p>
                 ) : (
                   <ul className={styles.timelineList}>
                     {detail.clarifications.map((item: ClarificationQuestionRead) => (
@@ -674,13 +707,16 @@ export function FamilyMemoryReviewPage() {
                                 : styles.timelineType
                             }
                           >
-                            {CLARIFICATION_STATUS_LABELS[item.status]}
-                            {item.required ? " · обязательный" : " · необязательный"}
+                            {dictionary.clarificationStatus[item.status]}
+                            {" · "}
+                            {item.required ? dictionary.detail.requiredSuffix : dictionary.detail.optionalSuffix}
                           </span>
                         </div>
                         <p className={styles.timelineText}>{item.question_text}</p>
                         {item.answered_at ? (
-                          <p className={styles.mutedText}>Отвечено {formatDateTime(item.answered_at)}</p>
+                          <p className={styles.mutedText}>
+                            {dictionary.detail.answeredAt} {formatDateTime(item.answered_at, locale)}
+                          </p>
                         ) : null}
                       </li>
                     ))}
@@ -689,19 +725,18 @@ export function FamilyMemoryReviewPage() {
               </section>
 
               {detail.candidate.dispute_status === "disputed" ? (
-                <section aria-label="Разные точки зрения" className={styles.disputeCard}>
-                  <h2 className={styles.sectionTitle}>Разные точки зрения</h2>
-                  <p className={styles.disputeWarning}>
-                    Это воспоминание содержит разные приписанные точки зрения. Подтверждение сохраняет
-                    расхождение, а не выбирает одну версию как достоверную.
-                  </p>
+                <section aria-label={dictionary.detail.disputeTitle} className={styles.disputeCard}>
+                  <h2 className={styles.sectionTitle}>{dictionary.detail.disputeTitle}</h2>
+                  <p className={styles.disputeWarning}>{dictionary.detail.disputeWarning}</p>
                   <ul className={styles.timelineList}>
                     {detail.contributions
                       .filter((item) => item.is_disputed || item.contribution_type === "owner_correction")
                       .map((item) => (
                         <li className={styles.timelineItem} key={`perspective-${item.contribution_id}`}>
                           <div className={styles.timelineActor}>
-                            {item.actor_role === "owner" ? "Точка зрения владельца" : "Точка зрения участника семьи"}
+                            {item.actor_role === "owner"
+                              ? dictionary.detail.ownerPerspective
+                              : dictionary.detail.contributorPerspective}
                           </div>
                           <p className={styles.timelineText}>{item.contribution_text}</p>
                         </li>
@@ -710,10 +745,10 @@ export function FamilyMemoryReviewPage() {
                 </section>
               ) : null}
 
-              <section aria-label="Итоговый текст воспоминания" className={styles.editorCard}>
-                <h2 className={styles.sectionTitle}>Итоговый текст воспоминания</h2>
+              <section aria-label={dictionary.detail.finalTextTitle} className={styles.editorCard}>
+                <h2 className={styles.sectionTitle}>{dictionary.detail.finalTextTitle}</h2>
                 <label className={styles.visuallyHidden} htmlFor="finalized-memory-text">
-                  Итоговый текст воспоминания
+                  {dictionary.detail.finalTextTitle}
                 </label>
                 <textarea
                   className={styles.editorTextarea}
@@ -735,45 +770,40 @@ export function FamilyMemoryReviewPage() {
                       onClick={() => setEditableFinalizedText(detail.candidate.finalized_memory_text ?? "")}
                       type="button"
                     >
-                      Вернуть исходный текст
+                      {dictionary.detail.resetOriginalText}
                     </button>
                   ) : null}
                 </div>
-                {isTextEdited ? (
-                  <p className={styles.mutedText}>
-                    Текст отличается от сохранённого на сервере варианта. Изменение будет сохранено как
-                    отдельная правка владельца в истории.
-                  </p>
-                ) : null}
+                {isTextEdited ? <p className={styles.mutedText}>{dictionary.detail.textEditedNotice}</p> : null}
               </section>
 
-              <section aria-label="Область приватности" className={styles.privacyCard}>
-                <h2 className={styles.sectionTitle}>Область приватности</h2>
-                <div className={styles.privacyOptions} role="radiogroup" aria-label="Область приватности">
-                  {PRIVACY_SCOPE_OPTIONS.map((option) => (
-                    <label className={styles.privacyOption} key={option.value}>
+              <section aria-label={dictionary.detail.privacyTitle} className={styles.privacyCard}>
+                <h2 className={styles.sectionTitle}>{dictionary.detail.privacyTitle}</h2>
+                <div className={styles.privacyOptions} role="radiogroup" aria-label={dictionary.detail.privacyTitle}>
+                  {(Object.keys(dictionary.privacyScope) as PrivacyScope[]).map((value) => (
+                    <label className={styles.privacyOption} key={value}>
                       <input
-                        checked={privacyScope === option.value}
+                        checked={privacyScope === value}
                         disabled={!isOwnerSelected}
                         name="privacy-scope"
-                        onChange={() => setPrivacyScope(option.value)}
+                        onChange={() => setPrivacyScope(value)}
                         type="radio"
-                        value={option.value}
+                        value={value}
                       />
                       <span>
-                        <strong>{option.label}</strong>
+                        <strong>{dictionary.privacyScope[value].label}</strong>
                         <br />
-                        <span className={styles.mutedText}>{option.description}</span>
+                        <span className={styles.mutedText}>{dictionary.privacyScope[value].description}</span>
                       </span>
                     </label>
                   ))}
                 </div>
               </section>
 
-              <section aria-label="Действия владельца" className={styles.actionsCard}>
-                <h2 className={styles.sectionTitle}>Действия владельца</h2>
+              <section aria-label={dictionary.detail.actionsTitle} className={styles.actionsCard}>
+                <h2 className={styles.sectionTitle}>{dictionary.detail.actionsTitle}</h2>
                 <label className={styles.visuallyHidden} htmlFor="review-note">
-                  Заметка проверяющего
+                  {dictionary.detail.reviewNotePlaceholder}
                 </label>
                 <textarea
                   className={styles.noteTextarea}
@@ -781,22 +811,20 @@ export function FamilyMemoryReviewPage() {
                   id="review-note"
                   maxLength={NOTE_MAX_LENGTH}
                   onChange={(event) => setReviewNote(event.target.value)}
-                  placeholder="Необязательная заметка к решению..."
+                  placeholder={dictionary.detail.reviewNotePlaceholder}
                   rows={2}
                   value={reviewNote}
                 />
 
                 {!detail.is_owner_actor && detail.blocked_reasons.includes("actor_is_not_owner") ? (
-                  <p className={styles.mutedText}>
-                    Переключитесь на демо-роль владельца выше, чтобы выполнять действия проверки.
-                  </p>
+                  <p className={styles.mutedText}>{dictionary.detail.switchToOwnerNotice}</p>
                 ) : null}
 
                 {detail.blocked_reasons
-                  .filter((reason) => reason !== "actor_is_not_owner" && blockedReasonLabel(reason))
+                  .filter((reason) => reason !== "actor_is_not_owner" && blockedReasonLabel(dictionary, reason))
                   .map((reason) => (
                     <p className={styles.blockedReason} key={reason}>
-                      {blockedReasonLabel(reason)}
+                      {blockedReasonLabel(dictionary, reason)}
                     </p>
                   ))}
 
@@ -807,7 +835,7 @@ export function FamilyMemoryReviewPage() {
                     onClick={() => setPendingAction({ type: primaryConfirmAction })}
                     type="button"
                   >
-                    {ACTION_LABELS[primaryConfirmAction]}
+                    {dictionary.actions[primaryConfirmAction]}
                   </button>
                   <button
                     className={styles.secondaryButton}
@@ -815,7 +843,7 @@ export function FamilyMemoryReviewPage() {
                     onClick={() => setPendingAction({ type: "reject" })}
                     type="button"
                   >
-                    Отклонить
+                    {dictionary.actions.reject}
                   </button>
                   <button
                     className={styles.secondaryButton}
@@ -823,7 +851,7 @@ export function FamilyMemoryReviewPage() {
                     onClick={() => setPendingAction({ type: "request_more_details" })}
                     type="button"
                   >
-                    Запросить больше деталей
+                    {dictionary.actions.request_more_details}
                   </button>
                   <button
                     className={styles.secondaryButton}
@@ -831,7 +859,7 @@ export function FamilyMemoryReviewPage() {
                     onClick={() => setPendingAction({ type: "mark_disputed" })}
                     type="button"
                   >
-                    Отметить как спорное
+                    {dictionary.actions.mark_disputed}
                   </button>
                   {detail.candidate.dispute_status === "disputed" ? (
                     <button
@@ -840,14 +868,14 @@ export function FamilyMemoryReviewPage() {
                       onClick={() => setPendingAction({ type: "approve_multiple_perspectives" })}
                       type="button"
                     >
-                      Подтвердить с разными точками зрения
+                      {dictionary.actions.approve_multiple_perspectives}
                     </button>
                   ) : null}
                 </div>
 
                 {pendingAction && pendingAction.type === "reject" ? (
                   <div className={styles.inlineField}>
-                    <label htmlFor="rejection-reason">Причина отклонения (необязательно)</label>
+                    <label htmlFor="rejection-reason">{dictionary.detail.rejectionReasonLabel}</label>
                     <input
                       id="rejection-reason"
                       maxLength={NOTE_MAX_LENGTH}
@@ -859,25 +887,28 @@ export function FamilyMemoryReviewPage() {
                 ) : null}
               </section>
 
-              <section aria-label="Продвижение и индексация" className={styles.promotionCard}>
-                <h2 className={styles.sectionTitle}>Продвижение и индексация</h2>
+              <section aria-label={dictionary.detail.promotionTitle} className={styles.promotionCard}>
+                <h2 className={styles.sectionTitle}>{dictionary.detail.promotionTitle}</h2>
                 {detail.promotion ? (
                   <>
                     <div className={styles.badgeRow}>
                       <span className={styles.badge}>
-                        {PROMOTION_STATUS_LABELS[detail.promotion.promotion_status]}
+                        {dictionary.promotionStatus[detail.promotion.promotion_status]}
                       </span>
                       <span
                         className={detail.promotion.searchable_as_fact ? styles.badgeSuccess : styles.badge}
                       >
-                        {detail.promotion.searchable_as_fact ? "Доступно аватару" : "Пока недоступно аватару"}
+                        {detail.promotion.searchable_as_fact
+                          ? dictionary.detail.availableToAvatar
+                          : dictionary.detail.notYetAvailableToAvatar}
                       </span>
                     </div>
-                    <p className={styles.mutedText}>Создано {formatDateTime(detail.promotion.created_at)}</p>
+                    <p className={styles.mutedText}>
+                      {dictionary.detail.promotionCreatedAt} {formatDateTime(detail.promotion.created_at, locale)}
+                    </p>
                     {detail.promotion.promotion_status === "failed" ? (
                       <p className={styles.errorBanner} role="alert">
-                        Индексация подтверждённого воспоминания не выполнена. Повторная попытка сейчас
-                        недоступна в этом интерфейсе.
+                        {dictionary.detail.promotionIndexFailed}
                       </p>
                     ) : null}
                     <button
@@ -886,14 +917,11 @@ export function FamilyMemoryReviewPage() {
                       onClick={() => setPendingAction({ type: "index" })}
                       type="button"
                     >
-                      Индексировать воспоминание
+                      {dictionary.actions.indexMemory}
                     </button>
                   </>
                 ) : (
-                  <p className={styles.mutedText}>
-                    Продвижение появится после подтверждения владельцем с областью приватности, доступной
-                    для индексации.
-                  </p>
+                  <p className={styles.mutedText}>{dictionary.detail.promotionNotYetCreated}</p>
                 )}
               </section>
             </div>
@@ -923,6 +951,7 @@ export function FamilyMemoryReviewPage() {
             promotion_status: detail.promotion?.promotion_status ?? null,
             searchable_as_fact: detail.promotion?.searchable_as_fact ?? false,
           }) : ""}
+          dictionary={dictionary}
           onCancel={() => setPendingAction(null)}
           onConfirm={confirmPendingAction}
           pendingAction={pendingAction}
@@ -945,6 +974,7 @@ function ConfirmDialog({
   candidateTitle,
   privacyScope,
   promotionWillBeCreated,
+  dictionary,
   onConfirm,
   onCancel,
 }: {
@@ -952,6 +982,7 @@ function ConfirmDialog({
   candidateTitle: string;
   privacyScope: PrivacyScope;
   promotionWillBeCreated: boolean;
+  dictionary: Dictionary;
   onConfirm: () => void;
   onCancel: () => void;
 }) {
@@ -969,8 +1000,8 @@ function ConfirmDialog({
   }, [onCancel]);
 
   const actionLabel =
-    pendingAction.type === "index" ? "Индексировать воспоминание" : ACTION_LABELS[pendingAction.type];
-  const privacyLabel = PRIVACY_SCOPE_OPTIONS.find((option) => option.value === privacyScope)?.label ?? privacyScope;
+    pendingAction.type === "index" ? dictionary.actions.indexMemory : dictionary.actions[pendingAction.type];
+  const privacyLabel = dictionary.privacyScope[privacyScope]?.label ?? privacyScope;
 
   return (
     <div className={styles.dialogOverlay}>
@@ -983,25 +1014,31 @@ function ConfirmDialog({
         tabIndex={-1}
       >
         <h2 className={styles.dialogTitle} id="confirm-dialog-title">
-          Подтвердите действие: {actionLabel}
+          {dictionary.confirmDialog.titlePrefix} {actionLabel}
         </h2>
-        <p>Эпизод: {candidateTitle || "без названия"}</p>
-        {pendingAction.type !== "index" ? <p>Область приватности: {privacyLabel}</p> : null}
+        <p>
+          {dictionary.confirmDialog.episodeLabel} {candidateTitle || dictionary.confirmDialog.untitled}
+        </p>
+        {pendingAction.type !== "index" ? (
+          <p>
+            {dictionary.confirmDialog.privacyLabel} {privacyLabel}
+          </p>
+        ) : null}
         {pendingAction.type !== "index" ? (
           <p>
             {promotionWillBeCreated
-              ? "Будет создано продвижение воспоминания, ожидающее явной индексации."
-              : "Продвижение не будет создано автоматически при текущей области приватности."}
+              ? dictionary.confirmDialog.promotionWillBeCreated
+              : dictionary.confirmDialog.promotionWillNotBeCreated}
           </p>
         ) : (
-          <p>Индексация сделает воспоминание доступным аватару для использования в ответах.</p>
+          <p>{dictionary.confirmDialog.indexingExplanation}</p>
         )}
         <div className={styles.dialogActions}>
           <button className={styles.secondaryButton} onClick={onCancel} type="button">
-            Отмена
+            {dictionary.confirmDialog.cancel}
           </button>
           <button className={styles.primaryButton} onClick={onConfirm} type="button">
-            Подтвердить
+            {dictionary.confirmDialog.confirm}
           </button>
         </div>
       </div>

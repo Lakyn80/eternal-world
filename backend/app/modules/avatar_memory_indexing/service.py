@@ -44,9 +44,13 @@ from app.modules.embeddings.runtime import assert_real_embedding_runtime_for_e2e
 from app.modules.qdrant_indexing import repository as qdrant_index_repository
 from app.modules.rag_chunks.validation import estimate_token_count
 from app.modules.family_memory_enrichment.eligibility import (
+    FINALIZED_MEMORY_FIELD_NAME,
+    REQUIRED_TRANSLATION_SOURCE_LANGUAGE,
+    REQUIRED_TRANSLATION_TARGET_LANGUAGE,
     FamilyMemoryEligibilityError,
     assert_candidate_eligible_for_promotion,
 )
+from app.modules.content_translation import repository as content_translation_repository
 
 
 INDEX_MODEL_CODE = "bge_m3_dense_sparse"
@@ -329,6 +333,7 @@ def _create_evidence_records(
 
 
 def _build_payload(
+    db: Session,
     *,
     plan: _IndexingPlan,
     source: RagSource,
@@ -367,6 +372,25 @@ def _build_payload(
         "workflow_version": promotion.candidate.workflow_version,
         "dispute_status": promotion.candidate.dispute_status,
     }
+    if promotion.candidate.language == REQUIRED_TRANSLATION_SOURCE_LANGUAGE:
+        # Czech-origin memory: the Russian avatar pipeline indexes the
+        # translated text (see _resolve_normalized_memory_text), so the
+        # payload records both the Czech source language and translation
+        # provenance - without embedding the full private Czech source text
+        # itself in the Qdrant payload (Part 25).
+        payload["source_language"] = REQUIRED_TRANSLATION_SOURCE_LANGUAGE
+        payload["indexed_language"] = REQUIRED_TRANSLATION_TARGET_LANGUAGE
+        translation_row = content_translation_repository.get_current(
+            db,
+            entity_type="memory_candidate",
+            entity_id=str(promotion.candidate_id),
+            field_name=FINALIZED_MEMORY_FIELD_NAME,
+            target_language=REQUIRED_TRANSLATION_TARGET_LANGUAGE,
+        )
+        if translation_row is not None:
+            payload["translation_status"] = translation_row.translation_status
+            payload["translation_version"] = translation_row.translation_version
+            payload["source_text_hash"] = translation_row.source_hash
     sparse_vector = (embedding.embedding_metadata or {}).get("sparse_vector")
     if isinstance(sparse_vector, dict):
         payload["sparse_vector"] = sparse_vector
@@ -546,6 +570,7 @@ def index_promotion(
 
         indexed_at = promotion.indexed_at or datetime.now(timezone.utc)
         payload = _build_payload(
+            db,
             plan=plan,
             source=source,
             chunk=chunk,

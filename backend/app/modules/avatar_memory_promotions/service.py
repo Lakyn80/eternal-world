@@ -11,8 +11,42 @@ from app.modules.avatar_memory_promotions.schemas import (
     AvatarMemoryPromotionCreate,
     AvatarMemoryPromotionStatus,
 )
+from app.modules.content_translation import repository as content_translation_repository
 from app.modules.memory_profiles import repository as memory_profiles_repository
-from app.modules.family_memory_enrichment.eligibility import assert_candidate_eligible_for_promotion
+from app.modules.family_memory_enrichment.eligibility import (
+    FINALIZED_MEMORY_FIELD_NAME,
+    REQUIRED_TRANSLATION_SOURCE_LANGUAGE,
+    REQUIRED_TRANSLATION_TARGET_LANGUAGE,
+    assert_candidate_eligible_for_promotion,
+)
+
+
+def _resolve_normalized_memory_text(db: Session, *, candidate: ConversationMemoryCandidate) -> str:
+    """Text that gets embedded/indexed for the current Russian avatar pipeline.
+
+    For Russian-origin candidates this is unchanged: the finalized text
+    itself. For Czech-origin candidates, the *current* Russian translation
+    of the finalized text is used instead - ``assert_candidate_eligible_for_promotion``
+    (called just before this, in ``create_or_get_promotion_for_candidate``)
+    already guarantees a current, successful translation exists by this
+    point, so this lookup cannot silently fall back to the Czech source.
+    """
+    if candidate.language != REQUIRED_TRANSLATION_SOURCE_LANGUAGE:
+        return candidate.finalized_memory_text
+    translation_row = content_translation_repository.get_current(
+        db,
+        entity_type="memory_candidate",
+        entity_id=str(candidate.id),
+        field_name=FINALIZED_MEMORY_FIELD_NAME,
+        target_language=REQUIRED_TRANSLATION_TARGET_LANGUAGE,
+    )
+    if translation_row is None or not (translation_row.translated_text or "").strip():
+        # Eligibility should have already blocked this candidate; fail loudly
+        # rather than silently indexing the Czech source as if it were Russian.
+        raise AvatarMemoryPromotionCandidateStateError(
+            "Czech-origin candidate has no current Russian translation to index"
+        )
+    return translation_row.translated_text
 
 
 class AvatarMemoryPromotionNotFoundError(Exception):
@@ -86,7 +120,7 @@ def create_or_get_promotion_for_candidate(
         avatar_id=candidate.avatar_id,
         profile_id=candidate.profile_id,
         approved_memory_text=candidate.finalized_memory_text,
-        normalized_memory_text=candidate.finalized_memory_text,
+        normalized_memory_text=_resolve_normalized_memory_text(db, candidate=candidate),
         language=candidate.language,
         trace_id=candidate.trace_id,
         source_candidate_status_snapshot=candidate.status,

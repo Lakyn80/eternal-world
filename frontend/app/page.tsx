@@ -1,62 +1,14 @@
-import Link from "next/link";
+import { redirect } from "next/navigation";
 
+import { DEFAULT_LOCALE } from "../lib/i18n/locales";
 
+/**
+ * Task 64.5.1: the real home page now lives at `app/[locale]/page.tsx`.
+ * `middleware.ts` already redirects bare `/` to `/{DEFAULT_LOCALE}` at the
+ * edge; this Server Component redirect is a defense-in-depth fallback for
+ * any request that reaches Next.js routing without going through
+ * middleware (kept, not deleted, to preserve this exact legacy route).
+ */
 export default function HomePage() {
-  return (
-    <main
-      style={{
-        minHeight: "100vh",
-        display: "grid",
-        placeItems: "center",
-        background: "linear-gradient(180deg, #f7f3eb 0%, #efe6d3 100%)",
-        padding: 24,
-        fontFamily: "Georgia, 'Times New Roman', serif",
-        color: "#2e241c",
-      }}
-    >
-      <div
-        style={{
-          maxWidth: 760,
-          textAlign: "center",
-          background: "rgba(255, 252, 246, 0.94)",
-          border: "1px solid #d9c8a8",
-          borderRadius: 24,
-          padding: 28,
-        }}
-      >
-        <h1 style={{ marginTop: 0 }}>Демо Eternal World</h1>
-        <p style={{ lineHeight: 1.6 }}>
-          Откройте тестовый чат с цифровым аватаром и задайте вопрос на русском языке.
-        </p>
-        <div style={{ display: "flex", gap: 12, justifyContent: "center", flexWrap: "wrap", marginTop: 12 }}>
-          <Link
-            href="/fa-chat"
-            style={{
-              display: "inline-block",
-              borderRadius: 999,
-              background: "#5f3f23",
-              color: "#fff7ee",
-              padding: "12px 18px",
-              textDecoration: "none",
-            }}
-          >
-            Перейти в чат
-          </Link>
-          <Link
-            href="/family-memory-review"
-            style={{
-              display: "inline-block",
-              borderRadius: 999,
-              border: "1px solid #5f3f23",
-              color: "#5f3f23",
-              padding: "12px 18px",
-              textDecoration: "none",
-            }}
-          >
-            Проверка семейных воспоминаний
-          </Link>
-        </div>
-      </div>
-    </main>
-  );
+  redirect(`/${DEFAULT_LOCALE}`);
 }

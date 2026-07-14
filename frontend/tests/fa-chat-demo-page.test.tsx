@@ -2,7 +2,13 @@ import React, { act } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createRoot, Root } from "react-dom/client";
 
+vi.mock("next/navigation", () => ({
+  usePathname: () => "/ru/fa-chat",
+  useSearchParams: () => new URLSearchParams(),
+}));
+
 import { FaChatDemoPage } from "../components/fa-chat-demo-page";
+import type { AppLocale } from "../lib/i18n/locales";
 
 
 type RenderHandle = {
@@ -14,12 +20,12 @@ type RenderHandle = {
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 
-function renderComponent(): RenderHandle {
+function renderComponent(locale: AppLocale = "ru"): RenderHandle {
   const container = document.createElement("div");
   document.body.appendChild(container);
   const root = createRoot(container);
   act(() => {
-    root.render(<FaChatDemoPage />);
+    root.render(<FaChatDemoPage locale={locale} />);
   });
   return {
     container,
@@ -154,6 +160,63 @@ describe("fa chat demo page", () => {
     expect(view.container.textContent).toContain(
       "Демо временно недоступно: модель эмбеддингов BGE-M3 не инициализирована."
     );
+
+    view.unmount();
+  });
+
+  it("renders the Czech interface and sends locale=cs to the backend (Task 64.5.1)", async () => {
+    const fetchMock = vi.fn(async () => ({
+      ok: true,
+      json: async () => ({
+        answer: "V dětství jsem žila u Popice.",
+        locale: "cs",
+        lack_of_evidence: false,
+        retrieval_used: true,
+        persona_applied: true,
+        guard_applied: false,
+        guard_reason: null,
+        trace_id: "cs-trace",
+        memory_candidate: null,
+        emotion: null,
+        face_directives: null,
+        voice_directives: null,
+        evidence: [],
+      }),
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const view = renderComponent("cs");
+
+    // No mixed-language primary UI: no Russian chrome text is present.
+    expect(view.container.textContent).toContain("Testovací chat s digitálním avatarem");
+    expect(view.container.textContent).not.toContain("Тестовый чат с цифровым аватаром");
+    expect(view.container.querySelector("textarea")?.getAttribute("placeholder")).toBe(
+      "Napište Evě otázku nebo vřelou zprávu..."
+    );
+    expect(view.container.textContent).toContain("Odeslat");
+
+    const form = view.container.querySelector("form");
+    const textarea = view.container.querySelector("textarea");
+    if (!form || !textarea) {
+      throw new Error("Required form controls are missing");
+    }
+    const nativeInputValueSetter = Object.getOwnPropertyDescriptor(
+      window.HTMLTextAreaElement.prototype,
+      "value"
+    )?.set;
+    act(() => {
+      nativeInputValueSetter?.call(textarea, "Kde jsi žila v dětství?");
+      textarea.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+
+    await act(async () => {
+      form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+    });
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const requestBody = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body));
+    expect(requestBody.locale).toBe("cs");
+    expect(view.container.textContent).toContain("V dětství jsem žila u Popice.");
 
     view.unmount();
   });

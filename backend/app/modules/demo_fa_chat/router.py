@@ -40,11 +40,14 @@ from .schemas import (
     DemoFaChatMemoryPromotionListResponse,
     DemoFaChatMessageRequest,
     DemoFaChatMessageResponse,
+    DemoFaChatTranslationListResponse,
 )
+from app.modules.content_translation.schemas import MemoryContentTranslationRead
 from .service import (
     DEMO_FA_CHAT_INTERNAL_ERROR_DETAIL,
     DemoFaChatInitializationError,
     DemoFaChatProfileUnavailableError,
+    DemoFaChatTranslationError,
     DemoFaChatValidationError,
     approve_demo_memory_candidate,
     archive_demo_memory_candidate,
@@ -55,9 +58,11 @@ from .service import (
     get_demo_memory_promotion,
     index_demo_memory_promotion,
     list_demo_memory_candidate_summaries,
+    list_demo_memory_candidate_translations,
     list_demo_memory_candidates,
     list_demo_memory_promotions,
     reject_demo_memory_candidate,
+    retry_demo_memory_candidate_translation,
     run_demo_fa_chat_message,
 )
 from app.modules.conversation_memory_candidates.service import (
@@ -142,6 +147,7 @@ def send_demo_fa_chat_message(
             actor_id=payload.actor_id,
             actor_role=payload.actor_role.value if payload.actor_role is not None else None,
             relationship_to_owner=payload.relationship_to_owner,
+            locale=payload.locale,
         )
         observe_fa_chat_success(
             duration_seconds=perf_counter() - started_at,
@@ -175,6 +181,16 @@ def send_demo_fa_chat_message(
     except DemoFaChatInitializationError as exc:
         observe_fa_chat_error(
             outcome="not_initialized",
+            debug=debug_enabled,
+            duration_seconds=perf_counter() - started_at,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=str(exc),
+        ) from exc
+    except DemoFaChatTranslationError as exc:
+        observe_fa_chat_error(
+            outcome="translation_failed",
             debug=debug_enabled,
             duration_seconds=perf_counter() - started_at,
         )
@@ -355,8 +371,14 @@ def get_demo_memory_candidate_review_detail_endpoint(
     actor_id: str | None = Query(default=None, min_length=1, max_length=120),
     actor_role: FamilyMemoryActorRole | None = Query(default=None),
     relationship_to_owner: str | None = Query(default=None, max_length=120),
+    locale: str = Query(default="ru"),
     db: Session = Depends(get_db),
 ) -> DemoFaChatMemoryCandidateReviewDetail:
+    if locale not in {"cs", "ru"}:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Unsupported locale. Supported values: cs, ru.",
+        )
     try:
         actor = _optional_actor_context(
             actor_id=actor_id,
@@ -368,6 +390,7 @@ def get_demo_memory_candidate_review_detail_endpoint(
             profile_id=profile_id,
             candidate_id=candidate_id,
             actor=actor,
+            locale=locale,
         )
     except DemoFaChatProfileUnavailableError as exc:
         raise HTTPException(
@@ -392,6 +415,96 @@ def get_demo_memory_candidate_review_detail_endpoint(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=CANDIDATE_NOT_FOUND_DETAIL,
+        ) from exc
+
+
+@router.get(
+    "/memory-candidates/{candidate_id}/translations",
+    response_model=DemoFaChatTranslationListResponse,
+    responses={
+        status.HTTP_404_NOT_FOUND: {"model": DemoFaChatErrorResponse},
+    },
+)
+def list_demo_memory_candidate_translations_endpoint(
+    candidate_id: CandidateIdPath,
+    profile_id: int | None = None,
+    actor_id: str | None = Query(default=None, min_length=1, max_length=120),
+    actor_role: FamilyMemoryActorRole | None = Query(default=None),
+    relationship_to_owner: str | None = Query(default=None, max_length=120),
+    db: Session = Depends(get_db),
+) -> DemoFaChatTranslationListResponse:
+    try:
+        actor = _optional_actor_context(
+            actor_id=actor_id,
+            actor_role=actor_role,
+            relationship_to_owner=relationship_to_owner,
+        )
+        items = list_demo_memory_candidate_translations(
+            db,
+            profile_id=profile_id,
+            candidate_id=candidate_id,
+            actor=actor,
+        )
+    except (DemoFaChatProfileUnavailableError, ConversationMemoryCandidateNotFoundError, FamilyMemoryNotFoundError) as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=CANDIDATE_NOT_FOUND_DETAIL,
+        ) from exc
+    return DemoFaChatTranslationListResponse(items=items, total=len(items))
+
+
+@router.post(
+    "/memory-candidates/{candidate_id}/translations/{target_language}/retry",
+    response_model=MemoryContentTranslationRead,
+    responses={
+        status.HTTP_403_FORBIDDEN: {"model": DemoFaChatErrorResponse},
+        status.HTTP_404_NOT_FOUND: {"model": DemoFaChatErrorResponse},
+        status.HTTP_422_UNPROCESSABLE_ENTITY: {"model": DemoFaChatErrorResponse},
+    },
+)
+def retry_demo_memory_candidate_translation_endpoint(
+    candidate_id: CandidateIdPath,
+    target_language: str,
+    profile_id: int | None = None,
+    actor_id: str | None = Query(default=None, min_length=1, max_length=120),
+    actor_role: FamilyMemoryActorRole | None = Query(default=None),
+    relationship_to_owner: str | None = Query(default=None, max_length=120),
+    db: Session = Depends(get_db),
+) -> MemoryContentTranslationRead:
+    """Explicit owner-only translation retry (Part G.29). Never approves or
+    indexes the candidate; safe to call repeatedly."""
+    if target_language not in {"cs", "ru"}:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Unsupported target language. Supported values: cs, ru.",
+        )
+    try:
+        actor = _optional_actor_context(
+            actor_id=actor_id,
+            actor_role=actor_role,
+            relationship_to_owner=relationship_to_owner,
+        )
+        return retry_demo_memory_candidate_translation(
+            db,
+            profile_id=profile_id,
+            candidate_id=candidate_id,
+            target_language=target_language,
+            actor=actor,
+        )
+    except (DemoFaChatProfileUnavailableError, ConversationMemoryCandidateNotFoundError, FamilyMemoryNotFoundError) as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=CANDIDATE_NOT_FOUND_DETAIL,
+        ) from exc
+    except FamilyMemoryAuthorizationError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Только владелец аватара может повторить перевод воспоминания.",
+        ) from exc
+    except DemoFaChatValidationError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=str(exc),
         ) from exc
 
 

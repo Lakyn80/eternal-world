@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field, model_validator
 
@@ -20,6 +20,7 @@ from app.modules.avatar_persona.schemas import (
     AvatarFaceDirectives,
     AvatarVoiceDirectives,
 )
+from app.modules.content_translation.schemas import MemoryContentTranslationRead
 from app.modules.family_memory_enrichment.enums import (
     DisputeStatus,
     EnrichmentStatus,
@@ -42,6 +43,13 @@ class DemoFaChatMessageRequest(BaseModel):
     actor_id: str | None = Field(default=None, min_length=1, max_length=120)
     actor_role: FamilyMemoryActorRole | None = None
     relationship_to_owner: str | None = Field(default=None, max_length=120)
+    #: Frontend interface locale for this chat turn (Task 64.5.1). Defaults
+    #: to "ru" so existing Russian-only clients that never send this field
+    #: keep their exact current behavior. When "cs", the user's message is
+    #: translated to Russian for the (unchanged) Russian retrieval/Brain
+    #: pipeline, and the final answer is translated back to Czech for
+    #: display - see demo_fa_chat.service.run_demo_fa_chat_message.
+    locale: Literal["cs", "ru"] = "ru"
 
     @model_validator(mode="after")
     def validate_actor_context(self):
@@ -81,6 +89,7 @@ class DemoFaChatMemoryCandidate(BaseModel):
 
 class DemoFaChatMessageResponse(BaseModel):
     answer: str
+    locale: Literal["cs", "ru"] = "ru"
     lack_of_evidence: bool
     retrieval_used: bool
     persona_applied: bool
@@ -96,6 +105,11 @@ class DemoFaChatMessageResponse(BaseModel):
     face_directives: AvatarFaceDirectives | None = None
     voice_directives: AvatarVoiceDirectives | None = None
     evidence: list[DemoFaChatEvidenceItem]
+
+
+class DemoFaChatTranslationListResponse(BaseModel):
+    items: list[MemoryContentTranslationRead]
+    total: int
 
 
 class DemoFaChatErrorResponse(BaseModel):
@@ -172,3 +186,16 @@ class DemoFaChatMemoryCandidateReviewDetail(BaseModel):
     can_approve_multiple_perspectives: bool
     can_index: bool
     blocked_reasons: list[str] = Field(default_factory=list)
+    #: Bilingual read-model additions (Task 64.5.1). ``requested_locale`` is
+    #: the locale the caller asked for (validated to "cs"/"ru");
+    #: ``source_language`` is the candidate's actual source language.
+    #: ``translations`` lists every current translation row for this
+    #: candidate (finalized text + each contribution), so the Czech review
+    #: UI can render a Czech/Russian comparison without extra round-trips.
+    #: ``translation_block_reason`` mirrors the same backend-calculated
+    #: eligibility gate used for promotion/indexing (never recomputed in
+    #: React) - one of russian_translation_missing/failed/stale, or null.
+    requested_locale: Literal["cs", "ru"] = "ru"
+    source_language: str | None = None
+    translations: list[MemoryContentTranslationRead] = Field(default_factory=list)
+    translation_block_reason: str | None = None
