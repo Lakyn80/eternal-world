@@ -1,3 +1,5 @@
+import "./globals.css";
+
 import { headers } from "next/headers";
 import type { Viewport } from "next";
 
