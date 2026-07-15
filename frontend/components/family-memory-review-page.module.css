@@ -57,6 +57,7 @@
   margin: 12px 0 0;
   color: var(--muted);
   line-height: 1.7;
+  overflow-wrap: anywhere;
 }
 
 .headerTools {
@@ -264,6 +265,7 @@
   display: flex;
   justify-content: space-between;
   gap: 10px;
+  flex-wrap: wrap;
   font-size: 0.78rem;
   color: var(--muted);
 }
@@ -282,6 +284,7 @@
   background: color-mix(in srgb, var(--surface-strong) 76%, var(--accent-soft));
   color: var(--accent);
   border: 1px solid var(--line-strong);
+  overflow-wrap: anywhere;
 }
 
 .badgeWarning {
@@ -438,6 +441,7 @@
 .overviewExcerpt {
   color: #4a3c28;
   line-height: 1.5;
+  overflow-wrap: anywhere;
 }
 
 .debugDetails {
@@ -491,11 +495,13 @@
   font-size: 0.8rem;
   color: #6b5738;
   margin-top: 4px;
+  overflow-wrap: anywhere;
 }
 
 .timelineText {
   margin: 6px 0 0;
   line-height: 1.5;
+  overflow-wrap: anywhere;
 }
 
 .disputeWarning {
@@ -744,7 +750,40 @@
 }
 
 @media (max-width: 640px) {
+  .page {
+    padding: 18px 14px 56px;
+  }
+
   .summaryStrip {
     grid-template-columns: 1fr;
+  }
+
+  .pageHeader,
+  .headerTools,
+  .actorBar,
+  .dialogActions,
+  .editorFooter {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .headerButton,
+  .backLink,
+  .actorSelect,
+  .retryButton,
+  .primaryButton,
+  .secondaryButton {
+    width: 100%;
+    box-sizing: border-box;
+    text-align: center;
+  }
+
+  .toggle {
+    width: 100%;
+  }
+
+  .inboxColumn,
+  .detailColumn {
+    padding: 14px;
   }
 }

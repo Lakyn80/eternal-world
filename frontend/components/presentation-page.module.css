@@ -70,4 +70,11 @@
     flex-direction: column;
     align-items: flex-start;
   }
+
+  .backLink,
+  .themeButton {
+    width: 100%;
+    box-sizing: border-box;
+    text-align: center;
+  }
 }

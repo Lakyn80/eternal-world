@@ -101,6 +101,7 @@
   color: var(--muted);
   text-decoration: none;
   transition: color 180ms ease, transform 180ms ease;
+  overflow-wrap: anywhere;
 }
 
 .nav a:hover,
@@ -224,6 +225,7 @@
 .workspaceLink {
   color: var(--text);
   background: color-mix(in srgb, var(--surface-strong) 76%, transparent);
+  text-align: center;
 }
 
 .heroVisual {
@@ -452,6 +454,24 @@
   color: var(--muted);
 }
 
+.queueCell {
+  display: grid;
+  gap: 0.25rem;
+  min-width: 0;
+}
+
+.queueCellLabel {
+  display: none;
+  color: var(--accent);
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.11em;
+}
+
+.queueCellValue {
+  overflow-wrap: anywhere;
+}
+
 .directiveGrid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -564,6 +584,7 @@
 
 @media (max-width: 900px) {
   .header {
+    position: static;
     border-radius: 1.6rem;
     align-items: flex-start;
   }
@@ -594,9 +615,12 @@
     align-items: stretch;
   }
 
+  .nav a,
   .primaryCta,
   .secondaryCta,
-  .themeButton {
+  .themeButton,
+  .workspaceLink {
+    width: 100%;
     text-align: center;
   }
 }
@@ -612,10 +636,24 @@
     border-radius: 1.4rem;
   }
 
-  .queueHead,
+  .queueHead {
+    display: none;
+  }
+
   .queueRow,
   .directiveGrid {
     grid-template-columns: 1fr;
+  }
+
+  .queueCell {
+    border-radius: 0.9rem;
+    border: 1px solid var(--line);
+    padding: 0.7rem;
+    background: color-mix(in srgb, var(--surface-strong) 86%, transparent);
+  }
+
+  .queueCellLabel {
+    display: block;
   }
 }
 

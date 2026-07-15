@@ -1,6 +1,13 @@
 import { headers } from "next/headers";
+import type { Viewport } from "next";
 
 import { DEFAULT_LOCALE, parseAppLocale } from "../lib/i18n/locales";
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
+};
 
 /**
  * Task 64.5.1: this is the single top-level App Router root layout (it owns

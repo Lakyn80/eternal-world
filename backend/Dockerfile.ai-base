@@ -1,0 +1,21 @@
+FROM python:3.12-slim
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    HF_HOME=/models/huggingface \
+    HUGGINGFACE_HUB_CACHE=/models/huggingface \
+    TRANSFORMERS_CACHE=/models/huggingface \
+    SENTENCE_TRANSFORMERS_HOME=/models/huggingface \
+    SENTENCE_TRANSFORMERS_CACHE_DIR=/models/huggingface
+
+WORKDIR /opt/python-ai-base
+
+COPY requirements.ai-base.txt ./
+
+RUN pip install --no-cache-dir --retries 10 --timeout 300 --index-url https://download.pytorch.org/whl/cpu torch \
+    && pip install --no-cache-dir --retries 10 --timeout 300 -r requirements.ai-base.txt \
+    && python -c "import torch, sentence_transformers, FlagEmbedding"
+
+RUN mkdir -p /models/huggingface

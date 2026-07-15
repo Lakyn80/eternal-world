@@ -19,11 +19,13 @@ The test server target is `https://eternalworld.lukiora.ru`.
 Key runtime decisions:
 
 - Production deploy uses prebuilt GHCR images, so the server does not `pip install` the backend on every deploy.
+- Heavy Python AI dependencies are shared through the GHCR base image `ghcr.io/lakyn80/python-ai-base-py312:py312-v1`, so projects built from the same base reuse identical Docker layers on the server.
 - Hugging Face model downloads are shared across projects through the external Docker volume `shared_huggingface_cache`.
-- The backend stays on Python `3.12` to match the repo runtime; the existing `ghcr.io/lakyn80/python-ai-base:1` image is Python `3.11` and is not a drop-in base for this app yet.
+- The backend stays on Python `3.12` to match the repo runtime; the older `ghcr.io/lakyn80/python-ai-base:1` image is Python `3.11` and is intentionally not used here.
 
 Files involved:
 
+- Shared AI base image: `backend/Dockerfile.ai-base`
 - Compose: `docker-compose.prod.yml`
 - Backend image: `backend/Dockerfile.prod`
 - Frontend image: `frontend/Dockerfile.prod`
@@ -52,15 +54,16 @@ Optional GitHub repository secrets:
 
 What the workflow does:
 
-1. Builds and pushes backend/frontend images to GHCR.
-2. Copies `docker-compose.prod.yml`, `.env.prod`, and nginx config to `/opt/eternal-world`.
-3. Ensures the shared model cache volume exists.
-4. Bootstraps nginx and Let's Encrypt for `eternalworld.lukiora.ru`.
-5. Starts `db`, `redis`, and `qdrant`.
-6. Runs Alembic migrations.
-7. Prefetches the BGE-M3 model into the shared Hugging Face cache.
-8. Seeds the RU E2E demo profile with `python scripts/bootstrap_family_avatar_ru_e2e.py`.
-9. Starts `backend`, `celery_worker`, and `frontend`.
+1. Builds and pushes the shared Python `3.12` AI base image to GHCR.
+2. Builds and pushes backend/frontend images to GHCR.
+3. Copies `docker-compose.prod.yml`, `.env.prod`, and nginx config to `/opt/eternal-world`.
+4. Ensures the shared model cache volume exists.
+5. Bootstraps nginx and Let's Encrypt for `eternalworld.lukiora.ru`.
+6. Starts `db`, `redis`, and `qdrant`.
+7. Runs Alembic migrations.
+8. Prefetches the BGE-M3 model into the shared Hugging Face cache.
+9. Seeds the RU E2E demo profile with `python scripts/bootstrap_family_avatar_ru_e2e.py`.
+10. Starts `backend`, `celery_worker`, and `frontend`.
 
 Manual server-side verification after deploy:
 

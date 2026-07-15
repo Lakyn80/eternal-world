@@ -218,8 +218,11 @@ export function MarketingHome({ locale }: { locale: AppLocale }) {
               </div>
               {content.showcase.review.rows.map((row) => (
                 <div className={styles.queueRow} key={row.join("-")}>
-                  {row.map((cell) => (
-                    <span key={cell}>{cell}</span>
+                  {row.map((cell, index) => (
+                    <div className={styles.queueCell} key={`${content.showcase.review.columns[index]}-${cell}`}>
+                      <span className={styles.queueCellLabel}>{content.showcase.review.columns[index]}</span>
+                      <span className={styles.queueCellValue}>{cell}</span>
+                    </div>
                   ))}
                 </div>
               ))}

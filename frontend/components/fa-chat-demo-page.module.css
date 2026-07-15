@@ -114,6 +114,7 @@
   background: color-mix(in srgb, var(--surface-strong) 90%, transparent);
   color: inherit;
   font-family: inherit;
+  overflow-wrap: anywhere;
 }
 
 .themeButton,
@@ -192,6 +193,7 @@
 .composerHint,
 .sideCard p {
   line-height: 1.72;
+  overflow-wrap: anywhere;
 }
 
 .exampleCluster,
@@ -302,10 +304,15 @@
 .chatPanel {
   display: grid;
   gap: 1rem;
+  min-width: 0;
 }
 
 .chatHeader {
   justify-content: space-between;
+}
+
+.chatHeader > :first-child {
+  min-width: 0;
 }
 
 .chatSubhead {
@@ -333,6 +340,7 @@
   max-height: 56vh;
   overflow: auto;
   padding-right: 0.4rem;
+  overscroll-behavior: contain;
 }
 
 .emptyCard,
@@ -390,6 +398,15 @@
 .evidenceTitle {
   margin-bottom: 0.55rem;
   font-weight: 700;
+}
+
+.candidateMeta,
+.traceLine,
+.evidenceMeta,
+.debugMeta,
+.directiveStrip,
+.chatSubhead {
+  overflow-wrap: anywhere;
 }
 
 .messageHint {
@@ -568,6 +585,13 @@
   .chatTools {
     width: 100%;
   }
+
+  .themeButton,
+  .headerLink,
+  .clearButton {
+    width: 100%;
+    text-align: center;
+  }
 }
 
 @media (max-width: 640px) {
@@ -584,6 +608,14 @@
 
   .directivePanel {
     grid-template-columns: 1fr;
+  }
+
+  .sendButton {
+    width: 100%;
+  }
+
+  .composerHint {
+    max-width: none;
   }
 }
 

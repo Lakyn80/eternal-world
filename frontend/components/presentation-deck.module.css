@@ -136,6 +136,7 @@
   font-size: clamp(1rem, 1.7vw, 1.25rem);
   line-height: 1.75;
   color: rgba(255, 241, 221, 0.88);
+  overflow-wrap: anywhere;
 }
 
 .slideAccent {
@@ -257,6 +258,7 @@
   .slideRail {
     position: static;
     grid-auto-flow: column;
+    justify-content: center;
     transform: none;
     padding: 0 1.2rem 1.2rem;
   }
@@ -276,6 +278,7 @@
   }
 
   .buttonRow {
+    display: flex;
     width: 100%;
   }
 

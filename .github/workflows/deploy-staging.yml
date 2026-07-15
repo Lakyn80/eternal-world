@@ -22,6 +22,8 @@ permissions:
 env:
   REGISTRY: ghcr.io
   IMAGE_NAMESPACE: lakyn80
+  PYTHON_AI_BASE_IMAGE: ghcr.io/lakyn80/python-ai-base-py312
+  PYTHON_AI_BASE_TAG: py312-v1
   APP_DOMAIN: eternalworld.lukiora.ru
   APP_DIR: /opt/eternal-world
   BACKEND_HOST_PORT: "8033"
@@ -64,7 +66,9 @@ jobs:
 
   build-backend:
     runs-on: ubuntu-latest
-    needs: prepare
+    needs:
+      - prepare
+      - build-python-ai-base
     if: needs.prepare.outputs.should_deploy == 'true'
     steps:
       - name: Checkout
@@ -88,11 +92,45 @@ jobs:
           context: ./backend
           file: ./backend/Dockerfile.prod
           push: true
+          build-args: |
+            PYTHON_AI_BASE_IMAGE=${{ env.PYTHON_AI_BASE_IMAGE }}:${{ env.PYTHON_AI_BASE_TAG }}
           tags: |
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAMESPACE }}/eternal-world-backend:latest
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAMESPACE }}/eternal-world-backend:${{ needs.prepare.outputs.image_tag }}
           cache-from: type=gha,scope=eternal-world-backend
           cache-to: type=gha,mode=max,scope=eternal-world-backend
+
+  build-python-ai-base:
+    runs-on: ubuntu-latest
+    needs: prepare
+    if: needs.prepare.outputs.should_deploy == 'true'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.prepare.outputs.git_sha }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push shared Python AI base image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./backend
+          file: ./backend/Dockerfile.ai-base
+          push: true
+          tags: |
+            ${{ env.PYTHON_AI_BASE_IMAGE }}:latest
+            ${{ env.PYTHON_AI_BASE_IMAGE }}:${{ env.PYTHON_AI_BASE_TAG }}
+          cache-from: type=gha,scope=python-ai-base-py312
+          cache-to: type=gha,mode=max,scope=python-ai-base-py312
 
   build-frontend:
     runs-on: ubuntu-latest
