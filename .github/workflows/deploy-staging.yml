@@ -121,7 +121,7 @@ jobs:
           file: ./frontend/Dockerfile.prod
           push: true
           build-args: |
-            NEXT_PUBLIC_API_URL=https://${{ env.APP_DOMAIN }}/api
+            NEXT_PUBLIC_API_URL=https://${{ env.APP_DOMAIN }}
           tags: |
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAMESPACE }}/eternal-world-frontend:latest
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAMESPACE }}/eternal-world-frontend:${{ needs.prepare.outputs.image_tag }}
@@ -193,7 +193,7 @@ jobs:
           printf '%s\n' "MEDIA_MAX_FILE_SIZE_BYTES=20971520" >> .deploy/.env.prod
           printf '%s\n' "CELERY_TASK_ALWAYS_EAGER=false" >> .deploy/.env.prod
           printf '%s\n' "CELERY_TASK_EAGER_PROPAGATES=false" >> .deploy/.env.prod
-          printf '%s\n' "NEXT_PUBLIC_API_URL=https://${{ env.APP_DOMAIN }}/api" >> .deploy/.env.prod
+          printf '%s\n' "NEXT_PUBLIC_API_URL=https://${{ env.APP_DOMAIN }}" >> .deploy/.env.prod
 
       - name: Copy deployment files to server
         shell: bash
