@@ -48,8 +48,6 @@ Required GitHub repository secrets:
 
 Optional GitHub repository secrets:
 
-- `GHCR_USERNAME`
-- `GHCR_READ_TOKEN`
 - `LETSENCRYPT_EMAIL`
 
 What the workflow does:

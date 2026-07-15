@@ -207,15 +207,15 @@ jobs:
       - name: Deploy on server
         shell: bash
         env:
-          GHCR_USERNAME: ${{ secrets.GHCR_USERNAME }}
-          GHCR_READ_TOKEN: ${{ secrets.GHCR_READ_TOKEN }}
+          GHCR_LOGIN_USER: ${{ github.actor }}
+          GHCR_LOGIN_TOKEN: ${{ github.token }}
           LETSENCRYPT_EMAIL: ${{ secrets.LETSENCRYPT_EMAIL }}
         run: |
           ssh root@188.120.231.45 "
             set -euo pipefail
 
-            if [ -n '${GHCR_USERNAME}' ] && [ -n '${GHCR_READ_TOKEN}' ]; then
-              printf '%s\n' '${GHCR_READ_TOKEN}' | docker login ghcr.io -u '${GHCR_USERNAME}' --password-stdin
+            if [ -n '${GHCR_LOGIN_USER}' ] && [ -n '${GHCR_LOGIN_TOKEN}' ]; then
+              printf '%s\n' '${GHCR_LOGIN_TOKEN}' | docker login ghcr.io -u '${GHCR_LOGIN_USER}' --password-stdin
             fi
 
             docker volume create shared_huggingface_cache >/dev/null
