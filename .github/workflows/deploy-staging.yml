@@ -259,6 +259,29 @@ jobs:
               sleep 5
             done
 
-            curl -fsSI http://127.0.0.1:${{ env.FRONTEND_HOST_PORT }}/cs >/dev/null
-            curl -fsSI https://${{ env.APP_DOMAIN }}/cs >/dev/null
+            for attempt in \$(seq 1 30); do
+              if curl -fsSI http://127.0.0.1:${{ env.FRONTEND_HOST_PORT }}/cs >/dev/null; then
+                break
+              fi
+              if [ \"\$attempt\" -eq 30 ]; then
+                echo 'frontend local healthcheck failed' >&2
+                docker compose --env-file .env.prod -f docker-compose.prod.yml ps >&2
+                docker logs eternal-world-frontend-1 --tail 200 >&2 || true
+                exit 1
+              fi
+              sleep 2
+            done
+
+            for attempt in \$(seq 1 30); do
+              if curl -fsSI https://${{ env.APP_DOMAIN }}/cs >/dev/null; then
+                break
+              fi
+              if [ \"\$attempt\" -eq 30 ]; then
+                echo 'frontend public healthcheck failed' >&2
+                docker compose --env-file .env.prod -f docker-compose.prod.yml ps >&2
+                docker logs eternal-world-frontend-1 --tail 200 >&2 || true
+                exit 1
+              fi
+              sleep 2
+            done
           "
