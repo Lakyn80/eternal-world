@@ -213,8 +213,6 @@ jobs:
         run: |
           ssh root@188.120.231.45 "
             set -euo pipefail
-            APP_DIR='${{ env.APP_DIR }}'
-            DOMAIN='${{ env.APP_DOMAIN }}'
 
             if [ -n '${GHCR_USERNAME}' ] && [ -n '${GHCR_READ_TOKEN}' ]; then
               printf '%s\n' '${GHCR_READ_TOKEN}' | docker login ghcr.io -u '${GHCR_USERNAME}' --password-stdin
@@ -223,25 +221,26 @@ jobs:
             docker volume create shared_huggingface_cache >/dev/null
 
             mkdir -p /etc/nginx/sites-available /etc/nginx/sites-enabled
+            rm -f /etc/nginx/sites-enabled/sites-available
 
             if [ ! -f \"/etc/letsencrypt/live/${{ env.APP_DOMAIN }}/fullchain.pem\" ]; then
-              cp \"$APP_DIR/infra/nginx/eternalworld.lukiora.ru.bootstrap.conf\" \"/etc/nginx/sites-available/$DOMAIN\"
-              ln -sfn \"/etc/nginx/sites-available/$DOMAIN\" \"/etc/nginx/sites-enabled/$DOMAIN\"
+              cp \"${{ env.APP_DIR }}/infra/nginx/eternalworld.lukiora.ru.bootstrap.conf\" \"/etc/nginx/sites-available/${{ env.APP_DOMAIN }}\"
+              ln -sfn \"/etc/nginx/sites-available/${{ env.APP_DOMAIN }}\" \"/etc/nginx/sites-enabled/${{ env.APP_DOMAIN }}\"
               nginx -t
               systemctl reload nginx
               if [ -n '${LETSENCRYPT_EMAIL}' ]; then
-                certbot --nginx --non-interactive --agree-tos -m '${LETSENCRYPT_EMAIL}' -d \"$DOMAIN\"
+                certbot --nginx --non-interactive --agree-tos -m '${LETSENCRYPT_EMAIL}' -d '${{ env.APP_DOMAIN }}'
               else
-                certbot --nginx --non-interactive --agree-tos --register-unsafely-without-email -d \"$DOMAIN\"
+                certbot --nginx --non-interactive --agree-tos --register-unsafely-without-email -d '${{ env.APP_DOMAIN }}'
               fi
             fi
 
-            cp \"$APP_DIR/infra/nginx/eternalworld.lukiora.ru.conf\" \"/etc/nginx/sites-available/$DOMAIN\"
-            ln -sfn \"/etc/nginx/sites-available/$DOMAIN\" \"/etc/nginx/sites-enabled/$DOMAIN\"
+            cp \"${{ env.APP_DIR }}/infra/nginx/eternalworld.lukiora.ru.conf\" \"/etc/nginx/sites-available/${{ env.APP_DOMAIN }}\"
+            ln -sfn \"/etc/nginx/sites-available/${{ env.APP_DOMAIN }}\" \"/etc/nginx/sites-enabled/${{ env.APP_DOMAIN }}\"
             nginx -t
             systemctl reload nginx
 
-            cd \"$APP_DIR\"
+            cd \"${{ env.APP_DIR }}\"
             docker compose --env-file .env.prod -f docker-compose.prod.yml pull
             docker compose --env-file .env.prod -f docker-compose.prod.yml up -d db redis qdrant
             docker compose --env-file .env.prod -f docker-compose.prod.yml run --rm backend alembic upgrade head
