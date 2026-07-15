@@ -4,15 +4,15 @@ from enum import Enum
 
 
 class SupportedContentLanguage(str, Enum):
-    """The only two languages the bilingual content-translation layer supports.
+    """Languages the content-translation layer supports.
 
-    Adding a third language later means extending this enum plus the
-    dictionaries/prompt language-name table - not introducing a new
-    architecture.
+    The architecture stays unchanged when a new supported language is added:
+    extend this enum plus the language-name tables/check constraints.
     """
 
     CS = "cs"
     RU = "ru"
+    EN = "en"
 
 
 class TranslationStatus(str, Enum):

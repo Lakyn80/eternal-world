@@ -1016,11 +1016,11 @@ class MemoryContentTranslation(TimestampMixin, Base):
             name="memory_content_translations_entity_type",
         ),
         CheckConstraint(
-            "source_language IN ('cs', 'ru')",
+            "source_language IN ('cs', 'ru', 'en')",
             name="memory_content_translations_source_language",
         ),
         CheckConstraint(
-            "target_language IN ('cs', 'ru')",
+            "target_language IN ('cs', 'ru', 'en')",
             name="memory_content_translations_target_language",
         ),
         CheckConstraint(

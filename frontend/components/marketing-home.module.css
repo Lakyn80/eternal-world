@@ -1,0 +1,634 @@
+.page {
+  --bg: #f5ecde;
+  --bg-strong: #efe1cb;
+  --surface: rgba(255, 250, 242, 0.84);
+  --surface-strong: rgba(255, 249, 238, 0.96);
+  --line: rgba(110, 79, 41, 0.15);
+  --text: #2f2418;
+  --muted: rgba(61, 43, 23, 0.76);
+  --accent: #9e6823;
+  --accent-strong: #7e4f14;
+  --accent-soft: rgba(183, 133, 71, 0.16);
+  min-height: 100vh;
+  position: relative;
+  overflow: clip;
+  padding: 1.2rem clamp(1rem, 3vw, 2rem) 4rem;
+  background:
+    radial-gradient(circle at top left, rgba(255, 236, 195, 0.9), transparent 28%),
+    radial-gradient(circle at 80% 12%, rgba(222, 190, 137, 0.42), transparent 22%),
+    linear-gradient(180deg, var(--bg), var(--bg-strong));
+  color: var(--text);
+  font-family: "Iowan Old Style", "Palatino Linotype", "Book Antiqua", serif;
+}
+
+.page[data-theme="dark"] {
+  --bg: #17110d;
+  --bg-strong: #211913;
+  --surface: rgba(46, 34, 26, 0.84);
+  --surface-strong: rgba(53, 39, 29, 0.96);
+  --line: rgba(255, 224, 182, 0.12);
+  --text: #f8ead7;
+  --muted: rgba(247, 233, 214, 0.76);
+  --accent: #dfb268;
+  --accent-strong: #f3ca86;
+  --accent-soft: rgba(223, 178, 104, 0.16);
+}
+
+.backgroundPaper {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background:
+    linear-gradient(90deg, rgba(255, 255, 255, 0.05) 1px, transparent 1px),
+    linear-gradient(0deg, rgba(255, 255, 255, 0.04) 1px, transparent 1px);
+  background-size: 2.75rem 2.75rem;
+  mask-image: radial-gradient(circle at center, black, transparent 88%);
+  opacity: 0.16;
+}
+
+.header,
+.nav,
+.headerTools,
+.heroActions,
+.presentationActions {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.header {
+  position: sticky;
+  top: 1rem;
+  z-index: 20;
+  justify-content: space-between;
+  margin: 0 auto 1.4rem;
+  max-width: 86rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--surface-strong) 86%, transparent);
+  padding: 0.82rem 1rem;
+  backdrop-filter: blur(18px);
+}
+
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.7rem;
+  color: inherit;
+  text-decoration: none;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.brandMark {
+  display: grid;
+  width: 2.2rem;
+  height: 2.2rem;
+  place-items: center;
+  border-radius: 999px;
+  background: linear-gradient(135deg, var(--accent-strong), #d5a562);
+  color: #fff7ea;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.28);
+}
+
+.nav {
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.nav a,
+.workspaceLink {
+  color: var(--muted);
+  text-decoration: none;
+  transition: color 180ms ease, transform 180ms ease;
+}
+
+.nav a:hover,
+.nav a:focus-visible,
+.workspaceLink:hover,
+.workspaceLink:focus-visible {
+  color: var(--text);
+  transform: translateY(-1px);
+}
+
+.headerTools {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.themeButton,
+.primaryCta,
+.secondaryCta,
+.workspaceLink {
+  border-radius: 999px;
+  padding: 0.78rem 1.1rem;
+  border: 1px solid var(--line);
+  font-family: inherit;
+}
+
+.themeButton {
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.hero,
+.section,
+.missionSection {
+  width: min(86rem, 100%);
+  margin: 0 auto 1.4rem;
+}
+
+.hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(20rem, 0.9fr);
+  gap: clamp(1.2rem, 3vw, 2rem);
+  padding: 2rem 0 1rem;
+}
+
+.heroCopy,
+.heroVisual,
+.section,
+.showcaseCard,
+.stepCard,
+.trustCard,
+.lossCard,
+.languageCard,
+.ctaPanel {
+  border: 1px solid var(--line);
+  background: var(--surface);
+  box-shadow: 0 22px 60px rgba(59, 39, 20, 0.1);
+}
+
+.heroCopy,
+.heroVisual {
+  border-radius: 2rem;
+  padding: clamp(1.4rem, 4vw, 2.4rem);
+}
+
+.heroCopy {
+  display: grid;
+  align-content: center;
+  gap: 1rem;
+}
+
+.eyebrow,
+.sectionKicker,
+.panelLabel,
+.mockLabel,
+.ctaLabel {
+  margin: 0;
+  color: var(--accent);
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  font-size: 0.78rem;
+}
+
+.heroTitle,
+.sectionHeading h2,
+.missionCopy h2 {
+  margin: 0;
+  line-height: 0.94;
+  font-weight: 600;
+}
+
+.heroTitle {
+  font-size: clamp(2.7rem, 6vw, 5.8rem);
+}
+
+.heroLead,
+.trustLine,
+.sectionHeading p,
+.cardNote,
+.sectionNote,
+.missionCopy p,
+.noEvidenceCard p {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.72;
+}
+
+.primaryCta,
+.secondaryCta,
+.workspaceLink {
+  text-decoration: none;
+}
+
+.primaryCta {
+  background: linear-gradient(135deg, var(--accent-strong), #c99143);
+  color: #fff7ea;
+  box-shadow: 0 14px 28px rgba(122, 74, 18, 0.18);
+}
+
+.secondaryCta,
+.workspaceLink {
+  color: var(--text);
+  background: color-mix(in srgb, var(--surface-strong) 76%, transparent);
+}
+
+.heroVisual {
+  position: relative;
+  overflow: hidden;
+}
+
+.avatarCard {
+  position: relative;
+  display: grid;
+  gap: 1rem;
+  min-height: 100%;
+}
+
+.avatarAura {
+  position: absolute;
+  inset: 8% 22% auto 22%;
+  height: 16rem;
+  border-radius: 999px;
+  background: radial-gradient(circle, rgba(255, 204, 117, 0.58), transparent 62%);
+  filter: blur(12px);
+}
+
+.avatarOrb {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  width: clamp(10rem, 30vw, 14rem);
+  aspect-ratio: 1;
+  place-items: center;
+  margin: 0 auto;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 35% 35%, rgba(255, 248, 230, 0.96), rgba(235, 192, 126, 0.72) 48%, rgba(126, 78, 23, 0.86));
+  color: #fff8ef;
+  font-size: clamp(1.5rem, 3vw, 2.3rem);
+  text-shadow: 0 3px 12px rgba(56, 29, 7, 0.34);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.34),
+    0 22px 54px rgba(97, 57, 13, 0.24);
+  animation: breathing 5.4s ease-in-out infinite;
+}
+
+.voiceBars {
+  display: grid;
+  grid-auto-flow: column;
+  gap: 0.45rem;
+  align-items: end;
+  justify-content: center;
+  min-height: 4rem;
+}
+
+.voiceBars span {
+  width: 0.55rem;
+  border-radius: 999px;
+  background: linear-gradient(180deg, var(--accent), rgba(255, 244, 223, 0.92));
+  animation: voiceFloat 1.8s ease-in-out infinite;
+}
+
+.voiceBars span:nth-child(1) { height: 1.5rem; }
+.voiceBars span:nth-child(2) { height: 3rem; animation-delay: 0.16s; }
+.voiceBars span:nth-child(3) { height: 2rem; animation-delay: 0.28s; }
+.voiceBars span:nth-child(4) { height: 3.4rem; animation-delay: 0.4s; }
+.voiceBars span:nth-child(5) { height: 1.8rem; animation-delay: 0.52s; }
+
+.evidencePanel,
+.noEvidenceCard {
+  position: relative;
+  z-index: 1;
+  border-radius: 1.3rem;
+  border: 1px solid var(--line);
+  background: color-mix(in srgb, var(--surface-strong) 86%, transparent);
+  padding: 1rem 1rem 1.05rem;
+}
+
+.evidenceList,
+.inlineList {
+  margin: 0;
+  padding-left: 1.15rem;
+  color: var(--muted);
+  line-height: 1.65;
+}
+
+.section {
+  display: grid;
+  gap: 1.4rem;
+  border-radius: 2rem;
+  padding: clamp(1.2rem, 3vw, 2rem);
+}
+
+.sectionHeading {
+  display: grid;
+  gap: 0.7rem;
+  max-width: 48rem;
+}
+
+.sectionHeading h2,
+.missionCopy h2 {
+  font-size: clamp(2rem, 4vw, 3.4rem);
+}
+
+.lossGrid,
+.stepGrid,
+.showcaseGrid,
+.trustGrid,
+.languageConversation {
+  display: grid;
+  gap: 1rem;
+}
+
+.lossGrid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.lossCard {
+  position: relative;
+  overflow: hidden;
+  border-radius: 1.45rem;
+  padding: 1.15rem;
+}
+
+.lossCard p {
+  position: relative;
+  z-index: 1;
+  margin: 0;
+  color: var(--text);
+}
+
+.lossPulse {
+  position: absolute;
+  inset: auto -15% -10% auto;
+  width: 7rem;
+  height: 7rem;
+  border-radius: 999px;
+  background: radial-gradient(circle, var(--accent-soft), transparent 68%);
+}
+
+.stepGrid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.stepCard,
+.showcaseCard,
+.trustCard,
+.languageCard,
+.ctaPanel {
+  border-radius: 1.5rem;
+  padding: 1.15rem;
+}
+
+.stepCard h3,
+.trustCard h3 {
+  margin: 0 0 0.8rem;
+}
+
+.stepBadge {
+  display: inline-flex;
+  margin-bottom: 1rem;
+  border-radius: 999px;
+  padding: 0.34rem 0.64rem;
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+}
+
+.stepCard p,
+.trustCard p {
+  margin: 0 0 0.8rem;
+  color: var(--muted);
+  line-height: 1.7;
+}
+
+.showcaseGrid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.cardHeader {
+  margin-bottom: 1rem;
+  font-size: 1.1rem;
+  font-weight: 700;
+}
+
+.mockLabel {
+  margin-bottom: 0.45rem;
+}
+
+.chatBubble {
+  border-radius: 1.2rem;
+  border: 1px solid var(--line);
+  background: var(--surface-strong);
+  padding: 0.9rem;
+  margin-bottom: 0.9rem;
+  line-height: 1.6;
+}
+
+.chatBubbleWarm {
+  background: linear-gradient(180deg, rgba(255, 245, 225, 0.94), rgba(255, 252, 246, 0.94));
+}
+
+.queueTable {
+  display: grid;
+  gap: 0.55rem;
+}
+
+.queueHead,
+.queueRow {
+  display: grid;
+  grid-template-columns: 1.2fr 0.9fr 1fr 0.6fr;
+  gap: 0.55rem;
+}
+
+.queueHead {
+  color: var(--accent);
+  font-size: 0.76rem;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+}
+
+.queueRow {
+  border-radius: 1rem;
+  border: 1px solid var(--line);
+  background: var(--surface-strong);
+  padding: 0.72rem 0.75rem;
+  color: var(--muted);
+}
+
+.directiveGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.7rem;
+}
+
+.directiveCard {
+  border-radius: 1rem;
+  border: 1px solid var(--line);
+  background: var(--surface-strong);
+  padding: 0.8rem;
+}
+
+.directiveCard span,
+.ctaLabel {
+  display: block;
+  margin-bottom: 0.3rem;
+}
+
+.directiveCard strong {
+  font-size: 0.96rem;
+}
+
+.trustGrid,
+.languageConversation {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.languageCard span {
+  display: inline-flex;
+  margin-bottom: 0.75rem;
+  border-radius: 999px;
+  padding: 0.35rem 0.6rem;
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+}
+
+.presentationActions {
+  justify-content: space-between;
+  flex-wrap: wrap;
+}
+
+.missionSection {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(18rem, 0.7fr);
+  gap: 1rem;
+  align-items: stretch;
+}
+
+.missionCopy {
+  display: grid;
+  gap: 0.8rem;
+}
+
+.ctaPanel {
+  display: grid;
+  align-content: start;
+  gap: 0.8rem;
+}
+
+.workspaceLink {
+  display: inline-flex;
+  justify-content: center;
+}
+
+.revealBlock {
+  opacity: 0;
+  transform: translateY(30px);
+  transition: opacity 560ms ease, transform 560ms ease;
+}
+
+.revealBlock[data-visible="true"] {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+@keyframes breathing {
+  0%,
+  100% {
+    transform: translateY(0) scale(1);
+  }
+  50% {
+    transform: translateY(-4px) scale(1.018);
+  }
+}
+
+@keyframes voiceFloat {
+  0%,
+  100% {
+    transform: scaleY(0.88);
+    opacity: 0.86;
+  }
+  50% {
+    transform: scaleY(1.08);
+    opacity: 1;
+  }
+}
+
+@media (max-width: 1120px) {
+  .hero,
+  .missionSection,
+  .showcaseGrid,
+  .trustGrid,
+  .languageConversation,
+  .lossGrid,
+  .stepGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 900px) {
+  .header {
+    border-radius: 1.6rem;
+    align-items: flex-start;
+  }
+
+  .header,
+  .nav,
+  .headerTools,
+  .hero,
+  .missionSection,
+  .lossGrid,
+  .stepGrid,
+  .showcaseGrid,
+  .trustGrid,
+  .languageConversation {
+    grid-template-columns: 1fr;
+    flex-direction: column;
+  }
+
+  .nav,
+  .headerTools {
+    align-items: flex-start;
+    width: 100%;
+  }
+
+  .presentationActions,
+  .heroActions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .primaryCta,
+  .secondaryCta,
+  .themeButton {
+    text-align: center;
+  }
+}
+
+@media (max-width: 640px) {
+  .page {
+    padding-inline: 0.8rem;
+  }
+
+  .heroCopy,
+  .heroVisual,
+  .section {
+    border-radius: 1.4rem;
+  }
+
+  .queueHead,
+  .queueRow,
+  .directiveGrid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .avatarOrb,
+  .voiceBars span,
+  .revealBlock {
+    animation: none;
+    transition: none;
+  }
+
+  .revealBlock {
+    opacity: 1;
+    transform: none;
+  }
+}

@@ -1,0 +1,258 @@
+name: Deploy Staging
+
+on:
+  workflow_dispatch:
+  workflow_run:
+    workflows:
+      - CI
+    types:
+      - completed
+
+concurrency:
+  group: eternal-world-staging
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  REGISTRY: ghcr.io
+  APP_DOMAIN: eternalworld.lukiora.ru
+  APP_DIR: /opt/eternal-world
+  BACKEND_HOST_PORT: "8033"
+  FRONTEND_HOST_PORT: "3017"
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    outputs:
+      should_deploy: ${{ steps.vars.outputs.should_deploy }}
+      git_sha: ${{ steps.vars.outputs.git_sha }}
+      image_tag: ${{ steps.vars.outputs.image_tag }}
+    steps:
+      - id: vars
+        shell: bash
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            git_sha="${GITHUB_SHA}"
+            should_deploy="true"
+          elif [[ "${{ github.event.workflow_run.conclusion }}" == "success" && "${{ github.event.workflow_run.head_branch }}" == "main" ]]; then
+            git_sha="${{ github.event.workflow_run.head_sha }}"
+            should_deploy="true"
+          else
+            git_sha=""
+            should_deploy="false"
+          fi
+
+          if [[ -n "${git_sha}" ]]; then
+            image_tag="${git_sha:0:12}"
+          else
+            image_tag=""
+          fi
+
+          echo "should_deploy=${should_deploy}" >> "${GITHUB_OUTPUT}"
+          echo "git_sha=${git_sha}" >> "${GITHUB_OUTPUT}"
+          echo "image_tag=${image_tag}" >> "${GITHUB_OUTPUT}"
+
+  build-backend:
+    runs-on: ubuntu-latest
+    needs: prepare
+    if: needs.prepare.outputs.should_deploy == 'true'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.prepare.outputs.git_sha }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push backend image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./backend
+          file: ./backend/Dockerfile.prod
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ github.repository_owner }}/eternal-world-backend:latest
+            ${{ env.REGISTRY }}/${{ github.repository_owner }}/eternal-world-backend:${{ needs.prepare.outputs.image_tag }}
+          cache-from: type=gha,scope=eternal-world-backend
+          cache-to: type=gha,mode=max,scope=eternal-world-backend
+
+  build-frontend:
+    runs-on: ubuntu-latest
+    needs: prepare
+    if: needs.prepare.outputs.should_deploy == 'true'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.prepare.outputs.git_sha }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push frontend image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./frontend
+          file: ./frontend/Dockerfile.prod
+          push: true
+          build-args: |
+            NEXT_PUBLIC_API_URL=https://${{ env.APP_DOMAIN }}/api
+          tags: |
+            ${{ env.REGISTRY }}/${{ github.repository_owner }}/eternal-world-frontend:latest
+            ${{ env.REGISTRY }}/${{ github.repository_owner }}/eternal-world-frontend:${{ needs.prepare.outputs.image_tag }}
+          cache-from: type=gha,scope=eternal-world-frontend
+          cache-to: type=gha,mode=max,scope=eternal-world-frontend
+
+  deploy:
+    runs-on: ubuntu-latest
+    needs:
+      - prepare
+      - build-backend
+      - build-frontend
+    if: needs.prepare.outputs.should_deploy == 'true'
+    timeout-minutes: 90
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.prepare.outputs.git_sha }}
+
+      - name: Prepare SSH
+        shell: bash
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "${{ secrets.STAGING_SSH_PRIVATE_KEY }}" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -H 188.120.231.45 >> ~/.ssh/known_hosts
+
+      - name: Render server env file
+        shell: bash
+        run: |
+          mkdir -p .deploy
+          : > .deploy/.env.prod
+          printf '%s\n' "COMPOSE_PROJECT_NAME=eternal-world" >> .deploy/.env.prod
+          printf '%s\n' "BACKEND_IMAGE=${{ env.REGISTRY }}/${{ github.repository_owner }}/eternal-world-backend:${{ needs.prepare.outputs.image_tag }}" >> .deploy/.env.prod
+          printf '%s\n' "FRONTEND_IMAGE=${{ env.REGISTRY }}/${{ github.repository_owner }}/eternal-world-frontend:${{ needs.prepare.outputs.image_tag }}" >> .deploy/.env.prod
+          printf '%s\n' "BACKEND_HOST_PORT=${{ env.BACKEND_HOST_PORT }}" >> .deploy/.env.prod
+          printf '%s\n' "FRONTEND_HOST_PORT=${{ env.FRONTEND_HOST_PORT }}" >> .deploy/.env.prod
+          printf '%s\n' "SHARED_HF_VOLUME=shared_huggingface_cache" >> .deploy/.env.prod
+          printf '%s\n' "POSTGRES_DB=${{ secrets.STAGING_POSTGRES_DB }}" >> .deploy/.env.prod
+          printf '%s\n' "POSTGRES_USER=${{ secrets.STAGING_POSTGRES_USER }}" >> .deploy/.env.prod
+          printf '%s\n' "POSTGRES_PASSWORD=${{ secrets.STAGING_POSTGRES_PASSWORD }}" >> .deploy/.env.prod
+          printf '%s\n' "APP_NAME=Eternal World API" >> .deploy/.env.prod
+          printf '%s\n' "ENVIRONMENT=staging" >> .deploy/.env.prod
+          printf '%s\n' "SQLALCHEMY_ECHO=false" >> .deploy/.env.prod
+          printf '%s\n' "BACKEND_CORS_ORIGINS=https://${{ env.APP_DOMAIN }}" >> .deploy/.env.prod
+          printf '%s\n' "JWT_SECRET_KEY=${{ secrets.STAGING_JWT_SECRET_KEY }}" >> .deploy/.env.prod
+          printf '%s\n' "JWT_ALGORITHM=HS256" >> .deploy/.env.prod
+          printf '%s\n' "JWT_ACCESS_TOKEN_EXPIRE_MINUTES=30" >> .deploy/.env.prod
+          printf '%s\n' "JWT_ISSUER=eternal-world" >> .deploy/.env.prod
+          printf '%s\n' "JWT_AUDIENCE=eternal-world-api" >> .deploy/.env.prod
+          printf '%s\n' "AI_BRAIN_PROVIDER=${{ secrets.STAGING_AI_BRAIN_PROVIDER }}" >> .deploy/.env.prod
+          printf '%s\n' "AI_BRAIN_BASE_URL=${{ secrets.STAGING_AI_BRAIN_BASE_URL }}" >> .deploy/.env.prod
+          printf '%s\n' "AI_BRAIN_MODEL=${{ secrets.STAGING_AI_BRAIN_MODEL }}" >> .deploy/.env.prod
+          printf '%s\n' "AI_BRAIN_API_KEY=${{ secrets.STAGING_AI_BRAIN_API_KEY }}" >> .deploy/.env.prod
+          printf '%s\n' "AI_BRAIN_TIMEOUT_SECONDS=30" >> .deploy/.env.prod
+          printf '%s\n' "CONTENT_TRANSLATION_PROVIDER=${{ secrets.STAGING_CONTENT_TRANSLATION_PROVIDER }}" >> .deploy/.env.prod
+          printf '%s\n' "CONTENT_TRANSLATION_BASE_URL=${{ secrets.STAGING_CONTENT_TRANSLATION_BASE_URL }}" >> .deploy/.env.prod
+          printf '%s\n' "CONTENT_TRANSLATION_MODEL=${{ secrets.STAGING_CONTENT_TRANSLATION_MODEL }}" >> .deploy/.env.prod
+          printf '%s\n' "CONTENT_TRANSLATION_API_KEY=${{ secrets.STAGING_CONTENT_TRANSLATION_API_KEY }}" >> .deploy/.env.prod
+          printf '%s\n' "CONTENT_TRANSLATION_TIMEOUT_SECONDS=20" >> .deploy/.env.prod
+          printf '%s\n' "CONTENT_TRANSLATION_MAX_RETRIES=1" >> .deploy/.env.prod
+          printf '%s\n' "EMBEDDING_PROVIDER=sentence_transformers" >> .deploy/.env.prod
+          printf '%s\n' "SENTENCE_TRANSFORMERS_DEVICE=cpu" >> .deploy/.env.prod
+          printf '%s\n' "QDRANT_COLLECTION_NAME=eternal_world_rag_chunks" >> .deploy/.env.prod
+          printf '%s\n' "QDRANT_TIMEOUT_SECONDS=10" >> .deploy/.env.prod
+          printf '%s\n' "QDRANT_INDEXING_ENABLED=true" >> .deploy/.env.prod
+          printf '%s\n' "MEDIA_STORAGE_PROVIDER=local" >> .deploy/.env.prod
+          printf '%s\n' "MEDIA_MAX_FILE_SIZE_BYTES=20971520" >> .deploy/.env.prod
+          printf '%s\n' "CELERY_TASK_ALWAYS_EAGER=false" >> .deploy/.env.prod
+          printf '%s\n' "CELERY_TASK_EAGER_PROPAGATES=false" >> .deploy/.env.prod
+          printf '%s\n' "NEXT_PUBLIC_API_URL=https://${{ env.APP_DOMAIN }}/api" >> .deploy/.env.prod
+
+      - name: Copy deployment files to server
+        shell: bash
+        run: |
+          ssh root@188.120.231.45 "mkdir -p ${{ env.APP_DIR }}/infra/nginx"
+          scp docker-compose.prod.yml root@188.120.231.45:${{ env.APP_DIR }}/docker-compose.prod.yml
+          scp .deploy/.env.prod root@188.120.231.45:${{ env.APP_DIR }}/.env.prod
+          scp infra/nginx/eternalworld.lukiora.ru.bootstrap.conf root@188.120.231.45:${{ env.APP_DIR }}/infra/nginx/eternalworld.lukiora.ru.bootstrap.conf
+          scp infra/nginx/eternalworld.lukiora.ru.conf root@188.120.231.45:${{ env.APP_DIR }}/infra/nginx/eternalworld.lukiora.ru.conf
+
+      - name: Deploy on server
+        shell: bash
+        env:
+          GHCR_USERNAME: ${{ secrets.GHCR_USERNAME }}
+          GHCR_READ_TOKEN: ${{ secrets.GHCR_READ_TOKEN }}
+          LETSENCRYPT_EMAIL: ${{ secrets.LETSENCRYPT_EMAIL }}
+        run: |
+          ssh root@188.120.231.45 "
+            set -euo pipefail
+            APP_DIR='${{ env.APP_DIR }}'
+            DOMAIN='${{ env.APP_DOMAIN }}'
+
+            if [ -n '${GHCR_USERNAME}' ] && [ -n '${GHCR_READ_TOKEN}' ]; then
+              printf '%s\n' '${GHCR_READ_TOKEN}' | docker login ghcr.io -u '${GHCR_USERNAME}' --password-stdin
+            fi
+
+            docker volume create shared_huggingface_cache >/dev/null
+
+            mkdir -p /etc/nginx/sites-available /etc/nginx/sites-enabled
+
+            if [ ! -f \"/etc/letsencrypt/live/${{ env.APP_DOMAIN }}/fullchain.pem\" ]; then
+              cp \"$APP_DIR/infra/nginx/eternalworld.lukiora.ru.bootstrap.conf\" \"/etc/nginx/sites-available/$DOMAIN\"
+              ln -sfn \"/etc/nginx/sites-available/$DOMAIN\" \"/etc/nginx/sites-enabled/$DOMAIN\"
+              nginx -t
+              systemctl reload nginx
+              if [ -n '${LETSENCRYPT_EMAIL}' ]; then
+                certbot --nginx --non-interactive --agree-tos -m '${LETSENCRYPT_EMAIL}' -d \"$DOMAIN\"
+              else
+                certbot --nginx --non-interactive --agree-tos --register-unsafely-without-email -d \"$DOMAIN\"
+              fi
+            fi
+
+            cp \"$APP_DIR/infra/nginx/eternalworld.lukiora.ru.conf\" \"/etc/nginx/sites-available/$DOMAIN\"
+            ln -sfn \"/etc/nginx/sites-available/$DOMAIN\" \"/etc/nginx/sites-enabled/$DOMAIN\"
+            nginx -t
+            systemctl reload nginx
+
+            cd \"$APP_DIR\"
+            docker compose --env-file .env.prod -f docker-compose.prod.yml pull
+            docker compose --env-file .env.prod -f docker-compose.prod.yml up -d db redis qdrant
+            docker compose --env-file .env.prod -f docker-compose.prod.yml run --rm backend alembic upgrade head
+            docker compose --env-file .env.prod -f docker-compose.prod.yml run --rm backend python scripts/prefetch_embedding_model.py --provider bge_m3_dense_sparse
+            docker compose --env-file .env.prod -f docker-compose.prod.yml run --rm backend python scripts/bootstrap_family_avatar_ru_e2e.py
+            docker compose --env-file .env.prod -f docker-compose.prod.yml up -d backend celery_worker frontend
+
+            for attempt in \$(seq 1 30); do
+              if curl -fsS http://127.0.0.1:${{ env.BACKEND_HOST_PORT }}/health/runtime >/dev/null; then
+                break
+              fi
+              if [ \"\$attempt\" -eq 30 ]; then
+                echo 'backend healthcheck failed' >&2
+                exit 1
+              fi
+              sleep 5
+            done
+
+            curl -fsSI http://127.0.0.1:${{ env.FRONTEND_HOST_PORT }}/cs >/dev/null
+            curl -fsSI https://${{ env.APP_DOMAIN }}/cs >/dev/null
+          "

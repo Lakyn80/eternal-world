@@ -294,3 +294,27 @@ def test_mock_provider_never_makes_network_calls_and_is_clearly_labeled():
     response = provider.translate(source_text="Ahoj", source_language="cs", target_language="ru")
     assert "mock_provider_not_a_real_translation" in response.result.warnings
     assert response.result.translated_text.startswith("[cs->ru] ")
+
+
+def test_english_language_pair_is_accepted(client):
+    db = _db()
+    try:
+        row = translate_content_field(
+            db,
+            TranslationFieldRequest(
+                candidate_id=7,
+                entity_type="memory_candidate",
+                entity_id="7",
+                field_name="user_message_excerpt",
+                source_language="ru",
+                target_language="en",
+                source_text="Бабушка пела мне песню.",
+            ),
+            provider=FakeProvider(translated_text="Grandma sang me a song."),
+        )
+        assert row.translation_status == "translated"
+        assert row.source_language == "ru"
+        assert row.target_language == "en"
+        assert row.translated_text == "Grandma sang me a song."
+    finally:
+        db.close()

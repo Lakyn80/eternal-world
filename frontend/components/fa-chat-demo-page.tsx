@@ -1,14 +1,14 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { FormEvent, useMemo, useState } from "react";
 import Link from "next/link";
 
 import { buildApiUrl } from "../lib/api-config";
 import { getDictionary } from "../lib/i18n/get-dictionary";
 import type { AppLocale } from "../lib/i18n/locales";
+import { useUiTheme } from "../lib/use-ui-theme";
 import { LanguageSwitcher } from "./language-switcher";
 import styles from "./fa-chat-demo-page.module.css";
-
 
 type DemoEvidenceItem = {
   chunk_id: string;
@@ -19,6 +19,7 @@ type DemoEvidenceItem = {
 };
 
 type DemoMemoryCandidate = {
+  candidate_id?: number | null;
   status: "needs_review";
   confidence: "unverified";
   source: "conversation";
@@ -77,15 +78,72 @@ type ChatMessage = {
   evidence: DemoEvidenceItem[];
 };
 
+function getShellText(locale: AppLocale) {
+  if (locale === "cs") {
+    return {
+      home: "Produktový web",
+      modeLight: "Světlý režim",
+      modeDark: "Tmavý režim",
+      liveBadge: "Živý workspace",
+      evidence: "Panel důkazů",
+      evidenceHint: "Avatar odpovídá jen z ověřené paměti. Důkaz je vždy důležitější než plynulost projevu.",
+      emotionalLayer: "Emoční vrstva",
+      emotionalHint: "Mění tón, tempo a výraz. Nikdy nemění fakta.",
+      trustTitle: "Pravdivostní guardrail",
+      trustBody: "Když důkaz chybí, systém řekne, že neví. Neimprovizuje rodinnou historii.",
+      reviewQueue: "Rodinná fronta",
+      reviewHint: "Nové epizody se posílají do workflow ke schválení vlastníkem avatara.",
+      emptyEvidence: "Zatím nejsou zobrazené žádné zdroje.",
+    };
+  }
+  if (locale === "ru") {
+    return {
+      home: "Продуктовый сайт",
+      modeLight: "Светлый режим",
+      modeDark: "Тёмный режим",
+      liveBadge: "Живой workspace",
+      evidence: "Панель доказательств",
+      evidenceHint: "Аватар отвечает только из подтверждённой памяти. Доказательство важнее гладкости ответа.",
+      emotionalLayer: "Эмоциональный слой",
+      emotionalHint: "Он меняет тон, темп и выражение. Никогда не меняет факты.",
+      trustTitle: "Guardrail правдивости",
+      trustBody: "Когда доказательства нет, система говорит, что не знает. Семейная история не дорисовывается.",
+      reviewQueue: "Семейная очередь",
+      reviewHint: "Новые эпизоды попадают в workflow на утверждение владельцем аватара.",
+      emptyEvidence: "Пока нет отображаемых источников.",
+    };
+  }
+  return {
+    home: "Product site",
+    modeLight: "Light mode",
+    modeDark: "Dark mode",
+    liveBadge: "Live workspace",
+    evidence: "Evidence panel",
+    evidenceHint: "The avatar answers only from verified memory. Supporting evidence matters more than conversational smoothness.",
+    emotionalLayer: "Emotion layer",
+    emotionalHint: "It changes tone, pace, and expression. It never changes facts.",
+    trustTitle: "Truthfulness guardrail",
+    trustBody: "When evidence is missing, the system says it does not know. It does not improvise family history.",
+    reviewQueue: "Family review queue",
+    reviewHint: "New episodes are routed into owner review before they can become trusted avatar memory.",
+    emptyEvidence: "No evidence sources are visible yet.",
+  };
+}
+
 export function FaChatDemoPage({ locale }: { locale: AppLocale }) {
   const dictionary = getDictionary(locale);
+  const shellText = getShellText(locale);
+  const [theme, toggleTheme] = useUiTheme();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [inputValue, setInputValue] = useState("");
   const [debugEnabled, setDebugEnabled] = useState(false);
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  const emptyStateVisible = messages.length === 0;
+  const latestAssistantMessage = useMemo(
+    () => [...messages].reverse().find((message) => message.role === "assistant") ?? null,
+    [messages]
+  );
 
   async function readErrorDetail(response: Response): Promise<string> {
     try {
@@ -171,195 +229,281 @@ export function FaChatDemoPage({ locale }: { locale: AppLocale }) {
   }
 
   return (
-    <main className={styles.page}>
-      <div className={styles.pageGlow} />
-      <div className={styles.shell}>
-        <section className={styles.scene}>
-          <div className={styles.heroColumn}>
-            <div className={styles.heroVisual}>
-              <div className={styles.heroMist} />
-              <div className={styles.avatarHalo}>
-                <div className={styles.avatarCore}>
-                  <div className={styles.avatarMonogram}>{dictionary.chat.avatarMonogram}</div>
-                  <div className={styles.avatarName}>{dictionary.chat.avatarName}</div>
-                  <div className={styles.avatarRole}>{dictionary.chat.avatarRole}</div>
-                </div>
-              </div>
-            </div>
+    <main className={styles.page} data-theme={theme}>
+      <header className={styles.header}>
+        <div className={styles.headerBrand}>
+          <Link className={styles.brandLink} href={`/${locale}`}>
+            Eternal World
+          </Link>
+          <span className={styles.liveBadge}>{shellText.liveBadge}</span>
+        </div>
+        <div className={styles.headerTools}>
+          <LanguageSwitcher currentLocale={locale} variant={theme === "dark" ? "dark" : "light"} />
+          <button className={styles.themeButton} onClick={toggleTheme} type="button">
+            {theme === "light" ? shellText.modeDark : shellText.modeLight}
+          </button>
+          <Link className={styles.headerLink} href={`/${locale}/family-memory-review`}>
+            {dictionary.chat.reviewLink}
+          </Link>
+          <Link className={styles.headerLink} href={`/${locale}`}>
+            {shellText.home}
+          </Link>
+        </div>
+      </header>
 
-            <div className={styles.heroCopy}>
-              <p className={styles.eyebrow}>{dictionary.chat.eyebrow}</p>
-              <h1 className={styles.title}>{dictionary.chat.title}</h1>
-              <p className={styles.lead}>{dictionary.chat.lead}</p>
-              <div className={styles.exampleCluster}>
-                {dictionary.chat.examples.map((exampleQuestion) => (
-                  <button
-                    key={exampleQuestion}
-                    className={styles.exampleChip}
-                    onClick={() => setInputValue(exampleQuestion)}
-                    type="button"
-                  >
-                    {exampleQuestion}
-                  </button>
-                ))}
-              </div>
+      <section className={styles.hero}>
+        <div className={styles.heroCopy}>
+          <p className={styles.eyebrow}>{dictionary.chat.eyebrow}</p>
+          <h1 className={styles.title}>{dictionary.chat.title}</h1>
+          <p className={styles.lead}>{dictionary.chat.lead}</p>
+          <div className={styles.exampleCluster}>
+            {dictionary.chat.examples.map((exampleQuestion) => (
+              <button
+                key={exampleQuestion}
+                className={styles.exampleChip}
+                onClick={() => setInputValue(exampleQuestion)}
+                type="button"
+              >
+                {exampleQuestion}
+              </button>
+            ))}
+          </div>
+          <div className={styles.trustStrip}>
+            <span>{shellText.trustTitle}</span>
+            <span>{shellText.evidence}</span>
+            <span>{shellText.reviewQueue}</span>
+          </div>
+        </div>
+
+        <aside className={styles.heroPanel}>
+          <div className={styles.avatarStage}>
+            <div className={styles.avatarHalo} />
+            <div className={styles.avatarCore}>
+              <span className={styles.avatarMonogram}>{dictionary.chat.avatarMonogram}</span>
+              <strong>{dictionary.chat.avatarName}</strong>
+              <span>{dictionary.chat.avatarRole}</span>
+            </div>
+            <div className={styles.voiceWave} aria-hidden="true">
+              <span />
+              <span />
+              <span />
+              <span />
+              <span />
             </div>
           </div>
+          <div className={styles.sideCard}>
+            <p className={styles.sideCardLabel}>{shellText.trustTitle}</p>
+            <p>{shellText.trustBody}</p>
+          </div>
+          <div className={styles.sideCard}>
+            <p className={styles.sideCardLabel}>{shellText.emotionalLayer}</p>
+            <p>{shellText.emotionalHint}</p>
+          </div>
+        </aside>
+      </section>
 
-          <section className={styles.chatPanel}>
-            <header className={styles.chatHeader}>
-              <div>
-                <div className={styles.chatBrand}>{dictionary.chat.brand}</div>
-                <div className={styles.chatSubhead}>{dictionary.chat.subhead}</div>
-              </div>
-              <div className={styles.chatTools}>
-                <LanguageSwitcher currentLocale={locale} variant="dark" />
-                <Link className={styles.reviewLink} href={`/${locale}/family-memory-review`}>
-                  {dictionary.chat.reviewLink}
-                </Link>
-                <label className={styles.toggle}>
-                  <input
-                    checked={debugEnabled}
-                    onChange={(event) => setDebugEnabled(event.target.checked)}
-                    type="checkbox"
-                  />
-                  <span>{dictionary.chat.debugLabel}</span>
-                </label>
-                <button
-                  className={styles.clearButton}
-                  onClick={() => {
-                    setMessages([]);
-                    setErrorMessage(null);
-                  }}
-                  type="button"
-                >
-                  {dictionary.chat.clear}
-                </button>
-              </div>
-            </header>
+      <section className={styles.workspace}>
+        <section className={styles.chatPanel}>
+          <header className={styles.chatHeader}>
+            <div>
+              <div className={styles.chatBrand}>{dictionary.chat.brand}</div>
+              <div className={styles.chatSubhead}>{dictionary.chat.subhead}</div>
+            </div>
+            <div className={styles.chatTools}>
+              <label className={styles.toggle}>
+                <input
+                  checked={debugEnabled}
+                  onChange={(event) => setDebugEnabled(event.target.checked)}
+                  type="checkbox"
+                />
+                <span>{dictionary.chat.debugLabel}</span>
+              </label>
+              <button
+                className={styles.clearButton}
+                onClick={() => {
+                  setMessages([]);
+                  setErrorMessage(null);
+                }}
+                type="button"
+              >
+                {dictionary.chat.clear}
+              </button>
+            </div>
+          </header>
 
-            <div className={styles.chatBody}>
-              {emptyStateVisible ? (
-                <section className={styles.emptyCard}>
-                  <div className={styles.emptyTitle}>{dictionary.chat.emptyTitle}</div>
-                  <p className={styles.emptyText}>{dictionary.chat.emptyText}</p>
-                </section>
-              ) : null}
+          <div className={styles.chatBody}>
+            {messages.length === 0 ? (
+              <section className={styles.emptyCard}>
+                <div className={styles.emptyTitle}>{dictionary.chat.emptyTitle}</div>
+                <p className={styles.emptyText}>{dictionary.chat.emptyText}</p>
+              </section>
+            ) : null}
 
-              {messages.map((message) => (
-                <article
-                  key={message.id}
-                  className={`${styles.messageRow} ${
-                    message.role === "user" ? styles.messageRowUser : styles.messageRowAssistant
+            {messages.map((message) => (
+              <article
+                key={message.id}
+                className={`${styles.messageRow} ${
+                  message.role === "user" ? styles.messageRowUser : styles.messageRowAssistant
+                }`}
+              >
+                <div
+                  className={`${styles.messageBubble} ${
+                    message.role === "user" ? styles.userBubble : styles.assistantBubble
                   }`}
                 >
-                  <div
-                    className={`${styles.messageBubble} ${
-                      message.role === "user" ? styles.userBubble : styles.assistantBubble
-                    }`}
-                  >
-                    <div className={styles.messageRole}>
-                      {message.role === "user" ? dictionary.chat.you : dictionary.chat.avatarName.split(" ")[0]}
-                    </div>
-                    <div className={styles.messageText}>{message.text}</div>
+                  <div className={styles.messageRole}>
+                    {message.role === "user" ? dictionary.chat.you : dictionary.chat.avatarName.split(" ")[0]}
+                  </div>
+                  <div className={styles.messageText}>{message.text}</div>
 
-                    {message.role === "assistant" && message.lackOfEvidence ? (
-                      <div className={styles.messageHint}>{dictionary.chat.lackOfEvidenceHint}</div>
-                    ) : null}
+                  {message.role === "assistant" && message.lackOfEvidence ? (
+                    <div className={styles.messageHint}>{dictionary.chat.lackOfEvidenceHint}</div>
+                  ) : null}
 
-                    {message.role === "assistant" && message.memoryCandidate ? (
-                      <section className={styles.candidateCard}>
-                        <div className={styles.candidateTitle}>{dictionary.chat.newEpisodeCardTitle}</div>
-                        <div className={styles.candidateText}>
-                          {message.memoryCandidate.proposed_memory_text}
-                        </div>
-                        <div className={styles.candidateMeta}>
-                          status: {message.memoryCandidate.status} • confidence:{" "}
-                          {message.memoryCandidate.confidence}
-                        </div>
-                      </section>
-                    ) : null}
-
-                    {message.role === "assistant" && message.emotion ? (
-                      <div className={styles.directiveStrip}>
-                        <span>tone: {message.emotion.primary}</span>
-                        <span>intensity: {message.emotion.intensity.toFixed(2)}</span>
-                        {message.personaApplied ? <span>persona: on</span> : null}
+                  {message.role === "assistant" && message.memoryCandidate ? (
+                    <section className={styles.candidateCard}>
+                      <div className={styles.candidateTitle}>{dictionary.chat.newEpisodeCardTitle}</div>
+                      <div className={styles.candidateText}>{message.memoryCandidate.proposed_memory_text}</div>
+                      <div className={styles.candidateMeta}>
+                        status: {message.memoryCandidate.status} • confidence: {message.memoryCandidate.confidence}
                       </div>
-                    ) : null}
+                      {message.memoryCandidate.candidate_id ? (
+                        <Link
+                          className={styles.reviewCandidateLink}
+                          href={`/${locale}/family-memory-review?candidate=${message.memoryCandidate.candidate_id}`}
+                        >
+                          {dictionary.chat.reviewLink}
+                        </Link>
+                      ) : null}
+                    </section>
+                  ) : null}
 
-                    {message.role === "assistant" && message.traceId ? (
-                      <div className={styles.traceLine}>trace_id: {message.traceId}</div>
-                    ) : null}
+                  {message.role === "assistant" && message.emotion ? (
+                    <div className={styles.directiveStrip}>
+                      <span>tone: {message.emotion.primary}</span>
+                      <span>intensity: {message.emotion.intensity.toFixed(2)}</span>
+                      {message.personaApplied ? <span>persona: on</span> : null}
+                    </div>
+                  ) : null}
 
-                    {message.role === "assistant" && debugEnabled && message.evidence.length > 0 ? (
-                      <details className={styles.detailsBlock}>
-                        <summary>{dictionary.chat.usedMemoriesSummary}</summary>
-                        <div className={styles.evidenceList}>
-                          {message.evidence.map((evidenceItem) => (
-                            <div
-                              key={`${message.id}-${evidenceItem.chunk_id}`}
-                              className={styles.evidenceCard}
-                            >
+                  {message.role === "assistant" && message.traceId ? (
+                    <div className={styles.traceLine}>trace_id: {message.traceId}</div>
+                  ) : null}
+
+                  {message.role === "assistant" && message.evidence.length > 0 ? (
+                    <details className={styles.detailsBlock} open>
+                      <summary>{dictionary.chat.usedMemoriesSummary}</summary>
+                      <div className={styles.evidenceList}>
+                        {message.evidence.map((evidenceItem) => (
+                          <div key={`${message.id}-${evidenceItem.chunk_id}`} className={styles.evidenceCard}>
+                            {evidenceItem.source_title ? (
+                              <div className={styles.evidenceTitle}>{evidenceItem.source_title}</div>
+                            ) : null}
+                            <div className={styles.evidenceText}>
+                              {evidenceItem.text_preview ?? dictionary.chat.noPreview}
+                            </div>
+                            {debugEnabled ? (
                               <div className={styles.evidenceMeta}>
                                 chunk_id: {evidenceItem.chunk_id}
-                                {evidenceItem.score !== null
-                                  ? ` • score: ${evidenceItem.score.toFixed(3)}`
-                                  : ""}
+                                {evidenceItem.score !== null ? ` • score: ${evidenceItem.score.toFixed(3)}` : ""}
                               </div>
-                              {evidenceItem.source_title ? (
-                                <div className={styles.evidenceTitle}>{evidenceItem.source_title}</div>
-                              ) : null}
-                              <div className={styles.evidenceText}>
-                                {evidenceItem.text_preview ?? dictionary.chat.noPreview}
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      </details>
-                    ) : null}
-
-                    {message.role === "assistant" && debugEnabled && message.faceDirectives && message.voiceDirectives ? (
-                      <div className={styles.debugMeta}>
-                        face: {message.faceDirectives.expression} / {message.faceDirectives.gaze} /{" "}
-                        {message.faceDirectives.head_motion}
-                        <br />
-                        voice: {message.voiceDirectives.tone} / {message.voiceDirectives.pace} /{" "}
-                        {message.voiceDirectives.volume}
+                            ) : null}
+                          </div>
+                        ))}
                       </div>
-                    ) : null}
-                  </div>
-                </article>
-              ))}
+                    </details>
+                  ) : null}
 
-              {loading ? <div className={styles.loadingState}>{dictionary.chat.loading}</div> : null}
-
-              {errorMessage ? (
-                <div className={styles.errorBanner} role="alert">
-                  {errorMessage}
+                  {message.role === "assistant" && debugEnabled && message.faceDirectives && message.voiceDirectives ? (
+                    <div className={styles.debugMeta}>
+                      face: {message.faceDirectives.expression} / {message.faceDirectives.gaze} /{" "}
+                      {message.faceDirectives.head_motion}
+                      <br />
+                      voice: {message.voiceDirectives.tone} / {message.voiceDirectives.pace} /{" "}
+                      {message.voiceDirectives.volume}
+                    </div>
+                  ) : null}
                 </div>
-              ) : null}
-            </div>
+              </article>
+            ))}
 
-            <form className={styles.composer} onSubmit={handleSubmit}>
-              <textarea
-                aria-label={dictionary.chat.composerAriaLabel}
-                className={styles.textarea}
-                onChange={(event) => setInputValue(event.target.value)}
-                placeholder={dictionary.chat.composerPlaceholder}
-                rows={3}
-                value={inputValue}
-              />
-              <div className={styles.composerFooter}>
-                <div className={styles.composerHint}>{dictionary.chat.composerHint}</div>
-                <button className={styles.sendButton} disabled={loading} type="submit">
-                  {dictionary.chat.send}
-                </button>
+            {loading ? <div className={styles.loadingState}>{dictionary.chat.loading}</div> : null}
+
+            {errorMessage ? (
+              <div className={styles.errorBanner} role="alert">
+                {errorMessage}
               </div>
-            </form>
-          </section>
+            ) : null}
+          </div>
+
+          <form className={styles.composer} onSubmit={handleSubmit}>
+            <textarea
+              aria-label={dictionary.chat.composerAriaLabel}
+              className={styles.textarea}
+              onChange={(event) => setInputValue(event.target.value)}
+              placeholder={dictionary.chat.composerPlaceholder}
+              rows={3}
+              value={inputValue}
+            />
+            <div className={styles.composerFooter}>
+              <div className={styles.composerHint}>{dictionary.chat.composerHint}</div>
+              <button className={styles.sendButton} disabled={loading} type="submit">
+                {dictionary.chat.send}
+              </button>
+            </div>
+          </form>
         </section>
-      </div>
+
+        <aside className={styles.insightPanel}>
+          <div className={styles.sideCard}>
+            <p className={styles.sideCardLabel}>{shellText.evidence}</p>
+            <p>{shellText.evidenceHint}</p>
+            {latestAssistantMessage?.evidence && latestAssistantMessage.evidence.length > 0 ? (
+              <ul className={styles.insightList}>
+                {latestAssistantMessage.evidence.map((item) => (
+                  <li key={item.chunk_id}>{item.source_title ?? item.text_preview ?? item.chunk_id}</li>
+                ))}
+              </ul>
+            ) : (
+              <p className={styles.sideMuted}>{shellText.emptyEvidence}</p>
+            )}
+          </div>
+
+          <div className={styles.sideCard}>
+            <p className={styles.sideCardLabel}>{shellText.emotionalLayer}</p>
+            {latestAssistantMessage?.emotion ? (
+              <div className={styles.directivePanel}>
+                <div>
+                  <span>emotion</span>
+                  <strong>{latestAssistantMessage.emotion.primary}</strong>
+                </div>
+                <div>
+                  <span>intensity</span>
+                  <strong>{latestAssistantMessage.emotion.intensity.toFixed(2)}</strong>
+                </div>
+                <div>
+                  <span>gaze</span>
+                  <strong>{latestAssistantMessage.faceDirectives?.gaze ?? "—"}</strong>
+                </div>
+                <div>
+                  <span>pace</span>
+                  <strong>{latestAssistantMessage.voiceDirectives?.pace ?? "—"}</strong>
+                </div>
+              </div>
+            ) : (
+              <p className={styles.sideMuted}>{shellText.emotionalHint}</p>
+            )}
+          </div>
+
+          <div className={styles.sideCard}>
+            <p className={styles.sideCardLabel}>{shellText.reviewQueue}</p>
+            <p>{shellText.reviewHint}</p>
+            <Link className={styles.reviewLink} href={`/${locale}/family-memory-review`}>
+              {dictionary.chat.reviewLink}
+            </Link>
+          </div>
+        </aside>
+      </section>
     </main>
   );
 }

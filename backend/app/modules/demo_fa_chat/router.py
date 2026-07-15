@@ -82,24 +82,35 @@ router = APIRouter(prefix="/api/demo/fa-chat", tags=["demo-fa-chat"])
 logger = get_logger("demo_fa_chat_router")
 CandidateIdPath = Annotated[int, Path(gt=0)]
 
-def _detail(locale: str, *, cs: str, ru: str) -> str:
-    """Pick the right-language error detail. Defaults to ``ru`` for any
-    ``locale`` other than ``"cs"``, matching this demo's original Russian-only
-    behavior for any caller that doesn't pass a locale."""
-    return cs if locale == "cs" else ru
+def _detail(locale: str, *, cs: str, ru: str, en: str | None = None) -> str:
+    """Pick the right-language error detail.
+
+    Czech keeps its dedicated wording, Russian remains the backward-compatible
+    default, and English can opt in explicitly where provided.
+    """
+    if locale == "cs":
+        return cs
+    if locale == "en" and en is not None:
+        return en
+    return ru
 
 
 def _validate_locale_param(locale: str) -> str:
-    if locale not in {"cs", "ru"}:
+    if locale not in {"cs", "ru", "en"}:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="Unsupported locale. Supported values: cs, ru.",
+            detail="Unsupported locale. Supported values: cs, ru, en.",
         )
     return locale
 
 
 def _candidate_not_found_detail(locale: str) -> str:
-    return _detail(locale, cs="Kandidát vzpomínky nebyl nalezen.", ru="Кандидат воспоминания не найден.")
+    return _detail(
+        locale,
+        cs="Kandidát vzpomínky nebyl nalezen.",
+        ru="Кандидат воспоминания не найден.",
+        en="Memory candidate was not found.",
+    )
 
 
 def _candidate_invalid_transition_detail(locale: str) -> str:
@@ -107,11 +118,17 @@ def _candidate_invalid_transition_detail(locale: str) -> str:
         locale,
         cs="Nepřípustná změna stavu kandidáta.",
         ru="Недопустимое изменение статуса кандидата.",
+        en="Invalid memory candidate state transition.",
     )
 
 
 def _promotion_not_found_detail(locale: str) -> str:
-    return _detail(locale, cs="Postoupení vzpomínky nebylo nalezeno.", ru="Продвижение воспоминания не найдено.")
+    return _detail(
+        locale,
+        cs="Postoupení vzpomínky nebylo nalezeno.",
+        ru="Продвижение воспоминания не найдено.",
+        en="Memory promotion was not found.",
+    )
 
 
 def _promotion_invalid_transition_detail(locale: str) -> str:
@@ -119,6 +136,7 @@ def _promotion_invalid_transition_detail(locale: str) -> str:
         locale,
         cs="Nepřípustná změna stavu postoupení.",
         ru="Недопустимое изменение статуса продвижения.",
+        en="Invalid memory promotion state transition.",
     )
 
 
@@ -127,6 +145,7 @@ def _promotion_indexing_failed_detail(locale: str) -> str:
         locale,
         cs="Indexace potvrzené vzpomínky se nezdařila.",
         ru="Индексация подтвержденного воспоминания не выполнена.",
+        en="Indexing the approved memory failed.",
     )
 
 
@@ -167,6 +186,7 @@ def _optional_actor_context(
                 locale,
                 cs="Zadaný kontext rodinného účastníka je neplatný.",
                 ru="Указанный контекст участника семьи недопустим.",
+                en="The supplied family participant context is invalid.",
             ),
         ) from exc
     return actor
@@ -249,6 +269,7 @@ def send_demo_fa_chat_message(
                 payload.locale,
                 cs="Rodinný účastník nemá oprávnění provést tuto akci.",
                 ru="Участник семьи не имеет права выполнять это действие.",
+                en="The family participant is not authorized for this action.",
             ),
         ) from exc
     except FamilyMemoryNotFoundError as exc:
@@ -258,6 +279,7 @@ def send_demo_fa_chat_message(
                 payload.locale,
                 cs="Kandidát rodinné vzpomínky nebyl nalezen.",
                 ru="Кандидат семейного воспоминания не найден.",
+                en="Family memory candidate was not found.",
             ),
         ) from exc
     except FamilyMemoryInvalidTransitionError as exc:
@@ -267,6 +289,7 @@ def send_demo_fa_chat_message(
                 payload.locale,
                 cs="Pro kandidáta není žádná čekající doplňující otázka.",
                 ru="Для кандидата нет ожидающего уточняющего вопроса.",
+                en="There is no pending clarification question for this candidate.",
             ),
         ) from exc
     except HTTPException:
@@ -292,6 +315,7 @@ def send_demo_fa_chat_message(
                 payload.locale,
                 cs="Nepodařilo se získat odpověď avatara. Zkuste to prosím znovu.",
                 ru=DEMO_FA_CHAT_INTERNAL_ERROR_DETAIL,
+                en="The avatar response could not be generated. Please try again.",
             ),
         ) from exc
 
@@ -577,6 +601,7 @@ def retry_demo_memory_candidate_translation_endpoint(
                 locale,
                 cs="Pouze vlastník avatara může znovu spustit překlad vzpomínky.",
                 ru="Только владелец аватара может повторить перевод воспоминания.",
+                en="Only the avatar owner can retry the memory translation.",
             ),
         ) from exc
     except DemoFaChatValidationError as exc:
@@ -649,6 +674,7 @@ def _review_demo_memory_candidate(
                 locale,
                 cs="Pro obohacenou vzpomínku je vyžadována výslovná kontrola vlastníkem.",
                 ru="Для обогащённого воспоминания требуется явная проверка владельцем.",
+                en="Enriched memories require explicit owner review.",
             ),
         ) from exc
 
@@ -852,6 +878,7 @@ def cancel_demo_memory_promotion_endpoint(
                 locale,
                 cs="Pouze vlastník avatara může zrušit postoupení vzpomínky.",
                 ru="Только владелец аватара может отменить продвижение воспоминания.",
+                en="Only the avatar owner can cancel a memory promotion.",
             ),
         ) from exc
 
@@ -936,6 +963,7 @@ def index_demo_memory_promotion_endpoint(
                 locale,
                 cs="Pouze vlastník avatara může vzpomínku indexovat.",
                 ru="Только владелец аватара может индексировать воспоминание.",
+                en="Only the avatar owner can index a memory.",
             ),
         ) from exc
 

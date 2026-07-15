@@ -1,0 +1,295 @@
+.deck {
+  --deck-surface: rgba(255, 251, 244, 0.9);
+  --deck-text: #2f2418;
+  --deck-muted: rgba(59, 43, 24, 0.72);
+  --deck-line: rgba(112, 79, 29, 0.18);
+  --deck-accent: #a56e24;
+  position: relative;
+  display: grid;
+  gap: 1.1rem;
+  border-radius: 2rem;
+  border: 1px solid var(--deck-line);
+  background:
+    radial-gradient(circle at top left, rgba(255, 238, 202, 0.82), transparent 36%),
+    linear-gradient(180deg, rgba(255, 251, 244, 0.95), rgba(246, 236, 219, 0.92));
+  padding: clamp(1rem, 2vw, 1.5rem);
+  color: var(--deck-text);
+  box-shadow: 0 26px 70px rgba(81, 56, 24, 0.14);
+  overflow: hidden;
+}
+
+.deckFullScreen {
+  min-height: 100vh;
+  border-radius: 0;
+  border: none;
+  box-shadow: none;
+  padding: clamp(1rem, 3vw, 2rem);
+}
+
+.deckHeader,
+.deckFooter,
+.controls,
+.buttonRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.deckEyebrow,
+.deckBody,
+.slideMeta,
+.slideAccent,
+.usageHint,
+.slideCounter {
+  margin: 0;
+}
+
+.deckEyebrow {
+  font-size: 0.82rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--deck-accent);
+}
+
+.deckBody,
+.usageHint,
+.slideAccent,
+.slideCounter {
+  color: var(--deck-muted);
+}
+
+.deckBody {
+  max-width: 48rem;
+}
+
+.deckViewport {
+  position: relative;
+  display: grid;
+  align-items: stretch;
+  min-height: min(74vh, 46rem);
+  overflow: hidden;
+  border-radius: 1.6rem;
+  border: 1px solid rgba(122, 92, 48, 0.14);
+  background:
+    radial-gradient(circle at 20% 15%, rgba(255, 234, 186, 0.92), transparent 24%),
+    radial-gradient(circle at 80% 30%, rgba(202, 169, 116, 0.22), transparent 26%),
+    linear-gradient(135deg, rgba(76, 54, 32, 0.98), rgba(46, 31, 19, 0.98));
+  color: #fff6ea;
+  outline: none;
+}
+
+.deckViewport:focus-visible {
+  box-shadow: 0 0 0 3px rgba(255, 223, 165, 0.62);
+}
+
+.deckBackdrop,
+.deckGlow {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.deckBackdrop {
+  background:
+    linear-gradient(90deg, rgba(255, 255, 255, 0.04) 1px, transparent 1px),
+    linear-gradient(0deg, rgba(255, 255, 255, 0.04) 1px, transparent 1px);
+  background-size: 3rem 3rem;
+  opacity: 0.22;
+}
+
+.deckGlow {
+  background:
+    radial-gradient(circle at 24% 24%, rgba(255, 206, 121, 0.52), transparent 24%),
+    radial-gradient(circle at 76% 72%, rgba(255, 246, 230, 0.12), transparent 22%);
+  animation: pulseGlow 6s ease-in-out infinite;
+}
+
+.slideFrame {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  align-content: center;
+  gap: 1rem;
+  padding: clamp(1.5rem, 5vw, 4rem);
+  max-width: 54rem;
+}
+
+.slideMeta {
+  font-size: 0.78rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: rgba(255, 228, 181, 0.78);
+}
+
+.slideTitle {
+  margin: 0;
+  font-size: clamp(2rem, 4.9vw, 4.8rem);
+  line-height: 0.95;
+  font-weight: 600;
+  font-family: "Iowan Old Style", "Palatino Linotype", "Book Antiqua", serif;
+}
+
+.slideText {
+  margin: 0;
+  max-width: 42rem;
+  font-size: clamp(1rem, 1.7vw, 1.25rem);
+  line-height: 1.75;
+  color: rgba(255, 241, 221, 0.88);
+}
+
+.slideAccent {
+  display: inline-flex;
+  width: fit-content;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 219, 151, 0.22);
+  padding: 0.62rem 0.9rem;
+  background: rgba(255, 255, 255, 0.06);
+  text-transform: lowercase;
+}
+
+.slideRail {
+  position: absolute;
+  right: clamp(0.85rem, 2vw, 1.4rem);
+  top: 50%;
+  z-index: 2;
+  display: grid;
+  gap: 0.6rem;
+  transform: translateY(-50%);
+}
+
+.railDot {
+  width: 0.85rem;
+  height: 0.85rem;
+  border: none;
+  border-radius: 999px;
+  background: rgba(255, 241, 220, 0.28);
+  cursor: pointer;
+  transition: transform 180ms ease, background 180ms ease;
+}
+
+.railDot:hover,
+.railDot:focus-visible {
+  background: rgba(255, 233, 193, 0.72);
+  transform: scale(1.14);
+}
+
+.railDotActive {
+  background: #ffd38e;
+  box-shadow: 0 0 0 6px rgba(255, 211, 142, 0.12);
+}
+
+.progressTrack {
+  width: 100%;
+  height: 0.45rem;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(107, 74, 31, 0.12);
+}
+
+.progressFill {
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #b97d2d, #f2c16e);
+  transition: width 240ms ease;
+}
+
+.controls {
+  align-items: center;
+}
+
+.usageHint {
+  font-size: 0.92rem;
+}
+
+.buttonRow {
+  flex-shrink: 0;
+}
+
+.navButton {
+  border: 1px solid rgba(123, 88, 37, 0.18);
+  border-radius: 999px;
+  padding: 0.76rem 1.1rem;
+  background: rgba(255, 250, 242, 0.88);
+  color: var(--deck-text);
+  cursor: pointer;
+  transition: transform 180ms ease, border-color 180ms ease, background 180ms ease;
+}
+
+.navButton:hover,
+.navButton:focus-visible {
+  transform: translateY(-1px);
+  border-color: rgba(123, 88, 37, 0.36);
+  background: rgba(255, 255, 255, 0.98);
+}
+
+.visuallyHidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+@keyframes pulseGlow {
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.03);
+    opacity: 0.88;
+  }
+}
+
+@media (max-width: 900px) {
+  .deckHeader,
+  .controls {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .slideRail {
+    position: static;
+    grid-auto-flow: column;
+    transform: none;
+    padding: 0 1.2rem 1.2rem;
+  }
+
+  .deckViewport {
+    min-height: 34rem;
+  }
+}
+
+@media (max-width: 640px) {
+  .deck {
+    border-radius: 1.5rem;
+  }
+
+  .deckViewport {
+    min-height: 28rem;
+  }
+
+  .buttonRow {
+    width: 100%;
+  }
+
+  .navButton {
+    flex: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .deckGlow,
+  .progressFill,
+  .navButton,
+  .railDot {
+    animation: none;
+    transition: none;
+  }
+}

@@ -28,11 +28,12 @@ afterEach(() => {
 });
 
 describe("locale support (Task 64.5.1)", () => {
-  it("default locale is Czech and both locales are supported", () => {
+  it("default locale is Czech and all supported locales are exposed", () => {
     expect(DEFAULT_LOCALE).toBe("cs");
     expect(SUPPORTED_LOCALES).toContain("cs");
     expect(SUPPORTED_LOCALES).toContain("ru");
-    expect(SUPPORTED_LOCALES.length).toBe(2);
+    expect(SUPPORTED_LOCALES).toContain("en");
+    expect(SUPPORTED_LOCALES.length).toBe(3);
   });
 
   it("rejects an unsupported locale instead of silently accepting it", () => {
@@ -40,22 +41,29 @@ describe("locale support (Task 64.5.1)", () => {
     expect(parseAppLocale("de")).toBeNull();
     expect(parseAppLocale("cs")).toBe("cs");
     expect(parseAppLocale("ru")).toBe("ru");
+    expect(parseAppLocale("en")).toBe("en");
   });
 
   it("maps locales to the correct Intl/BCP-47 tag for date formatting", () => {
     expect(toIntlLocaleTag("cs")).toBe("cs-CZ");
     expect(toIntlLocaleTag("ru")).toBe("ru-RU");
+    expect(toIntlLocaleTag("en")).toBe("en-US");
   });
 
-  it("Czech and Russian dictionaries expose exactly the same set of top-level keys", () => {
+  it("all dictionaries expose exactly the same set of top-level keys", () => {
     const cs = getDictionary("cs");
     const ru = getDictionary("ru");
+    const en = getDictionary("en");
     expect(Object.keys(cs).sort()).toEqual(Object.keys(ru).sort());
+    expect(Object.keys(cs).sort()).toEqual(Object.keys(en).sort());
     // A representative nested section must also match key-for-key, so a
     // missing Czech translation cannot silently fall back to Russian.
     expect(Object.keys(cs.actions).sort()).toEqual(Object.keys(ru.actions).sort());
+    expect(Object.keys(cs.actions).sort()).toEqual(Object.keys(en.actions).sort());
     expect(Object.keys(cs.translationPanel).sort()).toEqual(Object.keys(ru.translationPanel).sort());
+    expect(Object.keys(cs.translationPanel).sort()).toEqual(Object.keys(en.translationPanel).sort());
     expect(Object.keys(cs.privacyScope).sort()).toEqual(Object.keys(ru.privacyScope).sort());
+    expect(Object.keys(cs.privacyScope).sort()).toEqual(Object.keys(en.privacyScope).sort());
   });
 
   it("Czech dictionary text is never identical to Russian for primary UI strings", () => {
@@ -68,7 +76,7 @@ describe("locale support (Task 64.5.1)", () => {
   });
 });
 
-function renderSwitcher(locale: "cs" | "ru"): { container: HTMLDivElement; root: Root } {
+function renderSwitcher(locale: "cs" | "ru" | "en"): { container: HTMLDivElement; root: Root } {
   const container = document.createElement("div");
   document.body.appendChild(container);
   const root = createRoot(container);
@@ -101,9 +109,10 @@ describe("language switcher", () => {
     mockSearchParams.value = new URLSearchParams();
 
     const { container, root } = renderSwitcher("ru");
-    expect(container.querySelectorAll("a").length).toBe(1);
+    expect(container.querySelectorAll("a").length).toBe(2);
     expect(container.textContent).toContain("Русский");
     expect(container.textContent).toContain("Čeština");
+    expect(container.textContent).toContain("English");
 
     act(() => {
       root.unmount();

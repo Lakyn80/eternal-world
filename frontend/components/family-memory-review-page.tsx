@@ -14,6 +14,7 @@ import {
 } from "../lib/api/family-memory-review";
 import { getDictionary, type Dictionary } from "../lib/i18n/get-dictionary";
 import { toIntlLocaleTag, type AppLocale } from "../lib/i18n/locales";
+import { useUiTheme } from "../lib/use-ui-theme";
 import { LanguageSwitcher } from "./language-switcher";
 import type {
   ActorContext,
@@ -40,7 +41,7 @@ function buildDemoActors(dictionary: Dictionary): { key: string; actor: ActorCon
     },
     {
       key: "contributor",
-      actor: { actorId: "family-anna", actorRole: "contributor", relationshipToOwner: "внучка" },
+      actor: { actorId: "family-anna", actorRole: "contributor", relationshipToOwner: "granddaughter" },
       label: dictionary.actorBar.contributorLabel,
     },
   ];
@@ -106,6 +107,31 @@ function candidateCardTitle(item: MemoryCandidateSummary): string {
   return truncate(text, 110);
 }
 
+function localizeRelationshipToOwner(
+  value: string | null | undefined,
+  locale: AppLocale
+): string | null {
+  if (!value) {
+    return null;
+  }
+  const normalized = value.trim().toLocaleLowerCase();
+  const knownRelationshipMap: Record<string, Record<AppLocale, string>> = {
+    granddaughter: { cs: "vnučka", ru: "внучка", en: "granddaughter" },
+    "внучка": { cs: "vnučka", ru: "внучка", en: "granddaughter" },
+    "vnučka": { cs: "vnučka", ru: "внучка", en: "granddaughter" },
+    grandson: { cs: "vnuk", ru: "внук", en: "grandson" },
+    "внук": { cs: "vnuk", ru: "внук", en: "grandson" },
+    vnuk: { cs: "vnuk", ru: "внук", en: "grandson" },
+    daughter: { cs: "dcera", ru: "дочь", en: "daughter" },
+    "дочь": { cs: "dcera", ru: "дочь", en: "daughter" },
+    dcera: { cs: "dcera", ru: "дочь", en: "daughter" },
+    son: { cs: "syn", ru: "сын", en: "son" },
+    "сын": { cs: "syn", ru: "сын", en: "son" },
+    syn: { cs: "syn", ru: "сын", en: "son" },
+  };
+  return knownRelationshipMap[normalized]?.[locale] ?? value;
+}
+
 type PendingAction =
   | { type: OwnerReviewAction }
   | { type: "index" };
@@ -136,7 +162,7 @@ function translationStatusLabel(
  * text targeting the given language, if one exists. */
 function findFinalizedTranslation(
   translations: MemoryContentTranslation[] | undefined,
-  targetLanguage: AppLocale
+  targetLanguage: "cs" | "ru"
 ): MemoryContentTranslation | null {
   return (
     (translations ?? []).find(
@@ -148,8 +174,38 @@ function findFinalizedTranslation(
   );
 }
 
+function getReviewShellText(locale: AppLocale) {
+  if (locale === "cs") {
+    return {
+      home: "Produktový web",
+      modeLight: "Světlý režim",
+      modeDark: "Tmavý režim",
+      queueIntro:
+        "Rodina zůstává v kontrole nad tím, co se stane součástí paměti avatara. Backend workflow níže je živě napojený na review a indexing endpointy.",
+    };
+  }
+  if (locale === "ru") {
+    return {
+      home: "Продуктовый сайт",
+      modeLight: "Светлый режим",
+      modeDark: "Тёмный режим",
+      queueIntro:
+        "Семья остаётся в контроле над тем, что станет памятью аватара. Ниже работает тот же backend workflow для review и indexing.",
+    };
+  }
+  return {
+    home: "Product site",
+    modeLight: "Light mode",
+    modeDark: "Dark mode",
+    queueIntro:
+      "The family stays in control of what becomes avatar memory. The review and indexing workflow below is wired to the live backend endpoints.",
+  };
+}
+
 export function FamilyMemoryReviewPage({ locale }: { locale: AppLocale }) {
   const dictionary = getDictionary(locale);
+  const shellText = getReviewShellText(locale);
+  const [theme, toggleTheme] = useUiTheme();
   const demoActors = useMemo(() => buildDemoActors(dictionary), [dictionary]);
 
   const searchParams = useSearchParams();
@@ -398,16 +454,46 @@ export function FamilyMemoryReviewPage({ locale }: { locale: AppLocale }) {
 
   const isCzechOrigin = detail?.source_language === "cs";
   const russianTranslation = detail ? findFinalizedTranslation(detail.translations, "ru") : null;
+  const summaryMetrics = useMemo(() => {
+    const items = summaries ?? [];
+    return [
+      {
+        label: dictionary.reviewStatus.needs_review,
+        value: items.filter((item) => item.status === "needs_review").length,
+      },
+      {
+        label: dictionary.inbox.filters.ready_for_owner_review,
+        value: items.filter(
+          (item) => item.status === "needs_review" && item.enrichment_status === "ready_for_owner_review"
+        ).length,
+      },
+      {
+        label: dictionary.promotionStatus.indexed,
+        value: items.filter((item) => item.promotion_status === "indexed").length,
+      },
+      {
+        label: dictionary.disputeStatus.disputed,
+        value: items.filter((item) => item.dispute_status === "disputed").length,
+      },
+    ];
+  }, [dictionary, summaries]);
 
   return (
-    <main className={styles.page}>
+    <main className={styles.page} data-theme={theme}>
       <header className={styles.pageHeader}>
         <div>
           <p className={styles.eyebrow}>{dictionary.eyebrow}</p>
           <h1 className={styles.title}>{dictionary.reviewTitle}</h1>
+          <p className={styles.pageIntro}>{shellText.queueIntro}</p>
         </div>
         <div className={styles.headerTools}>
-          <LanguageSwitcher currentLocale={locale} />
+          <LanguageSwitcher currentLocale={locale} variant={theme === "dark" ? "dark" : "light"} />
+          <button className={styles.headerButton} onClick={toggleTheme} type="button">
+            {theme === "light" ? shellText.modeDark : shellText.modeLight}
+          </button>
+          <Link className={styles.backLink} href={`/${locale}`}>
+            {shellText.home}
+          </Link>
           <Link className={styles.backLink} href={`/${locale}/fa-chat`}>
             {dictionary.nav.backToChat}
           </Link>
@@ -417,6 +503,15 @@ export function FamilyMemoryReviewPage({ locale }: { locale: AppLocale }) {
       <div className={styles.demoWarning} role="note">
         {dictionary.demoWarning}
       </div>
+
+      <section className={styles.summaryStrip} aria-label="workflow summary">
+        {summaryMetrics.map((metric) => (
+          <article className={styles.summaryCard} key={metric.label}>
+            <span>{metric.label}</span>
+            <strong>{metric.value}</strong>
+          </article>
+        ))}
+      </section>
 
       <div className={styles.actorBar}>
         <label className={styles.actorLabel} htmlFor="demo-actor-select">
@@ -495,7 +590,7 @@ export function FamilyMemoryReviewPage({ locale }: { locale: AppLocale }) {
                         <span>
                           {dictionary.inbox.contributorFrom} {item.contributor_actor_id}
                           {item.contributor_relationship_to_owner
-                            ? ` (${item.contributor_relationship_to_owner})`
+                            ? ` (${localizeRelationshipToOwner(item.contributor_relationship_to_owner, locale)})`
                             : ""}
                         </span>
                       ) : (
@@ -680,7 +775,9 @@ export function FamilyMemoryReviewPage({ locale }: { locale: AppLocale }) {
                         </div>
                         <div className={styles.timelineActor}>
                           {item.actor_id}
-                          {item.relationship_to_owner ? ` (${item.relationship_to_owner})` : ""}
+                          {item.relationship_to_owner
+                            ? ` (${localizeRelationshipToOwner(item.relationship_to_owner, locale)})`
+                            : ""}
                           {item.is_owner_correction ? ` · ${dictionary.detail.ownerCorrection}` : ""}
                           {item.is_disputed ? ` · ${dictionary.detail.disputedSuffix}` : ""}
                         </div>

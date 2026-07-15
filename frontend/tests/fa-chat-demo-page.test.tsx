@@ -220,4 +220,59 @@ describe("fa chat demo page", () => {
 
     view.unmount();
   });
+
+  it("renders the English interface and sends locale=en to the backend", async () => {
+    const fetchMock = vi.fn(async () => ({
+      ok: true,
+      json: async () => ({
+        answer: "I grew up near Popice.",
+        locale: "en",
+        lack_of_evidence: false,
+        retrieval_used: true,
+        persona_applied: true,
+        guard_applied: false,
+        guard_reason: null,
+        trace_id: "en-trace",
+        memory_candidate: null,
+        emotion: null,
+        face_directives: null,
+        voice_directives: null,
+        evidence: [],
+      }),
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const view = renderComponent("en");
+    expect(view.container.textContent).toContain("Test chat with the digital avatar");
+    expect(view.container.querySelector("textarea")?.getAttribute("placeholder")).toBe(
+      "Write Eva a question or a warm message..."
+    );
+    expect(view.container.textContent).toContain("Send");
+
+    const form = view.container.querySelector("form");
+    const textarea = view.container.querySelector("textarea");
+    if (!form || !textarea) {
+      throw new Error("Required form controls are missing");
+    }
+
+    const nativeInputValueSetter = Object.getOwnPropertyDescriptor(
+      window.HTMLTextAreaElement.prototype,
+      "value"
+    )?.set;
+    act(() => {
+      nativeInputValueSetter?.call(textarea, "Where did you live as a child?");
+      textarea.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+
+    await act(async () => {
+      form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+    });
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const requestBody = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body));
+    expect(requestBody.locale).toBe("en");
+    expect(view.container.textContent).toContain("I grew up near Popice.");
+
+    view.unmount();
+  });
 });

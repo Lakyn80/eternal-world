@@ -52,7 +52,7 @@ class DemoFaChatMessageRequest(BaseModel):
     #: ``response_language=locale`` and answers directly in that language -
     #: no query-translation or answer-translation call for either locale.
     #: See demo_fa_chat.service.run_demo_fa_chat_message.
-    locale: Literal["cs", "ru"] = "ru"
+    locale: Literal["cs", "ru", "en"] = "ru"
 
     @model_validator(mode="after")
     def validate_actor_context(self):
@@ -92,7 +92,7 @@ class DemoFaChatMemoryCandidate(BaseModel):
 
 class DemoFaChatMessageResponse(BaseModel):
     answer: str
-    locale: Literal["cs", "ru"] = "ru"
+    locale: Literal["cs", "ru", "en"] = "ru"
     lack_of_evidence: bool
     retrieval_used: bool
     persona_applied: bool
@@ -198,7 +198,7 @@ class DemoFaChatMemoryCandidateReviewDetail(BaseModel):
     #: ``translation_block_reason`` mirrors the same backend-calculated
     #: eligibility gate used for promotion/indexing (never recomputed in
     #: React) - one of russian_translation_missing/failed/stale, or null.
-    requested_locale: Literal["cs", "ru"] = "ru"
+    requested_locale: Literal["cs", "ru", "en"] = "ru"
     source_language: str | None = None
     translations: list[MemoryContentTranslationRead] = Field(default_factory=list)
     translation_block_reason: str | None = None

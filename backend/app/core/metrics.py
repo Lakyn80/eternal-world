@@ -315,7 +315,16 @@ _PROMOTION_BLOCK_REASONS = frozenset({
     "russian_translation_failed",
     "russian_translation_stale",
 })
-_CONTENT_TRANSLATION_LANGUAGE_PAIRS = frozenset({"cs_ru", "ru_cs"})
+_CONTENT_TRANSLATION_LANGUAGE_PAIRS = frozenset(
+    {
+        "cs_ru",
+        "ru_cs",
+        "cs_en",
+        "en_cs",
+        "ru_en",
+        "en_ru",
+    }
+)
 _CONTENT_TRANSLATION_RESULTS = frozenset({"success", "failed"})
 _CONTENT_TRANSLATION_STATUSES = frozenset(
     {"pending", "translated", "failed", "stale", "human_reviewed"}

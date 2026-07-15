@@ -1,0 +1,130 @@
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  qdrant:
+    image: qdrant/qdrant:v1.13.6
+    restart: unless-stopped
+    volumes:
+      - qdrant_data:/qdrant/storage
+
+  backend:
+    image: ${BACKEND_IMAGE:-ghcr.io/lakyn80/eternal-world-backend:latest}
+    restart: unless-stopped
+    env_file:
+      - .env.prod
+    environment:
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+      REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis:6379/1
+      CELERY_RESULT_BACKEND: redis://redis:6379/1
+      QDRANT_URL: http://qdrant:6333
+      MEDIA_ROOT: /app/media
+      MEDIA_PUBLIC_BASE_URL: /media
+      SENTENCE_TRANSFORMERS_CACHE_DIR: /models/huggingface
+      HF_HOME: /models/huggingface
+      HUGGINGFACE_HUB_CACHE: /models/huggingface
+      TRANSFORMERS_CACHE: /models/huggingface
+      SENTENCE_TRANSFORMERS_HOME: /models/huggingface
+      CUDA_VISIBLE_DEVICES: ""
+      NVIDIA_VISIBLE_DEVICES: void
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      qdrant:
+        condition: service_started
+    ports:
+      - "127.0.0.1:${BACKEND_HOST_PORT:-8033}:8000"
+    volumes:
+      - media_data:/app/media
+      - huggingface_cache:/models/huggingface
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health/runtime').read()"]
+      interval: 15s
+      timeout: 5s
+      retries: 20
+      start_period: 20s
+
+  celery_worker:
+    image: ${BACKEND_IMAGE:-ghcr.io/lakyn80/eternal-world-backend:latest}
+    restart: unless-stopped
+    command: ["celery", "-A", "app.worker.celery_app.celery_app", "worker", "--loglevel=info"]
+    env_file:
+      - .env.prod
+    environment:
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+      REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis:6379/1
+      CELERY_RESULT_BACKEND: redis://redis:6379/1
+      QDRANT_URL: http://qdrant:6333
+      MEDIA_ROOT: /app/media
+      MEDIA_PUBLIC_BASE_URL: /media
+      SENTENCE_TRANSFORMERS_CACHE_DIR: /models/huggingface
+      HF_HOME: /models/huggingface
+      HUGGINGFACE_HUB_CACHE: /models/huggingface
+      TRANSFORMERS_CACHE: /models/huggingface
+      SENTENCE_TRANSFORMERS_HOME: /models/huggingface
+      CUDA_VISIBLE_DEVICES: ""
+      NVIDIA_VISIBLE_DEVICES: void
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      qdrant:
+        condition: service_started
+    volumes:
+      - media_data:/app/media
+      - huggingface_cache:/models/huggingface
+
+  frontend:
+    image: ${FRONTEND_IMAGE:-ghcr.io/lakyn80/eternal-world-frontend:latest}
+    restart: unless-stopped
+    env_file:
+      - .env.prod
+    environment:
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL}
+    depends_on:
+      backend:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:${FRONTEND_HOST_PORT:-3017}:3000"
+
+volumes:
+  postgres_data:
+    name: eternal-world-postgres-data
+  redis_data:
+    name: eternal-world-redis-data
+  qdrant_data:
+    name: eternal-world-qdrant-data
+  media_data:
+    name: eternal-world-media-data
+  huggingface_cache:
+    external: true
+    name: ${SHARED_HF_VOLUME:-shared_huggingface_cache}

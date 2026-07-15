@@ -42,11 +42,13 @@ from app.modules.avatar_persona import (
 from app.modules.avatar_memory_promotions import service as avatar_memory_promotions_service
 from app.modules.avatar_memory_indexing import service as avatar_memory_indexing_service
 from app.modules.avatar_memory_promotions.schemas import build_avatar_memory_promotion_read
+from app.modules.content_translation import repository as content_translation_repository
 from app.modules.content_translation import service as content_translation_service
-from app.modules.content_translation.schemas import MemoryContentTranslationRead
+from app.modules.content_translation.schemas import MemoryContentTranslationRead, TranslationFieldRequest
 from app.modules.conversation_memory_candidates import service as conversation_memory_candidates_service
 from app.modules.conversation_memory_candidates.schemas import (
     MemoryCandidateCreate,
+    MemoryCandidateRead,
     MemoryCandidateReviewUpdate,
     MemoryCandidateStatus,
     build_memory_candidate_read,
@@ -60,6 +62,7 @@ from app.modules.family_memory_enrichment.schemas import (
     ClarificationAnswerRequest,
     ClarificationQuestionRead,
     DemoFamilyActorContext,
+    FamilyMemoryContributionRead,
 )
 from app.modules.embeddings.embedding_cache import build_text_hash
 from app.modules.embeddings.runtime import resolve_embedding_runtime_diagnostics
@@ -89,35 +92,255 @@ from .schemas import (
 
 DEMO_FA_CHAT_MESSAGE_MAX_LENGTH = 4000
 DEMO_FA_CHAT_EVIDENCE_PREVIEW_LENGTH = 220
+SUPPORTED_REVIEW_CONTENT_LANGUAGES = frozenset({"cs", "ru", "en"})
 
 
-def _bilingual_detail(locale: str, *, cs: str, ru: str) -> str:
-    """Pick the right-language error detail (Part J/backend error behavior).
+def _localized_detail(locale: str, *, cs: str, ru: str, en: str | None = None) -> str:
+    """Pick the right-language detail while keeping Russian as the default."""
+    if locale == "cs":
+        return cs
+    if locale == "en" and en is not None:
+        return en
+    return ru
 
-    Defaults to ``ru`` for any ``locale`` other than ``"cs"`` so every
-    existing caller that doesn't pass a locale keeps its prior behavior.
-    """
-    return cs if locale == "cs" else ru
+
+def _review_ready_message(locale: str) -> str:
+    if locale == "cs":
+        return "Děkuji. Návrh vzpomínky je připraven ke kontrole vlastníkem avatara."
+    if locale == "en":
+        return "Thank you. The memory draft is ready for the avatar owner's review."
+    return "Спасибо. Черновик воспоминания готов к проверке владельцем аватара."
+
+
+def _normalize_review_content_language(language: str | None) -> str | None:
+    normalized_language = (language or "").strip().lower()
+    if normalized_language in SUPPORTED_REVIEW_CONTENT_LANGUAGES:
+        return normalized_language
+    return None
+
+
+def _localize_review_text(
+    db: Session,
+    *,
+    candidate_id: int,
+    entity_type: str,
+    entity_id: str,
+    field_name: str,
+    source_language: str | None,
+    requested_locale: str,
+    source_text: str | None,
+    contribution_id: int | None = None,
+    clarification_id: int | None = None,
+) -> str | None:
+    if source_text is None:
+        return None
+
+    normalized_source_language = _normalize_review_content_language(source_language)
+    normalized_target_language = _normalize_review_content_language(requested_locale)
+    if normalized_source_language is None or normalized_target_language is None:
+        return source_text
+    if normalized_source_language == normalized_target_language:
+        return source_text
+
+    current_source_text = source_text.strip()
+    if not current_source_text:
+        return source_text
+
+    current_row = content_translation_repository.get_current(
+        db,
+        entity_type=entity_type,
+        entity_id=entity_id,
+        field_name=field_name,
+        target_language=normalized_target_language,
+    )
+    if content_translation_service.is_translation_current(
+        current_row, current_source_text=current_source_text
+    ):
+        translated_text = (current_row.translated_text or "").strip() if current_row is not None else ""
+        if translated_text:
+            return current_row.translated_text
+
+    try:
+        row = content_translation_service.translate_content_field(
+            db,
+            TranslationFieldRequest(
+                candidate_id=candidate_id,
+                contribution_id=contribution_id,
+                clarification_id=clarification_id,
+                entity_type=entity_type,
+                entity_id=entity_id,
+                field_name=field_name,
+                source_language=normalized_source_language,
+                target_language=normalized_target_language,
+                source_text=current_source_text,
+            ),
+        )
+        db.commit()
+    except Exception as exc:
+        db.rollback()
+        log_event(
+            logger,
+            30,
+            "review_content_localization_failed",
+            candidate_id=candidate_id,
+            entity_type=entity_type,
+            entity_id=entity_id,
+            field_name=field_name,
+            source_language=normalized_source_language,
+            target_language=normalized_target_language,
+            error_type=exc.__class__.__name__,
+        )
+        return source_text
+
+    translated_text = (row.translated_text or "").strip()
+    if (
+        translated_text
+        and content_translation_service.is_translation_current(
+            row, current_source_text=current_source_text
+        )
+    ):
+        return row.translated_text
+    return source_text
+
+
+def _localize_candidate_review_read(
+    db: Session,
+    *,
+    candidate: MemoryCandidateRead,
+    locale: str,
+) -> MemoryCandidateRead:
+    source_language = candidate.language
+    updates: dict[str, str | None] = {}
+    for field_name in (
+        "user_message_excerpt",
+        "proposed_memory_text",
+        "reason",
+        "finalized_memory_text",
+        "review_note",
+        "rejection_reason",
+    ):
+        localized_value = _localize_review_text(
+            db,
+            candidate_id=candidate.candidate_id,
+            entity_type="memory_candidate",
+            entity_id=str(candidate.candidate_id),
+            field_name=field_name,
+            source_language=source_language,
+            requested_locale=locale,
+            source_text=getattr(candidate, field_name),
+        )
+        if localized_value != getattr(candidate, field_name):
+            updates[field_name] = localized_value
+    return candidate.model_copy(update=updates) if updates else candidate
+
+
+def _localize_enrichment_read(
+    db: Session,
+    *,
+    candidate_id: int,
+    candidate_language: str | None,
+    enrichment: CandidateEnrichmentRead | None,
+    locale: str,
+) -> CandidateEnrichmentRead | None:
+    if enrichment is None:
+        return None
+
+    updates: dict[str, object] = {}
+    localized_finalized_memory_text = _localize_review_text(
+        db,
+        candidate_id=candidate_id,
+        entity_type="memory_candidate",
+        entity_id=str(candidate_id),
+        field_name="finalized_memory_text",
+        source_language=candidate_language,
+        requested_locale=locale,
+        source_text=enrichment.finalized_memory_text,
+    )
+    if localized_finalized_memory_text != enrichment.finalized_memory_text:
+        updates["finalized_memory_text"] = localized_finalized_memory_text
+
+    if enrichment.next_clarification_question is not None:
+        localized_next_question = _localize_clarification_read(
+            db,
+            candidate_id=candidate_id,
+            candidate_language=candidate_language,
+            clarification=enrichment.next_clarification_question,
+            locale=locale,
+        )
+        if localized_next_question != enrichment.next_clarification_question:
+            updates["next_clarification_question"] = localized_next_question
+
+    return enrichment.model_copy(update=updates) if updates else enrichment
+
+
+def _localize_contribution_read(
+    db: Session,
+    *,
+    candidate_id: int,
+    candidate_language: str | None,
+    contribution: FamilyMemoryContributionRead,
+    locale: str,
+) -> FamilyMemoryContributionRead:
+    localized_text = _localize_review_text(
+        db,
+        candidate_id=candidate_id,
+        contribution_id=contribution.contribution_id,
+        entity_type="family_memory_contribution",
+        entity_id=str(contribution.contribution_id),
+        field_name="contribution_text",
+        source_language=contribution.language or candidate_language,
+        requested_locale=locale,
+        source_text=contribution.contribution_text,
+    )
+    if localized_text == contribution.contribution_text:
+        return contribution
+    return contribution.model_copy(update={"contribution_text": localized_text})
+
+
+def _localize_clarification_read(
+    db: Session,
+    *,
+    candidate_id: int,
+    candidate_language: str | None,
+    clarification: ClarificationQuestionRead,
+    locale: str,
+) -> ClarificationQuestionRead:
+    localized_text = _localize_review_text(
+        db,
+        candidate_id=candidate_id,
+        clarification_id=clarification.clarification_id,
+        entity_type="clarification_question",
+        entity_id=str(clarification.clarification_id),
+        field_name="question_text",
+        source_language=clarification.language or candidate_language,
+        requested_locale=locale,
+        source_text=clarification.question_text,
+    )
+    if localized_text == clarification.question_text:
+        return clarification
+    return clarification.model_copy(update={"question_text": localized_text})
 
 
 def demo_fa_chat_profile_unavailable_detail(locale: str = "ru") -> str:
-    return _bilingual_detail(
+    return _localized_detail(
         locale,
         cs="Testovací profil avatara momentálně není dostupný.",
         ru="Тестовый профиль аватара сейчас недоступен.",
+        en="The demo avatar profile is currently unavailable.",
     )
 
 
 def demo_fa_chat_not_initialized_detail(locale: str = "ru") -> str:
-    return _bilingual_detail(
+    return _localized_detail(
         locale,
         cs="Demo profil zatím není inicializován. Spusťte prosím přípravu testové paměti.",
         ru="Демо-профиль ещё не инициализирован. Пожалуйста, запустите подготовку тестовой памяти.",
+        en="The demo profile is not initialized yet. Run the demo memory preparation first.",
     )
 
 
 def demo_fa_chat_embedding_unavailable_detail(locale: str = "ru") -> str:
-    return _bilingual_detail(
+    return _localized_detail(
         locale,
         cs=(
             "Demo je dočasně nedostupné: model embeddingů BGE-M3 není inicializován. "
@@ -127,14 +350,19 @@ def demo_fa_chat_embedding_unavailable_detail(locale: str = "ru") -> str:
             "Демо временно недоступно: модель эмбеддингов BGE-M3 не инициализирована. "
             "Запустите подготовку модели и повторите запрос."
         ),
+        en=(
+            "The demo is temporarily unavailable: the BGE-M3 embeddings model is not initialized. "
+            "Run the model preparation and try again."
+        ),
     )
 
 
 def demo_fa_chat_internal_error_detail(locale: str = "ru") -> str:
-    return _bilingual_detail(
+    return _localized_detail(
         locale,
         cs="Nepodařilo se získat odpověď avatara. Zkuste to prosím znovu.",
         ru="Не удалось получить ответ аватара. Попробуйте ещё раз.",
+        en="The avatar response could not be generated. Please try again.",
     )
 
 
@@ -203,18 +431,20 @@ def _normalize_message_text(value: str, *, locale: str = "ru") -> str:
     normalized_value = value.strip()
     if not normalized_value:
         raise DemoFaChatValidationError(
-            _bilingual_detail(
+            _localized_detail(
                 locale,
                 cs="Zpráva nesmí být prázdná.",
                 ru="Сообщение не должно быть пустым.",
+                en="The message must not be empty.",
             )
         )
     if len(normalized_value) > DEMO_FA_CHAT_MESSAGE_MAX_LENGTH:
         raise DemoFaChatValidationError(
-            _bilingual_detail(
+            _localized_detail(
                 locale,
                 cs="Zpráva je pro demo-chat příliš dlouhá.",
                 ru="Сообщение слишком длинное для демо-чата.",
+                en="The message is too long for the demo chat.",
             )
         )
     return normalized_value
@@ -624,6 +854,31 @@ def list_demo_memory_candidate_summaries(
                 contributor_actor_id = earliest.actor_id
                 contributor_actor_role = earliest.actor_role
                 contributor_relationship_to_owner = earliest.relationship_to_owner
+        localized_finalized_memory_text = _localize_review_text(
+            db,
+            candidate_id=candidate.id,
+            entity_type="memory_candidate",
+            entity_id=str(candidate.id),
+            field_name="finalized_memory_text",
+            source_language=candidate.language,
+            requested_locale=locale,
+            source_text=candidate.finalized_memory_text,
+        )
+        localized_user_message_excerpt = candidate.user_message_excerpt
+        if not (localized_finalized_memory_text or "").strip():
+            localized_user_message_excerpt = (
+                _localize_review_text(
+                    db,
+                    candidate_id=candidate.id,
+                    entity_type="memory_candidate",
+                    entity_id=str(candidate.id),
+                    field_name="user_message_excerpt",
+                    source_language=candidate.language,
+                    requested_locale=locale,
+                    source_text=candidate.user_message_excerpt,
+                )
+                or candidate.user_message_excerpt
+            )
         summaries.append(
             DemoFaChatMemoryCandidateSummary(
                 candidate_id=candidate.id,
@@ -634,8 +889,8 @@ def list_demo_memory_candidate_summaries(
                 privacy_scope=candidate.privacy_scope,
                 dispute_status=candidate.dispute_status,
                 unresolved_clarification_count=candidate.unresolved_clarification_count,
-                finalized_memory_text=candidate.finalized_memory_text,
-                user_message_excerpt=candidate.user_message_excerpt,
+                finalized_memory_text=localized_finalized_memory_text,
+                user_message_excerpt=localized_user_message_excerpt,
                 created_at=candidate.created_at,
                 updated_at=candidate.updated_at,
                 contributor_actor_id=contributor_actor_id,
@@ -674,7 +929,11 @@ def get_demo_memory_candidate_review_detail(
         candidate_id=candidate_id,
         actor=actor,
     )
-    candidate_read = build_memory_candidate_read(candidate)
+    candidate_read = _localize_candidate_review_read(
+        db,
+        candidate=build_memory_candidate_read(candidate),
+        locale=locale,
+    )
 
     enrichment = None
     contributions = []
@@ -698,6 +957,33 @@ def get_demo_memory_candidate_review_detail(
             candidate_id=candidate.id,
             actor=actor,
         )
+        enrichment = _localize_enrichment_read(
+            db,
+            candidate_id=candidate.id,
+            candidate_language=candidate.language,
+            enrichment=enrichment,
+            locale=locale,
+        )
+        contributions = [
+            _localize_contribution_read(
+                db,
+                candidate_id=candidate.id,
+                candidate_language=candidate.language,
+                contribution=item,
+                locale=locale,
+            )
+            for item in contributions
+        ]
+        clarifications = [
+            _localize_clarification_read(
+                db,
+                candidate_id=candidate.id,
+                candidate_language=candidate.language,
+                clarification=item,
+                locale=locale,
+            )
+            for item in clarifications
+        ]
 
     promotion_row = candidate.avatar_memory_promotion
     promotion = build_avatar_memory_promotion_read(promotion_row) if promotion_row is not None else None
@@ -779,7 +1065,7 @@ def get_demo_memory_candidate_review_detail(
         can_approve_multiple_perspectives=can_approve_multiple_perspectives,
         can_index=can_index,
         blocked_reasons=blocked_reasons,
-        requested_locale=locale if locale in {"cs", "ru"} else "ru",
+        requested_locale=locale if locale in {"cs", "ru", "en"} else "ru",
         source_language=candidate.language,
         translations=translations,
         translation_block_reason=translation_block_reason,
@@ -1176,11 +1462,7 @@ def run_demo_fa_chat_message(
         localized_next_question = _localize_clarification_question_for_locale(
             enrichment.next_clarification_question, locale=locale
         )
-        draft_ready_message = (
-            "Děkuji. Návrh vzpomínky je připraven ke kontrole vlastníkem avatara."
-            if locale == "cs"
-            else "Спасибо. Черновик воспоминания готов к проверке владельцем аватара."
-        )
+        draft_ready_message = _review_ready_message(locale)
         return DemoFaChatMessageResponse(
             answer=(
                 localized_next_question.question_text
@@ -1474,11 +1756,7 @@ def run_demo_fa_chat_message(
         if localized_next_question_for_response is not None:
             response_answer = localized_next_question_for_response.question_text
         elif candidate_enrichment.enrichment_status == EnrichmentStatus.READY_FOR_OWNER_REVIEW:
-            response_answer = (
-                "Děkuji. Návrh vzpomínky je připraven ke kontrole vlastníkem avatara."
-                if locale == "cs"
-                else "Спасибо. Черновик воспоминания готов к проверке владельцем аватара."
-            )
+            response_answer = _review_ready_message(locale)
     # Ordinary grounded/lack-of-evidence answer: orchestrator_response.text is
     # final as-is. The Brain answered directly in `locale` (via
     # response_language above) - there is no separate answer-translation call
