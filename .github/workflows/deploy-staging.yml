@@ -21,6 +21,7 @@ permissions:
 
 env:
   REGISTRY: ghcr.io
+  IMAGE_NAMESPACE: lakyn80
   APP_DOMAIN: eternalworld.lukiora.ru
   APP_DIR: /opt/eternal-world
   BACKEND_HOST_PORT: "8033"
@@ -88,8 +89,8 @@ jobs:
           file: ./backend/Dockerfile.prod
           push: true
           tags: |
-            ${{ env.REGISTRY }}/${{ github.repository_owner }}/eternal-world-backend:latest
-            ${{ env.REGISTRY }}/${{ github.repository_owner }}/eternal-world-backend:${{ needs.prepare.outputs.image_tag }}
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAMESPACE }}/eternal-world-backend:latest
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAMESPACE }}/eternal-world-backend:${{ needs.prepare.outputs.image_tag }}
           cache-from: type=gha,scope=eternal-world-backend
           cache-to: type=gha,mode=max,scope=eternal-world-backend
 
@@ -122,8 +123,8 @@ jobs:
           build-args: |
             NEXT_PUBLIC_API_URL=https://${{ env.APP_DOMAIN }}/api
           tags: |
-            ${{ env.REGISTRY }}/${{ github.repository_owner }}/eternal-world-frontend:latest
-            ${{ env.REGISTRY }}/${{ github.repository_owner }}/eternal-world-frontend:${{ needs.prepare.outputs.image_tag }}
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAMESPACE }}/eternal-world-frontend:latest
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAMESPACE }}/eternal-world-frontend:${{ needs.prepare.outputs.image_tag }}
           cache-from: type=gha,scope=eternal-world-frontend
           cache-to: type=gha,mode=max,scope=eternal-world-frontend
 
@@ -155,8 +156,8 @@ jobs:
           mkdir -p .deploy
           : > .deploy/.env.prod
           printf '%s\n' "COMPOSE_PROJECT_NAME=eternal-world" >> .deploy/.env.prod
-          printf '%s\n' "BACKEND_IMAGE=${{ env.REGISTRY }}/${{ github.repository_owner }}/eternal-world-backend:${{ needs.prepare.outputs.image_tag }}" >> .deploy/.env.prod
-          printf '%s\n' "FRONTEND_IMAGE=${{ env.REGISTRY }}/${{ github.repository_owner }}/eternal-world-frontend:${{ needs.prepare.outputs.image_tag }}" >> .deploy/.env.prod
+          printf '%s\n' "BACKEND_IMAGE=${{ env.REGISTRY }}/${{ env.IMAGE_NAMESPACE }}/eternal-world-backend:${{ needs.prepare.outputs.image_tag }}" >> .deploy/.env.prod
+          printf '%s\n' "FRONTEND_IMAGE=${{ env.REGISTRY }}/${{ env.IMAGE_NAMESPACE }}/eternal-world-frontend:${{ needs.prepare.outputs.image_tag }}" >> .deploy/.env.prod
           printf '%s\n' "BACKEND_HOST_PORT=${{ env.BACKEND_HOST_PORT }}" >> .deploy/.env.prod
           printf '%s\n' "FRONTEND_HOST_PORT=${{ env.FRONTEND_HOST_PORT }}" >> .deploy/.env.prod
           printf '%s\n' "SHARED_HF_VOLUME=shared_huggingface_cache" >> .deploy/.env.prod
