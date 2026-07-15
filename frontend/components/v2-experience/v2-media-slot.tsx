@@ -46,7 +46,7 @@ export default function V2MediaSlot({
         </div>
 
         <Link
-          className="inline-flex w-fit items-center rounded-full border border-white/15 bg-white/5 px-4 py-2 text-sm font-medium text-fg transition-colors hover:border-cyan/45 hover:bg-cyan/10"
+          className="inline-flex max-w-full items-center rounded-full border border-white/15 bg-white/5 px-4 py-2 text-center text-sm font-medium text-fg transition-colors hover:border-cyan/45 hover:bg-cyan/10"
           href={`/${locale}${href}`}
         >
           {actionLabel}

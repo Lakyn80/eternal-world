@@ -11,7 +11,25 @@ Eternal World is a production-oriented AI memory social platform under active ba
 - Docker Compose for local orchestration
 - GitHub Actions CI for backend and frontend validation
 
-The backend currently includes infrastructure foundations, authentication, Memory Profiles CRUD, a chat backend MVP with a prepared multi-agent architecture tree, a media storage foundation with local server storage abstraction, local media serving plus Memory Profile photo binding for dev/MVP use, a configurable Brain Agent provider foundation with deterministic mock defaults, and a static billing / tariff foundation. The frontend remains minimal and was not expanded as part of the backend slices completed so far.
+The backend currently includes infrastructure foundations, authentication, Memory Profiles CRUD, a chat backend MVP with a prepared multi-agent architecture tree, a media storage foundation with local server storage abstraction, local media serving plus Memory Profile photo binding for dev/MVP use, a configurable Brain Agent provider foundation with deterministic mock defaults, and a static billing / tariff foundation. The frontend now includes localized product, chat, family review, and presentation experiences connected to the existing backend contracts.
+
+## 1.1 Frontend Responsive Hardening and Design System
+
+Status as of 2026-07-15:
+
+- The localized product frontend now uses centralized tokens in `frontend/styles/tokens.css` and shared layout/navigation primitives in `frontend/styles/layout.css`.
+- Main product routes are covered by a single responsive shell: `/{locale}`, `/{locale}/v2`, `/{locale}/fa-chat`, `/{locale}/family-memory-review`, and `/{locale}/presentation`.
+- The legacy per-page header implementations were consolidated behind `frontend/components/product-nav.tsx` while preserving locale switching, theme toggles, and backend-connected route behavior.
+- The family memory review, FA chat, presentation deck, and v2 landing sections were hardened for 320px mobile through desktop widths with safe containers, `min-width: 0`, full-width mobile controls, and tablet-safe grids.
+- Playwright responsive overflow coverage was added in `frontend/tests/e2e/responsive-overflow.spec.ts`. It validates `cs`, `ru`, and `en` across the five main routes and nine viewport sizes from 320px mobile to 1920px desktop.
+- CI now runs frontend typecheck, Vitest, production build, Chromium install, and the responsive Playwright suite.
+
+Verification commands:
+
+- `cd frontend && npm run typecheck`
+- `cd frontend && npm test`
+- `cd frontend && npm run build`
+- `cd frontend && npm run test:e2e`
 
 ## 2. Production Architecture Decisions
 

@@ -15,7 +15,7 @@ import {
 import { getDictionary, type Dictionary } from "../lib/i18n/get-dictionary";
 import { toIntlLocaleTag, type AppLocale } from "../lib/i18n/locales";
 import { useUiTheme } from "../lib/use-ui-theme";
-import { LanguageSwitcher } from "./language-switcher";
+import ProductNav from "./product-nav";
 import type {
   ActorContext,
   ClarificationQuestionRead,
@@ -480,23 +480,24 @@ export function FamilyMemoryReviewPage({ locale }: { locale: AppLocale }) {
 
   return (
     <main className={styles.page} data-theme={theme}>
+      <ProductNav
+        activeHref={`/${locale}/family-memory-review`}
+        items={[
+          { href: `/${locale}`, label: shellText.home },
+          { href: `/${locale}/fa-chat`, label: dictionary.nav.backToChat },
+        ]}
+        locale={locale}
+        onToggleTheme={toggleTheme}
+        subtitle={dictionary.reviewTitle}
+        theme={theme}
+        themeLabel={theme === "light" ? shellText.modeDark : shellText.modeLight}
+      />
+
       <header className={styles.pageHeader}>
         <div>
           <p className={styles.eyebrow}>{dictionary.eyebrow}</p>
           <h1 className={styles.title}>{dictionary.reviewTitle}</h1>
           <p className={styles.pageIntro}>{shellText.queueIntro}</p>
-        </div>
-        <div className={styles.headerTools}>
-          <LanguageSwitcher currentLocale={locale} variant={theme === "dark" ? "dark" : "light"} />
-          <button className={styles.headerButton} onClick={toggleTheme} type="button">
-            {theme === "light" ? shellText.modeDark : shellText.modeLight}
-          </button>
-          <Link className={styles.backLink} href={`/${locale}`}>
-            {shellText.home}
-          </Link>
-          <Link className={styles.backLink} href={`/${locale}/fa-chat`}>
-            {dictionary.nav.backToChat}
-          </Link>
         </div>
       </header>
 

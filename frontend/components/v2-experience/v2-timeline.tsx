@@ -27,22 +27,22 @@ export default function V2Timeline({ locale, content }: V2TimelineProps) {
       <div className="mx-auto max-w-7xl">
         <V2SectionHeading eyebrow={content.kicker} title={content.title} />
 
-        <div className="relative mt-14 overflow-x-auto pb-3">
-          <div className="relative min-w-max px-2">
+        <div className="relative mt-14 overflow-visible pb-3 lg:overflow-x-auto">
+          <div className="relative w-full min-w-0 px-0 lg:min-w-max lg:px-2">
             <div
-              className="absolute left-0 right-0 top-[0.6rem] h-px"
+              className="absolute left-0 right-0 top-[0.6rem] hidden h-px lg:block"
               style={{
                 background:
                   "linear-gradient(90deg, transparent, rgba(127, 216, 247, 0.38) 8%, rgba(139, 124, 246, 0.38) 92%, transparent)",
               }}
             />
 
-            <div className="flex gap-4">
+            <div className="grid grid-cols-2 gap-3 lg:flex lg:gap-4">
               {content.items.map((item, index) => {
                 const active = index === selectedIndex;
                 return (
                   <button
-                    className="relative flex w-36 shrink-0 flex-col items-center gap-3 rounded-3xl bg-transparent px-2 pb-2 pt-0 text-center"
+                    className="relative flex w-full min-w-0 flex-col items-center gap-3 rounded-3xl border border-white/10 bg-white/[0.03] px-2 py-3 text-center lg:w-36 lg:shrink-0 lg:border-0 lg:bg-transparent lg:pb-2 lg:pt-0"
                     key={item.year}
                     onClick={() => setSelectedIndex(index)}
                     type="button"
@@ -69,7 +69,7 @@ export default function V2Timeline({ locale, content }: V2TimelineProps) {
                       }
                     />
                     <span className={`text-xl font-semibold ${active ? "text-gold" : "text-fg"}`}>{item.year}</span>
-                    <span className="text-sm leading-6 text-fg/58">{item.title}</span>
+                    <span className="max-w-full text-sm leading-6 text-fg/58">{item.title}</span>
                   </button>
                 );
               })}
@@ -95,7 +95,7 @@ export default function V2Timeline({ locale, content }: V2TimelineProps) {
               </div>
 
               <Link
-                className="inline-flex rounded-full border border-white/15 bg-white/5 px-4 py-2 text-sm text-fg/72 transition-colors hover:border-cyan/35 hover:text-fg"
+                className="inline-flex max-w-full rounded-full border border-white/15 bg-white/5 px-4 py-2 text-center text-sm text-fg/72 transition-colors hover:border-cyan/35 hover:text-fg"
                 href={`/${locale}/family-memory-review`}
               >
                 {content.actionLabel}

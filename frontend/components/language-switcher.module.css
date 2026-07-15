@@ -2,27 +2,31 @@
   display: inline-flex;
   flex-wrap: wrap;
   align-items: center;
+  justify-content: center;
   gap: 0.35rem;
   font-size: 0.85rem;
+  max-width: 100%;
+  overflow-wrap: anywhere;
 }
 
 .separator {
-  color: #9a8f7a;
+  color: var(--ew-color-text-muted, #9a8f7a);
   padding: 0 0.15rem;
 }
 
 .localeLink {
-  color: #6b5209;
+  color: var(--ew-color-accent, #6b5209);
   text-decoration: underline;
+  text-underline-offset: 0.18em;
 }
 
 .localeLink:hover {
-  color: #4a3800;
+  color: var(--ew-color-accent-hover, #4a3800);
 }
 
 .activeLocale {
   font-weight: 700;
-  color: #2f2a1f;
+  color: var(--ew-color-text, #2f2a1f);
 }
 
 /* Dark-theme variant for use on the fa-chat hero background (light text on

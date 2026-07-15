@@ -45,6 +45,10 @@ jobs:
         working-directory: frontend
         run: npm install
 
+      - name: Run frontend typecheck
+        working-directory: frontend
+        run: npm run typecheck
+
       - name: Run frontend tests
         working-directory: frontend
         run: npm test
@@ -52,3 +56,11 @@ jobs:
       - name: Build frontend
         working-directory: frontend
         run: npm run build
+
+      - name: Install Playwright Chromium
+        working-directory: frontend
+        run: npx playwright install --with-deps chromium
+
+      - name: Run responsive E2E tests
+        working-directory: frontend
+        run: npm run test:e2e

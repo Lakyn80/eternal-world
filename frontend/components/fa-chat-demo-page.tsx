@@ -7,7 +7,7 @@ import { buildApiUrl } from "../lib/api-config";
 import { getDictionary } from "../lib/i18n/get-dictionary";
 import type { AppLocale } from "../lib/i18n/locales";
 import { useUiTheme } from "../lib/use-ui-theme";
-import { LanguageSwitcher } from "./language-switcher";
+import ProductNav from "./product-nav";
 import styles from "./fa-chat-demo-page.module.css";
 
 type DemoEvidenceItem = {
@@ -230,26 +230,18 @@ export function FaChatDemoPage({ locale }: { locale: AppLocale }) {
 
   return (
     <main className={styles.page} data-theme={theme}>
-      <header className={styles.header}>
-        <div className={styles.headerBrand}>
-          <Link className={styles.brandLink} href={`/${locale}`}>
-            Eternal World
-          </Link>
-          <span className={styles.liveBadge}>{shellText.liveBadge}</span>
-        </div>
-        <div className={styles.headerTools}>
-          <LanguageSwitcher currentLocale={locale} variant={theme === "dark" ? "dark" : "light"} />
-          <button className={styles.themeButton} onClick={toggleTheme} type="button">
-            {theme === "light" ? shellText.modeDark : shellText.modeLight}
-          </button>
-          <Link className={styles.headerLink} href={`/${locale}/family-memory-review`}>
-            {dictionary.chat.reviewLink}
-          </Link>
-          <Link className={styles.headerLink} href={`/${locale}`}>
-            {shellText.home}
-          </Link>
-        </div>
-      </header>
+      <ProductNav
+        activeHref={`/${locale}/fa-chat`}
+        items={[
+          { href: `/${locale}`, label: shellText.home },
+          { href: `/${locale}/family-memory-review`, label: dictionary.chat.reviewLink },
+        ]}
+        locale={locale}
+        onToggleTheme={toggleTheme}
+        subtitle={shellText.liveBadge}
+        theme={theme}
+        themeLabel={theme === "light" ? shellText.modeDark : shellText.modeLight}
+      />
 
       <section className={styles.hero}>
         <div className={styles.heroCopy}>

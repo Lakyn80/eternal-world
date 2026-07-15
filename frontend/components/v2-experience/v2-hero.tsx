@@ -53,8 +53,8 @@ export default function V2Hero({ locale, content, onShowDemo }: V2HeroProps) {
         }}
       />
 
-      <div className="relative mx-auto grid max-w-7xl items-center gap-12 lg:grid-cols-[1.15fr_0.85fr]">
-        <div className="max-w-3xl">
+      <div className="relative mx-auto grid w-full max-w-7xl min-w-0 items-center gap-12 lg:grid-cols-[1.15fr_0.85fr]">
+        <div className="min-w-0 max-w-3xl">
           <p className="text-xs uppercase tracking-[0.36em] text-cyan">{content.kicker}</p>
           <h1 className="mt-6 max-w-[14ch] font-serif text-[clamp(3.15rem,7vw,6.5rem)] leading-[0.95] text-fg">
             {content.title}
@@ -63,13 +63,13 @@ export default function V2Hero({ locale, content, onShowDemo }: V2HeroProps) {
 
           <div className="mt-10 flex flex-wrap gap-4">
             <Link
-              className="inline-flex w-full items-center justify-center rounded-full bg-[linear-gradient(135deg,#8fd6f5,#8b7cf6)] px-5 py-3.5 text-sm font-semibold text-ink shadow-[0_0_36px_rgba(96,180,255,0.35)] transition-transform hover:-translate-y-0.5 sm:w-auto sm:px-7 sm:py-4 sm:text-base"
+              className="inline-flex w-full min-w-0 max-w-full items-center justify-center rounded-full bg-[linear-gradient(135deg,#8fd6f5,#8b7cf6)] px-5 py-3.5 text-center text-sm font-semibold text-ink shadow-[0_0_36px_rgba(96,180,255,0.35)] transition-transform hover:-translate-y-0.5 sm:w-auto sm:px-7 sm:py-4 sm:text-base"
               href={`/${locale}/fa-chat`}
             >
               {content.primaryCta}
             </Link>
             <button
-              className="inline-flex w-full items-center justify-center rounded-full border border-white/15 bg-white/5 px-5 py-3.5 text-sm font-medium text-fg transition-colors hover:border-cyan/40 hover:bg-cyan/10 sm:w-auto sm:px-7 sm:py-4 sm:text-base"
+              className="inline-flex w-full min-w-0 max-w-full items-center justify-center rounded-full border border-white/15 bg-white/5 px-5 py-3.5 text-center text-sm font-medium text-fg transition-colors hover:border-cyan/40 hover:bg-cyan/10 sm:w-auto sm:px-7 sm:py-4 sm:text-base"
               onClick={onShowDemo}
               type="button"
             >
@@ -82,7 +82,7 @@ export default function V2Hero({ locale, content, onShowDemo }: V2HeroProps) {
           <div className="mt-10 grid gap-4 md:grid-cols-3">
             {content.workspaceLinks.map((link) => (
               <Link
-                className="min-w-0 rounded-[1.5rem] border border-white/10 bg-white/[0.04] p-5 transition-colors hover:border-cyan/35 hover:bg-white/[0.06]"
+                className="min-w-0 max-w-full rounded-[1.5rem] border border-white/10 bg-white/[0.04] p-5 transition-colors hover:border-cyan/35 hover:bg-white/[0.06]"
                 href={`/${locale}${link.href}`}
                 key={link.href}
               >

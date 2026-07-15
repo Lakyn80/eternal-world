@@ -102,7 +102,7 @@ export default function V2AvatarStudio({ locale, content }: V2AvatarStudioProps)
               <p className="mt-4 max-w-sm text-sm leading-6 text-fg/62">{content.presets.previewTagline}</p>
 
               <Link
-                className="mt-8 inline-flex w-full items-center justify-center rounded-full bg-[linear-gradient(135deg,#8fd6f5,#8b7cf6)] px-5 py-3 text-sm font-semibold text-ink sm:w-auto"
+                className="mt-8 inline-flex w-full min-w-0 max-w-full items-center justify-center rounded-full bg-[linear-gradient(135deg,#8fd6f5,#8b7cf6)] px-5 py-3 text-center text-sm font-semibold text-ink sm:w-auto"
                 href={`/${locale}/fa-chat`}
               >
                 {content.launchLabel}

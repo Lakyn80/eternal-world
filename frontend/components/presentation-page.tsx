@@ -1,11 +1,9 @@
 "use client";
 
-import Link from "next/link";
-
 import { getExperienceContent } from "../lib/experience-content";
 import type { AppLocale } from "../lib/i18n/locales";
 import { useUiTheme } from "../lib/use-ui-theme";
-import { LanguageSwitcher } from "./language-switcher";
+import ProductNav from "./product-nav";
 import PresentationDeck from "./presentation-deck";
 import styles from "./presentation-page.module.css";
 
@@ -25,25 +23,19 @@ export function PresentationPage({ locale }: { locale: AppLocale }) {
 
   return (
     <main className={styles.page} data-theme={theme}>
-      <header className={styles.header}>
-        <div className={styles.headerLinks}>
-          <Link className={styles.backLink} href={`/${locale}`}>
-            {content.presentation.backHome}
-          </Link>
-          <Link className={styles.backLink} href={`/${locale}/fa-chat`}>
-            {content.header.chat}
-          </Link>
-          <Link className={styles.backLink} href={`/${locale}/family-memory-review`}>
-            {content.header.review}
-          </Link>
-        </div>
-        <div className={styles.headerTools}>
-          <LanguageSwitcher currentLocale={locale} variant="dark" />
-          <button className={styles.themeButton} onClick={toggleTheme} type="button">
-            {themeLabel(locale, theme)}
-          </button>
-        </div>
-      </header>
+      <ProductNav
+        activeHref={`/${locale}/presentation`}
+        items={[
+          { href: `/${locale}`, label: content.presentation.backHome },
+          { href: `/${locale}/fa-chat`, label: content.header.chat },
+          { href: `/${locale}/family-memory-review`, label: content.header.review },
+        ]}
+        locale={locale}
+        onToggleTheme={toggleTheme}
+        subtitle={content.presentation.title}
+        theme={theme}
+        themeLabel={themeLabel(locale, theme)}
+      />
       <PresentationDeck content={content} fullScreen locale={locale} />
     </main>
   );

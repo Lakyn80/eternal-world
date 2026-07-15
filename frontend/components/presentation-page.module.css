@@ -1,80 +1,11 @@
 .page {
-  --page-bg: #f4ead8;
-  --page-text: #2d2218;
-  min-height: 100vh;
-  padding: 1rem;
+  min-height: 100dvh;
+  overflow-x: clip;
+  padding: var(--ew-page-gutter);
+  padding-bottom: max(var(--ew-page-gutter), env(safe-area-inset-bottom));
   background:
-    radial-gradient(circle at top left, rgba(255, 234, 194, 0.84), transparent 26%),
-    linear-gradient(180deg, #f4ead8, #e9dac0);
-}
-
-.page[data-theme="dark"] {
-  --page-bg: #16100c;
-  --page-text: #faecd9;
-  background:
-    radial-gradient(circle at top left, rgba(209, 165, 99, 0.18), transparent 26%),
-    linear-gradient(180deg, #16100c, #211711);
-}
-
-.header,
-.headerLinks,
-.headerTools {
-  display: flex;
-  align-items: center;
-  gap: 0.9rem;
-}
-
-.header {
-  justify-content: space-between;
-  width: min(86rem, 100%);
-  margin: 0 auto 1rem;
-  padding: 0.8rem 1rem;
-  border-radius: 999px;
-  background: rgba(27, 20, 15, 0.52);
-  color: #fff4e0;
-  border: 1px solid rgba(255, 226, 181, 0.12);
-  backdrop-filter: blur(12px);
-}
-
-.page[data-theme="light"] .header {
-  background: rgba(255, 249, 239, 0.84);
-  color: var(--page-text);
-  border-color: rgba(107, 73, 31, 0.14);
-}
-
-.backLink,
-.themeButton {
-  border-radius: 999px;
-  border: 1px solid rgba(255, 226, 181, 0.16);
-  padding: 0.72rem 1rem;
-  color: inherit;
-  text-decoration: none;
-  background: rgba(255, 255, 255, 0.04);
-}
-
-.page[data-theme="light"] .backLink,
-.page[data-theme="light"] .themeButton {
-  border-color: rgba(107, 73, 31, 0.16);
-  background: rgba(255, 255, 255, 0.64);
-}
-
-.themeButton {
-  font-family: inherit;
-  cursor: pointer;
-}
-
-@media (max-width: 900px) {
-  .header,
-  .headerLinks,
-  .headerTools {
-    flex-direction: column;
-    align-items: flex-start;
-  }
-
-  .backLink,
-  .themeButton {
-    width: 100%;
-    box-sizing: border-box;
-    text-align: center;
-  }
+    radial-gradient(circle at 10% 0%, rgba(232, 195, 122, 0.2), transparent 28rem),
+    linear-gradient(180deg, var(--ew-color-page), var(--ew-color-page-soft));
+  color: var(--ew-color-text);
+  font-family: var(--ew-font-sans);
 }

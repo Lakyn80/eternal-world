@@ -6,7 +6,9 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "test": "vitest run"
+    "test": "vitest run",
+    "test:e2e": "playwright test",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "next": "14.2.23",
@@ -14,10 +16,11 @@
     "react-dom": "18.3.1"
   },
   "devDependencies": {
-    "@vitejs/plugin-react": "4.3.4",
+    "@playwright/test": "^1.61.1",
     "@types/node": "22.10.5",
     "@types/react": "18.3.18",
     "@types/react-dom": "18.3.5",
+    "@vitejs/plugin-react": "4.3.4",
     "autoprefixer": "10.4.20",
     "jsdom": "25.0.1",
     "postcss": "8.4.49",

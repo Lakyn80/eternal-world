@@ -39,6 +39,9 @@ function renderComponent(locale: AppLocale = "ru"): RenderHandle {
   };
 }
 
+function getFetchCall(fetchMock: ReturnType<typeof vi.fn>, index = 0): [unknown, RequestInit?] {
+  return fetchMock.mock.calls[index] as [unknown, RequestInit?];
+}
 
 afterEach(() => {
   document.body.innerHTML = "";
@@ -85,7 +88,7 @@ describe("fa chat demo page", () => {
     });
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
-    expect(String(fetchMock.mock.calls[0]?.[0])).toContain("/api/demo/fa-chat/message");
+    expect(String(getFetchCall(fetchMock)[0])).toContain("/api/demo/fa-chat/message");
     expect(view.container.textContent).toContain("Ева подбирает ответ...");
 
     await act(async () => {
@@ -214,7 +217,7 @@ describe("fa chat demo page", () => {
     });
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
-    const requestBody = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body));
+    const requestBody = JSON.parse(String(getFetchCall(fetchMock)[1]?.body));
     expect(requestBody.locale).toBe("cs");
     expect(view.container.textContent).toContain("V dětství jsem žila u Popice.");
 
@@ -269,7 +272,7 @@ describe("fa chat demo page", () => {
     });
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
-    const requestBody = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body));
+    const requestBody = JSON.parse(String(getFetchCall(fetchMock)[1]?.body));
     expect(requestBody.locale).toBe("en");
     expect(view.container.textContent).toContain("I grew up near Popice.");
 

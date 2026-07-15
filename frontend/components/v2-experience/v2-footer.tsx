@@ -26,13 +26,13 @@ export default function V2Footer({ locale, content }: V2FooterProps) {
 
         <div className="mt-10 flex flex-wrap justify-center gap-4">
           <Link
-            className="inline-flex w-full items-center justify-center rounded-full bg-[linear-gradient(135deg,#8fd6f5,#8b7cf6)] px-6 py-3.5 text-base font-semibold text-ink sm:w-auto"
+            className="inline-flex w-full min-w-0 max-w-full items-center justify-center rounded-full bg-[linear-gradient(135deg,#8fd6f5,#8b7cf6)] px-6 py-3.5 text-center text-base font-semibold text-ink sm:w-auto"
             href={`/${locale}/fa-chat`}
           >
             {content.primaryCta}
           </Link>
           <Link
-            className="inline-flex w-full items-center justify-center rounded-full border border-white/15 bg-white/5 px-6 py-3.5 text-base font-medium text-fg transition-colors hover:border-cyan/40 hover:bg-cyan/10 sm:w-auto"
+            className="inline-flex w-full min-w-0 max-w-full items-center justify-center rounded-full border border-white/15 bg-white/5 px-6 py-3.5 text-center text-base font-medium text-fg transition-colors hover:border-cyan/40 hover:bg-cyan/10 sm:w-auto"
             href={`/${locale}/family-memory-review`}
           >
             {content.secondaryCta}
