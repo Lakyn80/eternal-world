@@ -1,15 +1,7 @@
 name: Deploy Staging
 
 on:
-  push:
-    branches:
-      - staging/**
   workflow_dispatch:
-  workflow_run:
-    workflows:
-      - CI
-    types:
-      - completed
 
 concurrency:
   group: eternal-world-staging
@@ -42,12 +34,6 @@ jobs:
         run: |
           if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
             git_sha="${GITHUB_SHA}"
-            should_deploy="true"
-          elif [[ "${{ github.event_name }}" == "push" && "${GITHUB_REF_NAME}" == staging/* ]]; then
-            git_sha="${GITHUB_SHA}"
-            should_deploy="true"
-          elif [[ "${{ github.event.workflow_run.conclusion }}" == "success" && "${{ github.event.workflow_run.head_branch }}" == "main" ]]; then
-            git_sha="${{ github.event.workflow_run.head_sha }}"
             should_deploy="true"
           else
             git_sha=""
