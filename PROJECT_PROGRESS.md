@@ -39,6 +39,103 @@ Verification commands:
 - `cd frontend && npm run build`
 - `cd frontend && npm run test:e2e`
 
+## Task 65 Accounts, Memorial Access, and Contribution Review Foundation
+
+Status as of 2026-07-16:
+
+Goal: establish the production backend foundation for real e-memorial accounts, memorial access grants, invitations, submitted memories, and owner/trusted-reviewer review before any user-submitted memory can become active avatar evidence.
+
+### What changed
+
+- Added `memorial_memberships` as the production access-grant table connecting a `users` account to an existing `memory_profiles` memorial with one of `owner`, `trusted_reviewer`, `contributor`, or `viewer`.
+- Added `memorial_invitations` with hashed single-use tokens, email binding, role binding, expiration, accepted/revoked timestamps, and creator/acceptor audit fields.
+- Added `memorial_contributions` for user-submitted memories with `draft`, `needs_review`, `approved`, `rejected`, `archived`, and `superseded` states plus reviewer audit fields.
+- Added the `backend/app/modules/memorial_access/` module with typed schemas, repository functions, service-level authorization, token hashing, and API routing.
+- Added `/api/memorials` endpoints for memorial creation/list/read, members, invitations, invitation acceptance, contribution submission/list/review-queue, approve/reject/archive.
+- Kept existing `/api/memory-profiles` behavior intact for backward compatibility; the new product flow is additive and uses existing `MemoryProfile` as the memorial object.
+- Added an Alembic migration `20260716_0021_add_memorial_access_foundation.py`; it backfills an active `owner` membership for every existing `memory_profiles.user_id`.
+- No frontend UI was added in this task. The prompt asked for core backend first and minimal frontend only if there was already a clearly scoped admin/client UI area. The backend contract is now ready for a focused frontend task.
+
+### Authorization model
+
+- `owner`: can create memorials, invite participants, list members, view review queue, approve/reject/archive contributions.
+- `trusted_reviewer`: can list members/review queue and approve/reject/archive contributions; cannot invite participants or manage ownership/billing.
+- `contributor`: can submit contributions and view own submitted contributions; cannot approve their own pending contribution.
+- `viewer`: can view permitted memorial details; cannot submit or approve contributions.
+- Non-members receive `404 Memorial not found` for profile-scoped routes to avoid leaking private memorial existence.
+- Members with insufficient role receive `403 Insufficient memorial permissions`.
+
+### Invitation flow
+
+1. Owner calls `POST /api/memorials/{profile_id}/invitations` with email and role.
+2. Backend validates owner access and allowed roles (`trusted_reviewer`, `contributor`, `viewer` only).
+3. Backend generates a random token and stores only `sha256(token)` in `memorial_invitations`.
+4. Raw token is returned once for dev/test flow; no real email integration was added.
+5. Logged-in invited user calls `POST /api/invitations/accept`.
+6. Backend validates token existence, not accepted, not revoked, not expired, email match, and duplicate membership protection.
+7. Backend creates the membership and marks the invitation accepted.
+
+### Contribution review flow
+
+1. `owner`, `trusted_reviewer`, or `contributor` submits a contribution via `POST /api/memorials/{profile_id}/contributions`.
+2. Submitted contribution starts as `needs_review` by default, or `draft` when explicitly not submitted for review.
+3. Reviewers list pending work via `GET /api/memorials/{profile_id}/review-queue`.
+4. Owner/trusted reviewer can approve, reject, or archive.
+5. Approval sets `status=approved`, `is_current=true`, reviewer audit fields, and `active_memory_eligible=true` in the response.
+6. If approval supersedes an existing approved contribution, the old row becomes `status=superseded`, `is_current=false`.
+7. Rejected, archived, draft, pending, superseded, foreign-profile, and foreign-user contributions are never returned by the active-memory helper.
+
+### Active memory safety rule
+
+The new active-memory eligibility helper returns only:
+
+```text
+profile_id matches
+status == approved
+is_current == true
+```
+
+This task does not automatically index approved contributions into Qdrant and does not change existing Brain/RAG retrieval, embedding, ranking, cache, or Qdrant behavior. Approved contributions are backend-eligible for a future explicit indexing/promotions task, not silently searchable facts today.
+
+### Files changed
+
+- `backend/app/db/models.py`
+- `backend/alembic/versions/20260716_0021_add_memorial_access_foundation.py`
+- `backend/app/modules/memorial_access/__init__.py`
+- `backend/app/modules/memorial_access/schemas.py`
+- `backend/app/modules/memorial_access/repository.py`
+- `backend/app/modules/memorial_access/service.py`
+- `backend/app/modules/memorial_access/router.py`
+- `backend/app/main.py`
+- `backend/tests/test_memorial_access.py`
+- `backend/tests/test_alembic.py`
+- `PROJECT_PROGRESS.md`
+
+### Verification
+
+- `docker compose exec -T backend python -m pytest tests/test_memorial_access.py -q` -> `12 passed`, 1 passlib `crypt` deprecation warning.
+- `docker compose exec -T backend python -m pytest tests/test_memorial_access.py tests/test_models.py tests/test_alembic.py tests/test_memory_profiles.py tests/test_family_memory_enrichment.py tests/test_family_memory_review_detail.py tests/test_avatar_memory_indexing.py tests/test_avatar_memory_promotions.py -q` -> `71 passed`, 1 passlib `crypt` deprecation warning.
+- `docker compose exec -T backend python -m pytest tests/test_memories.py -q` -> `16 passed`, 1 passlib `crypt` deprecation warning.
+- `docker compose exec -T backend alembic upgrade head` -> upgraded real Docker Postgres from `20260715_0020` to `20260716_0021`.
+- `docker compose exec -T backend alembic current` -> `20260716_0021 (head)`.
+- `docker compose exec -T backend python -m compileall app/modules/memorial_access app/db/models.py app/main.py` -> OK.
+- `GET http://127.0.0.1:8033/health` -> `200`.
+- `GET http://127.0.0.1:8033/openapi.json` -> new `/api/memorials...` and `/api/invitations/accept` routes present.
+- Runtime HTTP smoke against the running backend: owner registration/login -> memorial creation -> contributor registration/login -> owner invitation -> contributor accept -> contribution submit -> owner approve -> `approved_status=approved`, `active_memory_eligible=true`.
+
+### Known limitations
+
+- No frontend/admin UI was added; this task intentionally exposes the tested backend API foundation first.
+- No real email delivery was added; invitation raw token/accept URL are returned only for dev/test flow.
+- No ownership transfer, membership revocation endpoint, billing/admin ownership management, or audit-log UI was added.
+- Approved memorial contributions are not automatically converted into RAG chunks or Qdrant points; a future explicit indexing/promotions flow must consume only `approved + current` rows.
+- `tests/test_bilingual_retrieval_evaluation.py tests/test_metrics.py` still fail with the pre-existing unrelated `lambda() got an unexpected keyword argument 'locale'` issue in FA chat test doubles. This reproduces independently of Task 65 and was already observed before this work.
+- `tests/test_rag_retrieval.py` timed out in the current Docker environment after 240 seconds without a concrete assertion failure; `tests/test_memories.py` and all Task 65/family/indexing focused tests passed.
+
+### Next recommended task
+
+- Task 65.1 - Minimal Account/Memorial Frontend Flow: owner memorial dashboard, invite form, participant contribution form, review queue, and mobile-first access-aware UI over the new API.
+
 ## 2. Production Architecture Decisions
 
 - Backend framework: FastAPI

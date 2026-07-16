@@ -19,6 +19,7 @@ from app.modules.memories.router import router as memories_router
 from app.modules.media.router import public_router as media_public_router
 from app.modules.media.router import router as media_router
 from app.modules.job_tracking.router import router as job_tracking_router
+from app.modules.memorial_access.router import router as memorial_access_router
 from app.modules.metrics.router import router as metrics_router
 from app.modules.multi_embedding_eval.router import router as multi_embedding_eval_router
 from app.modules.memory_profiles.router import router as memory_profiles_router
@@ -55,6 +56,7 @@ app.include_router(multi_embedding_eval_router)
 app.include_router(memories_router)
 app.include_router(media_router)
 app.include_router(media_public_router)
+app.include_router(memorial_access_router)
 app.include_router(memory_profiles_router)
 app.include_router(rag_retrieval_router)
 app.include_router(qdrant_indexing_router)

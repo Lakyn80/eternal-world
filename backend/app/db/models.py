@@ -3,7 +3,22 @@ from __future__ import annotations
 from datetime import date, datetime
 from typing import Any
 
-from sqlalchemy import Boolean, CheckConstraint, Date, DateTime, Float, ForeignKey, Index, Integer, JSON, String, Text, func, text
+from sqlalchemy import (
+    Boolean,
+    CheckConstraint,
+    Date,
+    DateTime,
+    Float,
+    ForeignKey,
+    Index,
+    Integer,
+    JSON,
+    String,
+    Text,
+    UniqueConstraint,
+    func,
+    text,
+)
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base, TimestampMixin
@@ -83,6 +98,27 @@ class User(TimestampMixin, Base):
         back_populates="owner",
         cascade="all, delete-orphan",
     )
+    memorial_memberships: Mapped[list[MemorialMembership]] = relationship(
+        foreign_keys="MemorialMembership.user_id",
+        back_populates="user",
+        cascade="all, delete-orphan",
+    )
+    created_memorial_invitations: Mapped[list[MemorialInvitation]] = relationship(
+        foreign_keys="MemorialInvitation.created_by_user_id",
+        back_populates="created_by_user",
+    )
+    accepted_memorial_invitations: Mapped[list[MemorialInvitation]] = relationship(
+        foreign_keys="MemorialInvitation.accepted_by_user_id",
+        back_populates="accepted_by_user",
+    )
+    memorial_contributions: Mapped[list[MemorialContribution]] = relationship(
+        foreign_keys="MemorialContribution.author_user_id",
+        back_populates="author_user",
+    )
+    reviewed_memorial_contributions: Mapped[list[MemorialContribution]] = relationship(
+        foreign_keys="MemorialContribution.reviewed_by_user_id",
+        back_populates="reviewed_by_user",
+    )
 
 
 class MemoryProfile(TimestampMixin, Base):
@@ -149,9 +185,202 @@ class MemoryProfile(TimestampMixin, Base):
         back_populates="memory_profile",
         cascade="all, delete-orphan",
     )
+    memorial_memberships: Mapped[list[MemorialMembership]] = relationship(
+        back_populates="memory_profile",
+        cascade="all, delete-orphan",
+    )
+    memorial_invitations: Mapped[list[MemorialInvitation]] = relationship(
+        back_populates="memory_profile",
+        cascade="all, delete-orphan",
+    )
+    memorial_contributions: Mapped[list[MemorialContribution]] = relationship(
+        back_populates="memory_profile",
+        cascade="all, delete-orphan",
+        foreign_keys="MemorialContribution.profile_id",
+    )
     main_photo_media: Mapped[MediaAsset | None] = relationship(
         foreign_keys=[main_photo_media_id],
         post_update=True,
+    )
+
+
+class MemorialMembership(TimestampMixin, Base):
+    __tablename__ = "memorial_memberships"
+    __table_args__ = (
+        CheckConstraint(
+            "role IN ('owner', 'trusted_reviewer', 'contributor', 'viewer')",
+            name="memorial_memberships_role",
+        ),
+        CheckConstraint(
+            "status IN ('active', 'revoked')",
+            name="memorial_memberships_status",
+        ),
+        UniqueConstraint("profile_id", "user_id", name="uq_memorial_memberships_profile_user"),
+        Index("ix_memorial_memberships_profile_role", "profile_id", "role"),
+        Index("ix_memorial_memberships_user_status", "user_id", "status"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    profile_id: Mapped[int] = mapped_column(
+        ForeignKey("memory_profiles.id", ondelete="CASCADE"),
+        index=True,
+        nullable=False,
+    )
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"),
+        index=True,
+        nullable=False,
+    )
+    role: Mapped[str] = mapped_column(String(32), index=True, nullable=False)
+    status: Mapped[str] = mapped_column(
+        String(32),
+        index=True,
+        nullable=False,
+        default="active",
+        server_default=text("'active'"),
+    )
+    created_by_user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"),
+        index=True,
+        nullable=True,
+    )
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    revoked_by_user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"),
+        index=True,
+        nullable=True,
+    )
+
+    memory_profile: Mapped[MemoryProfile] = relationship(back_populates="memorial_memberships")
+    user: Mapped[User] = relationship(foreign_keys=[user_id], back_populates="memorial_memberships")
+    created_by_user: Mapped[User | None] = relationship(foreign_keys=[created_by_user_id])
+    revoked_by_user: Mapped[User | None] = relationship(foreign_keys=[revoked_by_user_id])
+
+
+class MemorialInvitation(TimestampMixin, Base):
+    __tablename__ = "memorial_invitations"
+    __table_args__ = (
+        CheckConstraint(
+            "role IN ('trusted_reviewer', 'contributor', 'viewer')",
+            name="memorial_invitations_role",
+        ),
+        Index("ix_memorial_invitations_profile_email", "profile_id", "email"),
+        Index("ix_memorial_invitations_profile_status", "profile_id", "accepted_at", "revoked_at"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    profile_id: Mapped[int] = mapped_column(
+        ForeignKey("memory_profiles.id", ondelete="CASCADE"),
+        index=True,
+        nullable=False,
+    )
+    email: Mapped[str] = mapped_column(String(320), index=True, nullable=False)
+    role: Mapped[str] = mapped_column(String(32), index=True, nullable=False)
+    token_hash: Mapped[str] = mapped_column(String(64), unique=True, index=True, nullable=False)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True, nullable=False)
+    accepted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), index=True, nullable=True)
+    accepted_by_user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"),
+        index=True,
+        nullable=True,
+    )
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), index=True, nullable=True)
+    created_by_user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"),
+        index=True,
+        nullable=True,
+    )
+
+    memory_profile: Mapped[MemoryProfile] = relationship(back_populates="memorial_invitations")
+    created_by_user: Mapped[User | None] = relationship(
+        foreign_keys=[created_by_user_id],
+        back_populates="created_memorial_invitations",
+    )
+    accepted_by_user: Mapped[User | None] = relationship(
+        foreign_keys=[accepted_by_user_id],
+        back_populates="accepted_memorial_invitations",
+    )
+
+
+class MemorialContribution(TimestampMixin, Base):
+    __tablename__ = "memorial_contributions"
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('draft', 'needs_review', 'approved', 'rejected', 'archived', 'superseded')",
+            name="memorial_contributions_status",
+        ),
+        CheckConstraint(
+            "privacy_scope IN ('private_owner', 'selected_family', 'all_family', 'public_legacy')",
+            name="memorial_contributions_privacy_scope",
+        ),
+        Index("ix_memorial_contributions_profile_status", "profile_id", "status"),
+        Index("ix_memorial_contributions_profile_current", "profile_id", "is_current"),
+        Index("ix_memorial_contributions_author_status", "author_user_id", "status"),
+        Index("ix_memorial_contributions_created_at", "created_at"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    profile_id: Mapped[int] = mapped_column(
+        ForeignKey("memory_profiles.id", ondelete="CASCADE"),
+        index=True,
+        nullable=False,
+    )
+    author_user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"),
+        index=True,
+        nullable=False,
+    )
+    title: Mapped[str] = mapped_column(String(200), nullable=False)
+    memory_text: Mapped[str] = mapped_column(Text, nullable=False)
+    source_note: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    privacy_scope: Mapped[str] = mapped_column(
+        String(32),
+        nullable=False,
+        default="private_owner",
+        server_default=text("'private_owner'"),
+    )
+    status: Mapped[str] = mapped_column(
+        String(32),
+        index=True,
+        nullable=False,
+        default="needs_review",
+        server_default=text("'needs_review'"),
+    )
+    is_current: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=False,
+        server_default=text("false"),
+    )
+    supersedes_contribution_id: Mapped[int | None] = mapped_column(
+        ForeignKey("memorial_contributions.id", ondelete="SET NULL"),
+        index=True,
+        nullable=True,
+    )
+    reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    reviewed_by_user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"),
+        index=True,
+        nullable=True,
+    )
+    review_note: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    rejection_reason: Mapped[str | None] = mapped_column(String(500), nullable=True)
+
+    memory_profile: Mapped[MemoryProfile] = relationship(
+        back_populates="memorial_contributions",
+        foreign_keys=[profile_id],
+    )
+    author_user: Mapped[User] = relationship(
+        foreign_keys=[author_user_id],
+        back_populates="memorial_contributions",
+    )
+    reviewed_by_user: Mapped[User | None] = relationship(
+        foreign_keys=[reviewed_by_user_id],
+        back_populates="reviewed_memorial_contributions",
+    )
+    supersedes_contribution: Mapped[MemorialContribution | None] = relationship(
+        remote_side=[id],
+        foreign_keys=[supersedes_contribution_id],
     )
 
 
