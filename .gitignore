@@ -3,7 +3,12 @@ __pycache__/
 .venv/
 .env
 .pytest_cache/
+.idea/
+.vscode/
 backend/media/
+backend/artifacts/avatar_quality_eval/runs/
+backend/artifacts/brain_rag_eval/runs/
+backend/artifacts/demo_exports/
 node_modules/
 .next/
 dist/
