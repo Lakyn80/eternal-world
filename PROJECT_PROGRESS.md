@@ -1,5 +1,13 @@
 # Project Progress
 
+## 0. Operating Protocol
+
+Status as of 2026-07-16:
+
+- The controlling execution protocol for this repository is `md_roadmap/ETERNAL_WORLD_AVATAR_QUALITY_PLAN.md`.
+- All future implementation work must follow its production execution, verification, scope, testing, documentation, git, and final-report rules.
+- `AGENTS.md` was added at the repository root to make this instruction visible as the default Codex project guidance.
+
 ## 1. Project Overview
 
 Eternal World is a production-oriented AI memory social platform under active backend-first development. The repository currently contains:
