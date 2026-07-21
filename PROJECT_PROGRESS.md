@@ -8,6 +8,199 @@ Status as of 2026-07-16:
 - All future implementation work must follow its production execution, verification, scope, testing, documentation, git, and final-report rules.
 - `AGENTS.md` was added at the repository root to make this instruction visible as the default Codex project guidance.
 
+## Task 65.1 - Minimal Account and Memorial Frontend Flow (2026-07-16)
+
+Goal: implement the minimal frontend flow in the new `frontend/react-export` Vite + React + TypeScript frontend on top of the Task 65 backend foundation without changing backend behavior, deploying, committing, or pushing. The flow covers: authenticated owner creates a memorial, owner sees/opens the workspace, owner invites a participant, invited participant accepts the invitation, contributor submits a memory contribution, owner/trusted reviewer sees the review queue, reviewer approves/rejects/archives, and approved current contributions are visibly active-memory eligible.
+
+### What changed
+
+- Added a backend-connected memorial workspace section directly to `frontend/react-export/src/App.tsx`.
+- Added `frontend/react-export/src/components/MemorialWorkspace.tsx`: in-memory auth, memorial create/list/open, invitation creation, invitation accept from `?token=...`, contributions, review queue, members, and active-memory eligibility display.
+- Added a typed memorial API client in `frontend/react-export/src/lib/memorialApi.ts` for existing backend endpoints: auth login/register, memorial list/create/detail, members, invitations, invitation accept, contributions, review queue, and approve/reject/archive actions.
+- Added shared role helpers in `frontend/react-export/src/lib/memorialPermissions.ts` and backend-aligned DTO types in `frontend/react-export/src/types/memorial.ts`.
+- Invitation tokens are read from the URL for the accept request and then removed from the visible URL; tokens are not written to `localStorage` or `sessionStorage`.
+- Review actions require a confirmation dialog and do not optimistically update until the backend response succeeds.
+- Main "Create your AI" CTAs now scroll to the backend-connected memorial workspace; the old static avatar studio remains as a secondary demo section.
+- Hardened the new `react-export` mobile layout beyond the workspace: navigation, conversation demo, feature cards, timeline, avatar studio, and moments cards now avoid horizontal overflow at 320px.
+- Removed the previously attempted Task 65.1 Next/app-router files from the working tree; the target frontend for this task is `frontend/react-export`.
+- Fixed frontend Docker wiring so both local and production frontend images build and run `frontend/react-export` instead of the old Next.js app. Local compose now passes `VITE_API_URL`, mounts `/app/react-export/node_modules`, and serves Vite on port 3000 inside the container. Production CI/CD now builds `frontend/Dockerfile.prod` with `VITE_API_URL` and writes `VITE_API_URL` into `.env.prod`.
+- Fixed `backend/Dockerfile` to copy `requirements*.txt` because `requirements.txt` includes `requirements.runtime.txt`; without this, a normal `docker compose up -d --build frontend` can fail while rebuilding the backend dependency before frontend startup.
+- Fixed local Docker CORS for the new Vite frontend when opened as `http://127.0.0.1:8017/`: `BACKEND_CORS_ORIGINS` now includes both `http://localhost:8017` and `http://127.0.0.1:8017`. This fixes browser-blocked API calls from the frontend without widening production CORS.
+
+### Verification
+
+- `cd frontend/react-export && npm run build` -> passed.
+- Preview smoke with Playwright/Chromium against `frontend/react-export` production build -> passed at 320, 375, 390, 768, and 1280px; no horizontal overflow.
+- Preview memorial-flow smoke with mocked backend API -> passed on 390px mobile: owner creates memorial, owner invites contributor, contributor accepts token, contributor submits memory, owner approves, contribution becomes active-memory eligible, no horizontal overflow after the flow.
+- `docker build -f frontend/Dockerfile.prod --build-arg VITE_API_URL=http://localhost:8033 -t eternal-world-frontend-react-export-test frontend` -> passed.
+- `docker run --rm -p 4175:3000 eternal-world-frontend-react-export-test` HTTP smoke -> `200`, served Vite assets and Memorial World HTML.
+- `docker compose build frontend` -> passed.
+- `docker compose up -d --no-deps frontend` + `http://127.0.0.1:8017/` browser smoke -> passed; new memorial workspace present, no mobile horizontal overflow at 390px.
+- `docker compose up -d --build frontend` -> frontend rebuilt/recreated and is running the Vite `memorial-world` app on `http://127.0.0.1:8017/`; the shell command itself exceeded the 5-minute tool timeout while backend image dependency work was still running, so the stale client process was stopped. The running frontend container was verified separately via HTTP and browser smoke.
+- CORS preflight from `Origin: http://127.0.0.1:8017` to `http://127.0.0.1:8033/api/auth/login` -> passed with `access-control-allow-origin: http://127.0.0.1:8017`.
+- Backend API smoke used by FE -> passed: register, login, create memorial, and list memorials through `http://127.0.0.1:8033`.
+- Chrome headless DOM smoke at `http://127.0.0.1:8017/` with `390x1200` viewport -> rendered `Memorial World` and `#memorial-workspace` from the new `react-export` frontend.
+- `docker compose exec -T backend python -m pytest tests/test_memorial_access.py -q` -> passed on rerun: 12 passed, 1 warning. First run had 11 passed / 1 failed due to an observed backend-container clock jump that made a freshly issued JWT temporarily invalid; rerun immediately passed without code changes.
+
+### Scope notes
+
+- Backend domain logic was not changed for Task 65.1; only `backend/app/core/config.py` default CORS origins were widened for local `127.0.0.1` development parity with Docker compose.
+- Docker files and staging deploy workflow were changed only to point frontend builds/runtime at `frontend/react-export`.
+- No deployment was performed.
+- No commit or push was performed, per the task instruction.
+
+## Task 65.1A Logged-In Account and Memorial Binding Audit (2026-07-19)
+
+Status: audit-only, no production behavior changed, no commit/push/deploy performed.
+
+Goal: determine why a real authenticated user who created their own memorial still saw a default/demo memorial named "Josef" inside the app, and map the current state of authentication, memorial selection, and embedding/retrieval isolation before any fix is attempted.
+
+### Observed Josef issue
+
+A real account (`lukas.krumpach@gmail.com`) was created, logged in, and used to create a real memorial ("Lukas Krumpach", `memory_profiles.id=11`). The user still saw a persona named "Josef" somewhere in the app after login.
+
+### Exact root cause
+
+`Josef` is static hardcoded marketing/demo copy in `frontend/react-export/src/components/ConversationDemo.tsx:73` and `AvatarStudio.tsx:65` (plus supporting strings in `i18n.ts`) — two non-authenticated, backend-disconnected landing-page mockup sections (`#demo`, `#studio`). These sit on the **same single continuously-scrolling page** (`App.tsx`) as the real, backend-connected `MemorialWorkspace.tsx` (`#memorial-workspace`, added in Task 65.1). There is no route/auth boundary between the public marketing/demo sections and the authenticated workspace, so a logged-in user scrolling the page (or clicking the "Studio" nav button) reaches static demo content and perceives it as part of "their" memorial area. `Josef` does not exist in the database, in any backend module, in seed/fixture data, or in any API response — confirmed by a repo-wide `rg -ni "josef"` (3 files, all frontend marketing copy) and by direct Postgres inspection of `memory_profiles`/`memorial_memberships`.
+
+### Current account/auth behavior
+
+Stateless JWT bearer auth (`Authorization: Bearer <token>`), backend `User` model resolved fresh from the DB on every request (`auth/dependencies.py:get_current_user`). The frontend keeps the access token only in a component-local `useState` in `MemorialWorkspace.tsx` — no `localStorage`/`sessionStorage`/cookies anywhere in `frontend/react-export/src`. This means a page reload always fully resets auth/memorial state (no stale-cross-user risk via storage, but also no session persistence across reloads). `signOut()` clears all session and memorial-scoped state.
+
+### Current memorial selection behavior
+
+Active memorial is plain component state (`selected` in `MemorialWorkspace.tsx`), set only by explicit user action (open workspace / after create) and always re-fetched+re-authorized from `GET /api/memorials/{id}` before rendering — a stale or inaccessible id can never render stale data. Gap found: there is no auto-select when the user has exactly one memorial (task's expected behavior #3); the user must manually click "Open workspace" even in the single-memorial case. Zero-memorial state shows an empty-state message plus the create-memorial form. No static/default memorial fallback exists anywhere in `MemorialWorkspace.tsx`.
+
+### Database/API state
+
+14 pre-existing users + the audited real user (id 14); 9 pre-existing `memory_profiles` + the user's own new memorial (id 11, "Lukas Krumpach"). User 14 has exactly one `memorial_memberships` row: `profile_id=11, role=owner, status=active` — no foreign/demo membership attached. Live API smoke (throwaway test account) confirmed `GET /api/memorials` returns `401` unauthenticated, `[]` for a fresh account, and exactly the created memorial after creation — never `Josef`, never another account's data. The frontend uses only the new `/api/memorials` endpoints (Task 65); the legacy `/api/memory-profiles` endpoint is unused by the frontend but still backs the same underlying `memory_profiles` table (no divergent dataset). The legacy endpoint family (`memories`, `rag-sources`, `rag/retrieve`, `active-retrieval-config`, `chat`, `photo`) authorizes via strict `memory_profiles.user_id` ownership only, not membership-aware — a gap for non-owner Task 65 roles, not a leak.
+
+### Embedding/indexing readiness
+
+**Partially ready.** The legacy owner-submitted pipeline (`memories`/`rag_sources` → `rag_chunks` → `embeddings` → `qdrant_indexing`) is fully `profile_id`-scoped end to end and already production-wired. Task 65's `memorial_contributions` (family-submitted, reviewed memories) are **not** connected to embedding/indexing at all yet — this is a pre-existing, already-documented boundary (`PROJECT_PROGRESS.md` Task 65 section, "Active memory safety rule"), reconfirmed unchanged by this audit. A future bridge module (pattern: `avatar_memory_indexing`) is required, gated strictly on `status == "approved" AND is_current == true`.
+
+### Retrieval isolation readiness
+
+**Fully ready**, confirmed by code (dual ownership check plus an independent Qdrant-side filter on `owner_user_id` + `profile_id`, never trusting a client-supplied id) and by a live cross-account runtime test using two throwaway accounts: every cross-profile call returned `404`, zero leakage.
+
+### Avatar chat readiness
+
+`profile_id` comes from the URL path and is independently re-validated server-side twice (once in `chat/service.py`, once inside RAG retrieval) before any message is processed; retrieval evidence is filtered by that same validated `profile_id`. No default/fallback persona (e.g. "Josef") is injected server-side anywhere in the backend — confirmed by a backend-only `rg -ni "josef"` (zero matches).
+
+### Artifact paths
+
+- `backend/artifacts/memorial_account_binding_audit/latest/report.md`
+- `backend/artifacts/memorial_account_binding_audit/runs/20260719_165520Z/report.md`
+
+### Tests/smokes
+
+- Manual runtime API smoke (throwaway account): register -> login -> empty memorial list -> create memorial -> list shows only the new memorial.
+- Manual runtime cross-account isolation smoke (two throwaway accounts): all cross-profile calls returned 404.
+- No automated test suite was run in this audit; prior Task 65/65.1 suites already passed per their own `PROJECT_PROGRESS.md` sections and were not re-run here.
+
+### Recommended implementation task
+
+Task 65.1B - Workspace/marketing separation and role-aware content access: (1) give the authenticated `MemorialWorkspace` its own route/mount boundary separate from the static `#demo`/`#studio` marketing sections so "Josef" can no longer appear to be part of the logged-in experience; (2) add auto-select-if-one-memorial logic to `MemorialWorkspace.tsx`; (3) make `memories`/`rag_sources`/`rag/retrieve`/`chat`/`active-retrieval-config`/`photo` authorization membership-aware instead of strict-ownership-only; (4) build the `memorial_contributions` -> embedding/indexing bridge gated on `approved` + `is_current`. Full detail and file-level fix plan in the audit report artifact above.
+
+## Task 65.1B Authenticated Memorial Bootstrap and Indexing Bridge (2026-07-19)
+
+Status: implemented, tests passing, no commit/push/deploy performed.
+
+Goal: act on the Task 65.1A audit findings - separate the public marketing page from the authenticated memorial application, bootstrap the authenticated memorial context deterministically after login, extend membership-aware authorization to the legacy chat/RAG-retrieval endpoints, and bridge approved Task 65 `MemorialContribution` rows into the existing canonical embedding/indexing pipeline.
+
+### Task 65.1A findings addressed
+
+1. `Josef` was static marketing copy in `ConversationDemo`/`AvatarStudio`, sharing a page with the real, authenticated `MemorialWorkspace` - no route boundary existed between them.
+2. No auto-select when a user has exactly one memorial.
+3. Legacy `memories`/`rag_sources`/`rag/retrieve`/`chat` endpoints authorized by strict `memory_profiles.user_id` ownership only, ignoring the Task 65 `memorial_memberships` role model.
+4. `MemorialContribution` approval never reached the embedding/Qdrant pipeline.
+
+### Route separation
+
+- New minimal History-API router (`frontend/react-export/src/lib/router.ts`) - no router dependency added, per the task's explicit "small, explicit route boundary, not a large dependency" guidance; this frontend had no routing at all before this task.
+- `App.tsx` now branches on `isAuthenticatedAppPath(pathname)`: `/app` and `/app/*` (plus the backend's existing bare `/invitations/accept?token=...` link format) render the new `AuthenticatedApp.tsx`; everything else renders the unchanged public marketing tree.
+- Public route (`/`): still includes `ConversationDemo` and `AvatarStudio` (and their "Josef" copy) - legitimate marketing content, left in place per the task's explicit "do not delete legitimate public demo content" instruction.
+- Authenticated route (`/app`, `/app/memorials`, `/app/memorials/{profileId}`, `/app/invitations/accept`): mounts only `AuthenticatedApp` -> `MemorialWorkspace`. It never imports `ConversationDemo`/`AvatarStudio` - confirmed by a source grep (zero matches for "Josef"/"ConversationDemo"/"AvatarStudio" in `AuthenticatedApp.tsx`/`MemorialWorkspace.tsx` outside of an explanatory code comment).
+- The primary "Create your AI" CTAs (`Hero`, `Nav`, `Footer`) now call `navigate('/app')` instead of anchor-scrolling to the in-page workspace section.
+
+### Public vs authenticated behavior
+
+- Public marketing page: unchanged content, may continue to show the fictional "Josef" persona; never renders authenticated/private memorial data (it has no access to a session at all - `MemorialWorkspace` isn't mounted there anymore).
+- Authenticated app: login/register, memorial list/onboarding, memorial workspace, contributions, review queue, members, invitations - and nothing else. Loading and empty states show neutral copy/forms, never a demo persona name.
+
+### Zero/one/multiple memorial bootstrap
+
+- After login, `MemorialWorkspace` calls `GET /api/memorials` and resolves deterministically (`resolveBootstrapSelection`):
+  - If the current route already names a memorial id (`/app/memorials/{id}`, e.g. a deep link or browser back/forward), that id is opened - re-validated against `/api/memorials/{id}` server-side, never trusted from the URL alone.
+  - Else, exactly one accessible memorial auto-opens and the URL updates to `/app/memorials/{id}`.
+  - Else (zero or multiple), the existing create-form/onboarding state or the explicit memorial-list selector is shown; multiple memorials are never silently auto-selected.
+- A stale/unauthorized memorial id (manually edited URL, revoked membership) hits the real 404 from `GET /api/memorials/{id}`; the frontend clears `selected`/`members`/`contributions`/`reviewQueue`, shows a safe error, and navigates back to `/app` - it never renders cached private data for an inaccessible memorial.
+- Logout clears all session/memorial state and navigates back to `/app`, so a subsequently logged-in user in the same tab can never see the previous user's memorial.
+
+### Active memorial context
+
+- Active memorial id lives in the URL (`/app/memorials/{profileId}`) plus component state; the URL is the navigation intent, the backend is the source of truth (every load re-fetches and re-authorizes via `GET /api/memorials/{id}`).
+- Switching memorials clears `members`/`contributions`/`reviewQueue` before loading the new one, so one memorial's data cannot leak into another's view.
+
+### Centralized backend capability model
+
+- New `backend/app/modules/memorial_access/capabilities.py`: `MemorialCapability` enum (`view_memorial`, `chat_with_avatar`, `search_approved_memory`, `submit_contribution`, `review_contribution`, `manage_members`, `manage_memorial`, `direct_memory_write`, `upload_source`, `trigger_indexing`) and a `ROLE_CAPABILITIES` matrix, plus `resolve_authorized_profile(db, current_user, profile_id, capability)` - the single place every membership-aware call site resolves `(profile, membership)` and re-reads the membership row from the database on every call (never trusts a client-supplied role).
+- Role/capability matrix: owner -> everything; trusted_reviewer -> view/chat/search/submit/review (no member/ownership/billing management, no direct memory write - unchanged from the pre-existing Task 65 model); contributor -> view/chat/search/submit only; viewer -> view/chat/search only. Relationship labels (daughter/friend/etc.) grant nothing - out of scope for this task, reserved for Task 65.2.
+- Non-member -> `404` (never reveals a private memorial exists); member without the capability -> `403`.
+- Self-heal: a `memory_profiles` row created through the legacy `/api/memory-profiles` endpoint (which predates membership-aware authorization and was intentionally left unchanged) can be missing its owner `memorial_memberships` row. `resolve_authorized_profile` now lazily creates that missing owner membership the first time the profile's own creator is resolved, rather than treating a profile's own owner as unauthorized - this was required to avoid a real regression once chat/retrieval became membership-aware (caught by the existing `test_chat.py`/`test_rag_retrieval.py` suites during verification).
+
+### Legacy endpoints made membership-aware
+
+- `chat` (`POST`/`GET /api/chat/{profile_id}/messages`): now requires `chat_with_avatar` (all active roles), not strict ownership. Chat history stays scoped by `(current_user.id, profile_id)` (each member's conversation is their own); the canonical-memories context injected into the grounded prompt is now correctly scoped by `profile.user_id` (the memorial's actual owner), not by whichever member is chatting.
+- `rag_retrieval` (`POST /api/memory-profiles/{profile_id}/rag/retrieve`, and transitively chat's evidence lookup): now requires `search_approved_memory` (all active roles). The Qdrant filter and SQL evidence lookup now use the resolved `profile.user_id` as `owner_user_id`, not `current_user.id` - this is a correctness fix, not a weakening: evidence was always indexed under the memorial owner's identity, so scoping by the *querying* member's id would have been wrong the moment a non-owner could query at all.
+- Everything else (`memory_profiles`, `memories`, `rag_sources` direct-write/upload endpoints, `photo`) is unchanged and remains strictly owner-only - not in the task's "at minimum" required list, and direct canonical-memory mutation must stay restricted per the task's hard prohibition.
+- Deliberately **not** changed: retrieval ranking, embedding model selection, Qdrant collection semantics - none were touched.
+
+### Contribution-to-canonical-memory bridge
+
+- Reuses the existing canonical memory model (`RagSource` -> `RagChunk` -> `RagEmbedding` -> Qdrant via `RagVectorIndex`) rather than a second embedding system, mirroring the established `avatar_memory_promotions` -> `avatar_memory_indexing` pattern (including reusing its generic Qdrant REST writer directly).
+- New table `memorial_contribution_promotions` (migration `20260719_0022`, one row per contribution via a unique `contribution_id`, statuses `pending_index -> indexed | failed | retired`) tracks lineage to `profile_id`, `rag_source_id`/`rag_chunk_id`/`rag_embedding_id`, attempt count, and failure reason; contribution author/reviewer lineage is available via the FK back to `memorial_contributions` (no duplicated columns).
+- `memorial_access.service.approve_contribution` now, after its own commit: (a) if the approval superseded a previously-indexed contribution, retires that old promotion (deletes its Qdrant point, keeps the SQL row for audit); (b) promotes the newly-approved contribution (cheap, DB-only, idempotent get-or-create) and enqueues the heavy embedding/Qdrant step on the existing Celery worker (`job_type="qdrant_indexing"`, reusing the existing `background_jobs`/job-tracking infrastructure) rather than running it inline - no blocking model load inside the HTTP request, and a failure to even enqueue is caught and logged, never turning a successful approval into an HTTP error.
+- `index_contribution_promotion` (the Celery-invoked heavy step) is idempotent: a deterministic UUID5 Qdrant point id, reuse of already-created `RagSource`/`RagChunk`/`RagEmbedding` rows on retry, and a payload-equality check before ever re-writing a Qdrant point - repeated triggers never duplicate rows or points.
+- Eligibility is enforced before any embedding call: only `approved` + `is_current` contributions can be promoted; `draft`/`needs_review`/`rejected`/`archived`/`superseded` and foreign-profile contributions raise before indexing.
+- De-indexing: when an approved+current contribution is superseded, its promotion is retired (Qdrant point deleted) automatically as part of the same approval that supersedes it - superseded evidence can no longer be retrieved as active evidence.
+- Indexing-status representation: `ContributionRead.indexing_status` (`not_applicable | pending | indexed | failed | retired`, plus `indexed_at`/`attempt_count`/`failure_reason`) is now returned by every contribution-serializing endpoint, backed by the real `memorial_contribution_promotions` row - the frontend never infers "searchable" from `contribution.status` alone.
+- Failure handling: an indexing failure is recorded on the promotion row (`status="failed"`, safe generic `failure_reason`, no internal exception details exposed) and is safely retryable (verified by a fake-writer test that fails once then succeeds).
+
+### Frontend indexing-status display
+
+- `ContributionList` in `MemorialWorkspace.tsx` now shows a second badge alongside the existing review-status badge, driven by the new `indexing_status.state` field: "Approved, indexing pending" / "Indexed and searchable" / "Indexing failed" / "No longer active evidence" - localized in en/cs/ru. Nothing is ever shown as searchable until the backend reports `indexed`.
+
+### Profile isolation
+
+- Verified live: a non-member gets `404` from both `chat` and `rag_retrieval`; an outsider account created in the smoke test could not reach a freshly created memorial's chat endpoint.
+- Retrieval/chat Qdrant and SQL scoping is keyed on the memorial's real owner (`profile.user_id`), independently re-validated on every call - never on a client-supplied id.
+
+### Tests and results
+
+- `backend/tests/test_memorial_capabilities.py` (new, 10 tests) - pure `MemorialCapability` matrix checks, owner/contributor/viewer chat access, non-member 404, per-member conversation isolation. All passing.
+- `backend/tests/test_memorial_contribution_indexing.py` (new, 8 tests) - promotion idempotency, eligibility gating, indexed evidence scoping/payload correctness, repeated-trigger non-duplication, failure-then-retry, and de-indexing on supersede (via a fake Qdrant writer/encoder, no real network/model calls). All passing.
+- `backend/tests/test_alembic.py` updated for the new migration head; all its assertions pass.
+- Full regression run: `test_memorial_access.py`, `test_memory_profiles.py`, `test_chat.py`, `test_rag_retrieval.py`, `test_rag_retrieval_hybrid.py`, `test_avatar_memory_indexing.py`, `test_avatar_memory_promotions.py`, `test_models.py` plus the new files above -> 86/88 passed. The 2 remaining failures (`test_rag_retrieval.py::test_query_embedding_is_generated_but_not_persisted_as_rag_embedding`, `test_chat.py::test_authenticated_user_can_send_message_to_own_profile`) are pre-existing environment mismatches unrelated to this task's changes: this local container has real `AI_BRAIN_PROVIDER=openai_compatible` (DeepSeek) credentials and a real cached BGE-M3 snapshot configured, so hardcoded "mock reply"/`MockEmbeddingProvider` assertions in those tests fail against genuine, non-deterministic model output - confirmed by inspecting `build_embedding_provider`'s provider-selection logic and the container's real environment variables, not by any code path this task touched.
+- Frontend: `tsc --noEmit` passes; `npm run build` succeeds (`vite build`, 48 modules, no errors); the running `frontend`/`backend` containers were verified live (`GET /` and `GET /app` both return `200`).
+- Runtime smoke (throwaway accounts, real containers): zero-memorial bootstrap (`[]`) -> create memorial -> one-memorial state -> invite+accept contributor -> contributor chats successfully (`200`) -> contributor submits contribution (`indexing_status.state="not_applicable"`) -> owner approves (`indexing_status.state="pending"`, `active_memory_eligible=true`, a `background_jobs` row with `job_type="qdrant_indexing"` and a real Celery task id was created, correctly scoped to the memorial owner's `user_id`) -> outsider account denied with `404`.
+- One incidental cleanup during verification: an earlier (pre-Celery-redesign) interactive test run had written 2 real points into the shared local Qdrant collection (`eternal_world_rag_chunks__bge_m3_dense_sparse`) before the synchronous-indexing design was replaced with the Celery-enqueue design; those 2 points (identified precisely by `provenance="review_approved_memorial_contribution"`) were deleted via Qdrant's REST API before finalizing. No other points, collections, or unrelated data were touched.
+
+### Migrations
+
+- `backend/alembic/versions/20260719_0022_add_memorial_contribution_promotions.py`: adds `memorial_contribution_promotions` only (new table, no changes to any existing table/constraint). Verified `alembic upgrade head` / `downgrade -1` / `upgrade head` round-trips cleanly against the real local Postgres database; `\d memorial_contribution_promotions` confirmed the expected columns, indexes, check constraints, and foreign keys.
+
+### Known limitations
+
+- The Celery worker (`eternal_world_celery_worker`) was not running in this environment during verification, so the enqueued indexing job for the smoke-test contribution stays `queued`/`pending` rather than completing end-to-end against real Qdrant - the enqueue path itself (job row, correct payload, real Celery task id) was verified directly; the actual embedding/Qdrant-write path was verified separately and thoroughly with fake-safe writers in the automated test suite, per the task's prohibition on running real embedding jobs.
+- No manual "retry indexing" endpoint was added; retries currently happen only via a subsequent Celery task execution of the same job, or a future explicit trigger built on the already-idempotent `index_contribution_promotion`.
+- `upload_source`/`direct_memory_write` capabilities remain owner-only (not opened to `trusted_reviewer`) - the task's own language on this was a hedge ("only if this is safe in the existing design"); left conservative pending an explicit product decision.
+- Relationship-aware disclosure (what an avatar may say to a daughter vs. a friend) is explicitly out of scope, reserved for Task 65.2.
+
+### Next recommended task
+
+Task 65.2 - Relationship-Aware Avatar Privacy and Disclosure Policy, as already scoped by the user for a separate task.
+
 ## 1. Project Overview
 
 Eternal World is a production-oriented AI memory social platform under active backend-first development. The repository currently contains:

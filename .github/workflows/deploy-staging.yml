@@ -145,7 +145,7 @@ jobs:
           file: ./frontend/Dockerfile.prod
           push: true
           build-args: |
-            NEXT_PUBLIC_API_URL=https://${{ env.APP_DOMAIN }}
+            VITE_API_URL=https://${{ env.APP_DOMAIN }}
           tags: |
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAMESPACE }}/eternal-world-frontend:latest
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAMESPACE }}/eternal-world-frontend:${{ needs.prepare.outputs.image_tag }}
@@ -217,7 +217,7 @@ jobs:
           printf '%s\n' "MEDIA_MAX_FILE_SIZE_BYTES=20971520" >> .deploy/.env.prod
           printf '%s\n' "CELERY_TASK_ALWAYS_EAGER=false" >> .deploy/.env.prod
           printf '%s\n' "CELERY_TASK_EAGER_PROPAGATES=false" >> .deploy/.env.prod
-          printf '%s\n' "NEXT_PUBLIC_API_URL=https://${{ env.APP_DOMAIN }}" >> .deploy/.env.prod
+          printf '%s\n' "VITE_API_URL=https://${{ env.APP_DOMAIN }}" >> .deploy/.env.prod
 
       - name: Copy deployment files to server
         shell: bash
@@ -284,7 +284,7 @@ jobs:
             done
 
             for attempt in \$(seq 1 30); do
-              if curl -fsSI http://127.0.0.1:${{ env.FRONTEND_HOST_PORT }}/cs >/dev/null; then
+              if curl -fsSI http://127.0.0.1:${{ env.FRONTEND_HOST_PORT }}/ >/dev/null; then
                 break
               fi
               if [ \"\$attempt\" -eq 30 ]; then
@@ -297,7 +297,7 @@ jobs:
             done
 
             for attempt in \$(seq 1 30); do
-              if curl -fsSI https://${{ env.APP_DOMAIN }}/cs >/dev/null; then
+              if curl -fsSI https://${{ env.APP_DOMAIN }}/ >/dev/null; then
                 break
               fi
               if [ \"\$attempt\" -eq 30 ]; then

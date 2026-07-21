@@ -41,7 +41,7 @@ services:
       REDIS_URL: redis://redis:6379/0
       APP_NAME: Eternal World API
       ENVIRONMENT: local
-      BACKEND_CORS_ORIGINS: http://localhost:8017
+      BACKEND_CORS_ORIGINS: http://localhost:8017,http://127.0.0.1:8017
       AI_BRAIN_PROVIDER: openai_compatible
       AI_BRAIN_MODEL: ${AI_BRAIN_MODEL}
       AI_BRAIN_BASE_URL: ${AI_BRAIN_BASE_URL}
@@ -92,7 +92,7 @@ services:
       REDIS_URL: redis://redis:6379/0
       APP_NAME: Eternal World API
       ENVIRONMENT: local
-      BACKEND_CORS_ORIGINS: http://localhost:8017
+      BACKEND_CORS_ORIGINS: http://localhost:8017,http://127.0.0.1:8017
       AI_BRAIN_PROVIDER: mock
       AI_BRAIN_TIMEOUT_SECONDS: 30
       CONTENT_TRANSLATION_PROVIDER: mock
@@ -121,14 +121,14 @@ services:
     container_name: eternal_world_frontend
     restart: unless-stopped
     environment:
-      NEXT_PUBLIC_API_URL: http://localhost:8033
+      VITE_API_URL: http://localhost:8033
     ports:
       - "8017:3000"
     depends_on:
       - backend
     volumes:
       - ./frontend:/app
-      - /app/node_modules
+      - /app/react-export/node_modules
 
   prometheus:
     image: prom/prometheus:v2.54.1

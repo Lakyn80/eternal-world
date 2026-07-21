@@ -43,16 +43,16 @@ export default function ConversationDemo({ lang, autoplay }: Props) {
   }, []);
 
   return (
-    <section id="demo" className="relative py-28 px-6 flex flex-col items-center">
+    <section id="demo" className="relative py-24 px-4 sm:px-6 flex flex-col items-center overflow-hidden">
       <div className="text-xs tracking-[.3em] uppercase text-cyan mb-3.5">{t.demoKicker}</div>
       <h2 className="font-serif font-normal text-[clamp(30px,3.6vw,48px)] text-center max-w-[22ch] mb-2.5">
         {t.demoTitle}
       </h2>
       <p className="text-fg/60 font-light max-w-[52ch] text-center leading-relaxed mb-11">{t.demoSub}</p>
 
-      <div className="flex w-full max-w-[940px] bg-white/[0.035] border border-white/[0.09] rounded-3xl overflow-hidden backdrop-blur-xl shadow-2xl">
+      <div className="flex w-full max-w-[940px] min-w-0 flex-col bg-white/[0.035] border border-white/[0.09] rounded-3xl overflow-hidden backdrop-blur-xl shadow-2xl md:flex-row">
         <div
-          className="flex-none w-[280px] flex flex-col items-center justify-center gap-5 p-9 border-r border-white/[0.07]"
+          className="w-full flex-none flex flex-col items-center justify-center gap-4 p-5 border-b border-white/[0.07] md:w-[280px] md:gap-5 md:border-b-0 md:border-r md:p-9"
           style={{ background: 'radial-gradient(circle at 50% 34%, rgba(70,90,200,.25), transparent 70%)' }}
         >
           <div className="relative w-[120px] h-[120px] animate-breathe">
@@ -91,12 +91,12 @@ export default function ConversationDemo({ lang, autoplay }: Props) {
           </div>
         </div>
 
-        <div className="flex-1 flex flex-col min-h-[460px]">
-          <div className="flex-1 flex flex-col gap-3 p-7 overflow-y-auto max-h-[420px]">
+        <div className="min-w-0 flex flex-1 flex-col md:min-h-[460px]">
+          <div className="flex-1 flex flex-col gap-3 p-4 overflow-y-auto max-h-[420px] sm:p-7">
             {messages.map((m, i) => (
               <div
                 key={i}
-                className={`max-w-[78%] px-4.5 py-3 text-[14.5px] leading-relaxed animate-fadein ${
+                className={`max-w-[88%] break-words px-4 py-3 text-[14.5px] leading-relaxed animate-fadein sm:max-w-[78%] ${
                   m.role === 'user'
                     ? 'self-end rounded-[16px_16px_4px_16px] border border-[rgba(143,214,245,.25)]'
                     : 'self-start rounded-[16px_16px_16px_4px] bg-white/[0.06] border border-white/[0.08] font-light'
@@ -111,33 +111,33 @@ export default function ConversationDemo({ lang, autoplay }: Props) {
               </div>
             ))}
             {typing && (
-              <div className="self-start px-4.5 py-3 rounded-[16px_16px_16px_4px] bg-white/[0.06] text-fg/50 text-sm animate-fadein">
+              <div className="self-start px-4 py-3 rounded-[16px_16px_16px_4px] bg-white/[0.06] text-fg/50 text-sm animate-fadein">
                 ···
               </div>
             )}
           </div>
-          <div className="flex gap-2 flex-wrap px-7 pb-3.5">
+          <div className="flex min-w-0 gap-2 flex-wrap px-4 pb-3.5 sm:px-7">
             {SUGGESTIONS[lang].map((q) => (
               <button
                 key={q}
                 onClick={() => ask(q)}
-                className="font-sans text-xs text-fg/75 bg-white/5 border border-white/[0.13] rounded-full px-3.5 py-1.5 hover:bg-cyan/10 hover:border-cyan/40 transition-colors"
+                className="max-w-full break-words font-sans text-xs text-fg/75 bg-white/5 border border-white/[0.13] rounded-full px-3.5 py-1.5 hover:bg-cyan/10 hover:border-cyan/40 transition-colors"
               >
                 {q}
               </button>
             ))}
           </div>
-          <div className="flex gap-2.5 px-7 py-5 border-t border-white/[0.07]">
+          <div className="flex min-w-0 flex-col gap-2.5 px-4 py-5 border-t border-white/[0.07] sm:flex-row sm:px-7">
             <input
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && ask(input)}
               placeholder={t.demoPlaceholder}
-              className="flex-1 font-sans text-sm text-fg bg-white/5 border border-white/[0.12] rounded-2xl px-4.5 py-3 outline-none focus:border-cyan/50"
+              className="min-w-0 flex-1 font-sans text-sm text-fg bg-white/5 border border-white/[0.12] rounded-2xl px-4 py-3 outline-none focus:border-cyan/50"
             />
             <button
               onClick={() => ask(input)}
-              className="font-sans text-sm font-medium text-ink rounded-2xl px-5.5 py-3"
+              className="w-full font-sans text-sm font-medium text-ink rounded-2xl px-5 py-3 sm:w-auto"
               style={{ background: 'linear-gradient(135deg,#8fd6f5,#8b7cf6)' }}
             >
               {t.demoSend}

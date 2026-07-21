@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 import hashlib
+import logging
 import secrets
 from datetime import datetime, timedelta, timezone
 
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from app.core.logging import get_logger, log_event
 from app.db.models import MemorialContribution, MemorialInvitation, MemorialMembership, MemoryProfile, User
 from app.modules.billing.service import enforce_memory_profile_creation_limit
 from app.modules.memorial_access import repository
@@ -17,7 +19,11 @@ from app.modules.memorial_access.schemas import (
     InvitationCreate,
     MemorialCreate,
 )
+from app.modules.memorial_contribution_indexing import service as contribution_indexing_service
 from app.modules.memory_profiles import repository as memory_profiles_repository
+
+
+logger = get_logger("memorial_access")
 
 
 REVIEW_ROLES = frozenset({"owner", "trusted_reviewer"})
@@ -110,6 +116,61 @@ def _get_profile_for_member(db: Session, *, profile_id: int, user: User) -> tupl
 
 def _active_memory_eligible(contribution: MemorialContribution) -> bool:
     return contribution.status == "approved" and contribution.is_current
+
+
+def _promote_and_enqueue_indexing_safely(
+    db: Session,
+    *,
+    contribution: MemorialContribution,
+    profile: MemoryProfile,
+) -> None:
+    """Bridge an approved+current contribution into the canonical memory /
+    embedding / indexing pipeline as a step separate from the approval
+    transaction that already committed. `promote_contribution` is a cheap,
+    DB-only, idempotent get-or-create; the heavy embedding/Qdrant step is
+    then handed off to the existing Celery worker (see
+    `enqueue_indexing_job`) rather than run inline here, so a request that
+    approves a contribution never blocks on a model load. Never raises:
+    approval success and indexing outcome are intentionally distinguishable,
+    so a failure to even *enqueue* indexing must not turn an already-
+    committed approval into an HTTP error, and must never leak internal
+    exception details to the caller.
+    """
+
+    try:
+        outcome = contribution_indexing_service.promote_contribution(db, contribution=contribution)
+        contribution_indexing_service.enqueue_indexing_job(
+            db,
+            profile=profile,
+            promotion=outcome.promotion,
+        )
+    except Exception as exc:  # noqa: BLE001 - deliberate safe-failure boundary, see docstring
+        log_event(
+            logger,
+            logging.ERROR,
+            "memorial_contribution_indexing_bridge_failed",
+            contribution_id=contribution.id,
+            profile_id=contribution.profile_id,
+            error_type=exc.__class__.__name__,
+        )
+
+
+def _retire_contribution_promotion_safely(db: Session, *, contribution: MemorialContribution) -> None:
+    """Best-effort de-indexing when a contribution stops being the current
+    approved memory (superseded). Never raises for the same reason as
+    `_promote_and_index_contribution_safely` above."""
+
+    try:
+        contribution_indexing_service.retire_contribution_promotion(db, contribution=contribution)
+    except Exception as exc:  # noqa: BLE001 - deliberate safe-failure boundary, see docstring
+        log_event(
+            logger,
+            logging.ERROR,
+            "memorial_contribution_retire_bridge_failed",
+            contribution_id=contribution.id,
+            profile_id=contribution.profile_id,
+            error_type=exc.__class__.__name__,
+        )
 
 
 def create_memorial(db: Session, *, current_user: User, payload: MemorialCreate) -> tuple[MemoryProfile, MemorialMembership]:
@@ -277,7 +338,19 @@ def approve_contribution(
     contribution.reviewed_by_user_id = current_user.id
     contribution.review_note = payload.review_note
     contribution.rejection_reason = None
+    superseded_contribution = superseded if payload.supersedes_contribution_id is not None else None
     db.commit()
+    db.refresh(contribution)
+
+    # Indexing is a separate step from the approval transaction above (no
+    # blocking model load inside the DB transaction that just committed the
+    # review decision) and must never turn a successful approval into an
+    # HTTP error - see _promote_and_enqueue_indexing_safely.
+    if superseded_contribution is not None:
+        _retire_contribution_promotion_safely(db, contribution=superseded_contribution)
+    profile = repository.get_profile(db, profile_id=profile_id)
+    if profile is not None:
+        _promote_and_enqueue_indexing_safely(db, contribution=contribution, profile=profile)
     db.refresh(contribution)
     return contribution
 

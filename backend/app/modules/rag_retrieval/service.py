@@ -5,7 +5,7 @@ from typing import Callable
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
-from app.db.models import User
+from app.db.models import MemoryProfile, User
 from app.modules.active_retrieval_config.service import resolve_runtime_active_retrieval_config
 from app.modules.embedding_models.exceptions import EmbeddingModelNotFoundError
 from app.modules.embedding_models.registry import BGE_M3_DENSE_SPARSE_RETRIEVAL_MODE
@@ -15,12 +15,14 @@ from app.modules.embedding_models.service import (
     is_embedding_model_runtime_available,
 )
 from app.modules.embeddings.providers import build_embedding_provider
-from app.modules.memory_profiles.service import MemoryProfileNotFoundError, get_memory_profile
+from app.modules.memorial_access.capabilities import MemorialCapability, resolve_authorized_profile
+from app.modules.memorial_access.service import MemorialForbiddenError, MemorialNotFoundError
 from app.modules.qdrant_indexing.client import build_qdrant_client
 from app.modules.qdrant_indexing.exceptions import QdrantClientError, QdrantCollectionConfigurationError
 from app.modules.rag_retrieval import repository
 from app.modules.rag_retrieval.exceptions import (
     RagRetrievalDisabledError,
+    RagRetrievalForbiddenError,
     RagRetrievalModelUnavailableError,
     RagRetrievalProfileNotFoundError,
 )
@@ -108,20 +110,33 @@ def _build_search_filter(
     return {"must": must_filters}
 
 
-def _get_owned_profile_or_raise(
+def _resolve_authorized_profile(
     db: Session,
     *,
     current_user: User,
     profile_id: int,
-):
+) -> MemoryProfile:
+    """Resolve `profile_id` for `current_user`, requiring search_approved_memory.
+
+    Every active member may search the memorial's approved/current evidence;
+    a non-member gets a safe 404, a member without the capability gets a
+    403. The returned profile's `user_id` (not `current_user.id`) is the
+    identity under which the memorial's evidence was actually indexed and
+    must be used for all downstream Qdrant/SQL scoping below.
+    """
+
     try:
-        return get_memory_profile(
+        profile, _membership = resolve_authorized_profile(
             db,
             current_user=current_user,
             profile_id=profile_id,
+            capability=MemorialCapability.SEARCH_APPROVED_MEMORY,
         )
-    except MemoryProfileNotFoundError as exc:
+    except MemorialNotFoundError as exc:
         raise RagRetrievalProfileNotFoundError("Memory profile not found") from exc
+    except MemorialForbiddenError as exc:
+        raise RagRetrievalForbiddenError("Insufficient memorial permissions") from exc
+    return profile
 
 
 def _coerce_sparse_vector_payload(payload_metadata: dict[str, object]) -> dict[str, float]:
@@ -173,7 +188,7 @@ def _search_dense_candidates(
 def _retrieve_hybrid_dense_sparse(
     db: Session,
     *,
-    current_user: User,
+    owner_user_id: int,
     profile_id: int,
     payload: RagRetrievalRequest,
     model,
@@ -195,7 +210,7 @@ def _retrieve_hybrid_dense_sparse(
         qdrant_collection=qdrant_collection,
         query_dense_vector=query_vectors.dense_vector,
         limit=candidate_limit,
-        owner_user_id=current_user.id,
+        owner_user_id=owner_user_id,
         profile_id=profile_id,
         language=payload.language,
         source_type=payload.source_type,
@@ -246,7 +261,7 @@ def _retrieve_hybrid_dense_sparse(
     embedding_ids = [result.embedding_id for result in fused_results]
     evidence_records = repository.list_retrieval_evidence_for_embeddings(
         db,
-        owner_user_id=current_user.id,
+        owner_user_id=owner_user_id,
         profile_id=profile_id,
         embedding_ids=embedding_ids,
     )
@@ -351,7 +366,7 @@ def retrieve_profile_rag_for_collection(
     query_encoder: Callable[[str, str], HybridQueryVectors] | None = None,
 ) -> RagRetrievalResponseRead:
     _ensure_retrieval_enabled()
-    _get_owned_profile_or_raise(
+    profile = _resolve_authorized_profile(
         db,
         current_user=current_user,
         profile_id=profile_id,
@@ -368,7 +383,7 @@ def retrieve_profile_rag_for_collection(
     ):
         return _retrieve_hybrid_dense_sparse(
             db,
-            current_user=current_user,
+            owner_user_id=profile.user_id,
             profile_id=profile_id,
             payload=payload,
             model=model,
@@ -388,7 +403,7 @@ def retrieve_profile_rag_for_collection(
         qdrant_collection=qdrant_collection,
         query_dense_vector=query_embedding.values,
         limit=payload.limit,
-        owner_user_id=current_user.id,
+        owner_user_id=profile.user_id,
         profile_id=profile_id,
         language=payload.language,
         source_type=payload.source_type,
@@ -435,7 +450,7 @@ def retrieve_profile_rag_for_collection(
 
     evidence_records = repository.list_retrieval_evidence_for_embeddings(
         db,
-        owner_user_id=current_user.id,
+        owner_user_id=profile.user_id,
         profile_id=profile_id,
         embedding_ids=embedding_ids,
     )

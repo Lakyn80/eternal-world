@@ -4,12 +4,12 @@ import { T, VOICES, PERSONALITIES, AVATAR_LANGS } from '../i18n';
 
 function ChipRow({ options, value, onPick }: { options: string[]; value: number; onPick: (i: number) => void }) {
   return (
-    <div className="flex gap-2 flex-wrap">
+    <div className="flex min-w-0 gap-2 flex-wrap">
       {options.map((name, i) => (
         <button
           key={name}
           onClick={() => onPick(i)}
-          className={`font-sans text-[13px] rounded-full px-4 py-2 border transition-colors ${
+          className={`max-w-full break-words font-sans text-[13px] rounded-full px-4 py-2 border transition-colors ${
             i === value ? 'bg-cyan/[0.14] border-cyan/50 text-[#bfe9fa]' : 'bg-white/[0.04] border-white/[0.13] text-fg/70'
           }`}
         >
@@ -31,16 +31,16 @@ export default function AvatarStudio({ lang }: { lang: Lang }) {
   const summary = `${VOICES[lang][voice]} · ${PERSONALITIES[lang][pers]} · ${AVATAR_LANGS[lang][alang]} · ${age}`;
 
   return (
-    <section id="studio" className="py-24 px-6 max-w-[1100px] mx-auto">
+    <section id="studio" className="w-full max-w-[1100px] mx-auto overflow-hidden px-4 py-24 sm:px-6">
       <div className="text-center mb-14">
         <div className="text-xs tracking-[.3em] uppercase text-cyan mb-3.5">{t.stKicker}</div>
         <h2 className="font-serif font-normal text-[clamp(30px,3.6vw,48px)] mb-2.5">{t.stTitle}</h2>
         <p className="mx-auto text-fg/60 font-light max-w-[50ch] leading-relaxed">{t.stSub}</p>
       </div>
 
-      <div className="flex gap-6.5 flex-wrap">
+      <div className="flex min-w-0 gap-5 flex-wrap sm:gap-6.5">
         <div
-          className="flex-1 min-w-[320px] flex flex-col items-center justify-center gap-6 p-11 bg-white/[0.03] border border-white/[0.09] rounded-3xl"
+          className="min-w-0 flex-1 basis-full flex flex-col items-center justify-center gap-6 p-5 bg-white/[0.03] border border-white/[0.09] rounded-3xl sm:basis-[280px] sm:p-9 lg:p-11"
           style={{ background: 'radial-gradient(circle at 50% 38%, rgba(70,90,200,.22), transparent 72%), rgba(255,255,255,.03)' }}
         >
           <div
@@ -63,11 +63,11 @@ export default function AvatarStudio({ lang }: { lang: Lang }) {
           </div>
           <div className="text-center">
             <div className="font-medium text-[16px]">Josef</div>
-            <div className="text-[13px] text-fg/55 mt-1.5">{summary}</div>
+            <div className="break-words text-[13px] text-fg/55 mt-1.5">{summary}</div>
           </div>
         </div>
 
-        <div className="flex-[1_1_420px] flex flex-col gap-6.5 p-9 bg-white/[0.035] border border-white/[0.09] rounded-3xl backdrop-blur-md">
+        <div className="min-w-0 flex-[1_1_320px] flex flex-col gap-6 p-5 bg-white/[0.035] border border-white/[0.09] rounded-3xl backdrop-blur-md sm:p-9">
           <div className="flex flex-col gap-2.5">
             <div className="text-xs tracking-[.2em] uppercase text-fg/50">{t.stVoice}</div>
             <ChipRow options={VOICES[lang]} value={voice} onPick={setVoice} />
@@ -81,7 +81,7 @@ export default function AvatarStudio({ lang }: { lang: Lang }) {
             <ChipRow options={AVATAR_LANGS[lang]} value={alang} onPick={setAlang} />
           </div>
           <div className="flex flex-col gap-2.5">
-            <div className="flex justify-between items-baseline">
+            <div className="flex min-w-0 justify-between items-baseline gap-3">
               <div className="text-xs tracking-[.2em] uppercase text-fg/50">{t.stAge}</div>
               <div className="text-[15px] font-semibold text-cyan">{age}</div>
             </div>

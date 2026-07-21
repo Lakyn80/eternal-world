@@ -6,6 +6,7 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from app.modules.auth.schemas import normalize_and_validate_email
+from app.modules.memorial_contribution_indexing.schemas import ContributionIndexingStatusRead
 from app.modules.memory_profiles.schemas import normalize_optional_text, normalize_required_text, validate_date_range
 
 
@@ -173,6 +174,7 @@ class ContributionRead(BaseModel):
     review_note: str | None
     rejection_reason: str | None
     active_memory_eligible: bool
+    indexing_status: ContributionIndexingStatusRead
     created_at: datetime
     updated_at: datetime
 

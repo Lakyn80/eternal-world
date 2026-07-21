@@ -11,6 +11,7 @@ from app.modules.auth.dependencies import get_current_user
 from app.modules.auth.schemas import ErrorResponse
 from app.modules.chat.schemas import ChatMessageCreate, ChatMessageRead, ChatSendResponse
 from app.modules.chat.service import (
+    ChatForbiddenError,
     ChatProfileNotFoundError,
     list_chat_messages,
     send_chat_message,
@@ -26,6 +27,7 @@ ProfileIdPath = Annotated[int, Path(gt=0)]
     response_model=ChatSendResponse,
     responses={
         status.HTTP_401_UNAUTHORIZED: {"model": ErrorResponse},
+        status.HTTP_403_FORBIDDEN: {"model": ErrorResponse},
         status.HTTP_404_NOT_FOUND: {"model": ErrorResponse},
     },
 )
@@ -47,6 +49,11 @@ def send_message(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=str(exc),
         ) from exc
+    except ChatForbiddenError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=str(exc),
+        ) from exc
 
 
 @router.get(
@@ -54,6 +61,7 @@ def send_message(
     response_model=list[ChatMessageRead],
     responses={
         status.HTTP_401_UNAUTHORIZED: {"model": ErrorResponse},
+        status.HTTP_403_FORBIDDEN: {"model": ErrorResponse},
         status.HTTP_404_NOT_FOUND: {"model": ErrorResponse},
     },
 )
@@ -71,5 +79,10 @@ def get_messages(
     except ChatProfileNotFoundError as exc:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(exc),
+        ) from exc
+    except ChatForbiddenError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
             detail=str(exc),
         ) from exc

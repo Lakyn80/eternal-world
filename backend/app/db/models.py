@@ -198,6 +198,10 @@ class MemoryProfile(TimestampMixin, Base):
         cascade="all, delete-orphan",
         foreign_keys="MemorialContribution.profile_id",
     )
+    memorial_contribution_promotions: Mapped[list[MemorialContributionPromotion]] = relationship(
+        back_populates="memory_profile",
+        cascade="all, delete-orphan",
+    )
     main_photo_media: Mapped[MediaAsset | None] = relationship(
         foreign_keys=[main_photo_media_id],
         post_update=True,
@@ -382,6 +386,95 @@ class MemorialContribution(TimestampMixin, Base):
         remote_side=[id],
         foreign_keys=[supersedes_contribution_id],
     )
+    promotion: Mapped[MemorialContributionPromotion | None] = relationship(
+        back_populates="contribution",
+        cascade="all, delete-orphan",
+        uselist=False,
+    )
+
+
+class MemorialContributionPromotion(TimestampMixin, Base):
+    """Bridges an approved+current `MemorialContribution` into the existing
+    canonical memory / embedding / indexing pipeline (`RagSource` ->
+    `RagChunk` -> `RagEmbedding` -> Qdrant), mirroring the established
+    `AvatarMemoryPromotion` pattern (Task 64.x) rather than introducing a
+    second embedding system. One row per contribution (`contribution_id` is
+    unique), created idempotently on approval and advanced by the indexing
+    step, which is itself idempotent via a deterministic Qdrant point id.
+
+    `promotion_status` values:
+      - pending_index: approved, not yet embedded/written to Qdrant.
+      - indexed: embedded and searchable as active evidence.
+      - failed: an indexing attempt raised; safe to retry.
+      - retired: the source contribution was later archived or superseded;
+        the Qdrant point has been removed so it can no longer be retrieved
+        as active evidence, while the SQL lineage row is kept for audit.
+    """
+
+    __tablename__ = "memorial_contribution_promotions"
+    __table_args__ = (
+        CheckConstraint(
+            "promotion_status IN ('pending_index', 'indexed', 'failed', 'retired')",
+            name="memorial_contribution_promotions_status",
+        ),
+        CheckConstraint(
+            "indexing_attempt_count >= 0",
+            name="memorial_contribution_promotions_indexing_attempt_count_non_negative",
+        ),
+        Index("ix_mcp_created_at", "created_at"),
+        Index("ix_mcp_profile_status", "profile_id", "promotion_status"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    contribution_id: Mapped[int] = mapped_column(
+        ForeignKey("memorial_contributions.id", ondelete="CASCADE"),
+        unique=True,
+        index=True,
+        nullable=False,
+    )
+    profile_id: Mapped[int] = mapped_column(
+        ForeignKey("memory_profiles.id", ondelete="CASCADE"),
+        index=True,
+        nullable=False,
+    )
+    promotion_status: Mapped[str] = mapped_column(
+        String(32),
+        index=True,
+        nullable=False,
+        default="pending_index",
+        server_default=text("'pending_index'"),
+    )
+    approved_memory_text: Mapped[str] = mapped_column(Text, nullable=False)
+    normalized_memory_text: Mapped[str] = mapped_column(Text, nullable=False)
+    language: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    indexed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    failed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    retired_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    failure_reason: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    target_collection_name: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    qdrant_point_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    indexing_attempt_count: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        default=0,
+        server_default=text("0"),
+    )
+    rag_source_id: Mapped[int | None] = mapped_column(
+        ForeignKey("rag_sources.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    rag_chunk_id: Mapped[int | None] = mapped_column(
+        ForeignKey("rag_chunks.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    rag_embedding_id: Mapped[int | None] = mapped_column(
+        ForeignKey("rag_embeddings.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    source_contribution_status_snapshot: Mapped[str] = mapped_column(String(32), nullable=False)
+
+    contribution: Mapped[MemorialContribution] = relationship(back_populates="promotion")
+    memory_profile: Mapped[MemoryProfile] = relationship(back_populates="memorial_contribution_promotions")
 
 
 class ChatMessage(TimestampMixin, Base):

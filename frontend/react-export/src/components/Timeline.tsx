@@ -18,7 +18,25 @@ export default function Timeline({ lang }: { lang: Lang }) {
         <h2 className="font-serif font-normal text-[clamp(30px,3.6vw,48px)]">{t.tlTitle}</h2>
       </div>
 
-      <div className="relative overflow-x-auto py-7 px-14">
+      <div className="grid gap-2 px-4 md:hidden">
+        {events.map((e, i) => {
+          const active = i === selected;
+          return (
+            <button
+              key={e.year}
+              onClick={() => setSelected(i)}
+              className={`flex min-w-0 items-center justify-between gap-3 rounded-2xl border px-4 py-3 text-left ${
+                active ? 'border-gold/45 bg-gold/10 text-gold' : 'border-white/10 bg-white/[.035] text-fg/70'
+              }`}
+            >
+              <span className="shrink-0 text-sm font-semibold">{e.year}</span>
+              <span className="min-w-0 flex-1 break-words text-sm">{e.title}</span>
+            </button>
+          );
+        })}
+      </div>
+
+      <div className="relative hidden overflow-x-auto py-7 px-14 md:block">
         <div className="relative flex items-start" style={{ minWidth: 'max-content' }}>
           <div
             className="absolute left-0 right-0 top-[9px] h-px"
@@ -50,15 +68,15 @@ export default function Timeline({ lang }: { lang: Lang }) {
         </div>
       </div>
 
-      <div className="flex gap-6.5 items-stretch w-[min(880px,calc(100%-48px))] mx-auto mt-6.5 p-7 bg-white/[0.035] border border-white/[0.09] rounded-[22px] backdrop-blur-lg animate-fadein">
-        <div className="flex-none w-[240px] h-[190px]">
+      <div className="flex w-[min(880px,calc(100%-32px))] flex-col gap-5 items-stretch mx-auto mt-6.5 p-5 bg-white/[0.035] border border-white/[0.09] rounded-[22px] backdrop-blur-lg animate-fadein sm:w-[min(880px,calc(100%-48px))] sm:p-7 md:flex-row md:gap-6.5">
+        <div className="h-[190px] w-full flex-none md:w-[240px]">
           <ImageSlot id={`tl-${sel.year}`} placeholder={t.tlDrop} className="w-full h-full" />
         </div>
-        <div className="flex-1 flex flex-col justify-center gap-2.5">
+        <div className="min-w-0 flex-1 flex flex-col justify-center gap-2.5">
           <div className="font-serif text-[42px] text-gold leading-none">{sel.year}</div>
-          <div className="text-[18px] font-medium">{sel.title}</div>
-          <div className="text-sm leading-relaxed font-light text-fg/65 text-pretty">{sel.desc}</div>
-          <div className="flex gap-2 mt-1.5">
+          <div className="break-words text-[18px] font-medium">{sel.title}</div>
+          <div className="break-words text-sm leading-relaxed font-light text-fg/65 text-pretty">{sel.desc}</div>
+          <div className="flex flex-wrap gap-2 mt-1.5">
             {sel.media.map((m) => (
               <span key={m} className="text-[11.5px] text-cyan border border-cyan/30 rounded-full px-2.5 py-1">
                 {m}

@@ -3,7 +3,7 @@ from __future__ import annotations
 from sqlalchemy.orm import Session
 
 from app.modules.ai_agents.brain.context import build_grounded_context, build_rag_evidence_items
-from app.db.models import ChatMessage, User
+from app.db.models import ChatMessage, MemoryProfile, User
 from app.modules.ai_agents import get_agent_orchestrator
 from app.modules.ai_agents.schemas import (
     ChatHistoryEntry,
@@ -13,7 +13,8 @@ from app.modules.ai_agents.schemas import (
 from app.modules.chat import repository
 from app.modules.chat.schemas import ChatMessageCreate, ChatMessageRead, ChatSendResponse
 from app.modules.memories import repository as memories_repository
-from app.modules.memory_profiles import repository as memory_profiles_repository
+from app.modules.memorial_access.capabilities import MemorialCapability, resolve_authorized_profile
+from app.modules.memorial_access.service import MemorialForbiddenError, MemorialNotFoundError
 from app.modules.qdrant_indexing.exceptions import QdrantClientError, QdrantCollectionConfigurationError
 from app.modules.rag_retrieval.exceptions import (
     RagRetrievalDisabledError,
@@ -31,20 +32,35 @@ class ChatProfileNotFoundError(Exception):
     pass
 
 
-def _get_owned_profile_or_raise(
+class ChatForbiddenError(Exception):
+    pass
+
+
+def _get_authorized_profile_or_raise(
     db: Session,
     *,
-    user_id: int,
+    current_user: User,
     profile_id: int,
-):
-    profile = memory_profiles_repository.get_memory_profile_for_user(
-        db,
-        user_id=user_id,
-        profile_id=profile_id,
-    )
-    if profile is None:
-        raise ChatProfileNotFoundError("Memory profile not found")
+) -> MemoryProfile:
+    """Resolve `profile_id` for `current_user`, requiring chat_with_avatar.
 
+    Every active member (owner/trusted_reviewer/contributor/viewer) may chat
+    with the avatar; a non-member gets a safe 404, a member without the
+    capability gets a 403. Membership is re-read from the database on every
+    call - the caller's asserted role is never trusted.
+    """
+
+    try:
+        profile, _membership = resolve_authorized_profile(
+            db,
+            current_user=current_user,
+            profile_id=profile_id,
+            capability=MemorialCapability.CHAT_WITH_AVATAR,
+        )
+    except MemorialNotFoundError as exc:
+        raise ChatProfileNotFoundError("Memory profile not found") from exc
+    except MemorialForbiddenError as exc:
+        raise ChatForbiddenError("Insufficient memorial permissions") from exc
     return profile
 
 
@@ -115,11 +131,17 @@ def send_chat_message(
     profile_id: int,
     payload: ChatMessageCreate,
 ) -> ChatSendResponse:
-    profile = _get_owned_profile_or_raise(
+    profile = _get_authorized_profile_or_raise(
         db,
-        user_id=current_user.id,
+        current_user=current_user,
         profile_id=profile_id,
     )
+    # Each member's conversation with the avatar is their own, so chat
+    # history stays scoped by (current_user.id, profile_id). Canonical
+    # memories, however, belong to the memorial itself (profile.user_id),
+    # not to whichever member is currently chatting - a contributor/viewer
+    # must see the same grounded memory context an owner would, not an
+    # empty one because the rows were authored by a different account.
     recent_history = repository.list_recent_chat_messages_for_profile(
         db,
         user_id=current_user.id,
@@ -128,7 +150,7 @@ def send_chat_message(
     )
     profile_memories = memories_repository.list_memories_for_profile(
         db,
-        user_id=current_user.id,
+        user_id=profile.user_id,
         profile_id=profile_id,
     )
     retrieved_evidence_items = _retrieve_rag_evidence_safely(
@@ -198,9 +220,9 @@ def list_chat_messages(
     current_user: User,
     profile_id: int,
 ) -> list[ChatMessageRead]:
-    _get_owned_profile_or_raise(
+    _get_authorized_profile_or_raise(
         db,
-        user_id=current_user.id,
+        current_user=current_user,
         profile_id=profile_id,
     )
     messages = repository.list_chat_messages_for_profile(

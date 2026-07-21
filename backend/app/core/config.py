@@ -21,7 +21,7 @@ class Settings(BaseSettings):
     environment: str = "local"
     database_url: str = "postgresql+psycopg://eternal_user:eternal_password@db:5432/eternal_world"
     redis_url: str = "redis://redis:6379/0"
-    backend_cors_origins: str = "http://localhost:8017"
+    backend_cors_origins: str = "http://localhost:8017,http://127.0.0.1:8017"
     sqlalchemy_echo: bool = False
     jwt_secret_key: SecretStr = SecretStr("unsafe-dev-jwt-secret-change-me")
     jwt_algorithm: str = "HS256"

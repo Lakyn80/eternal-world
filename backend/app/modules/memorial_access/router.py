@@ -5,11 +5,21 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, Path, status
 from sqlalchemy.orm import Session
 
-from app.db.models import MemorialContribution, MemorialInvitation, MemorialMembership, MemoryProfile, User
+from app.db.models import (
+    MemorialContribution,
+    MemorialContributionPromotion,
+    MemorialInvitation,
+    MemorialMembership,
+    MemoryProfile,
+    User,
+)
 from app.db.session import get_db
 from app.modules.auth.dependencies import get_current_user
 from app.modules.auth.schemas import ErrorResponse
 from app.modules.billing.schemas import BillingLimitExceededResponse
+from app.modules.memorial_contribution_indexing import repository as contribution_indexing_repository
+from app.modules.memorial_contribution_indexing.schemas import ContributionIndexingStatusRead
+from app.modules.memorial_contribution_indexing.service import get_indexing_status_for_contribution
 from app.modules.memorial_access.schemas import (
     ContributionCreate,
     ContributionRead,
@@ -106,7 +116,24 @@ def _build_invitation_response(invitation: MemorialInvitation, token: str) -> In
     )
 
 
-def _build_contribution_read(contribution: MemorialContribution) -> ContributionRead:
+def _build_indexing_status_read(
+    contribution: MemorialContribution,
+    promotion: MemorialContributionPromotion | None,
+) -> ContributionIndexingStatusRead:
+    state, resolved_promotion = get_indexing_status_for_contribution(contribution, promotion)
+    return ContributionIndexingStatusRead(
+        state=state,
+        indexed_at=resolved_promotion.indexed_at if resolved_promotion else None,
+        attempt_count=resolved_promotion.indexing_attempt_count if resolved_promotion else 0,
+        failure_reason=resolved_promotion.failure_reason if resolved_promotion else None,
+    )
+
+
+def _build_contribution_read(
+    contribution: MemorialContribution,
+    *,
+    promotion: MemorialContributionPromotion | None = None,
+) -> ContributionRead:
     return ContributionRead(
         id=contribution.id,
         profile_id=contribution.profile_id,
@@ -124,9 +151,27 @@ def _build_contribution_read(contribution: MemorialContribution) -> Contribution
         review_note=contribution.review_note,
         rejection_reason=contribution.rejection_reason,
         active_memory_eligible=contribution_is_active_memory(contribution),
+        indexing_status=_build_indexing_status_read(contribution, promotion),
         created_at=contribution.created_at,
         updated_at=contribution.updated_at,
     )
+
+
+def _build_contribution_reads(
+    db: Session,
+    contributions: list[MemorialContribution],
+) -> list[ContributionRead]:
+    promotions_by_contribution_id = contribution_indexing_repository.list_promotions_for_contributions(
+        db,
+        contribution_ids=[contribution.id for contribution in contributions],
+    )
+    return [
+        _build_contribution_read(
+            contribution,
+            promotion=promotions_by_contribution_id.get(contribution.id),
+        )
+        for contribution in contributions
+    ]
 
 
 def _raise_access_error(exc: Exception) -> None:
@@ -289,7 +334,7 @@ def submit_contribution_endpoint(
         )
     except (MemorialNotFoundError, MemorialForbiddenError, MemorialConflictError) as exc:
         _raise_access_error(exc)
-    return _build_contribution_read(contribution)
+    return _build_contribution_read(contribution)  # freshly submitted: never has a promotion yet
 
 
 @router.get(
@@ -309,7 +354,7 @@ def list_contributions_endpoint(
         contributions = list_contributions(db, current_user=current_user, profile_id=profile_id)
     except (MemorialNotFoundError, MemorialForbiddenError, MemorialConflictError) as exc:
         _raise_access_error(exc)
-    return [_build_contribution_read(contribution) for contribution in contributions]
+    return _build_contribution_reads(db, contributions)
 
 
 @router.get(
@@ -330,7 +375,7 @@ def list_review_queue_endpoint(
         contributions = list_review_queue(db, current_user=current_user, profile_id=profile_id)
     except (MemorialNotFoundError, MemorialForbiddenError, MemorialConflictError) as exc:
         _raise_access_error(exc)
-    return [_build_contribution_read(contribution) for contribution in contributions]
+    return _build_contribution_reads(db, contributions)
 
 
 @router.post(
@@ -364,7 +409,11 @@ def approve_contribution_endpoint(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     except ContributionInvalidTransitionError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
-    return _build_contribution_read(contribution)
+    promotion = contribution_indexing_repository.get_promotion_by_contribution_id(
+        db,
+        contribution_id=contribution.id,
+    )
+    return _build_contribution_read(contribution, promotion=promotion)
 
 
 @router.post(
@@ -432,5 +481,12 @@ def archive_contribution_endpoint(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     except ContributionInvalidTransitionError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
-    return _build_contribution_read(contribution)
+    # A superseded contribution (already retired, see approve_contribution)
+    # can still be archived afterwards - reflect its real promotion state
+    # rather than silently reporting "not_applicable".
+    promotion = contribution_indexing_repository.get_promotion_by_contribution_id(
+        db,
+        contribution_id=contribution.id,
+    )
+    return _build_contribution_read(contribution, promotion=promotion)
 

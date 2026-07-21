@@ -12,6 +12,7 @@ from app.modules.auth.schemas import ErrorResponse
 from app.modules.qdrant_indexing.exceptions import QdrantClientError, QdrantCollectionConfigurationError
 from app.modules.rag_retrieval.exceptions import (
     RagRetrievalDisabledError,
+    RagRetrievalForbiddenError,
     RagRetrievalModelUnavailableError,
     RagRetrievalProfileNotFoundError,
 )
@@ -28,6 +29,7 @@ ProfileIdPath = Annotated[int, Path(gt=0)]
     response_model=RagRetrievalResponseRead,
     responses={
         status.HTTP_401_UNAUTHORIZED: {"model": ErrorResponse},
+        status.HTTP_403_FORBIDDEN: {"model": ErrorResponse},
         status.HTTP_404_NOT_FOUND: {"model": ErrorResponse},
         status.HTTP_503_SERVICE_UNAVAILABLE: {"model": ErrorResponse},
     },
@@ -47,6 +49,8 @@ def retrieve_profile_rag_endpoint(
         )
     except RagRetrievalProfileNotFoundError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except RagRetrievalForbiddenError as exc:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
     except RagRetrievalModelUnavailableError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     except (RagRetrievalDisabledError, QdrantClientError, QdrantCollectionConfigurationError) as exc:
