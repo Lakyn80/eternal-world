@@ -96,6 +96,11 @@ services:
       AI_BRAIN_PROVIDER: mock
       AI_BRAIN_TIMEOUT_SECONDS: 30
       CONTENT_TRANSLATION_PROVIDER: mock
+      EMBEDDING_PROVIDER: sentence_transformers
+      SENTENCE_TRANSFORMERS_DEVICE: cpu
+      SENTENCE_TRANSFORMERS_CACHE_DIR: /models/huggingface
+      CUDA_VISIBLE_DEVICES: ""
+      NVIDIA_VISIBLE_DEVICES: void
       MEDIA_STORAGE_PROVIDER: local
       MEDIA_ROOT: /app/media
       MEDIA_PUBLIC_BASE_URL: /media
@@ -113,6 +118,7 @@ services:
       - redis
     volumes:
       - ./backend:/app
+      - eternal_world_bge_m3_cache:/models/huggingface
 
   frontend:
     build:

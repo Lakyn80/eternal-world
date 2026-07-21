@@ -143,6 +143,35 @@ def strip_internal_evidence_citations(answer_text: str) -> str:
     return sanitized.strip()
 
 
+def count_internal_evidence_citations(answer_text: str) -> int:
+    return len(INTERNAL_EVIDENCE_CITATION_PATTERN.findall(answer_text))
+
+
+@dataclass(frozen=True)
+class UserVisibleAnswerSanitizeResult:
+    answer_text: str
+    guard_applied: bool
+    removed_internal_citation_count: int
+
+
+def sanitize_user_visible_answer(answer_text: str) -> UserVisibleAnswerSanitizeResult:
+    """Removes internal evidence-citation markers (`[rag:...]`, `[memory:...]`)
+    from any answer text that will be shown to a real end user - regardless
+    of route (authenticated chat, demo chat), locale, or whether a persona
+    object happens to be attached to the request. Evidence lineage itself is
+    never destroyed by this function; callers keep the original citations in
+    server-side metadata/logs/trace records and only ever discard them from
+    the text a human actually reads."""
+
+    removed_count = count_internal_evidence_citations(answer_text)
+    sanitized = strip_internal_evidence_citations(answer_text) if removed_count else answer_text
+    return UserVisibleAnswerSanitizeResult(
+        answer_text=sanitized,
+        guard_applied=removed_count > 0,
+        removed_internal_citation_count=removed_count,
+    )
+
+
 def _sentence_contains_inline_detail(sentence: str) -> bool:
     normalized_sentence = f" {_normalize_text(_strip_citations(sentence))} "
     if not normalized_sentence.strip():

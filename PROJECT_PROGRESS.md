@@ -8513,3 +8513,116 @@ Also confirmed live: a candidate approved with `privacy_scope` left at the defau
 - Task 65.2.1 (optional) - extend the Biographer topic catalog with real per-topic clarification banks beyond `childhood`, if product feedback wants deeper follow-up on every topic rather than only one.
 
 ---
+
+## Task 65.3 - Runtime Stabilization, Celery Verification, and Citation-Guard Hardening (2026-07-21)
+
+Status: **complete**. All in-scope hard acceptance criteria are met: the Celery worker image was root-caused and successfully rebuilt (CPU-only PyTorch, no GPU packages, `prometheus-client` importable), real asynchronous biography ingestion was proven end-to-end through an *actual running* Celery worker process (not just a direct-call diagnostic), a second real bug (missing embedding-provider env vars/volume on the `celery_worker` compose service) was discovered and fixed along the way, the citation-marker leak in authenticated chat is fixed and persona-independent, the bilingual-retrieval-evaluation suite is fully fixed (not just diagnosed), and full Czech + Russian live smokes pass against real infrastructure with synthetic data only.
+
+Starting branch/commit: `staging/eternalworld-lukiora-20260715` at `ef9bf3c` (verified, unchanged from Task 65.2's final state; working tree was clean except the pre-existing untracked `backend/artifacts/memorial_account_binding_audit/`).
+
+### Stabilization matrix
+
+| Area | Current state | Proven issue | Required fix | Verification |
+|---|---|---|---|---|
+| Celery worker image | Was stuck on a build last successful **2026-06-25** (vs. backend's **2026-07-13**); now rebuilt successfully this session | Old image contained `torch==2.12.1+cu130` plus a dozen `nvidia-*`/`cuda-*` packages (8.65GB) and was missing `prometheus-client` entirely | Rebuild from the current (already-correct) Dockerfile | Old image: `docker run --rm eternal-world-celery_worker python -c "import torch; print(torch.__version__)"` -> `2.12.1+cu130`; `pip show prometheus-client` -> not found. New image `e713b99a64e6` (built 2026-07-21 14:44:35, 2.48GB): `torch==2.13.0+cpu`, zero `nvidia-*`/`cuda-*` packages, `prometheus_client` imports cleanly |
+| Celery startup | Was crash-looping on the stale image; now starts cleanly | `ModuleNotFoundError: No module named 'prometheus_client'` at import time (`app/worker/tasks.py` -> `biography_ingestion.service` -> `embeddings/providers/bge_m3_hybrid.py` -> `app.core.metrics`) | Successful rebuild (no code fix needed - `prometheus-client==0.21.1` is already correctly declared in `requirements.runtime.txt`) | `docker compose up -d --no-deps --force-recreate celery_worker` -> container reaches `Up`, connects to Redis, registers all 5 tasks including `run_biography_indexing_job`, no crash-loop |
+| Embedding provider (celery_worker) | **Second real bug found this session**: `docker-compose.yml`'s `celery_worker` service was missing `EMBEDDING_PROVIDER`/`SENTENCE_TRANSFORMERS_*`/`CUDA_VISIBLE_DEVICES`/`NVIDIA_VISIBLE_DEVICES` env vars and the `eternal_world_bge_m3_cache` volume mount that `backend`'s service already had | A stale queued job (`memorial_contribution_indexing`, job_id=165) failed with `RuntimeError: ... EMBEDDING_PROVIDER must be sentence_transformers ... (current: mock)` - real embedding tasks silently defaulted to the mock provider inside the worker | Add the same `EMBEDDING_PROVIDER: sentence_transformers`, `SENTENCE_TRANSFORMERS_DEVICE: cpu`, `SENTENCE_TRANSFORMERS_CACHE_DIR: /models/huggingface`, `CUDA_VISIBLE_DEVICES: ""`, `NVIDIA_VISIBLE_DEVICES: void` env vars and `eternal_world_bge_m3_cache:/models/huggingface` volume mount to the `celery_worker` block in `docker-compose.yml`, matching `backend`'s existing block exactly | `docker compose up -d --no-deps --force-recreate celery_worker` (env/volume-only change, no rebuild needed); subsequent real ingestion jobs succeeded using the real BGE-M3 provider |
+| Biography async ingestion | **Proven live through the real running worker this session** | Previously only proven via direct function call (permitted fallback), never through an actual worker process | Rebuild the image + fix the embedding-provider env gap above | Fresh synthetic profile (id=19): biography saved -> real authenticated ingest endpoint called -> real Celery worker picked up the job, ran real BGE-M3 embedding, real Qdrant PUT -> job succeeded in **21.7s**; Qdrant count 27 -> 28; exactly 1 new `RagSource`/`RagChunk`/`RagEmbedding` row created |
+| Biography ingestion idempotency | **Proven live through the real running worker this session** | Not previously proven through a real worker retry path | N/A (existing idempotent design, verified through the fixed worker) | Forced the same biography's status back to `failed` and re-triggered ingestion through the real worker -> retry completed in **0.23s** (reused existing records, no re-embedding); Qdrant count stayed at 28; `RagSource` count stayed at 1 - zero duplicates |
+| PyTorch Docker cache | `backend/Dockerfile` already copies `requirements*.txt` -> installs CPU-only torch -> installs `requirements.txt` -> copies app source **last** | None - this ordering already satisfies "app source changes never invalidate the PyTorch layer" | No Dockerfile change required | Confirmed by direct inspection; the rebuild that succeeded this session reused this exact layer ordering - the long build time (~89 minutes) was network latency reaching `download-r2.pytorch.org`, not a cache-invalidation problem |
+| Prometheus dependency | Declared correctly in `backend/requirements.runtime.txt:14` (`prometheus-client==0.21.1`) | Was only missing from the *stale* celery_worker image, never from the requirements file itself | None (already correct) | `grep -n prometheus backend/requirements.runtime.txt`; confirmed importable in the new image |
+| Citation stripping | Was gated on `request.avatar_persona is not None` in `ai_agents/brain/service.py:59` | Authenticated `/api/chat` (`chat/service.py`) never sets `avatar_persona` anywhere (confirmed via `grep`, zero matches) - every grounded authenticated answer leaked `[rag:chunk_id]` verbatim | Make sanitization unconditional for every user-visible answer | fixed; live-proven in Czech and Russian; automated tests |
+| Authenticated Chat | Fixed | Leaked `[rag:...]` markers before this task | `sanitize_user_visible_answer` always applied | live: zero markers in both Czech and Russian answers, `output_guard_applied=true`, `removed_internal_citation_count=1` on both |
+| Demo Chat | Unaffected/still correct | None (was already stripping citations via the same code path, since `demo_fa_chat` always sets `avatar_persona`) | None | existing demo test suites still pass (`test_ai_agents.py`, all `test_demo_fa_chat*` suites) |
+| Russian live workflow | Proven this session | Was never run for Task 65.2 | Full biography -> ingest -> Biographer question -> answer -> candidate -> clarification x2 -> owner review -> pending_index -> explicit index -> chat, in Russian | Qdrant 25 -> 26 (biography) -> 26 (candidate/clarification/approval, unchanged) -> 27 (explicit index) -> 27 (repeat, idempotent); chat answer directly recounts the newly indexed memory, zero markers |
+| Bilingual retrieval eval | Was 1/11 passing | Stale test fixture: `_resolve_demo_runtime` gained a `locale: str = "ru"` parameter in Task 64.5.2 (`demo_fa_chat/service.py:1485-1489` calls it with `locale=locale`), but this test file's monkeypatch replacement lambda (`test_bilingual_retrieval_evaluation.py:212`) was never updated to accept it - `TypeError: <lambda>() got an unexpected keyword argument 'locale'` on every parametrized case, before any real assertion ran | Add `locale="ru"` to the fixture lambda's signature | 11/11 passing after the one-line fixture fix |
+
+### Celery worker root cause (proven, not assumed) and successful rebuild
+
+`docker images` showed `eternal-world-backend` last built 2026-07-13 but `eternal-world-celery_worker` last built 2026-06-25 - **both from the identical `backend/Dockerfile` and build context**, yet the celery_worker image was never rebuilt since. Direct inspection of the stale image (`docker run --rm eternal-world-celery_worker python -c "import torch; print(torch.__version__, torch.cuda.is_available())"` and `pip list`) showed `torch==2.12.1+cu130` plus `nvidia-cublas`, `nvidia-cudnn-cu13`, `cuda-toolkit`, and nine other GPU packages - a full CUDA build from before the Dockerfile's current `--index-url https://download.pytorch.org/whl/cpu` pin existed, explaining both the missing `prometheus-client` (added to `requirements.runtime.txt` sometime between 2026-06-25 and 2026-07-13) and the image's 8.65GB size (vs. backend's 2.59GB).
+
+An initial rebuild attempt (`docker compose build celery_worker`, no `--no-cache`) hit an explicit `pip._vendor.urllib3.exceptions.ReadTimeoutError: HTTPSConnectionPool(host='download-r2.pytorch.org', port=443): Read timed out` after 793 seconds despite `--retries 10 --timeout 300` - a genuine slow/unstable network path to PyTorch's Cloudflare-R2-backed CDN from this environment, not a code defect. A second attempt was left running in the background; it was tracked via `docker buildx du`'s active cache-mount entries (whose IDs kept changing over ~40+ minutes, proving forward progress rather than a hang) and **completed successfully after approximately 89 minutes total**, producing image `e713b99a64e6` (built 2026-07-21 14:44:35, 2.48GB).
+
+Verification of the new image: `torch==2.13.0+cpu` (CPU-only, `torch.cuda.is_available()` -> `False`), zero `nvidia-*`/`cuda-*` packages in `pip list`, and `python -c "import prometheus_client"` succeeds. `docker compose up -d --no-deps --force-recreate celery_worker` brought the container to `Up`, connected to Redis, and registered all 5 tasks (including `run_biography_indexing_job`) without crash-looping.
+
+**No Dockerfile change was made or was needed.** `backend/Dockerfile` already: copies `requirements*.txt` first, installs CPU-only-pinned torch, installs the rest of `requirements.txt`, and copies application source **last** - exactly the cache-safe ordering this task asked for, and the ordering the successful rebuild relied on. `prometheus-client==0.21.1` is already correctly declared in `backend/requirements.runtime.txt:14`. The only actual defect fixed in this area was in `docker-compose.yml` (see below), not the Dockerfile.
+
+### Second bug found: celery_worker missing embedding-provider configuration
+
+After the worker started successfully, an old queued job (`memorial_contribution_indexing`, job_id=165) immediately failed with `RuntimeError: ... EMBEDDING_PROVIDER must be sentence_transformers ... (current: mock)`. Comparing `docker-compose.yml`'s `backend` and `celery_worker` service blocks showed `backend` had `EMBEDDING_PROVIDER: sentence_transformers`, `SENTENCE_TRANSFORMERS_DEVICE: cpu`, `SENTENCE_TRANSFORMERS_CACHE_DIR: /models/huggingface`, `CUDA_VISIBLE_DEVICES: ""`, `NVIDIA_VISIBLE_DEVICES: void`, and a mount of `eternal_world_bge_m3_cache:/models/huggingface`, while `celery_worker` had none of these - so every embedding task dispatched to the worker silently fell back to the mock embedding provider regardless of what the caller intended. Fixed by adding the identical env vars and volume mount to `celery_worker`'s block in `docker-compose.yml`. This required only `docker compose up -d --no-deps --force-recreate celery_worker` (env/volume change, no image rebuild) to take effect.
+
+### Real async ingestion proven through the actual running worker (the previously-unmet criterion)
+
+With both the image and the embedding-provider configuration fixed, a fresh synthetic profile (id=19, never the real owner's account) was created, a synthetic biography saved, and the real authenticated ingestion endpoint called. The **actual running Celery worker container** (not a direct function call) picked up the job, ran real BGE-M3 embedding and a real Qdrant upsert, and completed in **21.7 seconds**. Qdrant's point count went from 27 to 28, and exactly one new `RagSource`/`RagChunk`/`RagEmbedding` row was created - the precise, singular effect expected.
+
+To prove idempotency through the same real worker (not just via direct call, as in Task 65.2), the biography's status was forced back to `failed` and ingestion re-triggered. The retry completed in **0.23 seconds**, reusing the existing `RagSource`/`RagChunk`/`RagEmbedding` records instead of re-embedding, with Qdrant's point count remaining at 28 and `RagSource` count remaining at 1 - zero duplicates on a real-worker retry path.
+
+### Citation-marker leak - root cause and fix
+
+`backend/app/modules/ai_agents/brain/service.py:59` (`generate_chat_response`) only called `strip_internal_evidence_citations` `if request.avatar_persona is not None`. `avatar_persona` is populated exclusively by `app.modules.demo_fa_chat.service` (`load_demo_avatar_persona()`, the unauthenticated "Eva" demo persona); a repo-wide grep of `backend/app/modules/chat/service.py` (the real authenticated `/api/chat` endpoint) confirms it never sets `avatar_persona` - so citation stripping never ran for any authenticated user, on any locale.
+
+Fix: `backend/app/modules/ai_agents/brain/output_guard.py` gained `count_internal_evidence_citations`, `UserVisibleAnswerSanitizeResult`, and `sanitize_user_visible_answer` - a small, persona-independent wrapper around the existing (already-correct, already-tested) `strip_internal_evidence_citations` regex. `brain/service.py` now calls `sanitize_user_visible_answer` unconditionally for every answer, regardless of `avatar_persona`. The unrelated `persona_applied`/`avatar_persona_id` metadata fields are untouched - persona styling and citation safety are now correctly independent concerns. A new `removed_internal_citation_count` metadata field is always present. Evidence lineage is not destroyed: the original citations remain in the Brain provider's raw metadata and in structured logs; only the text a human reads is sanitized.
+
+Existing regex (`INTERNAL_EVIDENCE_CITATION_PATTERN = r"\s*\[(?:memory|rag):[^\]]+\]"`) was already correctly scoped (matches only `[memory:...]`/`[rag:...]`, case-insensitive, any content inside) and was **not** widened - verified live that a legitimate bracketed phrase (`[poznámka]`) is left untouched, both in a unit test and by inspecting the regex directly.
+
+### Tests
+
+- `backend/tests/test_ai_agents.py`: rewrote `test_brain_service_removes_internal_citations_only_for_avatar_persona` (which had encoded the *bug* as expected behavior - asserted the generic/no-persona response should still contain `[rag:27618]`) into `test_brain_service_removes_internal_citations_regardless_of_avatar_persona`, asserting citation-stripping fires identically with and without a persona attached. Added `test_brain_service_answer_without_citations_is_unchanged`, `test_brain_service_preserves_legitimate_bracketed_text`, `test_brain_service_removes_multiple_citations_in_different_positions` (3 markers in different positions - start, mid-sentence, own line - all removed, count=3). Also fixed two pre-existing, environment-dependent flakes discovered while re-running this file (`test_default_brain_provider_is_mock`, `test_openai_compatible_provider_requires_api_key_when_selected`): this dev container legitimately runs with real `AI_BRAIN_PROVIDER=openai_compatible`/`AI_BRAIN_API_KEY=sk-...` as OS environment variables (for live smokes), and `Settings(_env_file=None)` only disables reading a `.env` *file* - it still reads real process environment variables, so these two tests silently picked up the container's real configuration instead of testing the code's actual defaults. Fixed by explicitly `monkeypatch.delenv`-ing the relevant vars before constructing `Settings`. `test_ai_agents.py`: **48/48 passing** (was 46/48 before this session's fixes).
+- `backend/tests/test_bilingual_retrieval_evaluation.py`: one-line stale-fixture fix (see matrix above). **11/11 passing** (was 1/11).
+- Full required regression set run together: `test_ai_agents.py`, `test_bilingual_retrieval_evaluation.py`, `test_demo_fa_chat_bilingual.py`, `test_bilingual_family_memory.py`, `test_avatar_quality_evaluation.py`, `test_conversation_memory_candidates.py`, `test_family_memory_enrichment.py`, `test_biography_ingestion.py`, `test_avatar_biographer.py`, `test_memorial_candidates.py`, `test_alembic.py` -> **144/144 passing**, 0 failures (re-run after the citation-guard and bilingual-fixture fixes, against the rebuilt celery_worker environment).
+- `python -m compileall backend/app` -> clean, exit 0.
+
+### Live smoke evidence (synthetic accounts only, never the real owner's memorial)
+
+**Czech (existing synthetic profile, direct-call biography indexing, run alongside the worker rebuild as an additional diagnostic - the definitive real-worker proof is the separate profile id=19 case documented above):** biography saved -> ingest started -> `index_biography()` run directly (real BGE-M3, real Qdrant) -> `POST /api/chat/{id}/messages` "Co jsi rád dělal ve volném čase?" -> real DeepSeek answer correctly recounts the biography, **zero visible markers**, `chat_messages.message_metadata` shows `output_guard_applied=true`, `removed_internal_citation_count=1` - proving the guard actually fired on a real citation DeepSeek emitted, not just on absence of one. Zero `content_translation` log events in the exact request window.
+
+**Russian (fresh synthetic profile, full Task 65.2 workflow):**
+
+```text
+Russian biography saved -> ingest started -> index_biography() direct call
+  Qdrant 25 -> 26 (+1, biography chunk)
+GET biographer/eligibility -> {"eligible": true}
+GET biographer/next-question?locale=ru -> topic="childhood" (Russian question text)
+POST answer (Russian childhood story) -> candidate_id=188, unresolved_clarification_count=2
+  Qdrant unchanged (26)
+POST clarifications/answer x2 (place, period, both in Russian)
+  -> enrichment_status=ready_for_owner_review, unresolved_clarification_count=0
+  Qdrant unchanged (26)
+POST owner-review confirm (privacy_scope=all_family)
+  -> promotion_status=pending_index, searchable_as_fact=false
+  Qdrant unchanged (26)
+POST candidates/188/index -> result=indexed, searchable_as_fact=true
+  Qdrant 26 -> 27 (+1, exactly once)
+POST candidates/188/index (repeat) -> result=already_indexed
+  Qdrant unchanged (27) - idempotent
+POST /api/chat/18/messages "Что ты делал летом в детстве?"
+  -> real DeepSeek answer directly recounts the newly indexed memory
+     ("ловил рыбу с друзьями... жили в маленьком городе рядом с рекой")
+  -> zero visible markers; output_guard_applied=true, removed_internal_citation_count=1
+  -> zero content_translation log events in the exact request window
+```
+
+Both smokes confirm: one Brain call per chat message, zero separate translation-service calls, direct-locale response in the requested language, no citation markers, profile isolation (two independent synthetic profiles, ids 17 and 18), and the exact expected Qdrant count sequence (unchanged through candidate creation/clarification/approval, +1 only on explicit indexing, unchanged on repeat).
+
+### Known limitations
+
+- The celery_worker image rebuild took ~89 minutes in this environment due to network latency reaching `download-r2.pytorch.org` (PyTorch's CDN). This is an environment/network characteristic, not a code defect, but it means future rebuilds of this image in similarly-constrained environments should be started early and treated as a long-running background operation rather than something to wait on synchronously.
+- The pre-existing, unrelated `[rag:chunk_id]`-adjacent finding from Task 65.2 (that authenticated chat leaked citations) is now fully resolved - this was the primary deliverable of this task.
+- No other known gaps against this task's scope remain open.
+
+### Files changed
+
+- `backend/app/modules/ai_agents/brain/output_guard.py` (citation-guard generalization)
+- `backend/app/modules/ai_agents/brain/service.py` (unconditional sanitization call site)
+- `backend/tests/test_ai_agents.py` (citation-guard regression rewrite + 3 new tests + 2 pre-existing env-isolation fixes)
+- `backend/tests/test_bilingual_retrieval_evaluation.py` (stale fixture fix)
+- `docker-compose.yml` (`celery_worker` service: added missing `EMBEDDING_PROVIDER`/`SENTENCE_TRANSFORMERS_*`/`CUDA_VISIBLE_DEVICES`/`NVIDIA_VISIBLE_DEVICES` env vars and the `eternal_world_bge_m3_cache` volume mount, matching `backend`'s existing block)
+- `PROJECT_PROGRESS.md`, `md_roadmap/ETERNAL_WORLD_AVATAR_QUALITY_PLAN.md` (this documentation)
+
+No migration was needed. No Dockerfile/requirements file was changed (both already correct) - the only compose change was the `celery_worker` embedding-provider configuration gap described above. The celery_worker Docker *image* itself was rebuilt (not code-changed) to pick up the CPU-only PyTorch pin and `prometheus-client` dependency that already existed in the Dockerfile/requirements but had never been baked into that specific image since 2026-06-25.
+
+### Next recommended task
+
+**Task 66.1 - Provider Usage and Cost Foundation** (the AI cost-observability epic), as a separate, later task, per this task's own scope boundary.
+
+---

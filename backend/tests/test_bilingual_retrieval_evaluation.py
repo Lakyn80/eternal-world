@@ -209,7 +209,17 @@ def test_bilingual_retrieval_and_direct_locale_brain_answer(client, monkeypatch,
 
     monkeypatch.setattr(
         "app.modules.demo_fa_chat.service._resolve_demo_runtime",
-        lambda db, *, resolved_profile: SimpleNamespace(
+        # Task 65.3 stale-fixture fix: the real `_resolve_demo_runtime` has
+        # taken a `locale: str = "ru"` keyword argument since Task 64.5.2
+        # (`demo_fa_chat/service.py` calls it with `locale=locale` at its
+        # real call site), but this fixture was never updated to accept it,
+        # so every parametrized case in this module failed with
+        # `TypeError: <lambda>() got an unexpected keyword argument 'locale'`
+        # before the actual retrieval/Brain assertions ever ran - a stale
+        # test double, not a retrieval regression. `locale` is accepted and
+        # ignored here since this fixture's returned runtime is identical
+        # for every locale in this test's scenarios.
+        lambda db, *, resolved_profile, locale="ru": SimpleNamespace(
             collection_name="eternal_world_rag_chunks__bge_m3_dense_sparse__family_novak_ru_e2e_v3_bge_m3_real_cpu",
             retrieval_mode="bge_m3_dense_sparse",
             top_k=5,

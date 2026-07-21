@@ -134,7 +134,18 @@ def _get_test_db_session():
     return db, session_generator
 
 
-def test_default_brain_provider_is_mock():
+def test_default_brain_provider_is_mock(monkeypatch):
+    # Task 65.3 stabilization: `_env_file=None` only disables reading from a
+    # `.env` FILE - it does not stop pydantic-settings from reading real OS
+    # process environment variables. This dev container legitimately runs
+    # with `AI_BRAIN_PROVIDER=openai_compatible` set as a real environment
+    # variable (for live smoke tests elsewhere), which silently overrode the
+    # field default here and made this test fail in this environment only.
+    # Explicitly clearing the relevant vars proves the code's actual default
+    # rather than whatever happens to be configured on the host running the
+    # test.
+    for env_var in ("AI_BRAIN_PROVIDER", "AI_BRAIN_MODEL", "AI_BRAIN_API_KEY", "AI_BRAIN_BASE_URL"):
+        monkeypatch.delenv(env_var, raising=False)
     default_settings = Settings(_env_file=None)
 
     provider = build_brain_provider(provider_settings=default_settings)
@@ -180,7 +191,12 @@ def test_provider_factory_rejects_unknown_provider():
     assert "Unsupported AI_BRAIN_PROVIDER" in str(exc_info.value)
 
 
-def test_openai_compatible_provider_requires_api_key_when_selected():
+def test_openai_compatible_provider_requires_api_key_when_selected(monkeypatch):
+    # Task 65.3 stabilization: this container has a real `AI_BRAIN_API_KEY`
+    # set as an OS environment variable; since only `ai_brain_provider`/
+    # `ai_brain_model` were overridden explicitly, the api key field fell
+    # through to that real value and the expected error never raised.
+    monkeypatch.delenv("AI_BRAIN_API_KEY", raising=False)
     selected_settings = Settings(
         _env_file=None,
         ai_brain_provider="openai_compatible",
@@ -1210,7 +1226,13 @@ def test_strip_internal_evidence_citations_removes_memory_and_rag_labels():
     ) == "Да, я жила у Попице, а потом вспоминала семью."
 
 
-def test_brain_service_removes_internal_citations_only_for_avatar_persona():
+def test_brain_service_removes_internal_citations_regardless_of_avatar_persona():
+    """Task 65.3 regression: citation stripping used to be gated on
+    `avatar_persona is not None`, which the real authenticated `/api/chat`
+    endpoint never sets - every grounded authenticated answer leaked its
+    `[rag:...]` marker verbatim. Sanitization must now apply identically
+    whether or not a persona object is attached to the request."""
+
     service = BrainAgentService(provider=CitationStubProvider())
 
     generic_response = service.generate_chat_response(
@@ -1229,12 +1251,91 @@ def test_brain_service_removes_internal_citations_only_for_avatar_persona():
         )
     )
 
-    assert "[rag:27618]" in generic_response.text
-    assert generic_response.metadata["output_guard_applied"] is False
+    assert "[rag:27618]" not in generic_response.text
+    assert generic_response.text == "Деточка, я жила у Попице."
+    assert generic_response.metadata["output_guard_applied"] is True
+    assert generic_response.metadata["output_guard_reason"] == "avatar_internal_citation_removed"
+    assert generic_response.metadata["removed_internal_citation_count"] == 1
+    assert generic_response.metadata["persona_applied"] is False
+
     assert "[rag:27618]" not in avatar_response.text
     assert avatar_response.text == "Деточка, я жила у Попице."
     assert avatar_response.metadata["output_guard_applied"] is True
     assert avatar_response.metadata["output_guard_reason"] == "avatar_internal_citation_removed"
+    assert avatar_response.metadata["removed_internal_citation_count"] == 1
+    assert avatar_response.metadata["persona_applied"] is True
+
+
+def test_brain_service_answer_without_citations_is_unchanged():
+    class NoCitationStubProvider:
+        def generate_response(self, request: BrainAgentRequest) -> BrainAgentResponse:
+            return BrainAgentResponse(
+                text="Деточка, я жила у Попице.",
+                provider_name="no-citation-stub",
+                metadata={"grounding_status": "grounded"},
+            )
+
+    service = BrainAgentService(provider=NoCitationStubProvider())
+    response = service.generate_chat_response(
+        OrchestratorChatRequest(
+            profile=MemoryProfileContext(id=1, name="Ева"),
+            user_message="Где ты жила?",
+            recent_history=[],
+        )
+    )
+
+    assert response.text == "Деточка, я жила у Попице."
+    assert response.metadata["output_guard_applied"] is False
+    assert response.metadata["removed_internal_citation_count"] == 0
+
+
+def test_brain_service_preserves_legitimate_bracketed_text():
+    class BracketStubProvider:
+        def generate_response(self, request: BrainAgentRequest) -> BrainAgentResponse:
+            return BrainAgentResponse(
+                text="Ahoj [poznámka] to je vše, co si pamatuji.",
+                provider_name="bracket-stub",
+                metadata={"grounding_status": "grounded"},
+            )
+
+    service = BrainAgentService(provider=BracketStubProvider())
+    response = service.generate_chat_response(
+        OrchestratorChatRequest(
+            profile=MemoryProfileContext(id=1, name="Anna"),
+            user_message="Co si pamatujete?",
+            recent_history=[],
+        )
+    )
+
+    assert response.text == "Ahoj [poznámka] to je vše, co si pamatuji."
+    assert response.metadata["output_guard_applied"] is False
+    assert response.metadata["removed_internal_citation_count"] == 0
+
+
+def test_brain_service_removes_multiple_citations_in_different_positions():
+    class MultiCitationStubProvider:
+        def generate_response(self, request: BrainAgentRequest) -> BrainAgentResponse:
+            return BrainAgentResponse(
+                text=(
+                    "[rag:1] Vyrostla jsem na vesnici [memory:42], v malém domku.\n"
+                    "[rag:abc-def]"
+                ),
+                provider_name="multi-citation-stub",
+                metadata={"grounding_status": "grounded"},
+            )
+
+    service = BrainAgentService(provider=MultiCitationStubProvider())
+    response = service.generate_chat_response(
+        OrchestratorChatRequest(
+            profile=MemoryProfileContext(id=1, name="Anna"),
+            user_message="Kde jste vyrostla?",
+            recent_history=[],
+        )
+    )
+
+    assert "[rag:" not in response.text
+    assert "[memory:" not in response.text
+    assert response.metadata["removed_internal_citation_count"] == 3
 
 
 def test_brain_service_guard_metadata_does_not_store_original_answer_text():

@@ -1656,3 +1656,33 @@ Objeveno, ale záměrně neopraveno (mimo rozsah tohoto tasku): `eternal_world_c
 Task 65.2 se **považuje za dokončený** v rozsahu definovaném zadáním a živě ověřený. Neprovedeno/mimo rozsah: reálné zpracování přes skutečně běžící Celery worker (nahrazeno přímým voláním stejné funkce se stejnou reálnou infrastrukturou), rozšíření clarification bank na všechna témata (jen "childhood" má dnes vyžadované upřesnění, ostatní témata používají `general` bez upřesnění — vědomé minimální rozhodnutí).
 
 Další doporučený task: oprava `eternal_world_celery_worker` image a oprava úniku `[rag:chunk_id]` citace ve skutečném autentizovaném chatu (obojí zdokumentováno výše jako nalezené, ale mimo rozsah).
+
+## 19. Task 65.3 status (2026-07-21) — Runtime Stabilization, Celery Verification, and Citation-Guard Hardening dokončeno
+
+Task 65.3 opravil přesně ty dvě věci, které Task 65.2 nalezl a záměrně nechal mimo rozsah (viz sekce 18 výše), plus jednu další skrytou chybu objevenou při opravě první z nich. Plný popis (stabilizační matice, root-cause analýzy, testy, živé smoke testy) je v `PROJECT_PROGRESS.md`, sekce "Task 65.3 - Runtime Stabilization, Celery Verification, and Citation-Guard Hardening (2026-07-21)".
+
+Stručně:
+
+```text
+eternal_world_celery_worker image: byl zastaralý od 2026-06-25 (obsahoval torch+CUDA, chyběl
+  prometheus-client) -> úspěšně přestavěn (~89 min, síťová latence ke stažení PyTorch, ne chyba
+  v kódu) -> nový image torch==2.13.0+cpu, žádné GPU balíčky, prometheus_client funguje
+Objevena DRUHÁ skrytá chyba: docker-compose.yml u celery_worker chyběly EMBEDDING_PROVIDER a
+  související proměnné/volume (backend je měl, celery_worker ne) -> reálné embedding úlohy
+  ve workeru tiše spadly na mock provider -> opraveno přidáním identických proměnných
+Reálná asynchronní indexace životopisu PROKÁZÁNA přes skutečně běžící Celery worker (ne jen
+  přímé volání funkce): nová úloha 21.7s, Qdrant 27->28, přesně 1 nový RagSource/Chunk/Embedding
+Idempotence prokázána přes stejný reálný worker: opakování úlohy 0.23s, beze změny v Qdrantu,
+  beze duplicit
+Únik `[rag:chunk_id]` v autentizovaném chatu opraven: sanitizace nyní probíhá vždy, nezávisle
+  na avatar_persona (dříve podmíněno, autentizovaný chat nikdy avatar_persona nenastavuje)
+Živě ověřeno česky i rusky: nula viditelných značek, output_guard_applied=true,
+  removed_internal_citation_count=1
+test_bilingual_retrieval_evaluation.py: 1/11 -> 11/11 (zastaralá testovací fixture, jednořádková
+  oprava)
+Regresní sada (11 souborů): 144/144 prošlo
+```
+
+Task 65.3 se **považuje za kompletně dokončený** v rozsahu definovaném zadáním — obě položky, které Task 65.2 nechal mimo rozsah, jsou nyní vyřešeny a živě ověřeny, včetně nově nalezené a opravené chyby v `docker-compose.yml`. Žádná část zadání nezůstala neprokázaná; direct-call diagnostika byla použita jen jako doplňkový, výslovně povolený vedlejší důkaz vedle hlavního důkazu přes skutečný worker.
+
+Další doporučený task: **Task 66.1 — Provider Usage and Cost Foundation** (AI cost-observability epic, samostatný budoucí task, mimo rozsah Tasku 65.3).
