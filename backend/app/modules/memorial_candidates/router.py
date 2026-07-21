@@ -52,12 +52,18 @@ from app.modules.family_memory_enrichment.service import (
     FamilyMemoryNotFoundError,
     answer_next_clarification,
     get_candidate_enrichment,
+    list_clarifications,
+    list_contributions,
     owner_review,
     skip_clarification,
 )
 from app.modules.memorial_access.capabilities import MemorialCapability, resolve_authorized_profile
 from app.modules.memorial_access.service import MemorialForbiddenError, MemorialNotFoundError
-from app.modules.memorial_candidates.schemas import ClarificationAnswerBody, OwnerReviewBody
+from app.modules.memorial_candidates.schemas import (
+    CandidateHistoryRead,
+    ClarificationAnswerBody,
+    OwnerReviewBody,
+)
 
 
 router = APIRouter(tags=["memorial-candidates"])
@@ -192,6 +198,54 @@ def get_candidate_endpoint(
         )
     except (FamilyMemoryNotFoundError, ConversationMemoryCandidateNotFoundError) as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+
+
+@router.get(
+    "/api/memorials/{profile_id}/candidates/{candidate_id}/history",
+    response_model=CandidateHistoryRead,
+    responses={
+        status.HTTP_401_UNAUTHORIZED: {"model": ErrorResponse},
+        status.HTTP_403_FORBIDDEN: {"model": ErrorResponse},
+        status.HTTP_404_NOT_FOUND: {"model": ErrorResponse},
+    },
+)
+def get_candidate_history_endpoint(
+    profile_id: ProfileIdPath,
+    candidate_id: CandidateIdPath,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> CandidateHistoryRead:
+    """Task 65.4: the append-only contribution/clarification history behind
+    one candidate, for the Review-tab candidate-detail view. Gated behind
+    the exact same actor-visibility check `get_candidate_enrichment` already
+    applies (a `private_owner`-scoped candidate invisible to a
+    trusted_reviewer via the list/detail endpoints stays invisible here
+    too) - no new authorization logic, only new read composition."""
+
+    profile, membership = _resolve_profile(
+        db,
+        current_user=current_user,
+        profile_id=profile_id,
+        capability=MemorialCapability.SUBMIT_CONTRIBUTION,
+    )
+    actor = _actor_context(current_user=current_user, role=membership.role)
+    try:
+        enrichment = _localize_enrichment(
+            get_candidate_enrichment(db, owner_user_id=profile.user_id, candidate_id=candidate_id, actor=actor)
+        )
+        contributions = list_contributions(
+            db, owner_user_id=profile.user_id, candidate_id=candidate_id, actor=actor
+        )
+        clarifications = list_clarifications(
+            db, owner_user_id=profile.user_id, candidate_id=candidate_id, actor=actor
+        )
+    except (FamilyMemoryNotFoundError, ConversationMemoryCandidateNotFoundError) as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    return CandidateHistoryRead(
+        candidate=enrichment,
+        contributions=contributions,
+        clarifications=clarifications,
+    )
 
 
 @router.post(

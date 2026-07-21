@@ -1,8 +1,11 @@
 import type {
+  AvatarMemoryIndexingRead,
   BiographerAnswerResponse,
   BiographerEligibilityRead,
   BiographerQuestionRead,
+  BiographyIngestionStartResponse,
   BiographyStatusRead,
+  CandidateHistoryRead,
   ChatMessageRead,
   ChatSendResponse,
   ContributionRead,
@@ -57,6 +60,16 @@ export class MemorialApiError extends Error {
   }
 }
 
+let onUnauthorized: (() => void) | null = null;
+
+/** Registers a single app-wide callback fired whenever any authenticated
+ * request comes back 401 (expired/invalid token) - lets the top-level
+ * workspace clear its session once, without every leaf component needing
+ * its own expiry-detection logic. Pass `null` to unregister. */
+export function setUnauthorizedHandler(handler: (() => void) | null): void {
+  onUnauthorized = handler;
+}
+
 function buildApiUrl(path: string): string {
   return `${API_BASE_URL.replace(/\/$/, '')}${path}`;
 }
@@ -70,9 +83,13 @@ async function parseError(response: Response): Promise<string> {
     // Non-JSON responses are intentionally collapsed into a safe message.
   }
 
+  if (response.status === 400) return 'The request was rejected as invalid.';
   if (response.status === 401) return 'Authentication is required.';
   if (response.status === 403) return 'You do not have permission to perform this action.';
   if (response.status === 404) return 'The memorial or invitation was not found.';
+  if (response.status === 409) return 'This action conflicts with something already in progress.';
+  if (response.status === 422) return 'Submitted data did not pass validation.';
+  if (response.status === 503) return 'The background worker or search index is temporarily unavailable.';
   return 'The request could not be completed.';
 }
 
@@ -95,7 +112,13 @@ async function requestJson<T>(path: string, init: RequestInit | undefined = {}, 
   }
 
   if (!response.ok) {
-    throw new MemorialApiError(response.status, await parseError(response));
+    const detail = await parseError(response);
+    if (response.status === 401 && accessToken) {
+      // Only an authenticated request's own expiry triggers sign-out - an
+      // anonymous login/register attempt returning 401 must not.
+      onUnauthorized?.();
+    }
+    throw new MemorialApiError(response.status, detail);
   }
 
   return (await response.json()) as T;
@@ -176,8 +199,11 @@ export async function getBiographyStatus(accessToken: string, profileId: number)
   return requestJson<BiographyStatusRead>(`/api/memorials/${profileId}/biography/status`, undefined, accessToken);
 }
 
-export async function startBiographyIngestion(accessToken: string, profileId: number): Promise<BiographyStatusRead> {
-  return requestJson<BiographyStatusRead>(
+export async function startBiographyIngestion(
+  accessToken: string,
+  profileId: number
+): Promise<BiographyIngestionStartResponse> {
+  return requestJson<BiographyIngestionStartResponse>(
     `/api/memorials/${profileId}/biography/ingest`,
     { method: 'POST' },
     accessToken
@@ -277,10 +303,22 @@ export async function indexCandidateMemory(
   accessToken: string,
   profileId: number,
   candidateId: number
-): Promise<{ result: string; searchable_as_fact: boolean; promotion_status: string }> {
-  return requestJson(
+): Promise<AvatarMemoryIndexingRead> {
+  return requestJson<AvatarMemoryIndexingRead>(
     `/api/memorials/${profileId}/candidates/${candidateId}/index`,
     { method: 'POST' },
+    accessToken
+  );
+}
+
+export async function getCandidateHistory(
+  accessToken: string,
+  profileId: number,
+  candidateId: number
+): Promise<CandidateHistoryRead> {
+  return requestJson<CandidateHistoryRead>(
+    `/api/memorials/${profileId}/candidates/${candidateId}/history`,
+    undefined,
     accessToken
   );
 }

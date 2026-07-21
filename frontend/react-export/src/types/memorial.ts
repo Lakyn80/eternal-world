@@ -112,6 +112,13 @@ export type BiographyStatusRead = {
   background_job_id: number | null;
 };
 
+export type BiographyIngestionStartResponse = {
+  profile_id: number;
+  status: BiographyStatusState;
+  background_job_id: number;
+  background_job_status: string;
+};
+
 export type BiographerBlockedReason =
   | 'biography_missing'
   | 'biography_not_indexed'
@@ -144,6 +151,22 @@ export type BiographerAnswerResponse = {
   unresolved_clarification_count: number | null;
 };
 
+export type ClarificationStatus = 'pending' | 'answered' | 'skipped';
+
+export type ClarificationQuestionRead = {
+  clarification_id: number;
+  candidate_id: number;
+  question_key: string;
+  question_text: string;
+  language: string | null;
+  status: ClarificationStatus;
+  required: boolean;
+  asked_at: string;
+  answered_at: string | null;
+  answered_by: string | null;
+  answer_contribution_id: number | null;
+};
+
 export type MemoryCandidateEnrichmentRead = {
   candidate_id: number;
   avatar_id: string;
@@ -160,7 +183,7 @@ export type MemoryCandidateEnrichmentRead = {
   owner_reviewed_at: string | null;
   owner_reviewed_by: string | null;
   contribution_count: number;
-  next_clarification_question: { id: number; question_text: string; status: string; required: boolean } | null;
+  next_clarification_question: ClarificationQuestionRead | null;
   promotion_id: number | null;
   promotion_status: string | null;
   searchable_as_fact: boolean;
@@ -174,3 +197,49 @@ export type OwnerReviewCandidateAction =
   | 'request_more_details'
   | 'mark_disputed'
   | 'approve_multiple_perspectives';
+
+export type FamilyContributionType =
+  | 'initial_claim'
+  | 'clarification_answer'
+  | 'owner_correction'
+  | 'owner_confirmation'
+  | 'reviewer_note'
+  | 'dispute_statement'
+  | 'system_normalization';
+
+export type FamilyMemoryContributionRead = {
+  contribution_id: number;
+  candidate_id: number;
+  avatar_id: string;
+  profile_id: number | null;
+  actor_id: string;
+  actor_role: 'owner' | 'contributor' | 'trusted_reviewer' | 'system';
+  relationship_to_owner: string | null;
+  contribution_type: FamilyContributionType;
+  contribution_text: string;
+  structured_details: Record<string, unknown> | null;
+  language: string | null;
+  source_message_hash: string | null;
+  trace_id: string | null;
+  supersedes_contribution_id: number | null;
+  is_owner_correction: boolean;
+  is_disputed: boolean;
+  privacy_scope_snapshot: PrivacyScope;
+  created_at: string;
+};
+
+export type CandidateHistoryRead = {
+  candidate: MemoryCandidateEnrichmentRead;
+  contributions: FamilyMemoryContributionRead[];
+  clarifications: ClarificationQuestionRead[];
+};
+
+export type AvatarMemoryIndexingRead = {
+  promotion_id: number;
+  promotion_status: string;
+  indexed_at: string | null;
+  target_collection_name: string | null;
+  qdrant_point_id: string | null;
+  searchable_as_fact: boolean;
+  result: 'indexed' | 'already_indexed';
+};

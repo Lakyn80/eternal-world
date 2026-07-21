@@ -1742,3 +1742,49 @@ Vědomě mimo rozsah (zdokumentováno, ne skryto): dev-only evaluation skripty (
 Task 66.1 se **považuje za kompletně dokončený** v rozsahu definovaném zadáním. Dashboardy, rozpočty, anomaly detection a admin API zůstávají mimo rozsah (Task 66.2/66.3).
 
 Další doporučený task: **Task 66.2 — Cost Analytics and Admin API** (samostatný budoucí task, mimo rozsah Tasku 66.1).
+
+## 21. Task 65.4 status (2026-07-21) — Complete the Authenticated Memory Lifecycle Frontend dokončeno
+
+Task 65.4 dokončil autentizovaný frontend tak, aby běžný vlastník memorialu mohl projít celý backendem již implementovaný životní cyklus paměti bez Swaggeru, DB příkazů nebo shell skriptů. Většina API-klienta z Tasku 65.2 už existovala - skutečná mezera byla v UI propojení, ne v chybějících endpointech. Plný popis je v `PROJECT_PROGRESS.md`, sekce "Task 65.4 - Complete the Authenticated Memory Lifecycle Frontend (2026-07-21)".
+
+Stručně, nalezené a opravené skutečné chyby:
+
+```text
+Editor životopisu byl vždy prázdný (text se nikdy nenačetl ze skutečného
+  životopisu, jen ze stavu bez textu) - opraveno předáním initialBiography
+AI biograf měl natvrdo 'cs' bez ohledu na skutečně zvolený jazyk aplikace
+Polling stavu životopisu běžel donekonečna i před kliknutím na indexaci
+Owner review natvrdo posílal privacy_scope='all_family' u KAŽDÉ akce
+edit_and_confirm a approve_multiple_perspectives nebyly v UI vůbec dostupné,
+  ačkoli je API klient i typy už plně podporovaly
+Reject neměl pole pro důvod; žádný detail/historie kandidáta nebyl vidět
+  (nový, minimální, čistě-čtecí backend endpoint /candidates/{id}/history
+  přidán - skládá jen z existujících service funkcí, žádná nová logika)
+Chybělo potvrzovací dialog před "Start indexing" i "Index memory"
+Výsledek indexace (indexed vs already_indexed) se zahazoval
+Overview byl téměř prázdný - žádný souhrn stavu, žádné doporučení dalšího
+  kroku, žádné odznaky na záložkách
+Viewer mohl otevřít záložku AI biografa, ačkoli tam každý request 403
+  (žádná capabilita) - záložka nyní pro viewera skrytá
+```
+
+Živě ověřeno (syntetické účty, nikdy ne skutečný memorial vlastníka):
+
+```text
+Česky: uložení životopisu (draft, NEindexováno) -> explicitní start indexace
+  přes SKUTEČNÝ Celery worker -> indexed -> úprava -> stale -> re-index ->
+  indexed; AI biograf (childhood) -> 2 upřesnění -> ready_for_owner_review;
+  historie kandidáta (3 příspěvky, 2 upřesnění); edit_and_confirm ->
+  pending_index (Qdrant beze změny); explicitní indexace -> indexed;
+  opakování -> already_indexed (idempotentní); Chat -> reálná odpověď
+  DeepSeek používá novou vzpomínku, nula [rag:/memory:] značek
+Rusky (kontrolní běh): ruský životopis -> reálný worker -> indexed; AI
+  biograf v ruštině; Chat přímo v ruštině (cyrilicí ověřeno), nula značek
+Task 66.1 trace obou Chat volání: 1 Brain call, 0 translation calls
+```
+
+Testy: 7 nových backendových testů pro `/history` endpoint. Frontend měl nulovou testovací infrastrukturu - přidán nejmenší vhodný harness (Vitest + React Testing Library), **31 nových testů, všechny procházejí**. Backendová regrese (9 souborů): 121/121 (jeden přechodný timing flake v `test_memorial_candidates.py` prokázán jako netýkající se této úlohy trojím opakovaným během). `tsc --noEmit` čisté, `npm run build` prochází.
+
+Task 65.4 se **považuje za kompletně dokončený** - plný synteticky ověřený workflow prošel, ne jen TypeScript kompilace nebo API-only testy.
+
+Další doporučený task: **Task 66.2 — Cost Analytics and Admin API** (samostatný budoucí task, nedotčen tímto navazujícím taskem).

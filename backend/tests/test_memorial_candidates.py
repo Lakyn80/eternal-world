@@ -259,3 +259,54 @@ def test_czech_clarification_question_is_localized_not_raw_russian(client):
         "Kdy to bylo — přibližně v jakém věku, roce nebo období?",
     )
     assert "Где" not in question_text and "Когда" not in question_text
+
+
+def test_candidate_history_returns_contributions_and_clarifications(client):
+    """Task 65.4: the Review-tab candidate-detail view needs the original
+    Biographer answer and every clarification round, not just the current
+    finalized snapshot."""
+
+    token = _register_and_login(client, "candidates-owner6@example.com")
+    profile_id = _create_memorial(client, token)
+    _setup_indexed_biography(client, token, profile_id)
+
+    question = client.get(
+        f"/api/memorials/{profile_id}/biographer/next-question",
+        params={"locale": "cs"},
+        headers=_auth_headers(token),
+    ).json()
+    assert question["topic"] == "childhood"
+    answer = client.post(
+        f"/api/memorials/{profile_id}/biographer/questions/{question['id']}/answer",
+        headers=_auth_headers(token),
+        json={"locale": "cs", "answer_text": "Vyrostla jsem na vesnici u řeky."},
+    ).json()
+    candidate_id = answer["candidate_id"]
+
+    history = client.get(
+        f"/api/memorials/{profile_id}/candidates/{candidate_id}/history",
+        headers=_auth_headers(token),
+    )
+    assert history.status_code == 200
+    body = history.json()
+    assert body["candidate"]["candidate_id"] == candidate_id
+    assert len(body["contributions"]) >= 1
+    assert body["contributions"][0]["contribution_text"] == "Vyrostla jsem na vesnici u řeky."
+    assert body["contributions"][0]["contribution_type"] == "initial_claim"
+    # Clarification questions are created progressively (one at a time, not
+    # all upfront) - at least the first one must already exist.
+    assert len(body["clarifications"]) >= 1
+
+
+def test_candidate_history_requires_membership(client):
+    owner_token = _register_and_login(client, "candidates-owner7@example.com")
+    outsider_token = _register_and_login(client, "candidates-outsider7@example.com")
+    profile_id = _create_memorial(client, owner_token)
+    _setup_indexed_biography(client, owner_token, profile_id)
+    candidate_id, _ = _create_general_candidate_via_biographer(client, owner_token, profile_id)
+
+    response = client.get(
+        f"/api/memorials/{profile_id}/candidates/{candidate_id}/history",
+        headers=_auth_headers(outsider_token),
+    )
+    assert response.status_code == 404

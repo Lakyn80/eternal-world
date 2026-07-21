@@ -9,7 +9,12 @@ from __future__ import annotations
 from pydantic import BaseModel, Field, field_validator
 
 from app.modules.family_memory_enrichment.enums import OwnerReviewAction, PrivacyScope
-from app.modules.family_memory_enrichment.schemas import PersonalMemoryDetails
+from app.modules.family_memory_enrichment.schemas import (
+    CandidateEnrichmentRead,
+    ClarificationQuestionRead,
+    FamilyMemoryContributionRead,
+    PersonalMemoryDetails,
+)
 
 
 def _normalize(value: str) -> str:
@@ -43,3 +48,17 @@ class OwnerReviewBody(BaseModel):
             return None
         normalized = _normalize(str(value))
         return normalized or None
+
+
+class CandidateHistoryRead(BaseModel):
+    """Task 65.4: the full append-only audit trail for one candidate - the
+    original Biographer/family answer, every clarification round, and every
+    owner correction - so the authenticated Review UI can show provenance
+    before an owner approves or edits a memory. Composed entirely from
+    already-existing, already-tested queries
+    (`family_memory_enrichment.repository.list_contributions`/
+    `list_clarifications`); no new domain logic."""
+
+    candidate: CandidateEnrichmentRead
+    contributions: list[FamilyMemoryContributionRead]
+    clarifications: list[ClarificationQuestionRead]

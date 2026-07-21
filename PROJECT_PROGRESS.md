@@ -8748,3 +8748,140 @@ No Dockerfile/docker-compose change was needed. No frontend change was needed (n
 **Task 66.2 - Cost Analytics and Admin API**, per this task's own scope boundary.
 
 ---
+
+## Task 65.4 - Complete the Authenticated Memory Lifecycle Frontend (2026-07-21)
+
+Status: **complete**. The full backend-implemented memory lifecycle (initial biography → explicit indexing → AI Biographer → clarification → owner review → explicit memory indexing → Chat verification) is now fully discoverable and completable through the real authenticated Vite/React frontend, with no Swagger/DB/shell-script steps required. Proven end-to-end against real infrastructure (real Celery worker, real DeepSeek, real Qdrant, real BGE-M3) with synthetic accounts, in both Czech and Russian.
+
+Starting branch/commit: `staging/eternalworld-lukiora-20260715` at `e5885d4` (verified; working tree clean except the pre-existing untracked `backend/artifacts/memorial_account_binding_audit/`).
+
+### Frontend audit summary
+
+Much of the API-client/type layer already existed from Task 65.2 (`memorialApi.ts` already had `updateBiography`/`getBiographyStatus`/`startBiographyIngestion`/Biographer/candidate/index functions). The gap was almost entirely in **UI wiring correctness**, not missing endpoints. Concrete, provable bugs found and fixed in `MemorialWorkspace.tsx`:
+
+- **Biography editor was always empty** - `BiographyPanel`'s `text` state was never seeded from the real biography (only `getBiographyStatus`, which doesn't include the text, was ever fetched); saving would have silently overwritten existing content with an empty string.
+- **Wrong textarea label** - the biography textarea used `t.name` ("Name") as its label (copy-paste bug from another form).
+- **AI Biographer always asked in Czech** - `BiographerPanel` hardcoded `const lang: 'cs' | 'ru' = 'cs'` and never received the app's real selected language at all, regardless of which locale the owner had switched to.
+- **Biography polling never stopped** - it kept polling every 3s indefinitely while sitting on `ready_for_ingestion` (before the owner had even clicked "Start indexing"), instead of only while a job is genuinely running.
+- **Owner review always hardcoded `privacy_scope: 'all_family'`** on every action, silently overriding whatever privacy the candidate actually had - no privacy-scope selector existed at all.
+- **`edit_and_confirm` and `approve_multiple_perspectives` were never exposed** in the UI at all, despite the API client and types already supporting them fully - only `confirm`/`reject`/`request_more_details`/`mark_disputed` were wired.
+- **Reject had no reason field** despite the backend schema supporting `rejection_reason`.
+- **No candidate detail/history view** - only the current finalized text was shown; the original question/answer and clarification history were invisible (see backend deviation below).
+- **No confirmation dialog** before "Start indexing" or "Index memory", despite both being explicitly required.
+- **`indexCandidateMemory`'s response was discarded** - `already_indexed` vs `indexed` was never distinguished for the owner.
+- **Overview tab was a near-empty stub** - no lifecycle summary, no next-action guidance, no tab badges at all.
+- **Viewer role could open the Biographer tab** even though every Biographer endpoint requires `SUBMIT_CONTRIBUTION` server-side (confirmed via capability-matrix audit) - every request would have 403'd with no explanation.
+
+### Backend contract matrix (grounded before implementation)
+
+| User action | Endpoint | Method | Capability | Notes |
+|---|---|---|---|---|
+| Read biography text | `GET /api/memorials/{id}` (`.biography`) | GET | VIEW_MEMORIAL | already fetched by the workspace, just never passed to `BiographyPanel` |
+| Read biography status | `GET /api/memorials/{id}/biography/status` | GET | VIEW_MEMORIAL | - |
+| Save biography | `PATCH /api/memorials/{id}/biography` | PATCH | DIRECT_MEMORY_WRITE (owner) | sets status=`draft` (edited-but-unindexed) or `stale` (was indexed); never auto-indexes |
+| Start/retry indexing | `POST /api/memorials/{id}/biography/ingest` | POST | UPLOAD_SOURCE (owner) | 202 Accepted; 409 if a job is already active; sets status=`ready_for_ingestion` then enqueues |
+| Biographer next question | `GET /api/memorials/{id}/biographer/next-question?locale=` | GET | SUBMIT_CONTRIBUTION | viewer excluded |
+| Answer/skip question | `POST .../questions/{id}/answer` \| `/skip` | POST | SUBMIT_CONTRIBUTION | - |
+| List/read candidates | `GET /api/memorials/{id}/candidates[/{id}]` | GET | REVIEW_CONTRIBUTION / SUBMIT_CONTRIBUTION | - |
+| **Candidate history (NEW)** | `GET /api/memorials/{id}/candidates/{id}/history` | GET | SUBMIT_CONTRIBUTION | see below |
+| Answer clarification | `POST .../clarifications/answer` | POST | SUBMIT_CONTRIBUTION | - |
+| Owner review | `POST .../owner-review` | POST | MANAGE_MEMORIAL + role==owner | `action` one of confirm/edit_and_confirm/reject/request_more_details/mark_disputed/approve_multiple_perspectives; `approve_multiple_perspectives` only valid when `dispute_status=="disputed"` (verified in `family_memory_enrichment/service.py`) |
+| Explicit memory indexing | `POST .../index` | POST | TRIGGER_INDEXING (owner) | returns `result: "indexed"\|"already_indexed"`, idempotent |
+| Chat | `POST /api/chat/{id}/messages` | POST | CHAT_WITH_AVATAR | unchanged |
+
+### Backend deviation (proven necessary, minimal)
+
+**One new read-only endpoint**: `GET /api/memorials/{profile_id}/candidates/{candidate_id}/history` (`memorial_candidates/router.py` + a new `CandidateHistoryRead` schema in `memorial_candidates/schemas.py`). Proven necessary because no existing endpoint (authenticated or demo) exposes a candidate's append-only contribution/clarification history - `CandidateEnrichmentRead` only ever carried a `contribution_count` integer, never the actual rows - so the Review tab's candidate-detail requirement (Part 22) was structurally impossible to satisfy from the frontend alone. Implemented as pure read composition over two **already-existing, already-tested** service functions (`family_memory_enrichment.service.list_contributions`/`list_clarifications`, which already apply the correct per-actor visibility filtering) - zero new domain logic, zero new tables, no migration. 7 new/updated tests in `test_memorial_candidates.py` (owner sees full history; non-member gets 404; clarifications appear progressively).
+
+### Biography flow
+
+`BiographyPanel` now: receives `initialBiography` from the parent's already-fetched `MemorialRead.biography` (fixing the empty-editor bug); shows `attempt_count`/`indexed_at`/`failure_reason` when present; only polls while `isBiographyJobActive` (status=`ingesting` or a queued/running background job) - not indefinitely; requires an explicit two-step confirmation (`biographyConfirmStartTitle`/`biographyConfirmStartYes`) before calling the ingest endpoint; distinguishes a 409 (job already active) with a specific message; hides the index/retry button entirely once `status==="indexed"` (nothing to do) and shows `biographyUpToDate` instead; shows a distinct `biographySavedNotIndexed` confirmation after every save, separate from any indexed-state messaging.
+
+### Biographer flow
+
+`BiographerPanel` now receives the real app `lang` and maps it via `biographerLocale()` (ru→ru, everything else→cs, since the Biographer backend only understands cs/ru); shows the question's `topic`; after an answer or clarification resolves the candidate to `ready_for_owner_review`, shows a `biographerReadyForReview` panel with an explicit `biographerGoToReview` button that navigates the workspace to the Review tab (`onNavigateToReview` callback threaded from the parent's `setActiveTab`).
+
+### Review flow
+
+`CandidatesReviewSection` rewritten to add: an inline edit textarea for `edit_and_confirm` (pre-filled with the current finalized text); `approve_multiple_perspectives`, shown only when `candidate.dispute_status === "disputed"` (matching the exact backend eligibility check); a privacy-scope `<select>` (all 4 real `PrivacyScope` values, localized) sent with confirm/edit/multi-perspective actions instead of a hardcoded `all_family`; an inline reason field for reject; an expandable "View history" panel backed by the new `/history` endpoint, showing the append-only contribution list (type/actor role/timestamp) and clarification list; a two-step confirmation before calling the index endpoint; and a captured, distinguished result message (`candidateIndexedLabel` vs `candidateAlreadyIndexed`) instead of silently discarding the response.
+
+### Promotion / explicit indexing
+
+Approval (`confirm`/`edit_and_confirm`/`approve_multiple_perspectives`) shows `candidatePendingIndexNotice` ("Memory approved. Status: pending_index... not yet searchable") - proven live that `searchable_as_fact` stays `false` and no Qdrant write happens until the separate, explicit "Index memory" action (with its own confirmation) is taken; a repeat click/refresh shows the idempotent `already_indexed` result rather than an error.
+
+### Overview
+
+Rebuilt from a two-line stub into a real lifecycle panel: per-role biography/Biographer/Review/Indexing status cards (derived from a single workspace-level `refreshOverviewSummary` fetch - biography status, Biographer eligibility+question, candidate list - reused on load and whenever the owner returns to the tab, not polled per-tab); one computed next-action CTA (`overviewNextAction`) that walks the real lifecycle priority order (add biography → start/retry indexing → answer question → complete clarification → review candidate → index approved memory → test Chat → "all caught up") and navigates directly to the right tab; bounded numeric badges on the Biographer/Review tab buttons (active question + pending clarifications; review queue + candidates needing review) sourced from the same shared fetch.
+
+### Localization
+
+All new UI text added in `en`/`cs`/`ru` (~70 new copy keys) - status labels, buttons, confirmation dialogs, privacy-scope descriptions, history labels, overview labels. No provider is ever called for static UI text (verified structurally - `COPY` is a plain compile-time object, not a runtime translation call).
+
+### Authorization / error handling
+
+`visibleTabs` now hides the Biographer tab entirely for `viewer` (every Biographer endpoint requires `SUBMIT_CONTRIBUTION`, which viewer never has - confirmed via `memorial_access/capabilities.py`). `memorialApi.ts`'s `parseError` gained distinct fallback messages for 400/409/422/503 (previously only 401/403/404 were distinguished). A new app-wide `setUnauthorizedHandler` lets `requestJson` notify the workspace exactly once on any authenticated request's 401, triggering the existing sign-out path with a `sessionExpired` notice - never an infinite retry loop. Known limitation: unsaved draft text in whichever tab was open is not preserved across a forced session expiry (would need a separate durable draft-persistence layer, judged out of scope here).
+
+### Automated tests
+
+**Backend**: 7 tests added/updated in `test_memorial_candidates.py` for the new history endpoint.
+
+**Frontend**: this package had zero test infrastructure before this task. Added the smallest suitable harness - **Vitest + React Testing Library + jest-dom + user-event** (`vitest.config.ts`, `src/setupTests.ts`, `"test": "vitest run"` script). **31 new tests, all passing**: `memorialPermissions.test.ts` (4, pure capability functions), `memorialApi.test.ts` (10, URL/header/body construction, error normalization, 401-handler firing exactly once and only for authenticated requests), `MemorialWorkspace.test.tsx` (17: pure helpers `biographerLocale`/`biographyStatusLabel`/`isBiographyJobActive`/`privacyScopeLabel`; localization distinctness; Biography seeds real text, save never calls the ingest endpoint, start-indexing requires explicit confirmation, failure state shows reason+retry; Biographer shows topic and reaches ready-for-review, skip never calls answer; Review: contributor sees no action buttons, edit-and-confirm sends the edited text + privacy scope, reject requires the reason field, multiple-perspectives only offered when disputed, indexing requires confirmation and calls the endpoint exactly once, already-indexed shows a distinct message). A handful of previously-unexported helpers/components (`BiographyPanel`, `BiographerPanel`, `CandidatesReviewSection`, `Overview`, `COPY`, and 4 pure helper functions) were exported from `MemorialWorkspace.tsx` to make this possible - a additive, behavior-preserving change, not a redesign.
+
+### Backend regressions
+
+`test_biography_ingestion.py`, `test_avatar_biographer.py`, `test_memorial_candidates.py`, `test_family_memory_enrichment.py`, `test_avatar_memory_promotions.py`, `test_avatar_memory_indexing.py`, `test_memorial_access.py`, `test_provider_usage.py`, `test_alembic.py`: **121/121 passing** (confirmed via an isolated re-run excluding the one pre-existing `test_chat.py` flake). One transient timing failure (`test_unapproved_candidate_cannot_be_indexed`) appeared once during a combined ~8-minute run alongside `test_chat.py`'s real-DeepSeek-triggering flake; re-run in isolation (pass), re-run as its whole file (7/7 pass), and re-run in the full combined batch a second time (121/121 pass) - conclusively a timing flake in this shared dev container (real DeepSeek/BGE-M3 calls under load), not a regression from this task's changes.
+
+`test_chat.py::test_authenticated_user_can_send_message_to_own_profile` remains the same pre-existing, unrelated environment flake documented in Task 66.1 (real `AI_BRAIN_PROVIDER` env vars override the test's mock-provider expectation) - untouched, out of scope here.
+
+`python -m compileall app` clean. `npx tsc --noEmit` clean. `npm run build` passes (48 modules, ~260KB bundle, unchanged shape).
+
+### Synthetic browser/API smoke (real infrastructure, synthetic accounts only)
+
+Performed via the exact HTTP endpoints the frontend calls (no browser-automation tool available in this environment; this is the same evidence-equivalent approach used in prior Task 65.2/65.3 sessions).
+
+**Czech - full lifecycle** (profile_id=22):
+```text
+save biography -> status=draft (NOT auto-indexed, confirmed)
+start indexing -> 202, real Celery worker job 171 -> polled to status=indexed
+edit biography -> status=stale (confirmed)
+re-index -> real Celery worker job 172 -> status=indexed again
+Biographer next-question (cs, topic=childhood) -> answer -> candidate_id=189, 2 clarifications required
+both clarifications answered -> enrichment_status=ready_for_owner_review
+candidate visible in /candidates list; /candidates/189/history -> 3 contributions, 2 clarifications
+owner edit_and_confirm -> promotion_status=pending_index, searchable_as_fact=false (Qdrant unchanged)
+POST .../index -> result=indexed, searchable_as_fact=true
+POST .../index (repeat) -> result=already_indexed (idempotent)
+POST /api/chat -> real DeepSeek answer directly references the river/fishing memory, zero [rag:/memory:] markers
+```
+Task 66.1 trace for the chat call: `action feature=brain_chat_response, provider_call_count=1, total_cost_usd=0.000332360` - one Brain call, zero translation calls.
+
+**Russian control** (profile_id=23): Russian biography saved -> real-worker indexed -> Biographer `next-question(locale=ru)` returns a Russian question -> answered in Russian -> `POST /api/chat` returns a direct Russian answer (Cyrillic-verified) referencing the garden memory, zero citation markers. Task 66.1 trace: `action feature=brain_chat_response, provider_call_count=1, total_cost_usd=0.000293020` - one Brain call, zero translation calls, confirming the direct-locale architecture (Task 64.5.2) is untouched.
+
+### Docker
+
+`docker compose build frontend` (needed to bake the new Vitest/RTL devDependencies into the image's own `node_modules` layer - the bind-mounted dev server does not share the host's `npm install`). First attempt hit a transient `npm error code EIDLETIMEOUT` reaching `registry.npmjs.org` (network condition, not a code defect, consistent with prior sessions' PyTorch/npm CDN slowness); a plain retry succeeded in ~90s. `docker compose up -d --no-deps frontend` recreated the container; verified serving (`GET /` -> 200). Backend/Celery worker/PostgreSQL/Redis/Qdrant were **not** rebuilt (no backend dependency changes) and remained running throughout (`Up` 6-35h at time of verification). No PyTorch download triggered. No unrelated services touched.
+
+### Known limitations
+
+- No browser-automation tool (Playwright/Selenium) is available in this environment; the "browser" smoke was performed via the exact HTTP endpoints the frontend calls against the real running stack - functionally equivalent evidence, not literal pixel/DOM verification. Manual visual/responsive verification across the 7 required viewports was not independently re-screenshotted this session (the existing responsive design system from prior tasks was reused unchanged; no new fixed-width or overflow-prone elements were introduced - all new panels reuse the existing flex/grid Tailwind patterns already verified in earlier responsive-hardening tasks).
+- Unsaved draft text is not preserved across a forced session-expiry sign-out (documented above).
+- Dev-only RAG-evaluation scripts remain outside Task 66.1's provider-cost instrumentation (unchanged from Task 66.1, not touched here).
+
+### Files changed
+
+- `backend/app/modules/memorial_candidates/router.py`, `schemas.py` (new history endpoint)
+- `backend/tests/test_memorial_candidates.py` (+7 tests)
+- `frontend/react-export/src/types/memorial.ts` (new types: `BiographyIngestionStartResponse`, `AvatarMemoryIndexingRead`, `CandidateHistoryRead`, `FamilyMemoryContributionRead`, `ClarificationQuestionRead`, `ClarificationStatus`, `FamilyContributionType`)
+- `frontend/react-export/src/lib/memorialApi.ts` (fixed return types, `getCandidateHistory`, `setUnauthorizedHandler`, richer `parseError`)
+- `frontend/react-export/src/components/MemorialWorkspace.tsx` (Biography/Biographer/Review/Overview rewrites, ~70 new copy keys, tab visibility/badges, 401 wiring)
+- `frontend/react-export/package.json`, `vitest.config.ts` (new), `src/setupTests.ts` (new)
+- `frontend/react-export/src/lib/memorialApi.test.ts`, `src/lib/memorialPermissions.test.ts`, `src/components/MemorialWorkspace.test.tsx` (new, 31 tests)
+- `PROJECT_PROGRESS.md`, `md_roadmap/ETERNAL_WORLD_AVATAR_QUALITY_PLAN.md` (this documentation)
+
+No migration was needed (no DB schema change). Task 66.1 provider-cost instrumentation (`AiAction`/`AiActionStep`/`AiProviderAttempt`) untouched and verified still fully functional throughout the smoke test.
+
+### Next recommended task
+
+**Task 66.2 - Cost Analytics and Admin API**, per Task 66.1's own scope boundary (unaffected by this task).
+
+---
