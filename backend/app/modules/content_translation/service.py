@@ -24,6 +24,14 @@ from app.modules.content_translation.validators import (
     ContentTranslationValidationError,
     validate_translation_result,
 )
+from app.modules.provider_usage.context import AiCallContext
+from app.modules.provider_usage.enums import AiStepType
+from app.modules.provider_usage.service import (
+    AuditFinalizationError,
+    AuditPersistenceError,
+    run_instrumented_single_attempt_action,
+)
+from app.modules.provider_usage.usage import normalize_openai_compatible_usage
 
 
 logger = get_logger("content_translation")
@@ -37,6 +45,7 @@ def translate_content_field(
     db: Session,
     request: TranslationFieldRequest,
     *,
+    call_context: AiCallContext,
     provider: ContentTranslationProvider | None = None,
 ) -> MemoryContentTranslation:
     """Translate one field and persist the resulting state.
@@ -47,6 +56,13 @@ def translate_content_field(
     rolled back by a translation-provider outage. Never approves memory,
     never writes to Qdrant, and never overwrites ``source_text`` with the
     translated text.
+
+    ``call_context`` (Task 66.1) attributes this exact provider call to a
+    durable ``AiAction``/token/cost record via the shared instrumentation
+    wrapper - every caller must build one explicitly (feature/execution
+    source/user or memorial identity where known) rather than relying on a
+    default, since translation calls happen from several different features
+    (dynamic chat translation, memory candidate/contribution finalization).
     """
     source_hash = compute_source_hash(request.source_text)
     row = repository.start_pending_attempt(
@@ -65,17 +81,34 @@ def translate_content_field(
 
     active_provider = provider or build_content_translation_provider()
     started_at = perf_counter()
-    try:
+
+    def _translate_and_validate():
         response = active_provider.translate(
             source_text=request.source_text,
             source_language=str(request.source_language),
             target_language=str(request.target_language),
         )
         validate_translation_result(source_text=request.source_text, result=response.result)
+        return response
+
+    try:
+        response, _ai_action = run_instrumented_single_attempt_action(
+            db,
+            context=call_context,
+            step_type=AiStepType.PROVIDER_TRANSLATION,
+            provider=active_provider.provider_name,
+            model=getattr(active_provider, "model", "mock"),
+            operation=_translate_and_validate,
+            extract_token_usage=lambda resp: normalize_openai_compatible_usage(
+                raw_response={"id": resp.provider_request_id, "usage": resp.usage}
+            ),
+        )
     except (
         ContentTranslationProviderRequestError,
         ContentTranslationProviderResponseError,
         ContentTranslationValidationError,
+        AuditPersistenceError,
+        AuditFinalizationError,
     ) as exc:
         repository.mark_failed(db, row)
         set_content_translation_status_current(counts_by_status=repository.count_by_status(db))
@@ -136,6 +169,7 @@ def retry_translation(
     target_language: str,
     source_text: str,
     candidate_id: int | None,
+    call_context: AiCallContext,
     contribution_id: int | None = None,
     clarification_id: int | None = None,
     provider: ContentTranslationProvider | None = None,
@@ -158,6 +192,7 @@ def retry_translation(
             target_language=target_language,
             source_text=source_text,
         ),
+        call_context=call_context,
         provider=provider,
     )
     observe_content_translation_retry(

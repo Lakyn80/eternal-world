@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Any
+
 from prometheus_client import CONTENT_TYPE_LATEST, Counter, Gauge, Histogram, generate_latest
 from starlette.responses import Response
 
@@ -723,3 +725,239 @@ def observe_avatar_memory_query_intent(*, intent: str) -> None:
 def observe_avatar_corrected_memory_resolution(*, resolved: bool) -> None:
     result = "resolved" if resolved else "unresolved"
     AVATAR_CORRECTED_MEMORY_RESOLUTION_TOTAL.labels(result).inc()
+
+
+# --- Task 66.1: Provider Usage and Cost Foundation ---------------------------
+#
+# Every label here is a small closed set of enum-like values (feature,
+# execution_source, status, token_type, cost_component, monetary_cost_status,
+# locale, error-classification stage) - never a user id, memorial id,
+# trace/action/step id, or raw provider error message, per the hard
+# cardinality restriction in Task 66.1's scope.
+
+AI_COST_ACTIONS_TOTAL = Counter(
+    "ai_cost_actions_total",
+    "Total AI actions (one user-visible AI operation each).",
+    labelnames=("feature", "status", "execution_source"),
+)
+AI_COST_ACTION_DURATION_SECONDS = Histogram(
+    "ai_cost_action_duration_seconds",
+    "AI action duration in seconds.",
+    labelnames=("feature", "status", "execution_source"),
+)
+AI_COST_PROVIDER_CALLS_TOTAL = Counter(
+    "ai_cost_provider_calls_total",
+    "Total individual paid-provider HTTP attempts.",
+    labelnames=("provider", "model", "feature", "status"),
+)
+AI_COST_PROVIDER_LATENCY_SECONDS = Histogram(
+    "ai_cost_provider_latency_seconds",
+    "Paid-provider HTTP attempt latency in seconds.",
+    labelnames=("provider", "model", "feature", "status"),
+)
+AI_COST_TOKENS_TOTAL = Counter(
+    "ai_cost_tokens_total",
+    "Total provider tokens by type.",
+    labelnames=("provider", "model", "feature", "token_type"),
+)
+AI_COST_USD_TOTAL = Counter(
+    "ai_cost_usd_total",
+    "Total provider cost in USD by component.",
+    labelnames=("provider", "model", "feature", "cost_component", "monetary_cost_status"),
+)
+AI_COST_CACHED_INPUT_SAVINGS_USD_TOTAL = Counter(
+    "ai_cost_cached_input_savings_usd_total",
+    "Total USD saved via provider prompt caching on input tokens.",
+    labelnames=("provider", "model", "feature"),
+)
+AI_COST_RETRIES_TOTAL = Counter(
+    "ai_cost_retries_total",
+    "Total paid-provider call retries (attempt_number > 1).",
+    labelnames=("provider", "model", "feature", "reason"),
+)
+AI_COST_TRANSLATION_CACHE_TOTAL = Counter(
+    "ai_cost_translation_cache_total",
+    "Total dynamic-translation cache hit/miss events.",
+    labelnames=("source_locale", "target_locale", "status"),
+)
+AI_COST_PRICING_UNKNOWN_TOTAL = Counter(
+    "ai_cost_pricing_unknown_total",
+    "Total successful provider attempts priced as unknown (no catalog entry).",
+    labelnames=("provider", "model", "feature"),
+)
+AI_COST_AUDIT_FAILURES_TOTAL = Counter(
+    "ai_cost_audit_failures_total",
+    "Total durable audit-trail persistence failures for AI cost accounting.",
+    labelnames=("stage", "feature"),
+)
+
+_AI_COST_FEATURES = frozenset(
+    {
+        "brain_chat_response",
+        "avatar_biographer_question",
+        "dynamic_memory_translation",
+        "memory_candidate_finalization",
+        "memory_conflict_analysis",
+        "memory_summarization",
+        "evaluation",
+        "development_test",
+        "other",
+    }
+)
+_AI_COST_EXECUTION_SOURCES = frozenset({"fastapi", "celery", "internal", "test"})
+_AI_COST_ACTION_STATUSES = frozenset({"pending", "running", "succeeded", "failed", "cancelled"})
+_AI_COST_ATTEMPT_STATUSES = frozenset(
+    {
+        "pending",
+        "succeeded",
+        "timeout",
+        "rate_limited",
+        "http_error",
+        "invalid_response",
+        "empty_response",
+        "cancelled",
+        "audit_error",
+        "internal_error",
+    }
+)
+_AI_COST_TOKEN_TYPES = frozenset(
+    {"input", "cached_input", "uncached_input", "output", "reasoning", "total"}
+)
+_AI_COST_COST_COMPONENTS = frozenset(
+    {"uncached_input", "cached_input", "output", "reasoning", "total"}
+)
+_AI_COST_MONETARY_STATUSES = frozenset({"not_applicable", "calculated", "partial", "unknown"})
+_AI_COST_TRANSLATION_CACHE_STATUSES = frozenset({"hit", "miss"})
+_AI_COST_LOCALES = frozenset({"cs", "ru", "en"})
+
+
+def normalize_ai_feature_label(feature: str | None) -> str:
+    normalized = (feature or "").strip().lower()
+    return normalized if normalized in _AI_COST_FEATURES else "other"
+
+
+def normalize_ai_execution_source_label(execution_source: str | None) -> str:
+    normalized = (execution_source or "").strip().lower()
+    return normalized if normalized in _AI_COST_EXECUTION_SOURCES else "internal"
+
+
+def normalize_ai_action_status_label(status: str | None) -> str:
+    normalized = (status or "").strip().lower()
+    return normalized if normalized in _AI_COST_ACTION_STATUSES else "failed"
+
+
+def normalize_ai_attempt_status_label(status: str | None) -> str:
+    normalized = (status or "").strip().lower()
+    return normalized if normalized in _AI_COST_ATTEMPT_STATUSES else "internal_error"
+
+
+def normalize_ai_monetary_status_label(status: str | None) -> str:
+    normalized = (status or "").strip().lower()
+    return normalized if normalized in _AI_COST_MONETARY_STATUSES else "unknown"
+
+
+def normalize_ai_locale_label(locale: str | None) -> str:
+    normalized = (locale or "").strip().lower()
+    return normalized if normalized in _AI_COST_LOCALES else "other"
+
+
+def normalize_ai_provider_model_labels(provider: str | None, model: str | None) -> tuple[str, str]:
+    normalized_provider = normalize_brain_provider_label(provider)
+    normalized_model = normalize_brain_model_label(model)
+    return normalized_provider, normalized_model
+
+
+def observe_ai_action_completed(
+    *,
+    feature: str,
+    status: str,
+    execution_source: str,
+    duration_seconds: float,
+) -> None:
+    labels = (
+        normalize_ai_feature_label(feature),
+        normalize_ai_action_status_label(status),
+        normalize_ai_execution_source_label(execution_source),
+    )
+    AI_COST_ACTIONS_TOTAL.labels(*labels).inc()
+    AI_COST_ACTION_DURATION_SECONDS.labels(*labels).observe(max(0.0, duration_seconds))
+
+
+def observe_ai_provider_attempt(
+    *,
+    provider: str,
+    model: str,
+    feature: str,
+    status: str,
+    latency_seconds: float,
+    token_usage: Any | None = None,
+) -> None:
+    normalized_provider, normalized_model = normalize_ai_provider_model_labels(provider, model)
+    normalized_feature = normalize_ai_feature_label(feature)
+    normalized_status = normalize_ai_attempt_status_label(status)
+    call_labels = (normalized_provider, normalized_model, normalized_feature, normalized_status)
+    AI_COST_PROVIDER_CALLS_TOTAL.labels(*call_labels).inc()
+    AI_COST_PROVIDER_LATENCY_SECONDS.labels(*call_labels).observe(max(0.0, latency_seconds))
+
+    if token_usage is None:
+        return
+
+    token_values = (
+        ("input", token_usage.input_tokens),
+        ("cached_input", token_usage.cached_input_tokens),
+        ("uncached_input", token_usage.uncached_input_tokens),
+        ("output", token_usage.output_tokens),
+        ("reasoning", token_usage.reasoning_tokens),
+        ("total", token_usage.total_tokens),
+    )
+    for token_type, value in token_values:
+        if value:
+            AI_COST_TOKENS_TOTAL.labels(
+                normalized_provider, normalized_model, normalized_feature, token_type
+            ).inc(value)
+
+    monetary_status = normalize_ai_monetary_status_label(
+        getattr(token_usage.monetary_cost_status, "value", token_usage.monetary_cost_status)
+    )
+    cost_values = (
+        ("uncached_input", token_usage.uncached_input_cost_usd),
+        ("cached_input", token_usage.cached_input_cost_usd),
+        ("output", token_usage.output_cost_usd),
+        ("reasoning", token_usage.reasoning_cost_usd),
+        ("total", token_usage.total_cost_usd),
+    )
+    for cost_component, value in cost_values:
+        if value:
+            AI_COST_USD_TOTAL.labels(
+                normalized_provider, normalized_model, normalized_feature, cost_component, monetary_status
+            ).inc(float(value))
+
+    if token_usage.cached_input_savings_usd:
+        AI_COST_CACHED_INPUT_SAVINGS_USD_TOTAL.labels(
+            normalized_provider, normalized_model, normalized_feature
+        ).inc(float(token_usage.cached_input_savings_usd))
+
+    if monetary_status == "unknown":
+        AI_COST_PRICING_UNKNOWN_TOTAL.labels(normalized_provider, normalized_model, normalized_feature).inc()
+
+
+def observe_ai_retry(*, provider: str, model: str, feature: str, reason: str | None) -> None:
+    normalized_provider, normalized_model = normalize_ai_provider_model_labels(provider, model)
+    normalized_reason = (reason or "unspecified").strip().lower() or "unspecified"
+    AI_COST_RETRIES_TOTAL.labels(
+        normalized_provider, normalized_model, normalize_ai_feature_label(feature), normalized_reason
+    ).inc()
+
+
+def observe_ai_translation_cache(*, source_locale: str, target_locale: str, status: str) -> None:
+    normalized_status = status.strip().lower()
+    if normalized_status not in _AI_COST_TRANSLATION_CACHE_STATUSES:
+        normalized_status = "miss"
+    AI_COST_TRANSLATION_CACHE_TOTAL.labels(
+        normalize_ai_locale_label(source_locale), normalize_ai_locale_label(target_locale), normalized_status
+    ).inc()
+
+
+def observe_ai_audit_failure(*, stage: str, feature: str) -> None:
+    normalized_stage = (stage or "unknown").strip().lower() or "unknown"
+    AI_COST_AUDIT_FAILURES_TOTAL.labels(normalized_stage, normalize_ai_feature_label(feature)).inc()

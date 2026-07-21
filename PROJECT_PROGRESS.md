@@ -8626,3 +8626,125 @@ No migration was needed. No Dockerfile/requirements file was changed (both alrea
 **Task 66.1 - Provider Usage and Cost Foundation** (the AI cost-observability epic), as a separate, later task, per this task's own scope boundary.
 
 ---
+
+## Task 66.1 - Provider Usage and Cost Foundation (2026-07-21)
+
+Status: **complete**. Every paid DeepSeek/OpenAI-compatible provider call now produces a durable, `Decimal`-precise, versioned-pricing PostgreSQL audit trail (action -> step -> provider attempt), structured logs, and low-cardinality Prometheus metrics, through one shared instrumentation wrapper that fails closed if the audit trail cannot be written. Full detail in `docs/ai-provider-cost-foundation.md`; this section documents the grounded audit, tests, and live evidence.
+
+Starting branch/commit: `staging/eternalworld-lukiora-20260715` at `2e50cb0` (verified; working tree clean except the pre-existing untracked `backend/artifacts/memorial_account_binding_audit/`).
+
+### Provider-call inventory (grounded before implementation)
+
+| Call path | Feature | FastAPI/Celery | Prior usage capture | Retry behavior | Prior trace |
+|---|---|---|---|---|---|
+| `OpenAICompatibleBrainAgentProvider.generate_response` | Brain chat | both (via 2 real callers below) | only `prompt_tokens`/`completion_tokens`/`total_tokens`; no request id, no cached/reasoning tokens | none - single attempt | none |
+| `chat/service.py: send_chat_message` (`/api/chat`) | brain_chat_response | FastAPI | - | - | request_id only |
+| `demo_fa_chat/service.py: run_demo_fa_chat_message` | brain_chat_response | FastAPI (unauthenticated demo) | - | - | trace_id |
+| `rag_evaluation` eval scripts (`brain_eval_runner.py`/`brain_eval_e2e_runner.py`, `scripts/run_brain_rag_eval.py`) | evaluation | dev-only script, never production | - | - | - |
+| `OpenAICompatibleContentTranslationProvider.translate` | dynamic translation | both (via callers below) | **no usage capture at all** | none | none |
+| `content_translation/service.py: translate_content_field` | (shared choke point for all 4 real translation callers) | FastAPI | - | - | - |
+| `demo_fa_chat/service.py: _localize_review_text` (cache decision) | dynamic_memory_translation | FastAPI | - | - | - |
+| `demo_fa_chat/service.py: retry_demo_memory_candidate_translation` | dynamic_memory_translation | FastAPI | - | - | - |
+| `family_memory_enrichment/service.py` (contribution + finalized-memory translate) | memory_candidate_finalization | FastAPI | - | - | - |
+| `app/worker/tasks.py` (4 Celery tasks) | - | Celery | **confirmed: zero paid-provider calls in any Celery task today** - all 4 tasks (`run_rag_source_processing_job`, `run_multi_embedding_eval_job`, `run_memorial_contribution_indexing_job`, `run_biography_indexing_job`) only do BGE-M3/Qdrant work | - | - |
+
+Also confirmed: no `openai` SDK import exists anywhere (both providers are hand-rolled `httpx` calls); no existing table/column tracked provider usage or cost (`grep -i "usage|cost|token|pricing"` across `models.py` found only unrelated `ChatMessage.token_count`/`RagChunk.token_estimate`, both display/sizing fields, not billing); `BackgroundJob` (reused as-is, untouched) has no cost fields and was not extended - a new, purpose-built set of tables was the correct choice, not a retrofit.
+
+### Real DeepSeek response shape (verified against official docs, not guessed)
+
+`https://api-docs.deepseek.com/api/create-chat-completion`: top-level `id` (provider request id); `usage.prompt_tokens` = `prompt_cache_hit_tokens` + `prompt_cache_miss_tokens`; `usage.completion_tokens`; `usage.total_tokens`; optional nested `usage.completion_tokens_details.reasoning_tokens` (thinking-mode models only). The currently configured `AI_BRAIN_MODEL=deepseek-chat` is non-thinking, so `reasoning_tokens` is legitimately absent (normalized to `None`, never `0`).
+
+### Pricing (verified live, not invented)
+
+Source: `https://api-docs.deepseek.com/quick_start/pricing`, fetched 2026-07-21. `deepseek-chat`: $0.14/1M uncached input, $0.0028/1M cached input, $0.28/1M output, USD. `pricing_version="deepseek_2026_07_21_v1"`. **Time-sensitive finding, out of scope to act on here**: DeepSeek's docs state `deepseek-chat`/`deepseek-reasoner` deprecate 2026-07-24 15:59 UTC (mapping to `deepseek-v4-flash`, already billed at the same rate) - flagged for a future task, not fixed in Task 66.1 (no model switching permitted).
+
+### Architecture
+
+`backend/app/modules/provider_usage/`: `enums.py` (closed taxonomies: `AiFeature`, `AiStepType`, `ExecutionSource`, `CacheStatus`, `MonetaryCostStatus`, `AiActionStatus`, `AiStepStatus`, `ProviderAttemptStatus`, `AiErrorCategory`), `pricing.py` (versioned `Decimal` catalog + `get_pricing`), `usage.py` (`normalize_openai_compatible_usage`, `validate_token_usage`, `calculate_provider_usage_cost`), `context.py` (`AiCallContext` - JSON-serializable, crosses the FastAPI/Celery process boundary via `to_task_kwargs`/`from_task_kwargs`), `repository.py` (idempotent create/finalize/recompute), `service.py` (`execute_paid_provider_call` - the one shared instrumentation wrapper; `run_instrumented_single_attempt_action` - the higher-level helper every current call site uses).
+
+**New DB models** (`app/db/models.py`): `AiAction`, `AiActionStep`, `AiProviderAttempt` (migration `20260721_0024`, purely additive, 3 new tables, no existing table altered). **Reused as-is**: `BackgroundJob`/`job_tracking` (considered, not extended - it tracks Celery job lifecycle, not per-provider-attempt cost, and no Celery task makes paid calls yet); `app.core.logging.get_logger`/`log_event` (unchanged); `app.core.metrics` (extended with new `ai_cost_*` metrics following its exact existing `Counter`/`Histogram` + `normalize_*_label` + `observe_*` convention).
+
+**Aggregation strategy**: idempotent recomputation from provider attempts (not incremental counters) - `repository.recompute_action_totals`/`recompute_step_totals` always derive totals by summing the durable `AiProviderAttempt` rows, so repeated finalization (a Celery redelivery, a duplicate call) can never double-count. Redelivery-safety itself comes from `(step_id, attempt_number)` uniqueness in `get_or_create_pending_attempt`: a repeated call for the same logical attempt returns the existing terminal row instead of inserting a duplicate or re-calling the provider.
+
+**Fail-closed audit policy**: the pending `AiProviderAttempt` row is created and committed *before* any network call; if that fails, `AuditPersistenceError` is raised and the provider is never called. If the provider call succeeds but persisting its usage/cost afterward fails, `AuditFinalizationError` is raised (the pending row stays visible, uncounted, for reconciliation) rather than returning a silent success.
+
+**Provider adapters extended** (Part D.13): `ai_agents/brain/providers/openai_compatible.py` and `content_translation/provider.py` now retain the full real usage object (`prompt_cache_hit_tokens`/`prompt_cache_miss_tokens`/`completion_tokens_details.reasoning_tokens`) and the top-level `id`, not just the 3 OpenAI-shaped fields kept previously - additive, no behavior change to existing consumers of `.metadata["usage"]`.
+
+### FastAPI integration
+
+`chat/service.py: send_chat_message` and `demo_fa_chat/service.py: run_demo_fa_chat_message` both now wrap their existing `orchestrator.generate_chat_response(...)` call with `run_instrumented_single_attempt_action` (feature=`brain_chat_response`), attributed to `user_id`/`memorial_id`/`message_id`/`trace_id` where available - **no change to Brain/Orchestrator internals themselves**, since both are already the single choke point every real Brain caller funnels through. `content_translation/service.py: translate_content_field` (the single choke point for all 4 real translation callers) now requires an explicit `call_context: AiCallContext` and wraps `active_provider.translate(...)` + validation the same way; its 2 remaining callers (`demo_fa_chat`, `family_memory_enrichment`) were updated to pass one, using whatever real identity (`user_id`/`memorial_id`/`locale`) is available at that call site.
+
+### Celery integration
+
+`AiCallContext.to_task_kwargs()`/`from_task_kwargs()` provide JSON-safe serialization across the process boundary (never relies on `contextvars`). **No current Celery task makes a paid provider call** (see inventory above) - the propagation/redelivery-safety mechanism is proven at the repository/service layer (tests below) since there is no real production Celery+paid-call site to wire into yet. This is an honestly-reported scope boundary, not a gap in the mechanism itself.
+
+### Tests
+
+New `backend/tests/test_provider_usage.py` - **43 tests**, all passing: pricing (known/unknown/partial/overlapping-catalog-rejected/decimal-precision/cached-savings), usage normalization (complete/missing-cached/missing-reasoning/request-id-present-absent/empty/extra-fields-redacted/negative-rejected/cached-exceeds-input-rejected/inconsistent-totals-rejected), persistence (action/step/attempt creation, pre-call persistence proven before `operation()` runs, successful finalization, failed call recorded+reraised, timeout classification, retry creates 2 separate attempt rows with correct aggregated totals, repeated finalization is idempotent, incomplete pending attempt stays detectable, audit-initialization failure prevents the provider call entirely, audit-finalization failure raises rather than silently succeeding), Celery context round-trip + redelivery non-double-counting, `run_instrumented_single_attempt_action` success/failure paths, translation cache hit/miss counters, provider-call/unknown-pricing/audit-failure metrics, and privacy (no string/prompt text ever appears in `raw_usage_redacted`; `AiCallContext`'s own fields contain no secret-shaped names).
+
+One pre-existing test fixed as part of this task (not a new defect): `test_alembic.py`'s hardcoded expected head revision (`20260721_0023` -> `20260721_0024`), required whenever a new migration is added.
+
+Full regression (15 files touched or adjacent to this change - `test_provider_usage.py`, `test_content_translation.py`, `test_bilingual_family_memory.py`, `test_family_memory_enrichment.py`, `test_demo_fa_chat.py`, `test_demo_fa_chat_bilingual.py`, `test_export_demo_fa_memory.py`, `test_ai_agents.py`, `test_bilingual_retrieval_evaluation.py`, `test_biography_ingestion.py`, `test_avatar_biographer.py`, `test_memorial_candidates.py`, `test_alembic.py`, `test_avatar_quality_evaluation.py`, `test_conversation_memory_candidates.py`): **224/224 passing**. `python -m compileall app` clean.
+
+**Known pre-existing flake, not caused by this task** (reproduced identically on the pre-Task-66.1 commit `2e50cb0` via `git stash`): `test_chat.py::test_authenticated_user_can_send_message_to_own_profile` asserts the deterministic mock-provider reply text, but this dev container's real `AI_BRAIN_PROVIDER=openai_compatible` OS environment variables leak into `Settings()` for this specific test (it doesn't override/mock the provider), so it hits the real DeepSeek and gets a real (correct, but different-text) answer. Same root cause already fixed in Task 65.3 for `test_ai_agents.py`'s two analogous tests; `test_chat.py` was not in that task's scope and is left as a documented, pre-existing, unrelated gap here too (fixing it is a one-line `monkeypatch.delenv` change but is out of this task's scope).
+
+Migration round-trip (`upgrade head` -> `downgrade -1` -> `upgrade head`) passed cleanly against real PostgreSQL.
+
+### Live smoke evidence (synthetic account only, never the real owner's memorial)
+
+Budget: hard $0.01 USD ceiling, enforced via a pre-call worst-case-token-count estimate against the real pricing catalog (test-safety mechanism only, not a production budget system).
+
+**Brain Chat** (fresh synthetic account+profile, registered via `/api/auth/register`):
+
+```text
+Czech:   POST /api/chat/20/messages "Ahoj, jak se dnes máš?"
+  -> action_id=4, feature=brain_chat_response, 1 provider call, 1 Brain attempt
+  -> input_tokens=1948, cached_input_tokens=0, output_tokens=24
+  -> total_cost_usd=0.000279440, pricing_version=deepseek_2026_07_21_v1, latency_ms=2170
+Russian: POST /api/chat/20/messages "Привет, как ты сегодня?"
+  -> action_id=5, feature=brain_chat_response, 1 provider call, 1 Brain attempt
+  -> input_tokens=1979, cached_input_tokens=1920 (prompt-cache hit on the repeated system prompt), output_tokens=25
+  -> total_cost_usd=0.000020636, pricing_version=deepseek_2026_07_21_v1, latency_ms=1778
+```
+
+Both: exactly 1 provider call per action (zero separate translation calls), real DeepSeek answers directly in the requested language (direct-locale architecture preserved).
+
+**Dynamic translation** (synthetic entity, never a real candidate):
+
+```text
+First call (cache miss): translate_content_field(cs->ru, "Babička mi vždycky vyprávěla pohádky před spaním.")
+  -> 1 new AiAction (feature=dynamic_memory_translation), 1 provider call
+  -> total_tokens=492, total_cost_usd=0.000021515, monetary_cost_status=calculated
+Repeat (identical source text): is_translation_current(...) == True
+  -> record_translation_cache_hit() fires -> zero new AiAction rows (action count unchanged at 1)
+```
+
+**Total live smoke cost: 0.000321591 USD** (well under the $0.01 ceiling).
+
+### Known limitations
+
+- Dev-only RAG-evaluation scripts (`brain_eval_runner.py`/`brain_eval_e2e_runner.py`) are not yet instrumented - manual developer tools only, never production traffic, never exercised by automated tests.
+- No Celery task currently makes a paid provider call, so Celery propagation is proven at the repository/service layer, not through a real end-to-end Celery+DeepSeek path (none exists to wire into yet).
+- No internal/admin HTTP inspection endpoint was added - no admin-authorization pattern exists yet in this codebase (`User.is_superuser` is an unused column); `repository.get_action_with_details` is the ready-to-wrap query seam for Task 66.2.
+- `test_chat.py::test_authenticated_user_can_send_message_to_own_profile` has a pre-existing, unrelated environment flake (documented above, proven to predate this task).
+- DeepSeek's own documentation flags `deepseek-chat` for deprecation on 2026-07-24 - a real near-term risk, explicitly out of scope to act on here.
+
+### Files changed
+
+- `backend/app/modules/provider_usage/` (new module: `enums.py`, `pricing.py`, `usage.py`, `context.py`, `repository.py`, `service.py`)
+- `backend/alembic/versions/20260721_0024_add_provider_usage_cost_foundation.py` (new migration)
+- `backend/app/db/models.py` (`AiAction`/`AiActionStep`/`AiProviderAttempt`)
+- `backend/app/core/metrics.py` (new `ai_cost_*` metrics + normalization helpers)
+- `backend/app/modules/ai_agents/brain/providers/openai_compatible.py` (extended usage/request-id extraction)
+- `backend/app/modules/content_translation/provider.py` (extended usage/request-id extraction)
+- `backend/app/modules/chat/service.py`, `backend/app/modules/demo_fa_chat/service.py`, `backend/app/modules/content_translation/service.py`, `backend/app/modules/family_memory_enrichment/service.py` (instrumentation call sites)
+- `backend/tests/test_provider_usage.py` (new, 43 tests), `backend/tests/test_content_translation.py`, `backend/tests/test_bilingual_family_memory.py` (updated to pass `call_context`), `backend/tests/test_alembic.py` (updated head revision)
+- `docs/ai-provider-cost-foundation.md` (new), `PROJECT_PROGRESS.md`, `md_roadmap/ETERNAL_WORLD_AVATAR_QUALITY_PLAN.md` (this documentation)
+
+No Dockerfile/docker-compose change was needed. No frontend change was needed (no frontend code touched).
+
+### Next recommended task
+
+**Task 66.2 - Cost Analytics and Admin API**, per this task's own scope boundary.
+
+---

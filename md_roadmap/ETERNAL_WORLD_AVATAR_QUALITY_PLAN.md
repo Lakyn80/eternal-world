@@ -617,6 +617,26 @@ Known limitations:
 Next recommended task:
 ```
 
+---
+
+## 18. AI Provider Cost Accounting Permanent Rules
+
+Established by Task 66.1 (Provider Usage and Cost Foundation, see `PROJECT_PROGRESS.md` and `docs/ai-provider-cost-foundation.md`). Apply to every future task touching a paid AI provider call:
+
+```text
+Every paid provider call requires a durable action, step, and provider-attempt record.
+Unknown pricing must never be represented as zero.
+Cost calculations must use Decimal and a versioned pricing catalog.
+Retries and failed provider attempts must remain individually visible.
+Paid calls must fail closed if durable audit initialization cannot be created.
+Static UI localization must not call a paid provider.
+Cached dynamic translations must be reused without a provider call.
+Supported-locale Chat must answer directly without query-and-answer double translation.
+Provider secrets and private biography/memory text must never appear in cost logs or Prometheus labels.
+Prometheus AI-cost labels must remain low-cardinality.
+Generated test artifacts and runtime audit exports must not be committed.
+```
+
 
 
 # Eternal World — Avatar Quality Architecture Plan
@@ -1686,3 +1706,39 @@ Regresní sada (11 souborů): 144/144 prošlo
 Task 65.3 se **považuje za kompletně dokončený** v rozsahu definovaném zadáním — obě položky, které Task 65.2 nechal mimo rozsah, jsou nyní vyřešeny a živě ověřeny, včetně nově nalezené a opravené chyby v `docker-compose.yml`. Žádná část zadání nezůstala neprokázaná; direct-call diagnostika byla použita jen jako doplňkový, výslovně povolený vedlejší důkaz vedle hlavního důkazu přes skutečný worker.
 
 Další doporučený task: **Task 66.1 — Provider Usage and Cost Foundation** (AI cost-observability epic, samostatný budoucí task, mimo rozsah Tasku 65.3).
+
+## 20. Task 66.1 status (2026-07-21) — Provider Usage and Cost Foundation dokončeno
+
+Task 66.1 vybudoval trvalý základ pro přesné účtování každého placeného DeepSeek volání: verzovaný `Decimal` ceník, normalizaci token usage, trojici trvalých tabulek (action → step → provider attempt), sdílenou instrumentační vrstvu s fail-closed politikou, strukturované logy a Prometheus metriky. Plný popis je v `PROJECT_PROGRESS.md`, sekce "Task 66.1 - Provider Usage and Cost Foundation (2026-07-21)", a v `docs/ai-provider-cost-foundation.md`.
+
+Stručně:
+
+```text
+Ceník ověřen živě z oficiální DeepSeek dokumentace (ne vymyšlen): deepseek-chat
+  $0.14/1M uncached input, $0.0028/1M cached input, $0.28/1M output
+DŮLEŽITÉ: DeepSeek oznamuje deprecation deepseek-chat/deepseek-reasoner k
+  2026-07-24 15:59 UTC (mapování na deepseek-v4-flash) - mimo rozsah tohoto
+  tasku opravit, jen zdokumentováno jako riziko
+3 nové tabulky (ai_actions/ai_action_steps/ai_provider_attempts), čistě
+  aditivní migrace, žádná existující tabulka nezměněna
+Sdílená instrumentační vrstva (execute_paid_provider_call) - retry vytváří
+  nový attempt řádek, nikdy nepřepisuje neúspěšný; fail-closed: pokud selže
+  zápis pending řádku PŘED voláním provideru, provider se nikdy nezavolá
+Idempotentní přepočet totals ze skutečných attempt řádků - opakovaná
+  finalizace (např. Celery redelivery) nikdy nezdvojí náklady
+Autentizovaný Chat i demo FA chat: 1 Brain volání na zprávu, 0 překladových
+  volání (přímá lokalizace zachována, česky i rusky živě ověřeno)
+Cache hit u překladu: 0 nových provider volání, 0 nových AiAction řádků
+Živě ověřeno (syntetický účet, nikdy ne skutečný majitelův memorial):
+  česká zpráva $0.000279440, ruská zpráva $0.000020636 (cache-hit na
+  system promptu: 1920 z 1979 vstupních tokenů), překlad cache-miss
+  $0.000021515 -> celkem $0.000321591, pod limitem $0.01
+43 nových testů (pricing/normalizace/persistence/redelivery/metriky/
+  privacy) + 224/224 v plné regresní sadě
+```
+
+Vědomě mimo rozsah (zdokumentováno, ne skryto): dev-only evaluation skripty (`brain_eval_runner.py`) nejsou instrumentovány (nikdy produkční provoz); žádný Celery task dnes nevolá placený provider, takže Celery propagace je ověřena jen na úrovni repository/service vrstvy; žádný interní/admin HTTP endpoint nebyl přidán (v repozitáři neexistuje admin-autorizační vzor) - připravena je jen `repository.get_action_with_details` jako budoucí query seam pro Task 66.2.
+
+Task 66.1 se **považuje za kompletně dokončený** v rozsahu definovaném zadáním. Dashboardy, rozpočty, anomaly detection a admin API zůstávají mimo rozsah (Task 66.2/66.3).
+
+Další doporučený task: **Task 66.2 — Cost Analytics and Admin API** (samostatný budoucí task, mimo rozsah Tasku 66.1).

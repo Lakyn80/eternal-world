@@ -28,6 +28,7 @@ from app.modules.family_memory_enrichment.service import (
 )
 from app.modules.avatar_memory_promotions import service as promotion_service
 from app.modules.memory_profiles.schemas import MemoryProfileCreate
+from app.modules.provider_usage.context import development_test_context
 from app.modules.memory_profiles.service import create_memory_profile
 from app.modules.rag_evaluation.brain_eval_e2e_bootstrap import (
     FAMILY_AVATAR_RU_E2E_EMAIL,
@@ -277,6 +278,7 @@ def test_stale_translation_blocks_promotion_and_indexing(client, scripted_provid
                 target_language="ru",
                 source_text="Babička mi zpívala písničku před spaním.",
             ),
+            call_context=development_test_context(),
             provider=scripted_provider,
         )
         assert get_promotion_block_reason(db, candidate=candidate_row) is None
@@ -324,6 +326,7 @@ def test_failed_translation_blocks_promotion(client, scripted_provider):
                 target_language="ru",
                 source_text="Text, který se nepodaří přeložit.",
             ),
+            call_context=development_test_context(),
             provider=failing_provider,
         )
         reason = get_promotion_block_reason(db, candidate=candidate_row)
@@ -362,6 +365,7 @@ def test_translated_current_version_permits_promotion_and_normalized_text_is_rus
                 target_language="ru",
                 source_text="Babička mi zpívala písničku před spaním.",
             ),
+            call_context=development_test_context(),
             provider=scripted_provider,
         )
         assert get_promotion_block_reason(db, candidate=candidate_row) is None

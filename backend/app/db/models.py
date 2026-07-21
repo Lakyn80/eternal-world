@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import date, datetime
+from decimal import Decimal
 from typing import Any
 
 from sqlalchemy import (
@@ -13,6 +14,7 @@ from sqlalchemy import (
     Index,
     Integer,
     JSON,
+    Numeric,
     String,
     Text,
     UniqueConstraint,
@@ -1542,3 +1544,303 @@ class MediaAsset(TimestampMixin, Base):
         back_populates="media_asset",
         foreign_keys="Memory.media_id",
     )
+
+
+class AiAction(TimestampMixin, Base):
+    """Task 66.1 provider-cost foundation: one durable row per user-visible
+    AI operation (one Chat message+answer, one Biographer question, one
+    dynamic translation, etc). Totals (``total_*_tokens``/``total_cost_usd``)
+    are always recomputed deterministically from this action's
+    ``AiProviderAttempt`` rows rather than incremented in place, so repeated
+    finalization (e.g. a Celery task redelivery) can never double-count.
+
+    There is no separate "conversation" entity in this codebase (chat is
+    scoped by ``(user_id, memorial_id)``, not a distinct conversation row),
+    so ``conversation_id`` is a plain informational integer with no foreign
+    key and is not populated by any caller yet - reserved for a future
+    conversation entity rather than forced onto an identifier that does not
+    exist today.
+    """
+
+    __tablename__ = "ai_actions"
+    __table_args__ = (
+        CheckConstraint(
+            "feature IN ("
+            "'brain_chat_response', 'avatar_biographer_question', 'dynamic_memory_translation', "
+            "'memory_candidate_finalization', 'memory_conflict_analysis', 'memory_summarization', "
+            "'evaluation', 'development_test', 'other'"
+            ")",
+            name="ai_actions_feature",
+        ),
+        CheckConstraint(
+            "execution_source IN ('fastapi', 'celery', 'internal', 'test')",
+            name="ai_actions_execution_source",
+        ),
+        CheckConstraint(
+            "status IN ('pending', 'running', 'succeeded', 'failed', 'cancelled')",
+            name="ai_actions_status",
+        ),
+        CheckConstraint(
+            "monetary_cost_status IN ('not_applicable', 'calculated', 'partial', 'unknown')",
+            name="ai_actions_monetary_cost_status",
+        ),
+        CheckConstraint("provider_call_count >= 0", name="ai_actions_provider_call_count_non_negative"),
+        CheckConstraint("retry_count >= 0", name="ai_actions_retry_count_non_negative"),
+        CheckConstraint("total_input_tokens >= 0", name="ai_actions_total_input_tokens_non_negative"),
+        CheckConstraint(
+            "total_cached_input_tokens >= 0", name="ai_actions_total_cached_input_tokens_non_negative"
+        ),
+        CheckConstraint("total_output_tokens >= 0", name="ai_actions_total_output_tokens_non_negative"),
+        CheckConstraint(
+            "total_reasoning_tokens >= 0", name="ai_actions_total_reasoning_tokens_non_negative"
+        ),
+        CheckConstraint("total_tokens >= 0", name="ai_actions_total_tokens_non_negative"),
+        CheckConstraint("total_cost_usd >= 0", name="ai_actions_total_cost_usd_non_negative"),
+        CheckConstraint(
+            "cached_input_savings_usd >= 0", name="ai_actions_cached_input_savings_usd_non_negative"
+        ),
+        Index("ix_ai_actions_trace_id", "trace_id"),
+        Index("ix_ai_actions_created_at", "created_at"),
+        Index("ix_ai_actions_feature_created_at", "feature", "created_at"),
+        Index("ix_ai_actions_user_id_created_at", "user_id", "created_at"),
+        Index("ix_ai_actions_memorial_id_created_at", "memorial_id", "created_at"),
+        Index("ix_ai_actions_status_created_at", "status", "created_at"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    trace_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    feature: Mapped[str] = mapped_column(String(64), nullable=False)
+    status: Mapped[str] = mapped_column(
+        String(16), nullable=False, default="pending", server_default=text("'pending'")
+    )
+    execution_source: Mapped[str] = mapped_column(String(16), nullable=False)
+    requested_locale: Mapped[str | None] = mapped_column(String(8), nullable=True)
+    resolved_locale: Mapped[str | None] = mapped_column(String(8), nullable=True)
+    user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), index=True, nullable=True
+    )
+    memorial_id: Mapped[int | None] = mapped_column(
+        ForeignKey("memory_profiles.id", ondelete="SET NULL"), index=True, nullable=True
+    )
+    conversation_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    message_id: Mapped[int | None] = mapped_column(
+        ForeignKey("chat_messages.id", ondelete="SET NULL"), index=True, nullable=True
+    )
+    celery_task_id: Mapped[str | None] = mapped_column(String(255), index=True, nullable=True)
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    duration_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    provider_call_count: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default=text("0")
+    )
+    retry_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default=text("0"))
+    total_input_tokens: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default=text("0")
+    )
+    total_cached_input_tokens: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default=text("0")
+    )
+    total_output_tokens: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default=text("0")
+    )
+    total_reasoning_tokens: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default=text("0")
+    )
+    total_tokens: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default=text("0"))
+    total_cost_usd: Mapped[Decimal] = mapped_column(
+        Numeric(18, 9), nullable=False, default=Decimal("0"), server_default=text("0")
+    )
+    cached_input_savings_usd: Mapped[Decimal] = mapped_column(
+        Numeric(18, 9), nullable=False, default=Decimal("0"), server_default=text("0")
+    )
+    monetary_cost_status: Mapped[str] = mapped_column(
+        String(16), nullable=False, default="not_applicable", server_default=text("'not_applicable'")
+    )
+    error_category: Mapped[str | None] = mapped_column(String(64), nullable=True)
+
+    steps: Mapped[list[AiActionStep]] = relationship(
+        back_populates="action", cascade="all, delete-orphan"
+    )
+    provider_attempts: Mapped[list[AiProviderAttempt]] = relationship(
+        back_populates="action", cascade="all, delete-orphan"
+    )
+
+
+class AiActionStep(TimestampMixin, Base):
+    """One processing step within one ``AiAction``. Only
+    ``provider_generation``/``provider_translation``/``provider_structured_output``
+    steps are expected to carry non-zero ``total_tokens``/``total_cost_usd`` -
+    the remaining step types exist for action timing only."""
+
+    __tablename__ = "ai_action_steps"
+    __table_args__ = (
+        CheckConstraint(
+            "step_type IN ("
+            "'provider_generation', 'provider_translation', 'provider_structured_output', "
+            "'context_preparation', 'retrieval', 'deterministic_postprocessing', 'response_guard'"
+            ")",
+            name="ai_action_steps_step_type",
+        ),
+        CheckConstraint(
+            "status IN ('pending', 'running', 'succeeded', 'failed', 'cancelled', 'skipped')",
+            name="ai_action_steps_status",
+        ),
+        CheckConstraint(
+            "execution_source IN ('fastapi', 'celery', 'internal', 'test')",
+            name="ai_action_steps_execution_source",
+        ),
+        CheckConstraint(
+            "cache_status IN ('not_applicable', 'hit', 'miss', 'partial', 'unknown')",
+            name="ai_action_steps_cache_status",
+        ),
+        CheckConstraint(
+            "monetary_cost_status IN ('not_applicable', 'calculated', 'partial', 'unknown')",
+            name="ai_action_steps_monetary_cost_status",
+        ),
+        CheckConstraint("sequence_number >= 1", name="ai_action_steps_sequence_number_positive"),
+        CheckConstraint("provider_call_count >= 0", name="ai_action_steps_provider_call_count_non_negative"),
+        CheckConstraint("retry_count >= 0", name="ai_action_steps_retry_count_non_negative"),
+        CheckConstraint("total_tokens >= 0", name="ai_action_steps_total_tokens_non_negative"),
+        CheckConstraint("total_cost_usd >= 0", name="ai_action_steps_total_cost_usd_non_negative"),
+        UniqueConstraint(
+            "action_id", "sequence_number", name="uq_ai_action_steps_action_id_sequence_number"
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    action_id: Mapped[int] = mapped_column(
+        ForeignKey("ai_actions.id", ondelete="CASCADE"), index=True, nullable=False
+    )
+    step_type: Mapped[str] = mapped_column(String(64), nullable=False)
+    sequence_number: Mapped[int] = mapped_column(Integer, nullable=False)
+    status: Mapped[str] = mapped_column(
+        String(16), nullable=False, default="pending", server_default=text("'pending'")
+    )
+    execution_source: Mapped[str] = mapped_column(String(16), nullable=False)
+    cache_status: Mapped[str] = mapped_column(
+        String(16), nullable=False, default="not_applicable", server_default=text("'not_applicable'")
+    )
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    duration_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    provider_call_count: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default=text("0")
+    )
+    retry_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default=text("0"))
+    total_tokens: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default=text("0"))
+    total_cost_usd: Mapped[Decimal] = mapped_column(
+        Numeric(18, 9), nullable=False, default=Decimal("0"), server_default=text("0")
+    )
+    monetary_cost_status: Mapped[str] = mapped_column(
+        String(16), nullable=False, default="not_applicable", server_default=text("'not_applicable'")
+    )
+    error_category: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    idempotency_key: Mapped[str | None] = mapped_column(String(128), index=True, nullable=True)
+
+    action: Mapped[AiAction] = relationship(back_populates="steps")
+    provider_attempts: Mapped[list[AiProviderAttempt]] = relationship(
+        back_populates="step", cascade="all, delete-orphan"
+    )
+
+
+class AiProviderAttempt(TimestampMixin, Base):
+    """One durable row per individual paid-provider HTTP attempt. A retry
+    always creates a *new* row (``attempt_number`` incremented) rather than
+    overwriting a failed attempt - ``(step_id, attempt_number)`` is unique,
+    which is also what makes a Celery redelivery of the same logical attempt
+    safe to re-run: the repository looks up the existing row for that pair
+    before creating a new one instead of blindly inserting again."""
+
+    __tablename__ = "ai_provider_attempts"
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ("
+            "'pending', 'succeeded', 'timeout', 'rate_limited', 'http_error', 'invalid_response', "
+            "'empty_response', 'cancelled', 'audit_error', 'internal_error'"
+            ")",
+            name="ai_provider_attempts_status",
+        ),
+        CheckConstraint(
+            "monetary_cost_status IN ('not_applicable', 'calculated', 'partial', 'unknown')",
+            name="ai_provider_attempts_monetary_cost_status",
+        ),
+        CheckConstraint("attempt_number >= 1", name="ai_provider_attempts_attempt_number_positive"),
+        CheckConstraint(
+            "input_tokens IS NULL OR input_tokens >= 0", name="ai_provider_attempts_input_tokens_non_negative"
+        ),
+        CheckConstraint(
+            "cached_input_tokens IS NULL OR cached_input_tokens >= 0",
+            name="ai_provider_attempts_cached_input_tokens_non_negative",
+        ),
+        CheckConstraint(
+            "uncached_input_tokens IS NULL OR uncached_input_tokens >= 0",
+            name="ai_provider_attempts_uncached_input_tokens_non_negative",
+        ),
+        CheckConstraint(
+            "output_tokens IS NULL OR output_tokens >= 0",
+            name="ai_provider_attempts_output_tokens_non_negative",
+        ),
+        CheckConstraint(
+            "reasoning_tokens IS NULL OR reasoning_tokens >= 0",
+            name="ai_provider_attempts_reasoning_tokens_non_negative",
+        ),
+        CheckConstraint(
+            "total_tokens IS NULL OR total_tokens >= 0",
+            name="ai_provider_attempts_total_tokens_non_negative",
+        ),
+        UniqueConstraint(
+            "step_id", "attempt_number", name="uq_ai_provider_attempts_step_id_attempt_number"
+        ),
+        UniqueConstraint("provider_call_id", name="uq_ai_provider_attempts_provider_call_id"),
+        Index(
+            "ix_ai_provider_attempts_provider_model_created_at", "provider", "model", "created_at"
+        ),
+        Index("ix_ai_provider_attempts_status_created_at", "status", "created_at"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    action_id: Mapped[int] = mapped_column(
+        ForeignKey("ai_actions.id", ondelete="CASCADE"), index=True, nullable=False
+    )
+    step_id: Mapped[int] = mapped_column(
+        ForeignKey("ai_action_steps.id", ondelete="CASCADE"), index=True, nullable=False
+    )
+    provider_call_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    provider: Mapped[str] = mapped_column(String(32), nullable=False)
+    model: Mapped[str] = mapped_column(String(120), nullable=False)
+    provider_request_id: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    attempt_number: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=1, server_default=text("1")
+    )
+    retry_reason: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    status: Mapped[str] = mapped_column(
+        String(24), nullable=False, default="pending", server_default=text("'pending'")
+    )
+    success: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default=text("false")
+    )
+    request_started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    request_completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    latency_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    input_tokens: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    cached_input_tokens: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    uncached_input_tokens: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    output_tokens: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    reasoning_tokens: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    total_tokens: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    uncached_input_cost_usd: Mapped[Decimal | None] = mapped_column(Numeric(18, 9), nullable=True)
+    cached_input_cost_usd: Mapped[Decimal | None] = mapped_column(Numeric(18, 9), nullable=True)
+    output_cost_usd: Mapped[Decimal | None] = mapped_column(Numeric(18, 9), nullable=True)
+    reasoning_cost_usd: Mapped[Decimal | None] = mapped_column(Numeric(18, 9), nullable=True)
+    total_cost_usd: Mapped[Decimal | None] = mapped_column(Numeric(18, 9), nullable=True)
+    cached_input_savings_usd: Mapped[Decimal | None] = mapped_column(Numeric(18, 9), nullable=True)
+    monetary_cost_status: Mapped[str] = mapped_column(
+        String(16), nullable=False, default="not_applicable", server_default=text("'not_applicable'")
+    )
+    pricing_version: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    http_status: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    error_category: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    raw_usage_redacted: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
+
+    action: Mapped[AiAction] = relationship(back_populates="provider_attempts")
+    step: Mapped[AiActionStep] = relationship(back_populates="provider_attempts")

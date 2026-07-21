@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from sqlalchemy.orm import Session
 
+from app.core.config import settings
+from app.core.logging import get_request_id
 from app.modules.ai_agents.brain.context import build_grounded_context, build_rag_evidence_items
 from app.db.models import ChatMessage, MemoryProfile, User
 from app.modules.ai_agents import get_agent_orchestrator
@@ -15,6 +17,10 @@ from app.modules.chat.schemas import ChatMessageCreate, ChatMessageRead, ChatSen
 from app.modules.memories import repository as memories_repository
 from app.modules.memorial_access.capabilities import MemorialCapability, resolve_authorized_profile
 from app.modules.memorial_access.service import MemorialForbiddenError, MemorialNotFoundError
+from app.modules.provider_usage.context import AiCallContext
+from app.modules.provider_usage.enums import AiFeature, AiStepType, ExecutionSource
+from app.modules.provider_usage.service import run_instrumented_single_attempt_action
+from app.modules.provider_usage.usage import normalize_openai_compatible_usage
 from app.modules.qdrant_indexing.exceptions import QdrantClientError, QdrantCollectionConfigurationError
 from app.modules.rag_retrieval.exceptions import (
     RagRetrievalDisabledError,
@@ -23,6 +29,16 @@ from app.modules.rag_retrieval.exceptions import (
 )
 from app.modules.rag_retrieval.schemas import RagRetrievalRequest
 from app.modules.rag_retrieval.service import retrieve_profile_rag
+
+
+def _extract_brain_token_usage(orchestrator_response):
+    metadata = orchestrator_response.metadata or {}
+    return normalize_openai_compatible_usage(
+        raw_response={
+            "id": metadata.get("provider_request_id"),
+            "usage": metadata.get("usage"),
+        }
+    )
 
 
 RECENT_HISTORY_LIMIT = 10
@@ -177,15 +193,31 @@ def send_chat_message(
     db.flush()
 
     orchestrator = get_agent_orchestrator()
-    orchestrator_response = orchestrator.generate_chat_response(
-        OrchestratorChatRequest(
-            profile=_build_profile_context(profile),
-            user_message=payload.message,
-            recent_history=[
-                _build_history_entry(message) for message in recent_history
-            ],
-            grounded_context=grounded_context,
-        )
+    ai_call_context = AiCallContext(
+        feature=AiFeature.BRAIN_CHAT_RESPONSE,
+        execution_source=ExecutionSource.FASTAPI,
+        trace_id=get_request_id(),
+        user_id=current_user.id,
+        memorial_id=profile_id,
+        message_id=user_message.id,
+    )
+    orchestrator_response, ai_action = run_instrumented_single_attempt_action(
+        db,
+        context=ai_call_context,
+        step_type=AiStepType.PROVIDER_GENERATION,
+        provider=settings.ai_brain_provider,
+        model=settings.ai_brain_model,
+        operation=lambda: orchestrator.generate_chat_response(
+            OrchestratorChatRequest(
+                profile=_build_profile_context(profile),
+                user_message=payload.message,
+                recent_history=[
+                    _build_history_entry(message) for message in recent_history
+                ],
+                grounded_context=grounded_context,
+            )
+        ),
+        extract_token_usage=_extract_brain_token_usage,
     )
 
     assistant_message = repository.create_chat_message(
@@ -197,6 +229,7 @@ def send_chat_message(
         message_metadata={
             "reply_to_message_id": user_message.id,
             "provider_name": orchestrator_response.provider_name,
+            "ai_action_id": ai_action.id,
             **orchestrator_response.metadata,
         },
     )

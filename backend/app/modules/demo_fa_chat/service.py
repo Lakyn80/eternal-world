@@ -31,6 +31,12 @@ from app.modules.ai_agents.brain.context import (
     prioritize_corrected_memory_evidence,
 )
 from app.modules.ai_agents.schemas import MemoryProfileContext, OrchestratorChatRequest
+from app.core.config import settings as app_settings
+from app.modules.provider_usage import service as provider_usage_service
+from app.modules.provider_usage.context import AiCallContext
+from app.modules.provider_usage.enums import AiFeature, AiStepType, ExecutionSource
+from app.modules.provider_usage.service import run_instrumented_single_attempt_action
+from app.modules.provider_usage.usage import normalize_openai_compatible_usage
 from app.modules.avatar_persona import (
     CORRECTED_MEMORY_EXPANSION_RULE_ID,
     build_expanded_retrieval_query,
@@ -158,8 +164,20 @@ def _localize_review_text(
     ):
         translated_text = (current_row.translated_text or "").strip() if current_row is not None else ""
         if translated_text:
+            provider_usage_service.record_translation_cache_hit(
+                source_locale=normalized_source_language,
+                target_locale=normalized_target_language,
+                entity_type=entity_type,
+                field_name=field_name,
+            )
             return current_row.translated_text
 
+    provider_usage_service.record_translation_cache_miss(
+        source_locale=normalized_source_language,
+        target_locale=normalized_target_language,
+        entity_type=entity_type,
+        field_name=field_name,
+    )
     try:
         row = content_translation_service.translate_content_field(
             db,
@@ -173,6 +191,12 @@ def _localize_review_text(
                 source_language=normalized_source_language,
                 target_language=normalized_target_language,
                 source_text=current_source_text,
+            ),
+            call_context=AiCallContext(
+                feature=AiFeature.DYNAMIC_MEMORY_TRANSLATION,
+                execution_source=ExecutionSource.FASTAPI,
+                requested_locale=normalized_target_language,
+                resolved_locale=normalized_target_language,
             ),
         )
         db.commit()
@@ -1120,6 +1144,13 @@ def retry_demo_memory_candidate_translation(
         target_language=target_language,
         source_text=finalized_text,
         candidate_id=candidate.id,
+        call_context=AiCallContext(
+            feature=AiFeature.DYNAMIC_MEMORY_TRANSLATION,
+            execution_source=ExecutionSource.FASTAPI,
+            requested_locale=target_language,
+            resolved_locale=target_language,
+            memorial_id=profile_id,
+        ),
     )
     return MemoryContentTranslationRead.model_validate(row)
 
@@ -1629,20 +1660,41 @@ def run_demo_fa_chat_message(
     )
 
     orchestrator = get_agent_orchestrator()
-    orchestrator_response = orchestrator.generate_chat_response(
-        OrchestratorChatRequest(
-            profile=_build_profile_context(resolved_profile.profile),
-            avatar_persona=avatar_persona,
-            user_message=normalized_message,
-            recent_history=[],
-            grounded_context=grounded_context,
-            # Direct-locale architecture (Task 64.5.2): the Brain receives the
-            # ORIGINAL untranslated user_message above plus this explicit
-            # response_language, and answers directly in that language - no
-            # separate query-translation or answer-translation call. See
-            # prompt_builder._build_response_language_directive.
-            response_language=locale,
-        )
+    ai_call_context = AiCallContext(
+        feature=AiFeature.BRAIN_CHAT_RESPONSE,
+        execution_source=ExecutionSource.FASTAPI,
+        trace_id=trace_id,
+        requested_locale=locale,
+        resolved_locale=locale,
+        memorial_id=resolved_profile.profile.id,
+    )
+    orchestrator_response, _ai_action = run_instrumented_single_attempt_action(
+        db,
+        context=ai_call_context,
+        step_type=AiStepType.PROVIDER_GENERATION,
+        provider=app_settings.ai_brain_provider,
+        model=app_settings.ai_brain_model,
+        operation=lambda: orchestrator.generate_chat_response(
+            OrchestratorChatRequest(
+                profile=_build_profile_context(resolved_profile.profile),
+                avatar_persona=avatar_persona,
+                user_message=normalized_message,
+                recent_history=[],
+                grounded_context=grounded_context,
+                # Direct-locale architecture (Task 64.5.2): the Brain receives the
+                # ORIGINAL untranslated user_message above plus this explicit
+                # response_language, and answers directly in that language - no
+                # separate query-translation or answer-translation call. See
+                # prompt_builder._build_response_language_directive.
+                response_language=locale,
+            )
+        ),
+        extract_token_usage=lambda resp: normalize_openai_compatible_usage(
+            raw_response={
+                "id": (resp.metadata or {}).get("provider_request_id"),
+                "usage": (resp.metadata or {}).get("usage"),
+            }
+        ),
     )
     metadata = dict(orchestrator_response.metadata)
     persona_applied = bool(metadata.get("persona_applied", True))

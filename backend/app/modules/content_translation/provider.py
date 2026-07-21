@@ -34,6 +34,15 @@ class ContentTranslationProviderResponse:
     provider_name: str
     model: str
     latency_ms: int
+    #: Task 66.1: raw numeric usage fields (prompt_tokens,
+    #: prompt_cache_hit_tokens, prompt_cache_miss_tokens, completion_tokens,
+    #: total_tokens, nested completion_tokens_details.reasoning_tokens) -
+    #: never any prompt/response text - consumed by
+    #: ``app.modules.provider_usage.usage.normalize_openai_compatible_usage``.
+    #: ``None`` for providers that do not report usage at all (e.g. the mock
+    #: provider).
+    usage: dict[str, Any] | None = None
+    provider_request_id: str | None = None
 
 
 class ContentTranslationProvider(Protocol):
@@ -275,7 +284,39 @@ class OpenAICompatibleContentTranslationProvider:
             provider_name=self.provider_name,
             model=str(data.get("model") or self.model),
             latency_ms=latency_ms,
+            usage=self._extract_usage(data),
+            provider_request_id=self._extract_provider_request_id(data),
         )
+
+    def _extract_usage(self, data: dict[str, Any]) -> dict[str, Any] | None:
+        usage = data.get("usage")
+        if not isinstance(usage, dict):
+            return None
+        usage_metadata: dict[str, Any] = {
+            key: value
+            for key in (
+                "prompt_tokens",
+                "completion_tokens",
+                "total_tokens",
+                "prompt_cache_hit_tokens",
+                "prompt_cache_miss_tokens",
+            )
+            if isinstance((value := usage.get(key)), int)
+        }
+        completion_details = usage.get("completion_tokens_details")
+        if isinstance(completion_details, dict) and isinstance(
+            completion_details.get("reasoning_tokens"), int
+        ):
+            usage_metadata["completion_tokens_details"] = {
+                "reasoning_tokens": completion_details["reasoning_tokens"]
+            }
+        return usage_metadata or None
+
+    def _extract_provider_request_id(self, data: dict[str, Any]) -> str | None:
+        provider_request_id = data.get("id")
+        if isinstance(provider_request_id, str) and provider_request_id.strip():
+            return provider_request_id.strip()
+        return None
 
 
 def build_content_translation_provider(

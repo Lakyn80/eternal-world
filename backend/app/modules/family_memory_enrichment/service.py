@@ -18,6 +18,8 @@ from app.db.models import ConversationMemoryCandidate, FamilyMemoryContribution,
 from app.modules.avatar_memory_promotions import service as promotion_service
 from app.modules.content_translation import service as content_translation_service
 from app.modules.content_translation.schemas import TranslationFieldRequest
+from app.modules.provider_usage.context import AiCallContext
+from app.modules.provider_usage.enums import AiFeature, ExecutionSource
 from app.modules.family_memory_enrichment import repository
 from app.modules.family_memory_enrichment.clarification import (
     classify_memory_type,
@@ -115,6 +117,14 @@ def _translate_contribution_if_czech_origin(
             target_language=RUSSIAN_TARGET_LANGUAGE,
             source_text=contribution.contribution_text,
         ),
+        call_context=AiCallContext(
+            feature=AiFeature.MEMORY_CANDIDATE_FINALIZATION,
+            execution_source=ExecutionSource.FASTAPI,
+            requested_locale=RUSSIAN_TARGET_LANGUAGE,
+            resolved_locale=RUSSIAN_TARGET_LANGUAGE,
+            user_id=candidate.owner_user_id,
+            memorial_id=candidate.profile_id,
+        ),
     )
 
 
@@ -148,6 +158,14 @@ def _translate_finalized_memory_if_czech_origin(
             source_language=CZECH_SOURCE_LANGUAGE,
             target_language=RUSSIAN_TARGET_LANGUAGE,
             source_text=finalized_text,
+        ),
+        call_context=AiCallContext(
+            feature=AiFeature.MEMORY_CANDIDATE_FINALIZATION,
+            execution_source=ExecutionSource.FASTAPI,
+            requested_locale=RUSSIAN_TARGET_LANGUAGE,
+            resolved_locale=RUSSIAN_TARGET_LANGUAGE,
+            user_id=candidate.owner_user_id,
+            memorial_id=candidate.profile_id,
         ),
     )
 
