@@ -131,6 +131,73 @@ def update_biography(db: Session, *, profile: MemoryProfile, biography: str) -> 
     return profile
 
 
+def clear_biography(
+    db: Session,
+    *,
+    profile: MemoryProfile,
+    writer: AvatarMemoryQdrantWriter | None = None,
+) -> MemoryProfile:
+    """Task 65.5: a less-destructive alternative to deleting the whole
+    memorial - removes only the biography text and whatever it has indexed,
+    leaving membership, invitations, contributions, and other approved
+    (non-biography) memories untouched.
+
+    Reuses the exact same safe-partial-failure Qdrant cleanup pattern as
+    `_retire_previous_source` (re-indexing an edited biography already had
+    to solve "remove the previous version's points without losing the DB
+    audit trail" - clearing is the same operation, just without a new
+    source to replace the old one with). A point that fails to delete is
+    logged and skipped rather than aborting the whole clear - the
+    corresponding `RagVectorIndex` bookkeeping row is only removed once its
+    Qdrant point is confirmed gone, so a failed point remains discoverable
+    (not silently forgotten) and a repeat clear is safe to retry.
+
+    The underlying `RagSource`/`RagChunk`/`RagEmbedding` rows are
+    intentionally left in place (never hard-deleted here) - they are the
+    existing audit trail of what was previously indexed, exactly like a
+    normal stale-then-reindex cycle already preserves.
+    """
+
+    actual_writer = writer or DefaultAvatarMemoryQdrantWriter()
+    if profile.biography_source_id is not None:
+        records = repository.list_vector_indexes_for_source(
+            db, source_id=profile.biography_source_id
+        )
+        for record in records:
+            try:
+                actual_writer.delete_point(
+                    collection_name=record.qdrant_collection, point_id=record.qdrant_point_id
+                )
+            except Exception as exc:
+                log_event(
+                    logger,
+                    logging.ERROR,
+                    "biography_clear_delete_point_failed",
+                    profile_id=profile.id,
+                    source_id=profile.biography_source_id,
+                    error_type=exc.__class__.__name__,
+                )
+                continue
+            db.delete(record)
+
+    profile.biography = None
+    profile.biography_status = "draft"
+    profile.biography_content_hash = None
+    profile.biography_indexed_at = None
+    profile.biography_source_id = None
+    profile.biography_ingestion_attempt_count = 0
+    profile.biography_ingestion_failure_reason = None
+    db.commit()
+    db.refresh(profile)
+    log_event(
+        logger,
+        logging.INFO,
+        "biography_cleared",
+        profile_id=profile.id,
+    )
+    return profile
+
+
 def get_biography_status(profile: MemoryProfile) -> BiographyStatusRead:
     return BiographyStatusRead(
         profile_id=profile.id,

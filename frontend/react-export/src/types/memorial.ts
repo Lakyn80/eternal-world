@@ -243,3 +243,34 @@ export type AvatarMemoryIndexingRead = {
   searchable_as_fact: boolean;
   result: 'indexed' | 'already_indexed';
 };
+
+export type BillingPlanLimits = {
+  max_profiles: number | null;
+  max_memories: number | null;
+  max_audio_minutes: number | null;
+  max_videos_per_month: number | null;
+  max_video_seconds: number | null;
+  allow_watermark_removal: boolean;
+  allow_unlimited_chat: boolean;
+  allow_priority_support: boolean;
+  allow_family_members: boolean;
+  allow_shared_memories: boolean;
+  allow_family_tree: boolean;
+  max_family_members: number | null;
+  max_video_quality: string;
+};
+
+export type BillingUsageSnapshot = {
+  current_profiles: number;
+  current_memories: number;
+  current_audio_minutes: number;
+  current_videos_month: number;
+  current_family_members: number;
+};
+
+export type BillingLimitsRead = {
+  user_id: number;
+  plan_code: string;
+  limits: BillingPlanLimits;
+  current_usage: BillingUsageSnapshot;
+};

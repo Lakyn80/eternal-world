@@ -3,6 +3,7 @@ import type {
   BiographerAnswerResponse,
   BiographerEligibilityRead,
   BiographerQuestionRead,
+  BillingLimitsRead,
   BiographyIngestionStartResponse,
   BiographyStatusRead,
   CandidateHistoryRead,
@@ -121,6 +122,9 @@ async function requestJson<T>(path: string, init: RequestInit | undefined = {}, 
     throw new MemorialApiError(response.status, detail);
   }
 
+  if (response.status === 204) {
+    return undefined as T;
+  }
   return (await response.json()) as T;
 }
 
@@ -149,6 +153,52 @@ export async function createMemorial(accessToken: string, payload: MemorialCreat
 
 export async function fetchMemorial(accessToken: string, profileId: number): Promise<MemorialRead> {
   return requestJson<MemorialRead>(`/api/memorials/${profileId}`, undefined, accessToken);
+}
+
+export async function getBillingLimits(accessToken: string): Promise<BillingLimitsRead> {
+  return requestJson<BillingLimitsRead>('/api/billing/limits', undefined, accessToken);
+}
+
+export type MemorialMetadataUpdatePayload = {
+  name?: string;
+  personality?: string | null;
+  catchphrases?: string | null;
+};
+
+/** Reuses `/api/memory-profiles/{id}` (ownership-scoped PATCH) rather than
+ * `/api/memorials` (which has no update endpoint at all) - both operate on
+ * the same underlying `MemoryProfile` row (Task 65.5). Never sends
+ * `biography` through this path: that field has its own dedicated
+ * save/index/clear lifecycle and must not be touched by a plain metadata
+ * edit, or `biography_status` would desync from the actual saved text. */
+export async function updateMemorialMetadata(
+  accessToken: string,
+  profileId: number,
+  payload: MemorialMetadataUpdatePayload
+): Promise<MemorialRead> {
+  return requestJson<MemorialRead>(
+    `/api/memory-profiles/${profileId}`,
+    { method: 'PATCH', body: JSON.stringify(payload) },
+    accessToken
+  );
+}
+
+/** Removes only the biography text and its indexed vectors - membership,
+ * invitations, contributions, and other approved memories are untouched.
+ * Distinct from `deleteMemorial`, which removes the whole memorial. */
+export async function clearBiography(accessToken: string, profileId: number): Promise<BiographyStatusRead> {
+  return requestJson<BiographyStatusRead>(
+    `/api/memorials/${profileId}/biography/clear`,
+    { method: 'POST' },
+    accessToken
+  );
+}
+
+/** Deletes the whole memorial (owner-only, enforced server-side). Reuses
+ * `/api/memory-profiles/{id}` since `/api/memorials` has no delete
+ * endpoint. */
+export async function deleteMemorial(accessToken: string, profileId: number): Promise<void> {
+  await requestJson<unknown>(`/api/memory-profiles/${profileId}`, { method: 'DELETE' }, accessToken);
 }
 
 export async function listMembers(accessToken: string, profileId: number): Promise<MembershipRead[]> {

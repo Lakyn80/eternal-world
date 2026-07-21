@@ -18,6 +18,7 @@ from app.modules.biography_ingestion.schemas import (
 from app.modules.biography_ingestion.service import (
     BiographyIngestionConflictError,
     BiographyIngestionEligibilityError,
+    clear_biography,
     get_biography_status,
     start_biography_ingestion,
     update_biography,
@@ -75,6 +76,38 @@ def update_biography_endpoint(
     except (MemorialNotFoundError, MemorialForbiddenError) as exc:
         _raise_access_error(exc)
     update_biography(db, profile=profile, biography=payload.biography)
+    return _build_status_read(db, profile_id=profile_id)
+
+
+@router.post(
+    "/api/memorials/{profile_id}/biography/clear",
+    response_model=BiographyStatusRead,
+    responses={
+        status.HTTP_401_UNAUTHORIZED: {"model": ErrorResponse},
+        status.HTTP_403_FORBIDDEN: {"model": ErrorResponse},
+        status.HTTP_404_NOT_FOUND: {"model": ErrorResponse},
+    },
+)
+def clear_biography_endpoint(
+    profile_id: ProfileIdPath,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> BiographyStatusRead:
+    """Task 65.5: the less-destructive alternative to deleting the whole
+    memorial - same DIRECT_MEMORY_WRITE capability as saving the biography,
+    since it only ever touches the biography field and its own indexed
+    points, never membership/invitations/other approved memories."""
+
+    try:
+        profile, _membership = resolve_authorized_profile(
+            db,
+            current_user=current_user,
+            profile_id=profile_id,
+            capability=MemorialCapability.DIRECT_MEMORY_WRITE,
+        )
+    except (MemorialNotFoundError, MemorialForbiddenError) as exc:
+        _raise_access_error(exc)
+    clear_biography(db, profile=profile)
     return _build_status_read(db, profile_id=profile_id)
 
 

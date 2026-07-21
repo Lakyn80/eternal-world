@@ -131,3 +131,27 @@ def get_vector_index_for_user_by_embedding(
         .order_by(RagVectorIndex.updated_at.desc(), RagVectorIndex.id.desc())
     )
     return db.scalar(statement)
+
+
+def list_vector_indexes_for_profile(
+    db: Session,
+    *,
+    owner_user_id: int,
+    profile_id: int,
+) -> list[RagVectorIndex]:
+    """All currently-indexed Qdrant points for a profile, regardless of origin
+    (biography ingestion or promoted memory candidates) - the authoritative
+    set that must be removed from Qdrant before the profile itself can be
+    safely deleted (Task 65.5)."""
+
+    statement = (
+        select(RagVectorIndex)
+        .join(MemoryProfile, RagVectorIndex.profile_id == MemoryProfile.id)
+        .where(
+            RagVectorIndex.profile_id == profile_id,
+            RagVectorIndex.owner_user_id == owner_user_id,
+            MemoryProfile.user_id == owner_user_id,
+        )
+        .order_by(RagVectorIndex.id.asc())
+    )
+    return list(db.scalars(statement))

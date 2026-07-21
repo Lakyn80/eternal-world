@@ -4,9 +4,12 @@ import {
   acceptInvitation,
   answerBiographerQuestion,
   answerCandidateClarification,
+  clearBiography,
   createMemorial,
+  deleteMemorial,
   fetchMemorial,
   getBiographerEligibility,
+  getBillingLimits,
   getBiographyStatus,
   getCandidateHistory,
   getNextBiographerQuestion,
@@ -28,7 +31,8 @@ import {
   skipBiographerQuestion,
   startBiographyIngestion,
   submitContribution,
-  updateBiography
+  updateBiography,
+  updateMemorialMetadata
 } from '../lib/memorialApi';
 import { canInvite, canReview, canSubmitContribution, isActiveMemoryEligible } from '../lib/memorialPermissions';
 import { APP_ROOT_PATH, buildMemorialPath, navigate, parseAppRoute, usePathname } from '../lib/router';
@@ -36,6 +40,7 @@ import type {
   AuthSession,
   BiographerEligibilityRead,
   BiographerQuestionRead,
+  BillingLimitsRead,
   BiographyStatusRead,
   CandidateHistoryRead,
   ChatMessageRead,
@@ -210,6 +215,22 @@ export type Copy = {
   indexingFailed: string;
   indexingRetired: string;
   backToSite: string;
+  planLimitReachedMessage: string;
+  openExistingMemorial: string;
+  biographyIndexingExplanation: string;
+  editMemorial: string;
+  saveChanges: string;
+  clearBiography: string;
+  clearBiographyConfirmTitle: string;
+  clearBiographyConfirmBody: string;
+  clearBiographyConfirmYes: string;
+  deleteMemorial: string;
+  deleteMemorialConfirmTitle: string;
+  deleteMemorialConfirmBody: string;
+  deleteMemorialConfirmLabel: string;
+  deleteMemorialConfirmButton: string;
+  deleteMemorialPartialFailure: string;
+  backToMemorials: string;
 };
 
 export const COPY: Record<Lang, Copy> = {
@@ -371,7 +392,27 @@ export const COPY: Record<Lang, Copy> = {
     indexingIndexed: 'Indexed and searchable',
     indexingFailed: 'Indexing failed',
     indexingRetired: 'No longer active evidence',
-    backToSite: 'Back to site'
+    backToSite: 'Back to site',
+    planLimitReachedMessage:
+      'Your current plan already includes the maximum number of memorials.\nOpen your existing memorial to edit its biography.',
+    openExistingMemorial: 'Open existing memorial',
+    biographyIndexingExplanation:
+      'The biography is saved, but the avatar cannot use it yet. Start indexing to create memory embeddings.',
+    editMemorial: 'Edit memorial',
+    saveChanges: 'Save changes',
+    clearBiography: 'Clear biography',
+    clearBiographyConfirmTitle: 'Clear this biography?',
+    clearBiographyConfirmBody:
+      'This removes the saved biography text and any memory created from it. Membership, invitations and other approved memories are not affected.',
+    clearBiographyConfirmYes: 'Yes, clear biography',
+    deleteMemorial: 'Delete memorial',
+    deleteMemorialConfirmTitle: 'Delete this memorial?',
+    deleteMemorialConfirmBody:
+      'This permanently deletes the memorial, its biography, members, invitations, contributions and all indexed avatar memory. This cannot be undone.',
+    deleteMemorialConfirmLabel: 'Type the memorial name to confirm',
+    deleteMemorialConfirmButton: 'Permanently delete',
+    deleteMemorialPartialFailure: 'Deletion could not be completed safely and was cancelled. Please try again.',
+    backToMemorials: 'Back to memorials'
   },
   cs: {
     kicker: 'Kontrola rodinného přístupu',
@@ -531,7 +572,27 @@ export const COPY: Record<Lang, Copy> = {
     indexingIndexed: 'Indexováno a vyhledatelné',
     indexingFailed: 'Indexace selhala',
     indexingRetired: 'Již není aktivní znalost',
-    backToSite: 'Zpět na web'
+    backToSite: 'Zpět na web',
+    planLimitReachedMessage:
+      'V aktuálním plánu už máte maximální počet memorialů.\nOtevřete existující memorial a upravte jeho životopis.',
+    openExistingMemorial: 'Otevřít existující memorial',
+    biographyIndexingExplanation:
+      'Životopis je uložený, ale avatar ho zatím nemůže používat.\nSpusťte indexaci, aby se vytvořila jeho paměť.',
+    editMemorial: 'Upravit memorial',
+    saveChanges: 'Uložit změny',
+    clearBiography: 'Vymazat životopis',
+    clearBiographyConfirmTitle: 'Vymazat tento životopis?',
+    clearBiographyConfirmBody:
+      'Odstraní se uložený text životopisu a veškerá paměť z něj vytvořená. Členství, pozvánky a další schválené vzpomínky zůstanou zachovány.',
+    clearBiographyConfirmYes: 'Ano, vymazat životopis',
+    deleteMemorial: 'Smazat memorial',
+    deleteMemorialConfirmTitle: 'Smazat tento memorial?',
+    deleteMemorialConfirmBody:
+      'Trvale se smaže memorial, jeho životopis, členové, pozvánky, příspěvky a veškerá zaindexovaná paměť avatara. Tuto akci nelze vrátit zpět.',
+    deleteMemorialConfirmLabel: 'Pro potvrzení napište název memorialu',
+    deleteMemorialConfirmButton: 'Trvale smazat',
+    deleteMemorialPartialFailure: 'Smazání se nepodařilo bezpečně dokončit a bylo zrušeno. Zkuste to prosím znovu.',
+    backToMemorials: 'Zpět na memorialy'
   },
   ru: {
     kicker: 'Семейный контроль доступа',
@@ -691,7 +752,27 @@ export const COPY: Record<Lang, Copy> = {
     indexingIndexed: 'Проиндексировано и доступно для поиска',
     indexingFailed: 'Индексация не удалась',
     indexingRetired: 'Больше не активное знание',
-    backToSite: 'Вернуться на сайт'
+    backToSite: 'Вернуться на сайт',
+    planLimitReachedMessage:
+      'В текущем тарифе уже создано максимальное количество мемориалов.\nОткройте существующий мемориал и измените его биографию.',
+    openExistingMemorial: 'Открыть существующий мемориал',
+    biographyIndexingExplanation:
+      'Биография сохранена, но аватар пока не может её использовать.\nЗапустите индексацию, чтобы создать его память.',
+    editMemorial: 'Редактировать мемориал',
+    saveChanges: 'Сохранить изменения',
+    clearBiography: 'Очистить биографию',
+    clearBiographyConfirmTitle: 'Очистить эту биографию?',
+    clearBiographyConfirmBody:
+      'Будет удалён сохранённый текст биографии и вся созданная из него память. Участники, приглашения и другие одобренные воспоминания не будут затронуты.',
+    clearBiographyConfirmYes: 'Да, очистить биографию',
+    deleteMemorial: 'Удалить мемориал',
+    deleteMemorialConfirmTitle: 'Удалить этот мемориал?',
+    deleteMemorialConfirmBody:
+      'Мемориал, его биография, участники, приглашения, вклады и вся проиндексированная память аватара будут удалены безвозвратно. Это действие нельзя отменить.',
+    deleteMemorialConfirmLabel: 'Введите название мемориала для подтверждения',
+    deleteMemorialConfirmButton: 'Удалить навсегда',
+    deleteMemorialPartialFailure: 'Удаление не удалось безопасно завершить и было отменено. Попробуйте ещё раз.',
+    backToMemorials: 'Назад к мемориалам'
   }
 };
 
@@ -721,6 +802,18 @@ function getInvitationTokenFromUrl(): string | null {
   return params.get('token');
 }
 
+const SHORT_PREVIEW_MAX_LENGTH = 220;
+
+/** A guaranteed, JS-level short preview - never depends on CSS line-clamp
+ * support to keep a long biography from being rendered in full anywhere
+ * outside its dedicated editor (Task 65.5 Part 21/22: memorial cards and
+ * the Overview must show a short preview, never the complete text). */
+export function shortTextPreview(value: string | null | undefined): string {
+  const normalized = (value || '').trim();
+  if (normalized.length <= SHORT_PREVIEW_MAX_LENGTH) return normalized;
+  return `${normalized.slice(0, SHORT_PREVIEW_MAX_LENGTH).trimEnd()}…`;
+}
+
 export default function MemorialWorkspace({ lang }: { lang: Lang }) {
   const t = COPY[lang];
   const [session, setSession] = useState<AuthSession | null>(null);
@@ -738,6 +831,7 @@ export default function MemorialWorkspace({ lang }: { lang: Lang }) {
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [invitationToken, setInvitationToken] = useState<string | null>(null);
+  const [billingLimits, setBillingLimits] = useState<BillingLimitsRead | null>(null);
 
   const role = selected?.current_user_role;
   const mayInvite = role ? canInvite(role) : false;
@@ -779,6 +873,14 @@ export default function MemorialWorkspace({ lang }: { lang: Lang }) {
     try {
       const memorialList = await listMemorials(accessToken);
       setMemorials(memorialList);
+      // Billing limits gate the create-memorial form (Task 65.5) - fetched
+      // alongside the memorial list itself, and re-fetched after create or
+      // delete since both change `current_usage.current_profiles`. A failure
+      // here fails open (leaves `billingLimits` as-is / null), letting the
+      // backend remain the authoritative enforcement point either way.
+      void getBillingLimits(accessToken)
+        .then(setBillingLimits)
+        .catch(() => {});
       if (options.resolveBootstrap) {
         await resolveBootstrapSelection(memorialList, accessToken);
       }
@@ -979,28 +1081,47 @@ export default function MemorialWorkspace({ lang }: { lang: Lang }) {
             {error && <p className="rounded-2xl border border-red-400/30 bg-red-500/10 px-4 py-3 text-sm text-red-100">{error}</p>}
             {notice && <p className="rounded-2xl border border-cyan/30 bg-cyan/10 px-4 py-3 text-sm text-cyan">{notice}</p>}
 
-            <div className="grid min-w-0 gap-5 lg:grid-cols-[minmax(0,0.88fr)_minmax(0,1.12fr)]">
-              <CreateMemorialForm
-                onCreated={(memorial) => {
-                  setMemorials((items) => [memorial, ...items.filter((item) => item.id !== memorial.id)]);
-                  void loadWorkspace(memorial.id);
-                }}
-                t={t}
-                token={session.accessToken}
-              />
-              <MemorialList
-                loading={loading && !selected}
-                memorials={memorials}
-                onOpen={(profileId) => void loadWorkspace(profileId)}
-                t={t}
-                lang={lang}
-              />
-            </div>
+            {/* Task 65.5 Part G: the create/list picker is only ever shown
+                when no memorial is open - once one is selected, its own
+                "Open workspace" button (in MemorialList) would otherwise
+                render simultaneously with the workspace already being open,
+                a duplicated affordance for the same action. */}
+            {!selected && (
+              <div className="grid min-w-0 gap-5 lg:grid-cols-[minmax(0,0.88fr)_minmax(0,1.12fr)]">
+                <CreateMemorialForm
+                  billingLimits={billingLimits}
+                  existingMemorials={memorials}
+                  onCreated={(memorial) => {
+                    setMemorials((items) => [memorial, ...items.filter((item) => item.id !== memorial.id)]);
+                    void loadWorkspace(memorial.id);
+                  }}
+                  onOpenExisting={(profileId) => void loadWorkspace(profileId)}
+                  t={t}
+                  token={session.accessToken}
+                />
+                <MemorialList
+                  loading={loading && !selected}
+                  memorials={memorials}
+                  onOpen={(profileId) => void loadWorkspace(profileId)}
+                  t={t}
+                  lang={lang}
+                />
+              </div>
+            )}
 
             {selected && (
               <section className="grid min-w-0 gap-5 rounded-[34px] border border-white/10 bg-black/20 p-3 sm:p-4 lg:grid-cols-[280px_minmax(0,1fr)]">
                 <aside className="min-w-0 rounded-[28px] border border-white/10 bg-white/[.045] p-4 sm:p-5">
-                  <p className="mb-3 text-xs uppercase tracking-[.24em] text-cyan/60">{t.openWorkspace}</p>
+                  <button
+                    className="mb-3 text-xs uppercase tracking-[.24em] text-cyan/60 transition hover:text-cyan"
+                    onClick={() => {
+                      setSelected(null);
+                      navigate(APP_ROOT_PATH);
+                    }}
+                    type="button"
+                  >
+                    ← {t.backToMemorials}
+                  </button>
                   <h3 className="break-words font-serif text-3xl leading-tight">{selected.name}</h3>
                   <p className="mt-2 text-sm text-fg/55">
                     {t.role}: {roleLabel(selected.current_user_role)}
@@ -1050,8 +1171,20 @@ export default function MemorialWorkspace({ lang }: { lang: Lang }) {
                       isOwner={role === 'owner'}
                       lang={lang}
                       memorial={selected}
+                      onMemorialDeleted={() => {
+                        const deletedId = selected.id;
+                        setSelected(null);
+                        setMemorials((items) => items.filter((item) => item.id !== deletedId));
+                        void loadMemorials(session.accessToken);
+                        navigate(APP_ROOT_PATH);
+                      }}
+                      onMemorialUpdated={(updated) => {
+                        setSelected(updated);
+                        setMemorials((items) => items.map((item) => (item.id === updated.id ? updated : item)));
+                      }}
                       onNavigate={(tab) => setActiveTab(tab)}
                       t={t}
+                      token={session.accessToken}
                     />
                   )}
                   {activeTab === 'biography' && role === 'owner' && (
@@ -1253,11 +1386,40 @@ function InvitationAcceptPanel({
   );
 }
 
-function CreateMemorialForm({ token, t, onCreated }: { token: string; t: Copy; onCreated: (memorial: MemorialRead) => void }) {
+/** Task 65.5: whether the backend would currently accept another memorial
+ * for this account, based on `/api/billing/limits`. `max_profiles === null`
+ * means unlimited. Fails open (allows the form) when the limits haven't
+ * loaded yet or failed to load - the backend remains authoritative and
+ * still rejects the request server-side if the plan really is at its
+ * limit; this only controls whether the frontend shows the full create
+ * form as the primary action versus the "open existing memorial" message. */
+function hasReachedProfileLimit(billingLimits: BillingLimitsRead | null): boolean {
+  if (!billingLimits) return false;
+  const max = billingLimits.limits.max_profiles;
+  if (max === null) return false;
+  return billingLimits.current_usage.current_profiles >= max;
+}
+
+export function CreateMemorialForm({
+  token,
+  t,
+  onCreated,
+  billingLimits,
+  existingMemorials,
+  onOpenExisting
+}: {
+  token: string;
+  t: Copy;
+  onCreated: (memorial: MemorialRead) => void;
+  billingLimits: BillingLimitsRead | null;
+  existingMemorials: MemorialRead[];
+  onOpenExisting: (profileId: number) => void;
+}) {
   const [name, setName] = useState('');
   const [biography, setBiography] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [limitErrorOnSubmit, setLimitErrorOnSubmit] = useState(false);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -1267,16 +1429,45 @@ function CreateMemorialForm({ token, t, onCreated }: { token: string; t: Copy; o
     }
     setBusy(true);
     setError(null);
+    setLimitErrorOnSubmit(false);
     try {
       const memorial = await createMemorial(token, { name: name.trim(), biography: biography.trim() || null });
       setName('');
       setBiography('');
       onCreated(memorial);
     } catch (createError) {
-      setError(safeError(createError));
+      // The backend remains authoritative: even if the frontend's own
+      // billing-limits check said the form should be offered, a concurrent
+      // change (e.g. another tab already created the last allowed profile)
+      // can still return this error on submit. Normalize it into the same
+      // friendly, actionable message rather than surfacing raw backend
+      // wording, and preserve the entered draft text instead of clearing it.
+      if (createError instanceof MemorialApiError && createError.status === 403) {
+        setLimitErrorOnSubmit(true);
+      } else {
+        setError(safeError(createError));
+      }
     } finally {
       setBusy(false);
     }
+  }
+
+  if (hasReachedProfileLimit(billingLimits) || limitErrorOnSubmit) {
+    return (
+      <section className="min-w-0 rounded-[28px] border border-white/10 bg-white/[.045] p-4 sm:p-6">
+        <h3 className="font-serif text-3xl">{t.createMemorial}</h3>
+        <p className="mt-4 whitespace-pre-line text-sm leading-6 text-fg/70">{t.planLimitReachedMessage}</p>
+        {existingMemorials[0] && (
+          <button
+            className="mt-5 rounded-full bg-gradient-to-r from-cyan to-violet px-6 py-3.5 text-sm font-semibold text-ink"
+            onClick={() => onOpenExisting(existingMemorials[0].id)}
+            type="button"
+          >
+            {t.openExistingMemorial}
+          </button>
+        )}
+      </section>
+    );
   }
 
   return (
@@ -1294,7 +1485,7 @@ function CreateMemorialForm({ token, t, onCreated }: { token: string; t: Copy; o
   );
 }
 
-function MemorialList({
+export function MemorialList({
   loading,
   memorials,
   onOpen,
@@ -1320,7 +1511,7 @@ function MemorialList({
             <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
               <div className="min-w-0">
                 <h4 className="break-words text-lg font-semibold">{memorial.name}</h4>
-                <p className="mt-2 line-clamp-3 text-sm leading-6 text-fg/55">{memorial.biography || t.description}</p>
+                <p className="mt-2 line-clamp-3 text-sm leading-6 text-fg/55">{shortTextPreview(memorial.biography) || t.description}</p>
                 <p className="mt-2 text-xs text-fg/38">{formatDate(memorial.created_at, lang)}</p>
               </div>
               <span className="w-fit rounded-full bg-white/10 px-3 py-1 text-xs text-cyan">{roleLabel(memorial.current_user_role)}</span>
@@ -1348,7 +1539,10 @@ export function Overview({
   biographerEligible,
   biographerQuestion,
   candidates,
-  onNavigate
+  onNavigate,
+  token,
+  onMemorialUpdated,
+  onMemorialDeleted
 }: {
   memorial: MemorialRead;
   t: Copy;
@@ -1361,7 +1555,65 @@ export function Overview({
   biographerQuestion: BiographerQuestionRead | null;
   candidates: MemoryCandidateEnrichmentRead[];
   onNavigate: (tab: WorkspaceTab) => void;
+  token: string;
+  onMemorialUpdated: (memorial: MemorialRead) => void;
+  onMemorialDeleted: () => void;
 }) {
+  const [editingName, setEditingName] = useState(false);
+  const [nameDraft, setNameDraft] = useState(memorial.name);
+  const [nameBusy, setNameBusy] = useState(false);
+  const [nameError, setNameError] = useState<string | null>(null);
+
+  useEffect(() => {
+    setNameDraft(memorial.name);
+  }, [memorial.id, memorial.name]);
+
+  async function saveName() {
+    const trimmed = nameDraft.trim();
+    if (trimmed.length < 2) {
+      setNameError('Memorial name is required.');
+      return;
+    }
+    setNameBusy(true);
+    setNameError(null);
+    try {
+      const updated = await updateMemorialMetadata(token, memorial.id, { name: trimmed });
+      onMemorialUpdated(updated);
+      setEditingName(false);
+    } catch (updateError) {
+      // The entered draft name is deliberately left in `nameDraft` on
+      // failure rather than reset - the owner should not have to retype it.
+      setNameError(safeError(updateError));
+    } finally {
+      setNameBusy(false);
+    }
+  }
+
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const [deleteConfirmText, setDeleteConfirmText] = useState('');
+  const [deleteBusy, setDeleteBusy] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+
+  async function performDelete() {
+    setDeleteBusy(true);
+    setDeleteError(null);
+    try {
+      await deleteMemorial(token, memorial.id);
+      onMemorialDeleted();
+    } catch (deleteErr) {
+      // A 409 here means the backend's Qdrant-cleanup pass failed partway
+      // through and deliberately left the memorial (and its DB rows) intact
+      // rather than deleting the record while vectors remain retrievable -
+      // never claim success in that case, just let the owner retry.
+      if (deleteErr instanceof MemorialApiError && deleteErr.status === 409) {
+        setDeleteError(t.deleteMemorialPartialFailure);
+      } else {
+        setDeleteError(safeError(deleteErr));
+      }
+    } finally {
+      setDeleteBusy(false);
+    }
+  }
   const clarificationsRequired = candidates.filter((candidate) => candidate.next_clarification_question).length;
   const candidatesAwaitingReview = candidates.filter(
     (candidate) => candidate.review_status === 'needs_review' && !candidate.next_clarification_question
@@ -1385,7 +1637,17 @@ export function Overview({
     if (
       isOwner &&
       biographyStatus &&
-      (biographyStatus.status === 'ready_for_ingestion' || biographyStatus.status === 'failed' || biographyStatus.status === 'stale')
+      // 'draft' is the real backend status right after a biography save
+      // (confirmed via live diagnosis: update_biography sets 'draft', not
+      // 'ready_for_ingestion' - that value is only set momentarily inside
+      // start_biography_ingestion itself, immediately before enqueueing).
+      // Omitting 'draft' here was a proven Task 65.4 regression: a saved-
+      // but-never-indexed biography fell through every branch below and
+      // Overview incorrectly claimed "everything is up to date".
+      (biographyStatus.status === 'draft' ||
+        biographyStatus.status === 'ready_for_ingestion' ||
+        biographyStatus.status === 'failed' ||
+        biographyStatus.status === 'stale')
     ) {
       return { label: t.overviewNextActionStartIndexing, tab: 'biography' };
     }
@@ -1411,8 +1673,48 @@ export function Overview({
 
   return (
     <div className="min-w-0 space-y-5">
-      <h3 className="font-serif text-3xl">{t.overview}</h3>
-      <p className="break-words text-sm leading-7 text-fg/65">{memorial.biography || t.empty}</p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <h3 className="font-serif text-3xl">{t.overview}</h3>
+        {isOwner && !editingName && (
+          <button
+            className="shrink-0 rounded-full border border-white/15 px-4 py-2 text-sm text-fg/75 transition hover:bg-white/10"
+            onClick={() => setEditingName(true)}
+            type="button"
+          >
+            {t.editMemorial}
+          </button>
+        )}
+      </div>
+      {editingName ? (
+        <div className="grid gap-3 rounded-2xl border border-white/10 bg-black/20 p-4">
+          <Field label={t.name} value={nameDraft} onChange={setNameDraft} required />
+          {nameError && <p className="rounded-2xl border border-red-400/30 bg-red-500/10 px-4 py-3 text-sm text-red-100">{nameError}</p>}
+          <div className="flex flex-wrap gap-3">
+            <button
+              className="rounded-full bg-gradient-to-r from-cyan to-violet px-5 py-2.5 text-sm font-semibold text-ink disabled:opacity-55"
+              disabled={nameBusy}
+              onClick={() => void saveName()}
+              type="button"
+            >
+              {nameBusy ? t.working : t.saveChanges}
+            </button>
+            <button
+              className="rounded-full border border-white/15 px-5 py-2.5 text-sm text-fg/75 transition hover:bg-white/10"
+              disabled={nameBusy}
+              onClick={() => {
+                setEditingName(false);
+                setNameError(null);
+                setNameDraft(memorial.name);
+              }}
+              type="button"
+            >
+              {t.cancelAction}
+            </button>
+          </div>
+        </div>
+      ) : (
+        <p className="break-words text-sm leading-7 text-fg/65">{shortTextPreview(memorial.biography) || t.empty}</p>
+      )}
       <div className="flex flex-wrap gap-2">
         <Badge>{t.role}: {roleLabel(memorial.current_user_role)}</Badge>
         <Badge>{formatDate(memorial.created_at, lang)}</Badge>
@@ -1472,6 +1774,49 @@ export function Overview({
           </div>
         )}
       </div>
+
+      {isOwner && (
+        <div className="mt-8 rounded-2xl border border-red-400/25 bg-red-500/[.04] p-4">
+          {!confirmingDelete ? (
+            <button
+              className="rounded-full border border-red-400/30 px-5 py-2.5 text-sm text-red-200 transition hover:bg-red-500/10"
+              onClick={() => setConfirmingDelete(true)}
+              type="button"
+            >
+              {t.deleteMemorial}
+            </button>
+          ) : (
+            <div className="grid gap-3">
+              <p className="text-sm font-semibold text-fg">{t.deleteMemorialConfirmTitle}</p>
+              <p className="text-sm leading-6 text-fg/70">{t.deleteMemorialConfirmBody}</p>
+              <Field label={t.deleteMemorialConfirmLabel} value={deleteConfirmText} onChange={setDeleteConfirmText} />
+              {deleteError && <p className="rounded-2xl border border-red-400/30 bg-red-500/10 px-4 py-3 text-sm text-red-100">{deleteError}</p>}
+              <div className="flex flex-wrap gap-3">
+                <button
+                  className="rounded-full bg-red-500/80 px-5 py-2.5 text-sm font-semibold text-white disabled:opacity-40"
+                  disabled={deleteBusy || deleteConfirmText.trim() !== memorial.name.trim()}
+                  onClick={() => void performDelete()}
+                  type="button"
+                >
+                  {deleteBusy ? t.working : t.deleteMemorialConfirmButton}
+                </button>
+                <button
+                  className="rounded-full border border-white/15 px-5 py-2.5 text-sm text-fg/75 transition hover:bg-white/10"
+                  disabled={deleteBusy}
+                  onClick={() => {
+                    setConfirmingDelete(false);
+                    setDeleteConfirmText('');
+                    setDeleteError(null);
+                  }}
+                  type="button"
+                >
+                  {t.cancelAction}
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -1624,6 +1969,8 @@ export function BiographyPanel({
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [confirmingStart, setConfirmingStart] = useState(false);
+  const [confirmingClear, setConfirmingClear] = useState(false);
+  const [clearBusy, setClearBusy] = useState(false);
 
   useEffect(() => {
     setText(initialBiography ?? '');
@@ -1705,10 +2052,27 @@ export function BiographyPanel({
     }
   }
 
+  async function clear() {
+    setClearBusy(true);
+    setError(null);
+    setNotice(null);
+    try {
+      const next = await clearBiography(token, profileId);
+      setStatus(next);
+      setText('');
+      setConfirmingClear(false);
+    } catch (clearError) {
+      setError(safeError(clearError));
+    } finally {
+      setClearBusy(false);
+    }
+  }
+
   const hasEnoughText = text.trim().length >= 2;
   const jobActive = status !== null && isBiographyJobActive(status);
   const canOfferIndexing = status !== null && hasEnoughText && !jobActive && status.status !== 'indexed';
   const isRetry = status?.status === 'failed' || status?.status === 'stale';
+  const hasBiographyContent = text.trim().length > 0 || Boolean(status?.content_hash);
 
   return (
     <div className="min-w-0 space-y-5">
@@ -1741,6 +2105,11 @@ export function BiographyPanel({
       )}
       <Textarea label={t.biographyTextLabel} value={text} onChange={setText} required maxLength={20000} />
       <p className="text-xs text-fg/45">{t.biographyConfirmNote}</p>
+      {canOfferIndexing && (
+        <p className="whitespace-pre-line rounded-2xl border border-cyan/25 bg-cyan/10 px-4 py-3 text-sm leading-6 text-fg/75">
+          {t.biographyIndexingExplanation}
+        </p>
+      )}
       {notice && <p className="rounded-2xl border border-cyan/30 bg-cyan/10 px-4 py-3 text-sm text-cyan">{notice}</p>}
       {error && <p className="rounded-2xl border border-red-400/30 bg-red-500/10 px-4 py-3 text-sm text-red-100">{error}</p>}
       <div className="flex flex-wrap gap-3">
@@ -1786,6 +2155,42 @@ export function BiographyPanel({
               {t.biographyConfirmCancel}
             </button>
           </div>
+        </div>
+      )}
+      {hasBiographyContent && (
+        <div className="mt-6 border-t border-white/10 pt-5">
+          {!confirmingClear ? (
+            <button
+              className="rounded-full border border-red-400/30 px-5 py-2.5 text-sm text-red-200 transition hover:bg-red-500/10"
+              onClick={() => setConfirmingClear(true)}
+              type="button"
+            >
+              {t.clearBiography}
+            </button>
+          ) : (
+            <div className="grid gap-3 rounded-2xl border border-red-400/30 bg-red-500/10 p-4">
+              <p className="text-sm font-semibold text-fg">{t.clearBiographyConfirmTitle}</p>
+              <p className="text-sm leading-6 text-fg/70">{t.clearBiographyConfirmBody}</p>
+              <div className="flex flex-wrap gap-3">
+                <button
+                  className="rounded-full bg-red-500/80 px-5 py-2.5 text-sm font-semibold text-white disabled:opacity-55"
+                  disabled={clearBusy}
+                  onClick={() => void clear()}
+                  type="button"
+                >
+                  {clearBusy ? t.working : t.clearBiographyConfirmYes}
+                </button>
+                <button
+                  className="rounded-full border border-white/15 px-5 py-2.5 text-sm text-fg/75 transition hover:bg-white/10"
+                  disabled={clearBusy}
+                  onClick={() => setConfirmingClear(false)}
+                  type="button"
+                >
+                  {t.biographyConfirmCancel}
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>

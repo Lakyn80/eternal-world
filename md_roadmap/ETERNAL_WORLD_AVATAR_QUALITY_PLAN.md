@@ -1783,6 +1783,47 @@ Rusky (kontrolní běh): ruský životopis -> reálný worker -> indexed; AI
 Task 66.1 trace obou Chat volání: 1 Brain call, 0 translation calls
 ```
 
+## 22. Task 65.5 status (2026-07-22) — Existující memorial, indexace a bezpečné mazání dokončeno
+
+Task 65.5 řešil skutečný, konkrétní report vlastníka účtu: formulář pro vytvoření memorialu se nabízel jako hlavní akce, i když účet už jeden memorial měl (limit plánu dosažen), Overview tvrdilo "vše je aktuální" u uloženého, ale nezaindexovaného životopisu, a neexistoval způsob jak existující memorial upravit, vymazat jeho životopis nebo memorial celý bezpečně smazat. Plný popis je v `PROJECT_PROGRESS.md`, sekce "Task 65.5 - Fix Existing Memorial Editing, Legacy Biography Binding, Indexing CTA, and Safe Deletion (2026-07-22)".
+
+Nalezené a opravené skutečné chyby (tři nezávisle prokazatelné):
+
+```text
+Overview nextAction() nekontrolovalo stav 'draft' - přesný stav, který
+  backend nastaví hned po uložení životopisu (regrese z Tasku 65.4)
+Formulář pro vytvoření memorialu nebral v úvahu limit plánu vůbec
+KRITICKÁ BACKENDOVÁ CHYBA (nalezena až během tohoto úkolu): GET
+  /api/billing/limits vždy vracel current_profiles=0 bez ohledu na
+  skutečný počet memorialů - toto by kompletně znefunkčnilo právě
+  opravovanou frontend logiku; opraveno napojením na skutečný dotaz
+DALŠÍ BACKENDOVÁ CHYBA: mazání memorialu s jakýmkoli zaindexovaným
+  obsahem shazovalo IntegrityError (ORM se pokoušel vynulovat NOT NULL
+  cizí klíče místo spolehnutí na DB-level CASCADE) - nikdy dřív
+  neotestováno, protože žádný předchozí test nemazal profil s obsahem
+```
+
+Nové bezpečné ovládací prvky: "Upravit memorial" (jen jméno, vlastník),
+"Vymazat životopis" (odstraní jen životopis a jeho Qdrant vektory,
+zachová členství/pozvánky/ostatní schválené vzpomínky), "Smazat memorial"
+(vlastník, vyžaduje napsat přesný název memorialu, nikdy netvrdí úspěch
+při částečném selhání mazání Qdrant vektorů).
+
+Živě ověřeno (syntetický účet, nikdy ne skutečný memorial vlastníka):
+
+```text
+vytvoření memorialu #1 -> billing/limits current_profiles=1 (opravená
+  hodnota) -> druhé vytvoření -> 403 (odpovídá frontend gating) ->
+  úprava jména (bez druhého memorialu) -> uložení životopisu -> draft
+  (bez automatické indexace) -> explicitní indexace -> SKUTEČNÝ Celery
+  worker -> indexed -> úprava -> stale -> vymazání životopisu -> draft,
+  členství zachováno -> opětovné přidání a indexace -> indexed ->
+  smazání memorialu -> 204 -> opakované smazání -> 404 (bezpečné) ->
+  účet může vytvořit nový memorial po smazání -> 201
+```
+DB kontrola po smazání: 0 zbylých řádků MemoryProfile/RagSource/RagChunk/
+RagEmbedding/RagVectorIndex pro smazaný profil - žádná osiřelá data.
+
 Testy: 7 nových backendových testů pro `/history` endpoint. Frontend měl nulovou testovací infrastrukturu - přidán nejmenší vhodný harness (Vitest + React Testing Library), **31 nových testů, všechny procházejí**. Backendová regrese (9 souborů): 121/121 (jeden přechodný timing flake v `test_memorial_candidates.py` prokázán jako netýkající se této úlohy trojím opakovaným během). `tsc --noEmit` čisté, `npm run build` prochází.
 
 Task 65.4 se **považuje za kompletně dokončený** - plný synteticky ověřený workflow prošel, ne jen TypeScript kompilace nebo API-only testy.

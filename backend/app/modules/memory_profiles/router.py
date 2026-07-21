@@ -19,6 +19,7 @@ from app.modules.memory_profiles.schemas import (
 )
 from app.modules.memory_profiles.service import (
     InvalidMemoryProfilePhotoError,
+    MemoryProfileDeletionFailedError,
     MemoryProfileNotFoundError,
     MemoryProfilePhotoMediaNotFoundError,
     assign_memory_profile_photo,
@@ -134,6 +135,7 @@ def update_memory_profile_endpoint(
     responses={
         status.HTTP_401_UNAUTHORIZED: {"model": ErrorResponse},
         status.HTTP_404_NOT_FOUND: {"model": ErrorResponse},
+        status.HTTP_409_CONFLICT: {"model": ErrorResponse},
     },
 )
 def delete_memory_profile_endpoint(
@@ -150,6 +152,11 @@ def delete_memory_profile_endpoint(
     except MemoryProfileNotFoundError as exc:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(exc),
+        ) from exc
+    except MemoryProfileDeletionFailedError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
             detail=str(exc),
         ) from exc
 

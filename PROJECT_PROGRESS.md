@@ -8749,6 +8749,120 @@ No Dockerfile/docker-compose change was needed. No frontend change was needed (n
 
 ---
 
+## Task 65.5 - Fix Existing Memorial Editing, Legacy Biography Binding, Indexing CTA, and Safe Deletion (2026-07-22)
+
+Status: **complete**. Triggered by a real, concrete report from the account owner (lukas.krumpach@gmail.com): the frontend still offered the create-memorial form as the primary action even though the account already had one memorial (plan limit reached), the Overview tab wrongly claimed "everything is up to date" for a saved-but-unindexed biography, and there was no way to edit the existing memorial, clear its biography, or delete it. Confirmed a frontend/data-binding defect, not a plan-limit defect - and, during implementation, two additional **real backend defects** that would have silently defeated the frontend fix.
+
+Starting branch/commit: `staging/eternalworld-lukiora-20260715` at `624682d` (verified). No push to `main`.
+
+### Root cause (three separate, independently-provable bugs)
+
+1. **Overview `nextAction()` regression (Task 65.4, frontend)**: the priority-ordered next-action function never checked for `biographyStatus.status === 'draft'` - the exact status the real backend sets immediately after a biography save (`update_biography` sets `'draft'` or `'stale'`, never `'ready_for_ingestion'` - that value is only set transiently inside `start_biography_ingestion` itself). A saved-but-never-indexed biography fell through every branch and Overview incorrectly showed "Everything is up to date."
+2. **No plan-limit awareness in the create form (frontend)**: `CreateMemorialForm` always rendered as the primary action regardless of plan state, letting the owner type a full biography into a form that could only ever fail with a raw 403.
+3. **`GET /api/billing/limits` always reported `current_usage.current_profiles = 0` (backend, pre-existing, discovered during this task)**: `get_current_user_limits()` called `build_usage_snapshot()` with no arguments, which returns an all-zero placeholder regardless of the account's real profile count. This would have completely defeated the frontend plan-limit gating built for this task - the create form would have stayed visible for every user, always, no matter how many memorials they actually had. Fixed by threading `db: Session` through `get_current_user_limits`/the `/limits` router and querying the real count via the already-existing `memory_profiles.repository.count_memory_profiles_for_user`. Only `current_profiles` was wired to a real query (the only field this task's UX depends on); `current_memories`/`current_audio_minutes`/`current_videos_month`/`current_family_members` remain the pre-existing placeholder zero, out of scope here.
+
+### Current real-state diagnosis (read-only, no content printed)
+
+`lukas.krumpach@gmail.com` -> `user_id=14`, one memorial (`profile_id=15`, name "Lukas Krumpach"): `biography_len=9515` (length only, never the text itself), `biography_status='draft'`, `biography_source_id=None`, `biography_indexed_at=None`. Plan: `free`, `max_profiles=1`, `current_profiles=1` (confirmed matching after the billing-limits fix - was incorrectly `0` before it). No separate `description` field exists on `MemoryProfile` - Part D's "legacy `memory_profile.description`" concern was audited and does not apply to this schema: `biography` is the only text field, so no adoption/migration logic was needed or written.
+
+### Create-memorial UX (Part B)
+
+`CreateMemorialForm` now receives `billingLimits` (from a new `getBillingLimits()` call, fetched alongside the memorial list) and `existingMemorials`. `hasReachedProfileLimit()` fails open (shows the form) if limits haven't loaded, keeping the backend authoritative either way. When the limit is reached, the form is replaced with the exact required localized message (Czech: "V aktuálním plánu už máte maximální počet memorialů.\nOtevřete existující memorial a upravte jeho životopis."; Russian: "В текущем тарифе уже создано максимальное количество мемориалов.\nОткройте существующий мемориал и измените его биографию."; English equivalent) plus a primary "Open existing memorial" button. A concurrent 403 on submit (`profile_limit_exceeded`) is normalized into the same friendly message rather than showing raw backend wording; the typed draft name/biography are not cleared on this path.
+
+### Existing memorial editing (Part C)
+
+Added an owner-only "Edit memorial" control in the Overview tab (name-only - confirmed via schema audit that no separate short-description field exists distinct from `biography`, so there is nothing else to expose here without inventing a fake field). Saves via `PATCH /api/memory-profiles/{id}` (reused - `/api/memorials` has no update endpoint; both operate on the same `MemoryProfile` row, confirmed via `memorial_access/service.py`'s `create_memorial` internally calling `memory_profiles_repository.create_memory_profile`). Never touches `biography`/`biography_status` through this path. Draft text is preserved on failure. Long biography text is now truncated everywhere outside its dedicated editor via a new `shortTextPreview()` helper (220-char JS-level truncation, not dependent on CSS `line-clamp` support) - applied to both the memorial-list card and the Overview body.
+
+### Legacy biography binding (Part D)
+
+Audited, does not apply: `MemoryProfile` has no legacy/duplicate biography-like field. `biography` is the single field; the Biography tab already seeds correctly from it (fixed in Task 65.4). No migration/adoption code was written, since writing one would invent behavior for a field that does not exist.
+
+### Biography indexing (Part E)
+
+The "Start indexing" button and its confirmation dialog already existed correctly (Task 65.4) with the exact required Czech/Russian labels ("Spustit indexaci"/"Запустить индексацию") already in place. Added the required explanatory copy ("The biography is saved, but the avatar cannot use it yet. Start indexing to create memory embeddings." / Czech and Russian equivalents), shown directly above the button whenever indexing is offered. The Overview next-action bug (root cause #1) was the actual missing piece keeping this CTA from being unmistakable from the Overview tab.
+
+### Memorial list and Overview (Part G)
+
+Removed the duplicated "Open workspace" affordance: the create/list picker section is now hidden entirely once a memorial is selected (previously it stayed visible alongside the open workspace, so the list's own per-card "Open workspace" button rendered simultaneously with the workspace already being open). A "← Back to memorials" button replaces the old static "Open workspace" label in the workspace sidebar.
+
+### Clear biography (Part F, less-destructive alternative to deletion)
+
+New backend `clear_biography()` service function (`biography_ingestion/service.py`) + `POST /api/memorials/{id}/biography/clear` endpoint (`DIRECT_MEMORY_WRITE` capability, owner-only), reusing the exact same partial-failure-safe Qdrant cleanup pattern already established by `_retire_previous_source` (re-indexing an edited biography already had to solve "remove the previous version's points without losing the audit trail"; clearing is the same operation without a replacement). A point that fails to delete is logged and skipped rather than aborting the whole clear; the `RagVectorIndex` bookkeeping row is only removed once its Qdrant point is confirmed gone, so a failed point stays discoverable and a repeat clear is safe to retry. The underlying `RagSource`/`RagChunk`/`RagEmbedding` rows are intentionally preserved (never hard-deleted), matching the existing stale-then-reindex audit-trail behavior. Frontend: `BiographyPanel` shows a "Clear biography" button only when there is saved content (current text or a previously-indexed `content_hash`), behind a confirmation dialog with the required explanation text; membership/invitations/other approved memories are untouched (verified in tests and the live smoke run).
+
+### Delete memorial (Part F, full memorial deletion)
+
+Extended `memory_profiles.service.delete_memory_profile` with Qdrant-aware cleanup, using a new `qdrant_indexing.repository.list_vector_indexes_for_profile` helper (no such profile-scoped listing function existed before). Order of operations: (1) resolve the profile via the existing owner-scoped `get_memory_profile` (cross-profile deletion already impossible); (2) enumerate every `RagVectorIndex` row for the profile; (3) attempt to delete each Qdrant point; (4) if **any** deletion fails, abort with a new `MemoryProfileDeletionFailedError` (mapped to HTTP 409) without touching the database - never claim a successful deletion while vectors remain retrievable; (5) only once all deletions succeed (or there were none), explicitly bulk-delete `RagEmbedding`/`RagChunk`/`RagSource` rows scoped to the profile, then delete the `MemoryProfile` row itself.
+
+**A second real, pre-existing latent defect was found and fixed here**: `RagSource`/`RagChunk`/`RagEmbedding` have DB-level `ON DELETE CASCADE` from `memory_profiles`, but their SQLAlchemy relationships on `MemoryProfile` carry no ORM-level cascade or `passive_deletes=True`. Deleting a `MemoryProfile` with any indexed biography content via plain `db.delete(memory_profile)` (the pre-existing implementation) would make the ORM try to null out those non-nullable `profile_id` columns before issuing the delete, raising `IntegrityError: NOT NULL constraint failed` - this was never caught before because no prior test exercised deleting a profile that actually had indexed content. Fixed with an explicit, engine-agnostic bulk-delete pass (does not depend on SQLite's `PRAGMA foreign_keys` being enabled, unlike relying on ORM/DB cascade alone) rather than changing the relationship configuration, keeping the fix minimal and scoped to the actual failure. All other dependent rows (memberships, invitations, biography jobs, `RagVectorIndex`, Biographer questions, memory candidates, contributions, promotions) already had correct `cascade="all, delete-orphan"` relationships and needed no change; `ChatMessage`/`Memory`/`MediaAsset` intentionally use `ON DELETE SET NULL` (they belong to the user's account, not exclusively the memorial) and are correctly left as-is.
+
+Frontend: an owner-only "Delete memorial" danger-zone control in Overview, requiring the owner to type the exact memorial name before the destructive button enables, with an explicit final click. A 409 (partial-Qdrant-failure) response shows a dedicated "could not be completed safely, please retry" message and never claims success.
+
+### Automated tests
+
+**Backend**: new `backend/tests/test_memorial_deletion.py` (10 tests): `clear_biography` removes indexed points and resets status, is idempotent, preserves name/membership, requires `DIRECT_MEMORY_WRITE` (viewer gets 403); `delete_memory_profile` removes indexed vector points, aborts without DB changes on a simulated Qdrant failure (`FailingWriter`), handles the zero-content case as a simple delete, cannot be performed cross-user (404), is idempotent on repeat delete (204 then 404), and the account can create a new memorial after deletion. Extended `backend/tests/test_billing.py` with 2 new tests proving `current_usage.current_profiles` now reflects real state and is scoped to the requesting user (replacing the old test that had accidentally locked in the zero-usage bug as expected behavior).
+
+**Frontend**: new `MemorialWorkspace.task65_5.test.tsx` (19 tests): `shortTextPreview` truncation; the Task 65.4 Overview regression fix (draft status shows "Start biography indexing", never "Everything is up to date") and never rendering the full biography; owner-only edit/delete controls (absent for non-owners); typed-name confirmation gating the destructive delete button; delete calls the endpoint exactly once and a 409 never claims success; `CreateMemorialForm` shows the full form under the limit, replaces it with the localized message + Open-existing action at the limit, never calls `createMemorial` while blocked, and normalizes a concurrent 403 into the same message; `MemorialList` renders exactly one Open-workspace button per memorial and never the full biography text; `BiographyPanel` shows the indexing explanation and offers/requires confirmation for Clear biography, never for an empty never-saved biography. `CreateMemorialForm`/`MemorialList`/`shortTextPreview` were exported (additive, non-breaking) to make this possible, following the exact same pattern established in Task 65.4.
+
+Frontend results: react-export - `npx tsc --noEmit` clean, `npm test` **50/50 passing** (4 files), `npm run build` succeeds (48 modules). Next.js `frontend/` app - `npm run typecheck` clean, `npm test` **32/32 passing** (unchanged from before this task), confirming the `624682d` react-export/Next.js isolation still holds (no cross-project test/type leakage).
+
+### Synthetic full-lifecycle smoke (real infrastructure, synthetic account only)
+
+Performed via the exact HTTP endpoints against the real running dev stack (real Postgres, real Celery worker, real BGE-M3, real Qdrant) - no real owner data touched:
+
+```text
+create memorial #1 -> 201
+GET /api/billing/limits -> current_profiles=1, max_profiles=1 (proves the billing-limits fix)
+create memorial #2 -> 403 profile_limit_exceeded (matches the frontend's gating)
+PATCH name -> 200, still exactly 1 memorial (no second memorial created by editing)
+PATCH biography -> status=draft (not auto-indexed)
+POST .../biography/ingest -> 202, real Celery job -> polled to status=indexed
+  (first poll hit a ~82s cold BGE-M3 model load in this container - a one-time
+  environmental warm-up cost, not a defect; the job succeeded once loaded and
+  all subsequent indexing calls in the same run completed in ~6-9s)
+PATCH biography again (already indexed) -> status=stale
+POST .../biography/clear -> 200, status=draft, content_hash=null
+GET .../members -> still 1 member (role=owner) - membership preserved through clear
+PATCH + re-ingest -> re-indexed successfully (status=indexed again)
+DELETE /api/memory-profiles/{id} -> 204
+GET /api/memorials/{id} -> 404
+DELETE again (repeat) -> 404 (idempotent, no crash)
+GET /api/billing/limits -> current_profiles=0
+create a new memorial -> 201 (account can create again after deletion)
+```
+Post-deletion DB check (read-only): `MemoryProfile`/`RagSource`/`RagChunk`/`RagEmbedding`/`RagVectorIndex` rows for the deleted profile - all 0 rows remaining, confirming complete cleanup. All synthetic memorials created during this smoke run were deleted afterward; the real owner's memorial (`profile_id=15`) was never modified.
+
+### Real owner data modified
+
+**None.** Only read-only diagnostic queries were run against the real owner's account (`user_id=14`, `profile_id=15`) - no create/update/delete/clear/index call was ever made against it. Biography content length was inspected once (9515 chars); content was never printed or logged.
+
+### Known limitations
+
+- `BillingUsageSnapshot`'s other fields (`current_memories`, `current_audio_minutes`, `current_videos_month`, `current_family_members`) remain the pre-existing placeholder zero - only `current_profiles` was wired to a real query, since it is the only field this task's plan-limit UX depends on; wiring the rest is genuine new billing-feature work, out of scope here.
+- The one-time BGE-M3 cold-model-load latency (~80s on a fresh worker process) means the frontend's indexing poll must tolerate longer waits after a container restart - already handled by the existing unbounded poll loop (`isBiographyJobActive`), not a new gap introduced here.
+- No browser-automation tool is available in this environment; the smoke test is HTTP-endpoint-equivalent evidence, same approach used in prior Task 65.x sessions.
+
+### Files changed
+
+- `backend/app/modules/billing/service.py`, `router.py` (fixed `current_profiles` always reporting 0)
+- `backend/app/modules/biography_ingestion/service.py`, `router.py` (new `clear_biography` + endpoint)
+- `backend/app/modules/memory_profiles/service.py`, `router.py` (safe Qdrant-aware `delete_memory_profile`, fixed the FK-cascade `IntegrityError`)
+- `backend/app/modules/qdrant_indexing/repository.py` (new `list_vector_indexes_for_profile`)
+- `backend/tests/test_memorial_deletion.py` (new, 10 tests), `backend/tests/test_billing.py` (+2 tests, 1 renamed)
+- `frontend/react-export/src/components/MemorialWorkspace.tsx` (Overview next-action fix, `shortTextPreview`, plan-limit gating, edit/clear/delete UI, single Open-workspace button, ~20 new copy keys in en/cs/ru)
+- `frontend/react-export/src/lib/memorialApi.ts` (`getBillingLimits`, `updateMemorialMetadata`, `clearBiography`, `deleteMemorial`, 204-handling in `requestJson`)
+- `frontend/react-export/src/lib/memorialPermissions.ts` (`canEditMemorial`, `canClearBiography`, `canDeleteMemorial`)
+- `frontend/react-export/src/types/memorial.ts` (`BillingLimitsRead`, `BillingPlanLimits`, `BillingUsageSnapshot`)
+- `frontend/react-export/src/components/MemorialWorkspace.task65_5.test.tsx` (new, 19 tests)
+- `PROJECT_PROGRESS.md`, `md_roadmap/ETERNAL_WORLD_AVATAR_QUALITY_PLAN.md` (this documentation)
+
+No migration was needed (no DB schema change - only application-level query/cleanup logic). Task 66.1 provider-cost instrumentation untouched and unaffected.
+
+### Next exact step
+
+**Task 66.2 - Cost Analytics and Admin API** (unaffected by this task), or a dedicated billing-usage task to wire the remaining `BillingUsageSnapshot` fields to real queries now that `current_profiles` establishes the pattern.
+
+---
+
 ## Task 65.4 - Complete the Authenticated Memory Lifecycle Frontend (2026-07-21)
 
 Status: **complete**. The full backend-implemented memory lifecycle (initial biography → explicit indexing → AI Biographer → clarification → owner review → explicit memory indexing → Chat verification) is now fully discoverable and completable through the real authenticated Vite/React frontend, with no Swagger/DB/shell-script steps required. Proven end-to-end against real infrastructure (real Celery worker, real DeepSeek, real Qdrant, real BGE-M3) with synthetic accounts, in both Czech and Russian.

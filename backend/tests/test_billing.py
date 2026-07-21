@@ -151,7 +151,7 @@ def test_family_plan_includes_family_specific_flags(client):
     assert family_plan["priority_support_enabled"] is True
 
 
-def test_billing_limits_returns_free_plan_limits_and_usage_placeholders(client):
+def test_billing_limits_returns_free_plan_limits_and_zero_usage_for_a_fresh_account(client):
     token = _register_and_login(client, "billing-limits@example.com")
 
     response = client.get(
@@ -170,6 +170,35 @@ def test_billing_limits_returns_free_plan_limits_and_usage_placeholders(client):
         "current_videos_month": 0,
         "current_family_members": 0,
     }
+
+
+def test_billing_limits_current_profiles_reflects_real_memory_profile_count(client):
+    # Task 65.5: `current_usage.current_profiles` used to be a hardcoded 0
+    # regardless of how many memorials the account actually owned - this
+    # silently broke the frontend's plan-limit gating for the create-memorial
+    # form, since it always looked like there was room for another profile.
+    token = _register_and_login(client, "billing-limits-real-usage@example.com")
+
+    before = client.get("/api/billing/limits", headers=_auth_headers(token))
+    assert before.json()["current_usage"]["current_profiles"] == 0
+
+    create_response = client.post(
+        "/api/memorials", headers=_auth_headers(token), json={"name": "First Memorial"}
+    )
+    assert create_response.status_code == 201
+
+    after = client.get("/api/billing/limits", headers=_auth_headers(token))
+    assert after.json()["current_usage"]["current_profiles"] == 1
+
+
+def test_billing_limits_current_profiles_is_scoped_to_the_requesting_user(client):
+    other_token = _register_and_login(client, "billing-limits-other@example.com")
+    client.post("/api/memorials", headers=_auth_headers(other_token), json={"name": "Someone Else's Memorial"})
+
+    token = _register_and_login(client, "billing-limits-self@example.com")
+    response = client.get("/api/billing/limits", headers=_auth_headers(token))
+
+    assert response.json()["current_usage"]["current_profiles"] == 0
 
 
 def test_billing_limit_checker_returns_allowed_for_unlimited_plans():
