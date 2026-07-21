@@ -2,31 +2,47 @@ import { FormEvent, type ReactNode, useEffect, useMemo, useState } from 'react';
 import type { Lang } from '../i18n';
 import {
   acceptInvitation,
+  answerBiographerQuestion,
+  answerCandidateClarification,
   createMemorial,
   fetchMemorial,
+  getBiographerEligibility,
+  getBiographyStatus,
+  getNextBiographerQuestion,
+  indexCandidateMemory,
   inviteParticipant,
   listChatMessages,
   listContributions,
   listMembers,
   listMemorials,
+  listMemoryCandidates,
   listReviewQueue,
   login,
   MemorialApiError,
+  ownerReviewCandidate,
   register,
   reviewContribution,
   sendChatMessage,
-  submitContribution
+  skipBiographerQuestion,
+  startBiographyIngestion,
+  submitContribution,
+  updateBiography
 } from '../lib/memorialApi';
 import { canInvite, canReview, canSubmitContribution, isActiveMemoryEligible } from '../lib/memorialPermissions';
 import { APP_ROOT_PATH, buildMemorialPath, navigate, parseAppRoute, usePathname } from '../lib/router';
 import type {
   AuthSession,
+  BiographerEligibilityRead,
+  BiographerQuestionRead,
+  BiographyStatusRead,
   ChatMessageRead,
   ContributionRead,
   InvitationCreateResponse,
   InvitableMemorialRole,
   MembershipRead,
+  MemoryCandidateEnrichmentRead,
   MemorialRead,
+  OwnerReviewCandidateAction,
   PrivacyScope,
   WorkspaceTab
 } from '../types/memorial';
@@ -51,6 +67,40 @@ type Copy = {
   chatSend: string;
   chatYou: string;
   chatAvatar: string;
+  biography: string;
+  biographyIntro: string;
+  biographyPlaceholder: string;
+  biographySave: string;
+  biographyStartIngestion: string;
+  biographyConfirmNote: string;
+  biographyStatusDraft: string;
+  biographyStatusReady: string;
+  biographyStatusIngesting: string;
+  biographyStatusIndexed: string;
+  biographyStatusFailed: string;
+  biographyStatusStale: string;
+  biographyRetry: string;
+  biographer: string;
+  biographerIntro: string;
+  biographerBlockedMissing: string;
+  biographerBlockedNotIndexed: string;
+  biographerBlockedActive: string;
+  biographerDone: string;
+  biographerAnswerPlaceholder: string;
+  biographerSubmit: string;
+  biographerSkip: string;
+  candidatesTitle: string;
+  candidatesEmpty: string;
+  candidateConfirm: string;
+  candidateReject: string;
+  candidateRequestDetails: string;
+  candidateMarkDisputed: string;
+  candidateIndexButton: string;
+  candidateIndexedLabel: string;
+  candidatePendingIndexLabel: string;
+  candidateClarificationPending: string;
+  candidateClarificationPlaceholder: string;
+  candidateClarificationSubmit: string;
   createMemorial: string;
   name: string;
   description: string;
@@ -118,6 +168,40 @@ const COPY: Record<Lang, Copy> = {
     chatSend: 'Send',
     chatYou: 'You',
     chatAvatar: 'Avatar',
+    biography: 'Biography',
+    biographyIntro: 'Write the memorial\'s initial life story. Nothing becomes avatar memory until you explicitly start indexing.',
+    biographyPlaceholder: 'Write the biography here...',
+    biographySave: 'Save biography',
+    biographyStartIngestion: 'Start indexing',
+    biographyConfirmNote: 'After indexing, the avatar may use this biography in its answers.',
+    biographyStatusDraft: 'Draft - not indexed yet',
+    biographyStatusReady: 'Queued for indexing',
+    biographyStatusIngesting: 'Indexing in progress...',
+    biographyStatusIndexed: 'Indexed - part of avatar memory',
+    biographyStatusFailed: 'Indexing failed',
+    biographyStatusStale: 'Edited since last indexing - re-index to update avatar memory',
+    biographyRetry: 'Retry indexing',
+    biographer: 'Biographer',
+    biographerIntro: 'The AI Biographer asks one question at a time to learn more about this person. Answers are never indexed automatically - they go through the same review as any other contribution.',
+    biographerBlockedMissing: 'Save the biography first.',
+    biographerBlockedNotIndexed: 'Index the biography before starting the Biographer.',
+    biographerBlockedActive: 'Please finish answering the current clarification question below before continuing.',
+    biographerDone: 'All Biographer topics for this memorial have been covered.',
+    biographerAnswerPlaceholder: 'Write your answer...',
+    biographerSubmit: 'Submit answer',
+    biographerSkip: 'Skip this question',
+    candidatesTitle: 'Biographer memories',
+    candidatesEmpty: 'No Biographer-sourced memories yet.',
+    candidateConfirm: 'Confirm',
+    candidateReject: 'Reject',
+    candidateRequestDetails: 'Request more details',
+    candidateMarkDisputed: 'Mark disputed',
+    candidateIndexButton: 'Index memory',
+    candidateIndexedLabel: 'Indexed and searchable',
+    candidatePendingIndexLabel: 'Approved, not yet indexed',
+    candidateClarificationPending: 'The Biographer needs one more detail before this can be reviewed:',
+    candidateClarificationPlaceholder: 'Write your answer...',
+    candidateClarificationSubmit: 'Submit',
     createMemorial: 'Create memorial',
     name: 'Name',
     description: 'Description',
@@ -183,6 +267,40 @@ const COPY: Record<Lang, Copy> = {
     chatSend: 'Odeslat',
     chatYou: 'Vy',
     chatAvatar: 'Avatar',
+    biography: 'Životopis',
+    biographyIntro: 'Napište počáteční životní příběh memorialu. Nic se nestane pamětí avatara, dokud výslovně nespustíte indexaci.',
+    biographyPlaceholder: 'Sem napište životopis...',
+    biographySave: 'Uložit životopis',
+    biographyStartIngestion: 'Spustit indexaci',
+    biographyConfirmNote: 'Po zaindexování může avatar tento životopis použít ve svých odpovědích.',
+    biographyStatusDraft: 'Koncept - zatím neindexováno',
+    biographyStatusReady: 'Čeká na indexaci',
+    biographyStatusIngesting: 'Probíhá indexace...',
+    biographyStatusIndexed: 'Zaindexováno - součást paměti avatara',
+    biographyStatusFailed: 'Indexace selhala',
+    biographyStatusStale: 'Upraveno od poslední indexace - spusťte indexaci znovu, aby se paměť avatara aktualizovala',
+    biographyRetry: 'Zkusit indexaci znovu',
+    biographer: 'AI biograf',
+    biographerIntro: 'AI biograf klade vždy jednu otázku, aby se dozvěděl víc o tomto člověku. Odpovědi se nikdy neindexují automaticky - projdou stejnou kontrolou jako jakýkoli jiný příspěvek.',
+    biographerBlockedMissing: 'Nejprve uložte životopis.',
+    biographerBlockedNotIndexed: 'Před spuštěním biografa nejprve zaindexujte životopis.',
+    biographerBlockedActive: 'Nejprve prosím odpovězte na aktuální upřesňující otázku níže.',
+    biographerDone: 'Všechna témata AI biografa pro tento memorial už byla probrána.',
+    biographerAnswerPlaceholder: 'Napište svou odpověď...',
+    biographerSubmit: 'Odeslat odpověď',
+    biographerSkip: 'Přeskočit otázku',
+    candidatesTitle: 'Vzpomínky od biografa',
+    candidatesEmpty: 'Zatím žádné vzpomínky od AI biografa.',
+    candidateConfirm: 'Potvrdit',
+    candidateReject: 'Odmítnout',
+    candidateRequestDetails: 'Vyžádat více podrobností',
+    candidateMarkDisputed: 'Označit jako sporné',
+    candidateIndexButton: 'Zaindexovat vzpomínku',
+    candidateIndexedLabel: 'Zaindexováno a vyhledatelné',
+    candidatePendingIndexLabel: 'Schváleno, zatím nezaindexováno',
+    candidateClarificationPending: 'AI biograf potřebuje ještě jeden detail, než se to dá zkontrolovat:',
+    candidateClarificationPlaceholder: 'Napište svou odpověď...',
+    candidateClarificationSubmit: 'Odeslat',
     createMemorial: 'Vytvořit memorial',
     name: 'Jméno',
     description: 'Popis',
@@ -248,6 +366,40 @@ const COPY: Record<Lang, Copy> = {
     chatSend: 'Отправить',
     chatYou: 'Вы',
     chatAvatar: 'Аватар',
+    biography: 'Биография',
+    biographyIntro: 'Напишите начальную историю жизни мемориала. Ничто не станет памятью аватара, пока вы явно не запустите индексацию.',
+    biographyPlaceholder: 'Напишите биографию здесь...',
+    biographySave: 'Сохранить биографию',
+    biographyStartIngestion: 'Запустить индексацию',
+    biographyConfirmNote: 'После индексации аватар сможет использовать эту биографию в своих ответах.',
+    biographyStatusDraft: 'Черновик - ещё не проиндексировано',
+    biographyStatusReady: 'В очереди на индексацию',
+    biographyStatusIngesting: 'Идёт индексация...',
+    biographyStatusIndexed: 'Проиндексировано - часть памяти аватара',
+    biographyStatusFailed: 'Индексация не удалась',
+    biographyStatusStale: 'Изменено после последней индексации - запустите индексацию заново',
+    biographyRetry: 'Повторить индексацию',
+    biographer: 'ИИ-биограф',
+    biographerIntro: 'ИИ-биограф задаёт по одному вопросу, чтобы больше узнать об этом человеке. Ответы никогда не индексируются автоматически - они проходят ту же проверку, что и любой другой вклад.',
+    biographerBlockedMissing: 'Сначала сохраните биографию.',
+    biographerBlockedNotIndexed: 'Сначала проиндексируйте биографию, прежде чем запускать биографа.',
+    biographerBlockedActive: 'Пожалуйста, сначала ответьте на текущий уточняющий вопрос ниже.',
+    biographerDone: 'Все темы ИИ-биографа для этого мемориала уже пройдены.',
+    biographerAnswerPlaceholder: 'Напишите свой ответ...',
+    biographerSubmit: 'Отправить ответ',
+    biographerSkip: 'Пропустить вопрос',
+    candidatesTitle: 'Воспоминания от биографа',
+    candidatesEmpty: 'Пока нет воспоминаний от ИИ-биографа.',
+    candidateConfirm: 'Подтвердить',
+    candidateReject: 'Отклонить',
+    candidateRequestDetails: 'Запросить больше деталей',
+    candidateMarkDisputed: 'Отметить как спорное',
+    candidateIndexButton: 'Проиндексировать воспоминание',
+    candidateIndexedLabel: 'Проиндексировано и доступно для поиска',
+    candidatePendingIndexLabel: 'Одобрено, ещё не проиндексировано',
+    candidateClarificationPending: 'Биографу нужна ещё одна деталь, прежде чем это можно будет проверить:',
+    candidateClarificationPlaceholder: 'Напишите свой ответ...',
+    candidateClarificationSubmit: 'Отправить',
     createMemorial: 'Создать мемориал',
     name: 'Имя',
     description: 'Описание',
@@ -354,14 +506,15 @@ export default function MemorialWorkspace({ lang }: { lang: Lang }) {
   }, []);
 
   const visibleTabs = useMemo(() => {
-    const tabs: WorkspaceTab[] = ['overview', 'chat', 'contributions', 'review', 'members', 'invitations'];
+    const tabs: WorkspaceTab[] = ['overview', 'biography', 'biographer', 'chat', 'contributions', 'review', 'members', 'invitations'];
     return tabs.filter((tab) => {
       if (tab === 'review') return mayReview;
       if (tab === 'members') return mayReview;
       if (tab === 'invitations') return mayInvite;
+      if (tab === 'biography') return role === 'owner';
       return true;
     });
-  }, [mayInvite, mayReview]);
+  }, [mayInvite, mayReview, role]);
 
   async function loadMemorials(accessToken = session?.accessToken, options: { resolveBootstrap?: boolean } = {}) {
     if (!accessToken) return;
@@ -553,6 +706,12 @@ export default function MemorialWorkspace({ lang }: { lang: Lang }) {
 
                 <div className="min-w-0 rounded-[28px] border border-white/10 bg-white/[.045] p-4 sm:p-6">
                   {activeTab === 'overview' && <Overview memorial={selected} t={t} lang={lang} />}
+                  {activeTab === 'biography' && role === 'owner' && (
+                    <BiographyPanel profileId={selected.id} t={t} token={session.accessToken} />
+                  )}
+                  {activeTab === 'biographer' && (
+                    <BiographerPanel profileId={selected.id} t={t} token={session.accessToken} />
+                  )}
                   {activeTab === 'chat' && <ChatPanel profileId={selected.id} t={t} token={session.accessToken} />}
                   {activeTab === 'contributions' && (
                     <ContributionsSection
@@ -592,6 +751,16 @@ export default function MemorialWorkspace({ lang }: { lang: Lang }) {
                       t={t}
                       token={session.accessToken}
                     />
+                  )}
+                  {activeTab === 'review' && mayReview && (
+                    <div className="mt-8 border-t border-white/10 pt-8">
+                      <CandidatesReviewSection
+                        isOwner={role === 'owner'}
+                        profileId={selected.id}
+                        t={t}
+                        token={session.accessToken}
+                      />
+                    </div>
                   )}
                   {activeTab === 'members' && mayReview && <MembersSection members={members} t={t} />}
                   {activeTab === 'invitations' && mayInvite && (
@@ -909,6 +1078,433 @@ function ChatPanel({ token, profileId, t }: { token: string; profileId: number; 
           {busy ? t.working : t.chatSend}
         </button>
       </form>
+    </div>
+  );
+}
+
+const BIOGRAPHY_POLL_INTERVAL_MS = 3000;
+const BIOGRAPHY_TERMINAL_STATUSES = new Set(['indexed', 'failed', 'stale', 'draft']);
+
+function biographyStatusLabel(t: Copy, status: BiographyStatusRead['status']): string {
+  switch (status) {
+    case 'draft':
+      return t.biographyStatusDraft;
+    case 'ready_for_ingestion':
+      return t.biographyStatusReady;
+    case 'ingesting':
+      return t.biographyStatusIngesting;
+    case 'indexed':
+      return t.biographyStatusIndexed;
+    case 'failed':
+      return t.biographyStatusFailed;
+    case 'stale':
+      return t.biographyStatusStale;
+    default:
+      return status;
+  }
+}
+
+function BiographyPanel({ token, profileId, t }: { token: string; profileId: number; t: Copy }) {
+  const [text, setText] = useState('');
+  const [status, setStatus] = useState<BiographyStatusRead | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+
+    async function poll() {
+      try {
+        const next = await getBiographyStatus(token, profileId);
+        if (cancelled) return;
+        setStatus(next);
+        setLoading(false);
+        if (!BIOGRAPHY_TERMINAL_STATUSES.has(next.status) || next.status === 'ready_for_ingestion') {
+          timer = setTimeout(poll, BIOGRAPHY_POLL_INTERVAL_MS);
+        }
+      } catch (loadError) {
+        if (!cancelled) {
+          setError(safeError(loadError));
+          setLoading(false);
+        }
+      }
+    }
+
+    void poll();
+    return () => {
+      cancelled = true;
+      if (timer) clearTimeout(timer);
+    };
+  }, [token, profileId]);
+
+  async function save() {
+    setBusy(true);
+    setError(null);
+    try {
+      const next = await updateBiography(token, profileId, text);
+      setStatus(next);
+    } catch (saveError) {
+      setError(safeError(saveError));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function startIngestion() {
+    setBusy(true);
+    setError(null);
+    try {
+      const next = await startBiographyIngestion(token, profileId);
+      setStatus(next);
+    } catch (startError) {
+      setError(safeError(startError));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const canStart = status !== null && text.trim().length >= 2 && status.status !== 'ingesting';
+
+  return (
+    <div className="min-w-0 space-y-5">
+      <div>
+        <h3 className="font-serif text-3xl">{t.biography}</h3>
+        <p className="mt-2 text-sm leading-6 text-fg/58">{t.biographyIntro}</p>
+      </div>
+      {loading && <p className="text-sm text-fg/55">{t.working}</p>}
+      {status && (
+        <div className="flex flex-wrap items-center gap-2">
+          <Badge tone={status.status === 'indexed' ? 'cyan' : status.status === 'failed' ? 'danger' : 'muted'}>
+            {biographyStatusLabel(t, status.status)}
+          </Badge>
+          {status.background_job_status && <Badge>{status.background_job_status}</Badge>}
+        </div>
+      )}
+      <Textarea label={t.name} value={text} onChange={setText} required maxLength={20000} />
+      <p className="text-xs text-fg/45">{t.biographyConfirmNote}</p>
+      {error && <p className="rounded-2xl border border-red-400/30 bg-red-500/10 px-4 py-3 text-sm text-red-100">{error}</p>}
+      <div className="flex flex-wrap gap-3">
+        <button
+          className="rounded-full border border-white/15 px-5 py-3 text-sm text-fg/75 transition hover:bg-white/10 disabled:opacity-55"
+          disabled={busy || text.trim().length < 2}
+          onClick={() => void save()}
+          type="button"
+        >
+          {busy ? t.working : t.biographySave}
+        </button>
+        <button
+          className="rounded-full bg-gradient-to-r from-cyan to-violet px-5 py-3 text-sm font-semibold text-ink disabled:opacity-55"
+          disabled={busy || !canStart}
+          onClick={() => void startIngestion()}
+          type="button"
+        >
+          {busy ? t.working : status?.status === 'failed' || status?.status === 'stale' ? t.biographyRetry : t.biographyStartIngestion}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function BiographerPanel({ token, profileId, t }: { token: string; profileId: number; t: Copy }) {
+  const [eligibility, setEligibility] = useState<BiographerEligibilityRead | null>(null);
+  const [question, setQuestion] = useState<BiographerQuestionRead | null>(null);
+  const [activeCandidateId, setActiveCandidateId] = useState<number | null>(null);
+  const [answerText, setAnswerText] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [done, setDone] = useState(false);
+
+  const lang: 'cs' | 'ru' = 'cs';
+
+  async function load() {
+    setLoading(true);
+    setError(null);
+    setDone(false);
+    try {
+      const nextEligibility = await getBiographerEligibility(token, profileId);
+      setEligibility(nextEligibility);
+      if (nextEligibility.eligible) {
+        const nextQuestion = await getNextBiographerQuestion(token, profileId, lang);
+        setQuestion(nextQuestion);
+        setDone(nextQuestion === null);
+      } else {
+        setQuestion(null);
+      }
+    } catch (loadError) {
+      setError(safeError(loadError));
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    void load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [token, profileId]);
+
+  async function submitAnswer(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!question || !answerText.trim()) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const response = await answerBiographerQuestion(token, profileId, question.id, lang, answerText.trim());
+      setAnswerText('');
+      if (response.unresolved_clarification_count && response.unresolved_clarification_count > 0 && response.candidate_id) {
+        setActiveCandidateId(response.candidate_id);
+        setQuestion(null);
+      } else {
+        setActiveCandidateId(null);
+        await load();
+      }
+    } catch (answerError) {
+      setError(safeError(answerError));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function submitClarification(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!activeCandidateId || !answerText.trim()) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const enrichment = await answerCandidateClarification(token, profileId, activeCandidateId, answerText.trim());
+      setAnswerText('');
+      if (enrichment.unresolved_clarification_count === 0) {
+        setActiveCandidateId(null);
+        await load();
+      }
+    } catch (clarificationError) {
+      setError(safeError(clarificationError));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function skip() {
+    if (!question) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await skipBiographerQuestion(token, profileId, question.id);
+      await load();
+    } catch (skipError) {
+      setError(safeError(skipError));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="min-w-0 space-y-5">
+      <div>
+        <h3 className="font-serif text-3xl">{t.biographer}</h3>
+        <p className="mt-2 text-sm leading-6 text-fg/58">{t.biographerIntro}</p>
+      </div>
+      {loading && <p className="text-sm text-fg/55">{t.working}</p>}
+      {error && <p className="rounded-2xl border border-red-400/30 bg-red-500/10 px-4 py-3 text-sm text-red-100">{error}</p>}
+      {!loading && eligibility && !eligibility.eligible && (
+        <p className="rounded-2xl border border-white/10 bg-black/20 p-4 text-sm text-fg/60">
+          {eligibility.blocked_reason === 'biography_missing' && t.biographerBlockedMissing}
+          {eligibility.blocked_reason === 'biography_not_indexed' && t.biographerBlockedNotIndexed}
+          {eligibility.blocked_reason === 'active_candidate_requires_answer' && t.biographerBlockedActive}
+        </p>
+      )}
+      {!loading && activeCandidateId && (
+        <form className="grid gap-4 rounded-3xl border border-cyan/20 bg-cyan/10 p-4" onSubmit={(event) => void submitClarification(event)}>
+          <p className="text-sm leading-6 text-fg/75">{t.candidateClarificationPending}</p>
+          <Textarea label={t.candidateClarificationPlaceholder} value={answerText} onChange={setAnswerText} required maxLength={1000} />
+          <button className="rounded-full bg-gradient-to-r from-cyan to-violet px-6 py-3 text-sm font-semibold text-ink disabled:opacity-55" disabled={busy || !answerText.trim()} type="submit">
+            {busy ? t.working : t.candidateClarificationSubmit}
+          </button>
+        </form>
+      )}
+      {!loading && !activeCandidateId && eligibility?.eligible && question && (
+        <form className="grid gap-4 rounded-3xl border border-white/10 bg-black/20 p-4" onSubmit={(event) => void submitAnswer(event)}>
+          <p className="text-lg font-semibold text-fg">{question.question_text}</p>
+          <Textarea label={t.biographerAnswerPlaceholder} value={answerText} onChange={setAnswerText} required maxLength={2000} />
+          <div className="flex flex-wrap gap-3">
+            <button className="rounded-full bg-gradient-to-r from-cyan to-violet px-6 py-3 text-sm font-semibold text-ink disabled:opacity-55" disabled={busy || !answerText.trim()} type="submit">
+              {busy ? t.working : t.biographerSubmit}
+            </button>
+            <button
+              className="rounded-full border border-white/15 px-6 py-3 text-sm text-fg/75 transition hover:bg-white/10 disabled:opacity-55"
+              disabled={busy}
+              onClick={() => void skip()}
+              type="button"
+            >
+              {t.biographerSkip}
+            </button>
+          </div>
+        </form>
+      )}
+      {!loading && !activeCandidateId && eligibility?.eligible && done && (
+        <p className="rounded-2xl border border-white/10 bg-black/20 p-4 text-sm text-fg/60">{t.biographerDone}</p>
+      )}
+    </div>
+  );
+}
+
+function CandidatesReviewSection({
+  token,
+  profileId,
+  t,
+  isOwner
+}: {
+  token: string;
+  profileId: number;
+  t: Copy;
+  isOwner: boolean;
+}) {
+  const [candidates, setCandidates] = useState<MemoryCandidateEnrichmentRead[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [busyId, setBusyId] = useState<number | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [clarificationDrafts, setClarificationDrafts] = useState<Record<number, string>>({});
+
+  async function load() {
+    setLoading(true);
+    setError(null);
+    try {
+      setCandidates(await listMemoryCandidates(token, profileId));
+    } catch (loadError) {
+      setError(safeError(loadError));
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    void load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [token, profileId]);
+
+  async function review(candidateId: number, action: OwnerReviewCandidateAction) {
+    setBusyId(candidateId);
+    setError(null);
+    try {
+      const updated = await ownerReviewCandidate(token, profileId, candidateId, action, { privacy_scope: 'all_family' });
+      setCandidates((items) => items.map((item) => (item.candidate_id === candidateId ? updated : item)));
+    } catch (reviewError) {
+      setError(safeError(reviewError));
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  async function answerClarification(candidateId: number) {
+    const draft = clarificationDrafts[candidateId]?.trim();
+    if (!draft) return;
+    setBusyId(candidateId);
+    setError(null);
+    try {
+      const updated = await answerCandidateClarification(token, profileId, candidateId, draft);
+      setCandidates((items) => items.map((item) => (item.candidate_id === candidateId ? updated : item)));
+      setClarificationDrafts((drafts) => ({ ...drafts, [candidateId]: '' }));
+    } catch (clarificationError) {
+      setError(safeError(clarificationError));
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  async function indexMemory(candidateId: number) {
+    setBusyId(candidateId);
+    setError(null);
+    try {
+      await indexCandidateMemory(token, profileId, candidateId);
+      await load();
+    } catch (indexError) {
+      setError(safeError(indexError));
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  return (
+    <div className="min-w-0 space-y-5">
+      <h3 className="font-serif text-3xl">{t.candidatesTitle}</h3>
+      {loading && <p className="text-sm text-fg/55">{t.working}</p>}
+      {error && <p className="rounded-2xl border border-red-400/30 bg-red-500/10 px-4 py-3 text-sm text-red-100">{error}</p>}
+      {!loading && candidates.length === 0 && <p className="rounded-2xl border border-white/10 bg-black/20 p-4 text-sm text-fg/60">{t.candidatesEmpty}</p>}
+      <div className="grid gap-3">
+        {candidates.map((candidate) => (
+          <article className="min-w-0 rounded-3xl border border-white/10 bg-black/20 p-4" key={candidate.candidate_id}>
+            <p className="break-words text-sm leading-6 text-fg/80">{candidate.finalized_memory_text || '-'}</p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <Badge>{candidate.review_status}</Badge>
+              {candidate.searchable_as_fact && <Badge tone="cyan">{t.candidateIndexedLabel}</Badge>}
+              {candidate.explicit_indexing_required && <Badge tone="muted">{t.candidatePendingIndexLabel}</Badge>}
+            </div>
+
+            {candidate.next_clarification_question && (
+              <div className="mt-4 grid gap-2 rounded-2xl border border-cyan/20 bg-cyan/10 p-3">
+                <p className="text-sm text-fg/75">{candidate.next_clarification_question.question_text}</p>
+                <input
+                  className="min-w-0 rounded-2xl border border-white/10 bg-black/25 px-4 py-2.5 text-fg outline-none focus:border-cyan/70"
+                  onChange={(event) =>
+                    setClarificationDrafts((drafts) => ({ ...drafts, [candidate.candidate_id]: event.target.value }))
+                  }
+                  value={clarificationDrafts[candidate.candidate_id] || ''}
+                />
+                <button
+                  className="w-fit rounded-full border border-white/15 px-4 py-2 text-xs text-fg/75 transition hover:bg-white/10 disabled:opacity-55"
+                  disabled={busyId === candidate.candidate_id}
+                  onClick={() => void answerClarification(candidate.candidate_id)}
+                  type="button"
+                >
+                  {t.candidateClarificationSubmit}
+                </button>
+              </div>
+            )}
+
+            {candidate.review_status === 'needs_review' && !candidate.next_clarification_question && isOwner && (
+              <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+                <ActionButton
+                  disabled={busyId === candidate.candidate_id}
+                  label={t.candidateConfirm}
+                  onClick={() => void review(candidate.candidate_id, 'confirm')}
+                  tone="primary"
+                />
+                <ActionButton
+                  disabled={busyId === candidate.candidate_id}
+                  label={t.candidateRequestDetails}
+                  onClick={() => void review(candidate.candidate_id, 'request_more_details')}
+                  tone="secondary"
+                />
+                <ActionButton
+                  disabled={busyId === candidate.candidate_id}
+                  label={t.candidateMarkDisputed}
+                  onClick={() => void review(candidate.candidate_id, 'mark_disputed')}
+                  tone="secondary"
+                />
+                <ActionButton
+                  disabled={busyId === candidate.candidate_id}
+                  label={t.candidateReject}
+                  onClick={() => void review(candidate.candidate_id, 'reject')}
+                  tone="danger"
+                />
+              </div>
+            )}
+
+            {candidate.explicit_indexing_required && isOwner && (
+              <div className="mt-4">
+                <ActionButton
+                  disabled={busyId === candidate.candidate_id}
+                  label={t.candidateIndexButton}
+                  onClick={() => void indexMemory(candidate.candidate_id)}
+                  tone="primary"
+                />
+              </div>
+            )}
+          </article>
+        ))}
+      </div>
     </div>
   );
 }

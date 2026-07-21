@@ -12,6 +12,8 @@ from app.modules.embeddings.router import router as embeddings_router
 from app.modules.embedding_models.router import router as embedding_models_router
 from app.modules.active_retrieval_config.router import router as active_retrieval_config_router
 from app.modules.auth.router import router as auth_router
+from app.modules.avatar_biographer.router import router as avatar_biographer_router
+from app.modules.biography_ingestion.router import router as biography_ingestion_router
 from app.modules.billing.router import router as billing_router
 from app.modules.chat.router import router as chat_router
 from app.modules.demo_fa_chat.router import router as demo_fa_chat_router
@@ -23,6 +25,7 @@ from app.modules.memorial_access.router import router as memorial_access_router
 from app.modules.metrics.router import router as metrics_router
 from app.modules.multi_embedding_eval.router import router as multi_embedding_eval_router
 from app.modules.memory_profiles.router import router as memory_profiles_router
+from app.modules.memorial_candidates.router import router as memorial_candidates_router
 from app.modules.rag_retrieval.router import router as rag_retrieval_router
 from app.modules.rag_chunks.router import router as rag_chunks_router
 from app.modules.rag_sources.router import router as rag_sources_router
@@ -57,6 +60,9 @@ app.include_router(memories_router)
 app.include_router(media_router)
 app.include_router(media_public_router)
 app.include_router(memorial_access_router)
+app.include_router(memorial_candidates_router)
+app.include_router(biography_ingestion_router)
+app.include_router(avatar_biographer_router)
 app.include_router(memory_profiles_router)
 app.include_router(rag_retrieval_router)
 app.include_router(qdrant_indexing_router)

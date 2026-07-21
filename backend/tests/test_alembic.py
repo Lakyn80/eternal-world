@@ -15,7 +15,7 @@ def test_alembic_configuration_loads_revision_history():
     revision_ids = {revision.revision for revision in revisions}
 
     assert revisions
-    assert script_directory.get_current_head() == "20260719_0022"
+    assert script_directory.get_current_head() == "20260721_0023"
     assert {
         "20260616_0001",
         "20260616_0002",
@@ -39,6 +39,7 @@ def test_alembic_configuration_loads_revision_history():
         "20260715_0020",
         "20260716_0021",
         "20260719_0022",
+        "20260721_0023",
     }.issubset(revision_ids)
 
 
@@ -80,14 +81,14 @@ def test_current_alembic_revision_module_imports():
         backend_dir
         / "alembic"
         / "versions"
-        / "20260719_0022_add_memorial_contribution_promotions.py"
+        / "20260721_0023_add_biography_ingestion_and_biographer.py"
     )
 
-    spec = spec_from_file_location("alembic_revision_20260719_0022", revision_path)
+    spec = spec_from_file_location("alembic_revision_20260721_0023", revision_path)
     assert spec is not None
     assert spec.loader is not None
 
     module = module_from_spec(spec)
     spec.loader.exec_module(module)
 
-    assert module.revision == "20260719_0022"
+    assert module.revision == "20260721_0023"

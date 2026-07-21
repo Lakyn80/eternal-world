@@ -70,7 +70,7 @@ export type ContributionRead = {
   updated_at: string;
 };
 
-export type WorkspaceTab = 'overview' | 'chat' | 'contributions' | 'review' | 'members' | 'invitations';
+export type WorkspaceTab = 'overview' | 'biography' | 'biographer' | 'chat' | 'contributions' | 'review' | 'members' | 'invitations';
 
 export type ChatMessageRead = {
   id: number;
@@ -98,3 +98,79 @@ export type ContributionIndexingStatus = {
   attempt_count: number;
   failure_reason: string | null;
 };
+
+export type BiographyStatusState = 'draft' | 'ready_for_ingestion' | 'ingesting' | 'indexed' | 'failed' | 'stale';
+
+export type BiographyStatusRead = {
+  profile_id: number;
+  status: BiographyStatusState;
+  content_hash: string | null;
+  indexed_at: string | null;
+  attempt_count: number;
+  failure_reason: string | null;
+  background_job_status: string | null;
+  background_job_id: number | null;
+};
+
+export type BiographerBlockedReason =
+  | 'biography_missing'
+  | 'biography_not_indexed'
+  | 'permission_denied'
+  | 'active_candidate_requires_answer';
+
+export type BiographerEligibilityRead = {
+  eligible: boolean;
+  blocked_reason: BiographerBlockedReason | null;
+};
+
+export type BiographerQuestionStatus = 'pending' | 'answered' | 'skipped';
+
+export type BiographerQuestionRead = {
+  id: number;
+  profile_id: number;
+  topic: string;
+  locale: 'cs' | 'ru';
+  question_text: string;
+  status: BiographerQuestionStatus;
+  asked_at: string;
+  answered_at: string | null;
+  resulting_candidate_id: number | null;
+};
+
+export type BiographerAnswerResponse = {
+  question: BiographerQuestionRead;
+  candidate_id: number | null;
+  enrichment_status: string | null;
+  unresolved_clarification_count: number | null;
+};
+
+export type MemoryCandidateEnrichmentRead = {
+  candidate_id: number;
+  avatar_id: string;
+  profile_id: number | null;
+  memory_type: string;
+  enrichment_status: 'draft' | 'collecting_details' | 'ready_for_owner_review';
+  review_status: 'needs_review' | 'approved' | 'rejected' | 'archived';
+  dispute_status: 'none' | 'disputed' | 'resolved';
+  privacy_scope: PrivacyScope;
+  unresolved_clarification_count: number;
+  finalized_memory_text: string | null;
+  finalized_at: string | null;
+  finalized_by: string | null;
+  owner_reviewed_at: string | null;
+  owner_reviewed_by: string | null;
+  contribution_count: number;
+  next_clarification_question: { id: number; question_text: string; status: string; required: boolean } | null;
+  promotion_id: number | null;
+  promotion_status: string | null;
+  searchable_as_fact: boolean;
+  explicit_indexing_required: boolean;
+};
+
+export type OwnerReviewCandidateAction =
+  | 'confirm'
+  | 'edit_and_confirm'
+  | 'reject'
+  | 'request_more_details'
+  | 'mark_disputed'
+  | 'approve_multiple_perspectives';

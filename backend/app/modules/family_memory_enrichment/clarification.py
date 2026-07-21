@@ -32,6 +32,20 @@ BEDTIME_SONG_QUESTIONS = (
     ),
 )
 
+#: AI Biographer "childhood" topic clarification bank (Task 65.2). Reuses the
+#: same generic "place"/"approximate_period" keys as `BEDTIME_SONG_QUESTIONS`
+#: (both already handled generically by `extract_answer_details`'s bottom-of-
+#: function natural-language fallback, and both already have generic-enough
+#: Czech localizations below) rather than inventing a second key namespace.
+CHILDHOOD_MEMORY_QUESTIONS = (
+    ClarificationSpec("place", "Где именно это происходило?", True),
+    ClarificationSpec(
+        "approximate_period",
+        "Когда это было — примерно в каком возрасте, году или периоде?",
+        True,
+    ),
+)
+
 #: Static Czech localization for the fixed clarification question templates
 #: above (Task 64.5.1, Part E.17). These are deterministic UI-adjacent
 #: templates, not dynamic user content, so they are localized directly
@@ -110,6 +124,8 @@ def latest_details(contributions: list) -> dict[str, str]:
 def required_question_specs(memory_type: str) -> tuple[ClarificationSpec, ...]:
     if memory_type == MemoryType.BEDTIME_SONG.value:
         return BEDTIME_SONG_QUESTIONS
+    if memory_type == MemoryType.CHILDHOOD_MEMORY.value:
+        return CHILDHOOD_MEMORY_QUESTIONS
     return ()
 
 

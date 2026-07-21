@@ -165,14 +165,29 @@ class FamilyMemoryInvalidTransitionError(Exception):
 
 
 def is_demo_owner(actor: DemoFamilyActorContext) -> bool:
-    return actor.actor_role == FamilyMemoryActorRole.OWNER and actor.actor_id == DEMO_OWNER_ACTOR_ID
+    """Whether ``actor`` carries owner authority for this candidate.
+
+    Historically (Task 64.x) this also required ``actor.actor_id ==
+    DEMO_OWNER_ACTOR_ID``, since the unauthenticated FA chat demo has no real
+    account system and a fixed demo owner id was the only available check.
+    Task 65.2 added a second, real caller: the authenticated memorial
+    workspace's Biographer/review endpoints, which resolve ``actor_role``
+    from a database-verified `MemorialMembership.role` (never from
+    client-supplied input) before constructing this actor context - for that
+    caller, a fixed demo id can never match, which would incorrectly deny
+    every real owner. The identity check added no real security (it was
+    always just a string constant, never tied to authentication) since the
+    demo surface has no auth boundary to begin with; the role field is now
+    the single source of truth, and every caller remains responsible for
+    only ever setting ``actor_role=OWNER`` when the actor is truly the
+    owner.
+    """
+    return actor.actor_role == FamilyMemoryActorRole.OWNER
 
 
 def validate_demo_actor(actor: DemoFamilyActorContext) -> None:
     if actor.actor_role == FamilyMemoryActorRole.SYSTEM:
         raise FamilyMemoryAuthorizationError("System role is internal only")
-    if actor.actor_role == FamilyMemoryActorRole.OWNER and not is_demo_owner(actor):
-        raise FamilyMemoryAuthorizationError("Demo owner actor is invalid")
 
 
 def _can_view_candidate(candidate: ConversationMemoryCandidate, actor: DemoFamilyActorContext) -> bool:

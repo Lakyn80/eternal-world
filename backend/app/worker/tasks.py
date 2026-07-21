@@ -3,6 +3,11 @@ from __future__ import annotations
 from celery.utils.log import get_task_logger
 
 from app.db.session import SessionLocal
+from app.modules.biography_ingestion.service import (
+    BiographyIngestionEligibilityError,
+    BiographyIngestionNotFoundError,
+    index_biography,
+)
 from app.modules.job_tracking import repository as job_tracking_repository
 from app.modules.job_tracking.service import append_job_event, mark_failed, mark_running, mark_succeeded, update_progress
 from app.modules.memorial_contribution_indexing.service import (
@@ -212,6 +217,81 @@ def run_memorial_contribution_indexing_job(self, job_id: int) -> dict[str, objec
                 "contribution_id": result.contribution_id,
                 "promotion_status": result.promotion_status,
                 "searchable_as_fact": result.searchable_as_fact,
+            },
+        )
+        return {"job_id": job_id, "status": "succeeded"}
+    finally:
+        db.close()
+
+
+@celery_app.task(bind=True, name="app.worker.tasks.run_biography_indexing_job")
+def run_biography_indexing_job(self, job_id: int) -> dict[str, object]:
+    """Runs the heavy chunk/embed/Qdrant step of Task 65.2's initial-biography
+    ingestion outside the HTTP request that started it. Domain-level
+    ineligibility (e.g. the biography was cleared between enqueue and
+    execution) is recorded as a failed job, not a Celery retry storm."""
+
+    session_factory = get_session_factory()
+    db = session_factory()
+    try:
+        background_job = job_tracking_repository.get_background_job_by_id(db, job_id=job_id)
+        if background_job is None:
+            return {"job_id": job_id, "status": "skipped", "reason": "job_not_found"}
+
+        profile_id = background_job.profile_id
+        if not isinstance(profile_id, int):
+            mark_failed(
+                db,
+                job_id=job_id,
+                error_message="Biography indexing job payload is missing profile_id",
+            )
+            return {"job_id": job_id, "status": "failed"}
+
+        mark_running(db, job_id=job_id, celery_task_id=self.request.id)
+        append_job_event(db, job_id=job_id, stage="biography_indexing", status="running")
+        try:
+            result = index_biography(db, profile_id=profile_id)
+        except (BiographyIngestionNotFoundError, BiographyIngestionEligibilityError) as exc:
+            append_job_event(
+                db,
+                job_id=job_id,
+                stage="biography_indexing",
+                status="skipped",
+                details={"reason": str(exc)},
+            )
+            mark_succeeded(db, job_id=job_id, result_payload={"skipped": True, "reason": str(exc)})
+            return {"job_id": job_id, "status": "skipped"}
+        except Exception as exc:
+            logger.exception("biography_indexing_job_failed", extra={"job_id": job_id})
+            append_job_event(
+                db,
+                job_id=job_id,
+                stage="biography_indexing",
+                status="failed",
+                details={"exception_type": exc.__class__.__name__},
+            )
+            mark_failed(
+                db,
+                job_id=job_id,
+                error_message="Biography indexing failed",
+                error_payload={"code": "biography_indexing_failed"},
+            )
+            return {"job_id": job_id, "status": "failed"}
+
+        append_job_event(
+            db,
+            job_id=job_id,
+            stage="biography_indexing",
+            status="succeeded",
+            details={"status": result.status},
+        )
+        mark_succeeded(
+            db,
+            job_id=job_id,
+            result_payload={
+                "profile_id": result.profile_id,
+                "status": result.status,
+                "indexed_at": result.indexed_at.isoformat() if result.indexed_at else None,
             },
         )
         return {"job_id": job_id, "status": "succeeded"}

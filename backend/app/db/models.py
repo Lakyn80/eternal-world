@@ -123,6 +123,12 @@ class User(TimestampMixin, Base):
 
 class MemoryProfile(TimestampMixin, Base):
     __tablename__ = "memory_profiles"
+    __table_args__ = (
+        CheckConstraint(
+            "biography_status IN ('draft', 'ready_for_ingestion', 'ingesting', 'indexed', 'failed', 'stale')",
+            name="memory_profiles_biography_status",
+        ),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True)
     user_id: Mapped[int] = mapped_column(
@@ -152,11 +158,39 @@ class MemoryProfile(TimestampMixin, Base):
         default=False,
         server_default=text("false"),
     )
+    biography_status: Mapped[str] = mapped_column(
+        String(32),
+        nullable=False,
+        default="draft",
+        server_default=text("'draft'"),
+    )
+    biography_content_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    biography_source_id: Mapped[int | None] = mapped_column(
+        ForeignKey(
+            "rag_sources.id",
+            ondelete="SET NULL",
+            use_alter=True,
+            name="fk_memory_profiles_biography_source_id_rag_sources",
+        ),
+        index=True,
+        nullable=True,
+    )
+    biography_indexed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    biography_ingestion_attempt_count: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        default=0,
+        server_default=text("0"),
+    )
+    biography_ingestion_failure_reason: Mapped[str | None] = mapped_column(String(500), nullable=True)
 
     user: Mapped[User] = relationship(back_populates="memory_profiles")
     chat_messages: Mapped[list[ChatMessage]] = relationship(back_populates="memory_profile")
     memories: Mapped[list[Memory]] = relationship(back_populates="memory_profile")
-    rag_sources: Mapped[list[RagSource]] = relationship(back_populates="memory_profile")
+    rag_sources: Mapped[list[RagSource]] = relationship(
+        back_populates="memory_profile",
+        foreign_keys="RagSource.profile_id",
+    )
     rag_chunks: Mapped[list[RagChunk]] = relationship(back_populates="memory_profile")
     rag_embeddings: Mapped[list[RagEmbedding]] = relationship(back_populates="memory_profile")
     rag_vector_indexes: Mapped[list[RagVectorIndex]] = relationship(
@@ -205,6 +239,15 @@ class MemoryProfile(TimestampMixin, Base):
     main_photo_media: Mapped[MediaAsset | None] = relationship(
         foreign_keys=[main_photo_media_id],
         post_update=True,
+    )
+    biography_source: Mapped[RagSource | None] = relationship(
+        foreign_keys=[biography_source_id],
+        post_update=True,
+    )
+    biographer_questions: Mapped[list[BiographerQuestion]] = relationship(
+        back_populates="memory_profile",
+        cascade="all, delete-orphan",
+        foreign_keys="BiographerQuestion.profile_id",
     )
 
 
@@ -617,7 +660,10 @@ class RagSource(TimestampMixin, Base):
     source_metadata: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
 
     owner: Mapped[User] = relationship(back_populates="rag_sources")
-    memory_profile: Mapped[MemoryProfile] = relationship(back_populates="rag_sources")
+    memory_profile: Mapped[MemoryProfile] = relationship(
+        back_populates="rag_sources",
+        foreign_keys=[profile_id],
+    )
     rag_chunks: Mapped[list[RagChunk]] = relationship(
         back_populates="source",
         cascade="all, delete-orphan",
@@ -975,7 +1021,7 @@ class ConversationMemoryCandidate(TimestampMixin, Base):
             name="conversation_memory_candidates_confidence",
         ),
         CheckConstraint(
-            "memory_type IN ('general', 'bedtime_song')",
+            "memory_type IN ('general', 'bedtime_song', 'childhood_memory')",
             name="conversation_memory_candidates_memory_type",
         ),
         CheckConstraint(
@@ -1302,6 +1348,59 @@ class MemoryClarificationQuestion(TimestampMixin, Base):
     )
     answer_contribution: Mapped[FamilyMemoryContribution | None] = relationship(
         foreign_keys=[answer_contribution_id]
+    )
+
+
+class BiographerQuestion(TimestampMixin, Base):
+    """One AI Biographer top-level question offered to a memorial's members
+    (Task 65.2). Distinct from `MemoryClarificationQuestion`: a clarification
+    always enriches an *existing* candidate (`candidate_id` is non-null
+    there), whereas a biographer question is what *initiates* one - it has
+    no candidate yet when asked, only once answered. Profile-scoped (not
+    per-actor): once a topic has been asked for a memorial, it stays covered
+    regardless of which member answers, so multiple family members curating
+    the same memorial never see duplicate topics.
+    """
+
+    __tablename__ = "biographer_questions"
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('pending', 'answered', 'skipped')",
+            name="biographer_questions_status",
+        ),
+        UniqueConstraint("profile_id", "topic", name="uq_biographer_questions_profile_topic"),
+        Index("ix_biographer_questions_profile_status", "profile_id", "status"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    profile_id: Mapped[int] = mapped_column(
+        ForeignKey("memory_profiles.id", ondelete="CASCADE"), index=True, nullable=False
+    )
+    topic: Mapped[str] = mapped_column(String(64), nullable=False)
+    locale: Mapped[str] = mapped_column(String(8), nullable=False)
+    question_text: Mapped[str] = mapped_column(String(500), nullable=False)
+    status: Mapped[str] = mapped_column(
+        String(32), nullable=False, default="pending", server_default=text("'pending'")
+    )
+    asked_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    answered_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    skipped_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    answered_by_user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    resulting_candidate_id: Mapped[int | None] = mapped_column(
+        ForeignKey("conversation_memory_candidates.id", ondelete="SET NULL"), nullable=True
+    )
+
+    memory_profile: Mapped[MemoryProfile] = relationship(
+        back_populates="biographer_questions",
+        foreign_keys=[profile_id],
+    )
+    answered_by: Mapped[User | None] = relationship(foreign_keys=[answered_by_user_id])
+    resulting_candidate: Mapped[ConversationMemoryCandidate | None] = relationship(
+        foreign_keys=[resulting_candidate_id]
     )
 
 

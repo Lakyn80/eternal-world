@@ -1630,3 +1630,29 @@ Známé omezení: rusko-jazyčné heuristiky pro klasifikaci záměru (corrected
 Task 64.5.2 se **považuje za kompletně uzavřený** v rozsahu definovaném zadáním, s výše uvedenou poznámkou k původu zadání.
 
 Další doporučený task: **Task 65 — AI Biographer & Living Memory Onboarding** (nedotčen tímto navazujícím taskem).
+
+## 18. Task 65.2 status (2026-07-21) — AI Biographer & Living Memory Onboarding implementováno
+
+Task 65.2 (číslováno takto, aby nekolidovalo s již dokončeným "Task 65 — Accounts, Memorial Access, and Contribution Review Foundation" a jeho podtasky 65.1/65.1A/65.1B, které mezitím vznikly a s touto sekcí roadmapy - psanou 2026-07-14 - se nikdy nesynchronizovaly) — byl proveden a **dokončen v rozsahu ověřeném živě proti reálné infrastruktuře**. Plný popis (grounded audit, architektonická rozhodnutí, nové backend moduly `biography_ingestion`/`avatar_biographer`/`memorial_candidates`, frontend Biography/Biographer taby, testy, migrace, živé E2E ověření s reálným BGE-M3/Qdrant/DeepSeek) je v `PROJECT_PROGRESS.md`, sekce "Task 65.2 - AI Biographer & Living Memory Onboarding (2026-07-21)".
+
+Stručně:
+
+```text
+Počáteční životopis: uložení -> explicitní indexace -> Qdrant (nová schopnost, dříve neexistovala)
+AI Biographer: 8 pevně daných témat, jedna otázka najednou, nikdy neomezené/náhodné otázky
+Odpověď -> memory candidate (workflow_version=2, existující pipeline, ne duplicitní)
+Upřesnění (clarification) pro téma "childhood" -> stejný kandidát, nikdy nová vzpomínka
+Owner review (6 existujících akcí) -> pending_index promotion, NIKDY automatická indexace
+Explicitní indexace -> Qdrant, ověřeno idempotentní
+Živě ověřeno: Qdrant 22 -> 23 (biografie) -> 24 (kandidát), beze změny mezi schválením a indexací
+Chat po indexaci skutečně použil nově zaindexovanou vzpomínku (reálný DeepSeek)
+Backend testy: 30 nových + 102 regresních prošlo; 1 nesouvisející, již existující selhání
+  (test_bilingual_retrieval_evaluation.py) reprodukováno izolovaně a potvrzeno nesouvisející
+Frontend: tsc + build bez chyb
+```
+
+Objeveno, ale záměrně neopraveno (mimo rozsah tohoto tasku): `eternal_world_celery_worker` se v tomto vývojovém prostředí nikdy úspěšně nesestavil (existující, zdokumentovaný stav již od Tasku 65.1B); a reálný autentizovaný `/api/chat` propouští interní `[rag:chunk_id]` citační značku do odpovědi viditelné uživateli, protože `strip_internal_evidence_citations` se v `ai_agents/brain/service.py` volá jen `if avatar_persona is not None` — `avatar_persona` je čistě demo koncept, pro reálné autentizované memorialy nikdy nenastavený. Obojí předchází Tasku 65.2 a není touto úlohou způsobeno; doporučeno jako samostatný navazující task.
+
+Task 65.2 se **považuje za dokončený** v rozsahu definovaném zadáním a živě ověřený. Neprovedeno/mimo rozsah: reálné zpracování přes skutečně běžící Celery worker (nahrazeno přímým voláním stejné funkce se stejnou reálnou infrastrukturou), rozšíření clarification bank na všechna témata (jen "childhood" má dnes vyžadované upřesnění, ostatní témata používají `general` bez upřesnění — vědomé minimální rozhodnutí).
+
+Další doporučený task: oprava `eternal_world_celery_worker` image a oprava úniku `[rag:chunk_id]` citace ve skutečném autentizovaném chatu (obojí zdokumentováno výše jako nalezené, ale mimo rozsah).

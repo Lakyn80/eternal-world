@@ -1,11 +1,17 @@
 import type {
+  BiographerAnswerResponse,
+  BiographerEligibilityRead,
+  BiographerQuestionRead,
+  BiographyStatusRead,
   ChatMessageRead,
   ChatSendResponse,
   ContributionRead,
   InvitationCreateResponse,
   InvitableMemorialRole,
   MembershipRead,
+  MemoryCandidateEnrichmentRead,
   MemorialRead,
+  OwnerReviewCandidateAction,
   PrivacyScope
 } from '../types/memorial';
 
@@ -154,6 +160,127 @@ export async function submitContribution(
   return requestJson<ContributionRead>(
     `/api/memorials/${profileId}/contributions`,
     { method: 'POST', body: JSON.stringify(payload) },
+    accessToken
+  );
+}
+
+export async function updateBiography(accessToken: string, profileId: number, biography: string): Promise<BiographyStatusRead> {
+  return requestJson<BiographyStatusRead>(
+    `/api/memorials/${profileId}/biography`,
+    { method: 'PATCH', body: JSON.stringify({ biography }) },
+    accessToken
+  );
+}
+
+export async function getBiographyStatus(accessToken: string, profileId: number): Promise<BiographyStatusRead> {
+  return requestJson<BiographyStatusRead>(`/api/memorials/${profileId}/biography/status`, undefined, accessToken);
+}
+
+export async function startBiographyIngestion(accessToken: string, profileId: number): Promise<BiographyStatusRead> {
+  return requestJson<BiographyStatusRead>(
+    `/api/memorials/${profileId}/biography/ingest`,
+    { method: 'POST' },
+    accessToken
+  );
+}
+
+export async function getBiographerEligibility(accessToken: string, profileId: number): Promise<BiographerEligibilityRead> {
+  return requestJson<BiographerEligibilityRead>(
+    `/api/memorials/${profileId}/biographer/eligibility`,
+    undefined,
+    accessToken
+  );
+}
+
+export async function getNextBiographerQuestion(
+  accessToken: string,
+  profileId: number,
+  locale: 'cs' | 'ru'
+): Promise<BiographerQuestionRead | null> {
+  return requestJson<BiographerQuestionRead | null>(
+    `/api/memorials/${profileId}/biographer/next-question?locale=${locale}`,
+    undefined,
+    accessToken
+  );
+}
+
+export async function answerBiographerQuestion(
+  accessToken: string,
+  profileId: number,
+  questionId: number,
+  locale: 'cs' | 'ru',
+  answerText: string
+): Promise<BiographerAnswerResponse> {
+  return requestJson<BiographerAnswerResponse>(
+    `/api/memorials/${profileId}/biographer/questions/${questionId}/answer`,
+    { method: 'POST', body: JSON.stringify({ locale, answer_text: answerText }) },
+    accessToken
+  );
+}
+
+export async function skipBiographerQuestion(
+  accessToken: string,
+  profileId: number,
+  questionId: number
+): Promise<BiographerQuestionRead> {
+  return requestJson<BiographerQuestionRead>(
+    `/api/memorials/${profileId}/biographer/questions/${questionId}/skip`,
+    { method: 'POST' },
+    accessToken
+  );
+}
+
+export async function listMemoryCandidates(accessToken: string, profileId: number): Promise<MemoryCandidateEnrichmentRead[]> {
+  return requestJson<MemoryCandidateEnrichmentRead[]>(`/api/memorials/${profileId}/candidates`, undefined, accessToken);
+}
+
+export async function getMemoryCandidate(
+  accessToken: string,
+  profileId: number,
+  candidateId: number
+): Promise<MemoryCandidateEnrichmentRead> {
+  return requestJson<MemoryCandidateEnrichmentRead>(
+    `/api/memorials/${profileId}/candidates/${candidateId}`,
+    undefined,
+    accessToken
+  );
+}
+
+export async function answerCandidateClarification(
+  accessToken: string,
+  profileId: number,
+  candidateId: number,
+  answerText: string
+): Promise<MemoryCandidateEnrichmentRead> {
+  return requestJson<MemoryCandidateEnrichmentRead>(
+    `/api/memorials/${profileId}/candidates/${candidateId}/clarifications/answer`,
+    { method: 'POST', body: JSON.stringify({ answer_text: answerText }) },
+    accessToken
+  );
+}
+
+export async function ownerReviewCandidate(
+  accessToken: string,
+  profileId: number,
+  candidateId: number,
+  action: OwnerReviewCandidateAction,
+  extra: { finalized_memory_text?: string; privacy_scope?: PrivacyScope; review_note?: string; rejection_reason?: string } = {}
+): Promise<MemoryCandidateEnrichmentRead> {
+  return requestJson<MemoryCandidateEnrichmentRead>(
+    `/api/memorials/${profileId}/candidates/${candidateId}/owner-review`,
+    { method: 'POST', body: JSON.stringify({ action, ...extra }) },
+    accessToken
+  );
+}
+
+export async function indexCandidateMemory(
+  accessToken: string,
+  profileId: number,
+  candidateId: number
+): Promise<{ result: string; searchable_as_fact: boolean; promotion_status: string }> {
+  return requestJson(
+    `/api/memorials/${profileId}/candidates/${candidateId}/index`,
+    { method: 'POST' },
     accessToken
   );
 }
