@@ -15,7 +15,7 @@ def test_alembic_configuration_loads_revision_history():
     revision_ids = {revision.revision for revision in revisions}
 
     assert revisions
-    assert script_directory.get_current_head() == "20260721_0024"
+    assert script_directory.get_current_head() == "20260722_0025"
     assert {
         "20260616_0001",
         "20260616_0002",

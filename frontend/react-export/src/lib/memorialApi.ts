@@ -306,6 +306,18 @@ export async function skipBiographerQuestion(
   );
 }
 
+export async function postponeBiographerQuestion(
+  accessToken: string,
+  profileId: number,
+  questionId: number
+): Promise<BiographerQuestionRead> {
+  return requestJson<BiographerQuestionRead>(
+    `/api/memorials/${profileId}/biographer/questions/${questionId}/postpone`,
+    { method: 'POST' },
+    accessToken
+  );
+}
+
 export async function listMemoryCandidates(accessToken: string, profileId: number): Promise<MemoryCandidateEnrichmentRead[]> {
   return requestJson<MemoryCandidateEnrichmentRead[]>(`/api/memorials/${profileId}/candidates`, undefined, accessToken);
 }

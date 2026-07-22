@@ -1,11 +1,34 @@
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel, Field, field_validator
 
 
 SUPPORTED_LOCALES = ("cs", "ru")
+
+#: Task 65.6 - bounded, closed question-intent classification (never
+#: free-form) so it stays a safe, low-cardinality provenance/metric field.
+QuestionIntent = Literal[
+    "specific_memory",
+    "specific_person",
+    "specific_event",
+    "sensory_detail",
+    "impact",
+    "general_fact",
+]
+
+
+class ProviderQuestionResult(BaseModel):
+    """Structured DeepSeek output contract for one generated question
+    (Task 65.6). The provider is instructed to return exactly this JSON
+    shape; anything else is a validation failure, not a best-effort parse."""
+
+    question: str = Field(min_length=1, max_length=500)
+    known_information_used: bool
+    question_intent: QuestionIntent
+    confidence: Literal["high", "medium", "low"]
 
 
 class BiographerEligibilityRead(BaseModel):
@@ -23,6 +46,8 @@ class BiographerQuestionRead(BaseModel):
     asked_at: datetime
     answered_at: datetime | None
     resulting_candidate_id: int | None
+    generation_mode: str
+    fallback_used: bool
 
 
 class BiographerAnswerRequest(BaseModel):

@@ -1,4 +1,5 @@
-"""AI Biographer question/answer loop (Task 65.2).
+"""AI Biographer question/answer loop (Task 65.2, made context-aware in
+Task 65.6).
 
 Turns one answered biographer question into a real `ConversationMemoryCandidate`
 by reusing the existing avatar-chat-derived candidate/enrichment pipeline
@@ -7,18 +8,44 @@ by reusing the existing avatar-chat-derived candidate/enrichment pipeline
 Qdrant/promotions/indexing. A biographer answer is never approved or indexed
 automatically; it only ever reaches `needs_review`, same as any other
 workflow_version=2 candidate.
+
+Task 65.6 replaced the previous "always the next never-asked fixed-catalog
+topic" selection with: verified-context retrieval per topic, deterministic
+coverage evaluation, coverage-priority topic selection, DeepSeek-backed
+context-aware question generation (bounded, validated, at most one
+regeneration, deterministic fallback), and a database-level guard against
+two concurrent pending questions. See `coverage.py`, `context_package.py`,
+`duplicate_prevention.py`, `question_generation.py`.
 """
 
 from __future__ import annotations
 
+import logging
 from datetime import datetime, timezone
+from time import perf_counter
 
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from app.core.logging import get_logger, log_event
+from app.core.metrics import (
+    observe_biographer_blocked,
+    observe_biographer_context_sources,
+    observe_biographer_fallback,
+    observe_biographer_generation_duration,
+    observe_biographer_question,
+    observe_biographer_topic_selection,
+)
 from app.db.models import BiographerQuestion, ConversationMemoryCandidate, MemoryProfile, User
-from app.modules.avatar_biographer import repository
+from app.modules.avatar_biographer import coverage, repository
 from app.modules.avatar_biographer import topics as topic_catalog
+from app.modules.avatar_biographer.context_package import (
+    TopicContextPackage,
+    build_topic_context_package,
+    empty_context_package,
+)
+from app.modules.avatar_biographer.question_generation import generate_question_for_topic
 from app.modules.avatar_biographer.schemas import (
     BiographerAnswerResponse,
     BiographerEligibilityRead,
@@ -34,10 +61,26 @@ from app.modules.family_memory_enrichment.service import (
     initialize_candidate,
 )
 
+_logger = get_logger("avatar_biographer")
 
+#: Minimum blocked reasons (Part B.6 of the task spec). `permission_denied`
+#: is never returned by `get_eligibility` itself - a non-member/insufficient
+#: -capability request is rejected at the router/capability layer (404/403)
+#: before this service is ever called; the value is kept here purely for
+#: documentation/forward-compatibility with the frontend's reason union.
 BLOCKED_BIOGRAPHY_MISSING = "biography_missing"
 BLOCKED_BIOGRAPHY_NOT_INDEXED = "biography_not_indexed"
-BLOCKED_ACTIVE_CANDIDATE_REQUIRES_ANSWER = "active_candidate_requires_answer"
+BLOCKED_BIOGRAPHY_STALE = "biography_stale"
+BLOCKED_INDEXING_IN_PROGRESS = "indexing_in_progress"
+BLOCKED_PERMISSION_DENIED = "permission_denied"
+BLOCKED_ACTIVE_CLARIFICATION_EXISTS = "active_clarification_exists"
+BLOCKED_CANDIDATE_WAITING_FOR_REVIEW = "candidate_waiting_for_review"
+
+#: Legacy alias kept for any external caller still referencing the Task
+#: 65.2 name - identical value to `BLOCKED_ACTIVE_CLARIFICATION_EXISTS`.
+BLOCKED_ACTIVE_CANDIDATE_REQUIRES_ANSWER = BLOCKED_ACTIVE_CLARIFICATION_EXISTS
+
+_INDEXING_IN_PROGRESS_STATUSES = frozenset({"ready_for_ingestion", "ingesting"})
 
 
 class BiographerNotFoundError(Exception):
@@ -65,6 +108,8 @@ def _build_read(question: BiographerQuestion) -> BiographerQuestionRead:
         asked_at=question.asked_at,
         answered_at=question.answered_at,
         resulting_candidate_id=question.resulting_candidate_id,
+        generation_mode=question.generation_mode,
+        fallback_used=question.fallback_used,
     )
 
 
@@ -88,50 +133,222 @@ def _get_open_biographer_candidate(db: Session, *, profile_id: int) -> Conversat
 def get_eligibility(db: Session, *, profile: MemoryProfile) -> BiographerEligibilityRead:
     if not (profile.biography or "").strip():
         return BiographerEligibilityRead(eligible=False, blocked_reason=BLOCKED_BIOGRAPHY_MISSING)
+    if profile.biography_status in _INDEXING_IN_PROGRESS_STATUSES:
+        return BiographerEligibilityRead(eligible=False, blocked_reason=BLOCKED_INDEXING_IN_PROGRESS)
+    if profile.biography_status == "stale":
+        # Deliberate choice (Part 8 of the task spec): block new contextual
+        # questions rather than mixing the edited-but-not-yet-reindexed
+        # draft text with the still-indexed (now stale) verified content -
+        # re-indexing is required before the Biographer trusts anything new.
+        return BiographerEligibilityRead(eligible=False, blocked_reason=BLOCKED_BIOGRAPHY_STALE)
     if profile.biography_status != "indexed":
         return BiographerEligibilityRead(eligible=False, blocked_reason=BLOCKED_BIOGRAPHY_NOT_INDEXED)
     if _get_open_biographer_candidate(db, profile_id=profile.id) is not None:
-        return BiographerEligibilityRead(
-            eligible=False,
-            blocked_reason=BLOCKED_ACTIVE_CANDIDATE_REQUIRES_ANSWER,
-        )
+        return BiographerEligibilityRead(eligible=False, blocked_reason=BLOCKED_ACTIVE_CLARIFICATION_EXISTS)
     return BiographerEligibilityRead(eligible=True, blocked_reason=None)
 
 
-def get_next_question(db: Session, *, profile: MemoryProfile, locale: str) -> BiographerQuestionRead | None:
+def _safe_context_package(
+    db: Session,
+    *,
+    current_user: User,
+    profile_id: int,
+    topic: topic_catalog.BiographerTopic,
+    locale: str,
+) -> TopicContextPackage:
+    """Retrieval must degrade safely (Part 11 of the task spec) - a Qdrant/
+    embedding outage falls back to the deterministic question path rather
+    than a 500."""
+
+    try:
+        return build_topic_context_package(
+            db, current_user=current_user, profile_id=profile_id, topic=topic, locale=locale
+        )
+    except Exception:
+        log_event(
+            _logger,
+            logging.WARNING,
+            "biographer_context_retrieval_failed",
+            profile_id=profile_id,
+            topic=topic.key,
+        )
+        return empty_context_package(topic)
+
+
+def get_next_question(
+    db: Session,
+    *,
+    profile: MemoryProfile,
+    current_user: User,
+    locale: str,
+    trace_id: str | None = None,
+) -> BiographerQuestionRead | None:
     """Returns the current pending question (resuming state if one already
-    exists), the next never-asked topic's question, or `None` once every
-    bounded topic has been asked - never more than one pending question."""
+    exists), a newly generated context-aware question for the next
+    coverage-selected topic, or `None` once no topic remains selectable."""
 
     eligibility = get_eligibility(db, profile=profile)
+    log_event(
+        _logger,
+        logging.INFO,
+        "biographer_eligibility_evaluated",
+        profile_id=profile.id,
+        eligible=eligibility.eligible,
+        blocked_reason=eligibility.blocked_reason,
+    )
     if not eligibility.eligible:
+        log_event(
+            _logger,
+            logging.INFO,
+            "biographer_generation_blocked",
+            profile_id=profile.id,
+            reason=eligibility.blocked_reason,
+        )
+        observe_biographer_blocked(reason=eligibility.blocked_reason or "other", locale=locale)
         raise BiographerBlockedError(eligibility.blocked_reason or "blocked")
 
     pending = repository.get_pending_question(db, profile_id=profile.id)
     if pending is not None:
         return _build_read(pending)
 
-    used_topic_keys = {question.topic for question in repository.list_questions_for_profile(db, profile_id=profile.id)}
-    topic = topic_catalog.next_unused_topic(used_topic_keys=used_topic_keys)
-    if topic is None:
+    all_questions = repository.list_questions_for_profile(db, profile_id=profile.id)
+    unresolved_candidate_topics = repository.get_unresolved_candidate_topic_keys(db, profile_id=profile.id)
+
+    context_by_topic: dict[str, TopicContextPackage] = {
+        topic.key: _safe_context_package(
+            db, current_user=current_user, profile_id=profile.id, topic=topic, locale=locale
+        )
+        for topic in topic_catalog.BIOGRAPHER_TOPICS
+    }
+    for topic_key, package in context_by_topic.items():
+        observe_biographer_context_sources(topic=topic_key, source_count=package.selected_source_count)
+
+    coverages = coverage.build_topic_coverage_map(
+        all_questions=all_questions,
+        verified_chunk_counts_by_topic={key: pkg.selected_chunk_count for key, pkg in context_by_topic.items()},
+        unresolved_candidate_topic_keys=unresolved_candidate_topics,
+    )
+    log_event(
+        _logger,
+        logging.INFO,
+        "biographer_coverage_evaluated",
+        profile_id=profile.id,
+        coverage_states={c.topic.key: c.state.value for c in coverages},
+    )
+
+    selected = coverage.select_next_topic(coverages, total_questions_asked=len(all_questions))
+    if selected is None:
+        if any(c.blocked_from_selection for c in coverages):
+            observe_biographer_blocked(reason=BLOCKED_CANDIDATE_WAITING_FOR_REVIEW, locale=locale)
+            raise BiographerBlockedError(BLOCKED_CANDIDATE_WAITING_FOR_REVIEW)
         return None
 
-    question_text = topic_catalog.question_text_for(topic, locale=locale)
-    question = repository.create_question(
-        db,
+    topic = selected.topic
+    observe_biographer_topic_selection(topic=topic.key, coverage_state=selected.state.value)
+    log_event(
+        _logger,
+        logging.INFO,
+        "biographer_topic_selected",
         profile_id=profile.id,
         topic=topic.key,
-        locale=locale,
-        question_text=question_text,
+        coverage_state=selected.state.value,
     )
-    db.commit()
+
+    context_package = context_by_topic[topic.key]
+    log_event(
+        _logger,
+        logging.INFO,
+        "biographer_context_retrieved",
+        profile_id=profile.id,
+        topic=topic.key,
+        retrieval_used=context_package.retrieval_used,
+        selected_source_count=context_package.selected_source_count,
+        selected_chunk_count=context_package.selected_chunk_count,
+        context_character_count=context_package.context_character_count,
+        estimated_context_tokens=context_package.estimated_context_tokens,
+        retrieval_duration_ms=context_package.retrieval_duration_ms,
+    )
+
+    topic_questions = [question for question in all_questions if question.topic == topic.key]
+    skipped_or_postponed_texts = [
+        question.question_text for question in all_questions if question.status in ("skipped", "postponed")
+    ]
+
+    started_at = perf_counter()
+    generated = generate_question_for_topic(
+        db,
+        topic=topic,
+        context_package=context_package,
+        locale=locale,
+        profile_id=profile.id,
+        user_id=current_user.id,
+        trace_id=trace_id,
+        previous_questions_for_topic=topic_questions,
+        all_previous_questions=all_questions,
+        skipped_or_postponed_texts=skipped_or_postponed_texts,
+    )
+    duration_seconds = perf_counter() - started_at
+
+    observe_biographer_generation_duration(
+        locale=locale, result=generated.validation_result, duration_seconds=duration_seconds
+    )
+    observe_biographer_question(
+        locale=locale, topic=topic.key, result=generated.validation_result, generation_mode=generated.generation_mode
+    )
+    if generated.fallback_used:
+        observe_biographer_fallback(
+            reason="validation_failed_twice" if context_package.retrieval_used else "retrieval_unavailable",
+            locale=locale,
+        )
+
+    try:
+        question = repository.create_question(
+            db,
+            profile_id=profile.id,
+            topic=topic.key,
+            locale=locale,
+            question_text=generated.question_text,
+            generation_mode=generated.generation_mode,
+            provider=generated.provider,
+            model=generated.model,
+            ai_action_id=generated.ai_action_id,
+            context_source_count=context_package.selected_source_count,
+            context_chunk_count=context_package.selected_chunk_count,
+            question_intent=generated.question_intent,
+            validation_result=generated.validation_result,
+            fallback_used=generated.fallback_used,
+        )
+        db.commit()
+    except IntegrityError:
+        # The DB-level `uq_biographer_questions_profile_pending` partial
+        # unique index caught a concurrent request that created a pending
+        # question first (Part G.27 / Part 62 of the task spec) - reuse the
+        # winner instead of erroring or creating a duplicate.
+        db.rollback()
+        winner = repository.get_pending_question(db, profile_id=profile.id)
+        if winner is not None:
+            return _build_read(winner)
+        raise
     db.refresh(question)
+
+    log_event(
+        _logger,
+        logging.INFO,
+        "biographer_question_persisted",
+        profile_id=profile.id,
+        topic=topic.key,
+        question_id=question.id,
+        generation_mode=question.generation_mode,
+    )
     return _build_read(question)
 
 
 def skip_question(db: Session, *, profile: MemoryProfile, question_id: int) -> BiographerQuestionRead:
-    """Skipping never creates a candidate - the topic is simply marked
-    covered so it is not offered again for this memorial."""
+    """Skipping never creates a candidate. Unlike a topic exhausted by
+    evidence, a skipped topic is only excluded from selection while its most
+    recent action stays "skipped" - it does not become permanently
+    unselectable the way the previous fixed-catalog design made every topic
+    permanently one-shot."""
 
     question = repository.get_question_for_profile(db, profile_id=profile.id, question_id=question_id)
     if question is None:
@@ -139,6 +356,22 @@ def skip_question(db: Session, *, profile: MemoryProfile, question_id: int) -> B
     if question.status != "pending":
         raise BiographerConflictError("Question is not pending")
     repository.mark_skipped(db, question=question)
+    db.commit()
+    db.refresh(question)
+    return _build_read(question)
+
+
+def postpone_question(db: Session, *, profile: MemoryProfile, question_id: int) -> BiographerQuestionRead:
+    """"Ask later": distinct from skip - the topic becomes selectable again
+    once the postpone cool-down elapses (`coverage.POSTPONE_COOLDOWN_QUESTIONS`),
+    instead of staying excluded until explicitly re-answered."""
+
+    question = repository.get_question_for_profile(db, profile_id=profile.id, question_id=question_id)
+    if question is None:
+        raise BiographerNotFoundError("Biographer question not found")
+    if question.status != "pending":
+        raise BiographerConflictError("Question is not pending")
+    repository.mark_postponed(db, question=question)
     db.commit()
     db.refresh(question)
     return _build_read(question)

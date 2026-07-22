@@ -28,6 +28,7 @@ import {
   reviewContribution,
   sendChatMessage,
   setUnauthorizedHandler,
+  postponeBiographerQuestion,
   skipBiographerQuestion,
   startBiographyIngestion,
   submitContribution,
@@ -38,6 +39,7 @@ import { canInvite, canReview, canSubmitContribution, isActiveMemoryEligible } f
 import { APP_ROOT_PATH, buildMemorialPath, navigate, parseAppRoute, usePathname } from '../lib/router';
 import type {
   AuthSession,
+  BiographerBlockedReason,
   BiographerEligibilityRead,
   BiographerQuestionRead,
   BillingLimitsRead,
@@ -105,15 +107,31 @@ export type Copy = {
   biographerIntro: string;
   biographerBlockedMissing: string;
   biographerBlockedNotIndexed: string;
+  biographerBlockedIndexing: string;
+  biographerBlockedStale: string;
   biographerBlockedActive: string;
+  biographerBlockedWaitingReview: string;
+  biographerBlockedPermission: string;
+  biographerGoToBiography: string;
+  biographerGenerationFailed: string;
   biographerDone: string;
   biographerAnswerPlaceholder: string;
   biographerSubmit: string;
   biographerSkip: string;
+  biographerPostpone: string;
   biographerTopicLabel: string;
+  biographerRelevanceTemplate: string;
   biographerMoreDetailsNeeded: string;
   biographerReadyForReview: string;
   biographerGoToReview: string;
+  biographerTopicChildhood: string;
+  biographerTopicFamily: string;
+  biographerTopicEducation: string;
+  biographerTopicWork: string;
+  biographerTopicRelationships: string;
+  biographerTopicPlaces: string;
+  biographerTopicTraditions: string;
+  biographerTopicValues: string;
   candidatesTitle: string;
   candidatesSubtitle: string;
   candidatesEmpty: string;
@@ -280,18 +298,34 @@ export const COPY: Record<Lang, Copy> = {
     biographyConfirmStartYes: 'Yes, start indexing',
     biographyConfirmCancel: 'Cancel',
     biographer: 'Biographer',
-    biographerIntro: 'The AI Biographer asks one question at a time to learn more about this person. Answers are never indexed automatically - they go through the same review as any other contribution.',
+    biographerIntro: 'The AI Biographer works from the indexed biography and approved memories. It first figures out what is already known, then asks one question that adds to the story. Answers are never indexed automatically - they go through review first.',
     biographerBlockedMissing: 'Save the biography first.',
     biographerBlockedNotIndexed: 'Index the biography before starting the Biographer.',
+    biographerBlockedIndexing: 'Biography indexing is in progress. The Biographer will be available once it finishes.',
+    biographerBlockedStale: 'The biography changed since it was last indexed. Re-index it to let the Biographer use the current text.',
     biographerBlockedActive: 'Please finish answering the current clarification question below before continuing.',
+    biographerBlockedWaitingReview: 'The current topic has a memory candidate waiting for owner review. Another topic will be offered once you continue.',
+    biographerBlockedPermission: 'You do not have permission to use the Biographer for this memorial.',
+    biographerGoToBiography: 'Start biography indexing',
+    biographerGenerationFailed: 'The Biographer could not prepare a question right now. Please try again.',
     biographerDone: 'All Biographer topics for this memorial have been covered.',
     biographerAnswerPlaceholder: 'Write your answer...',
     biographerSubmit: 'Submit answer',
     biographerSkip: 'Skip this question',
+    biographerPostpone: 'Ask me later',
     biographerTopicLabel: 'Topic',
+    biographerRelevanceTemplate: 'This question adds to the topic {topic}.',
     biographerMoreDetailsNeeded: 'More details required',
     biographerReadyForReview: 'Ready for owner review.',
     biographerGoToReview: 'Go to Review',
+    biographerTopicChildhood: 'Childhood',
+    biographerTopicFamily: 'Family',
+    biographerTopicEducation: 'Education',
+    biographerTopicWork: 'Work',
+    biographerTopicRelationships: 'Relationships',
+    biographerTopicPlaces: 'Places',
+    biographerTopicTraditions: 'Traditions',
+    biographerTopicValues: 'Values',
     candidatesTitle: 'Biographer memories',
     candidatesSubtitle: 'Memory candidates awaiting or completing owner review - separate from membership/family contribution requests above.',
     candidatesEmpty: 'No Biographer-sourced memories yet.',
@@ -460,15 +494,31 @@ export const COPY: Record<Lang, Copy> = {
     biographyConfirmStartYes: 'Ano, spustit indexaci',
     biographyConfirmCancel: 'Zrušit',
     biographer: 'AI biograf',
-    biographerIntro: 'AI biograf klade vždy jednu otázku, aby se dozvěděl víc o tomto člověku. Odpovědi se nikdy neindexují automaticky - projdou stejnou kontrolou jako jakýkoli jiný příspěvek.',
+    biographerIntro: 'AI biograf vychází ze zaindexovaného životopisu a schválených vzpomínek. Nejdřív zjistí, co už je známé, a potom položí jednu otázku, která příběh doplní. Odpověď se nikdy nezaindexuje automaticky - nejprve projde kontrolou.',
     biographerBlockedMissing: 'Nejprve uložte životopis.',
     biographerBlockedNotIndexed: 'Před spuštěním biografa nejprve zaindexujte životopis.',
+    biographerBlockedIndexing: 'Indexace životopisu probíhá. AI biograf bude dostupný po dokončení.',
+    biographerBlockedStale: 'Životopis byl po zaindexování upraven. Zaindexujte ho znovu, aby biograf pracoval s aktuálním textem.',
     biographerBlockedActive: 'Nejprve prosím odpovězte na aktuální upřesňující otázku níže.',
+    biographerBlockedWaitingReview: 'Aktuální téma má vzpomínku čekající na kontrolu vlastníkem. Další téma se nabídne po jejím vyřízení.',
+    biographerBlockedPermission: 'Nemáte oprávnění používat AI biografa u tohoto memorialu.',
+    biographerGoToBiography: 'Spustit indexaci životopisu',
+    biographerGenerationFailed: 'AI biografovi se teď nepodařilo připravit otázku. Zkuste to prosím znovu.',
     biographerDone: 'Všechna témata AI biografa pro tento memorial už byla probrána.',
     biographerAnswerPlaceholder: 'Napište svou odpověď...',
     biographerSubmit: 'Odeslat odpověď',
     biographerSkip: 'Přeskočit otázku',
+    biographerPostpone: 'Zeptat se později',
     biographerTopicLabel: 'Téma',
+    biographerRelevanceTemplate: 'Tato otázka doplňuje téma {topic}.',
+    biographerTopicChildhood: 'Dětství',
+    biographerTopicFamily: 'Rodina',
+    biographerTopicEducation: 'Vzdělání',
+    biographerTopicWork: 'Práce',
+    biographerTopicRelationships: 'Vztahy',
+    biographerTopicPlaces: 'Místa',
+    biographerTopicTraditions: 'Tradice',
+    biographerTopicValues: 'Hodnoty',
     biographerMoreDetailsNeeded: 'Je potřeba více podrobností',
     biographerReadyForReview: 'Připraveno ke kontrole vlastníkem.',
     biographerGoToReview: 'Přejít na Kontrolu',
@@ -640,15 +690,31 @@ export const COPY: Record<Lang, Copy> = {
     biographyConfirmStartYes: 'Да, запустить индексацию',
     biographyConfirmCancel: 'Отмена',
     biographer: 'ИИ-биограф',
-    biographerIntro: 'ИИ-биограф задаёт по одному вопросу, чтобы больше узнать об этом человеке. Ответы никогда не индексируются автоматически - они проходят ту же проверку, что и любой другой вклад.',
+    biographerIntro: 'ИИ-биограф использует проиндексированную биографию и одобренные воспоминания. Сначала он определяет, что уже известно, а затем задаёт один вопрос, который дополняет историю. Ответ никогда не индексируется автоматически - сначала он проходит проверку.',
     biographerBlockedMissing: 'Сначала сохраните биографию.',
     biographerBlockedNotIndexed: 'Сначала проиндексируйте биографию, прежде чем запускать биографа.',
+    biographerBlockedIndexing: 'Индексация биографии выполняется. ИИ-биограф станет доступен после её завершения.',
+    biographerBlockedStale: 'Биография была изменена после индексации. Проиндексируйте её заново, чтобы биограф использовал актуальный текст.',
     biographerBlockedActive: 'Пожалуйста, сначала ответьте на текущий уточняющий вопрос ниже.',
+    biographerBlockedWaitingReview: 'По текущей теме есть воспоминание, ожидающее проверки владельцем. Следующая тема будет предложена после её рассмотрения.',
+    biographerBlockedPermission: 'У вас нет прав на использование ИИ-биографа для этого мемориала.',
+    biographerGoToBiography: 'Запустить индексацию биографии',
+    biographerGenerationFailed: 'ИИ-биографу не удалось подготовить вопрос. Попробуйте ещё раз.',
     biographerDone: 'Все темы ИИ-биографа для этого мемориала уже пройдены.',
     biographerAnswerPlaceholder: 'Напишите свой ответ...',
     biographerSubmit: 'Отправить ответ',
     biographerSkip: 'Пропустить вопрос',
+    biographerPostpone: 'Спросить позже',
     biographerTopicLabel: 'Тема',
+    biographerRelevanceTemplate: 'Этот вопрос дополняет тему {topic}.',
+    biographerTopicChildhood: 'Детство',
+    biographerTopicFamily: 'Семья',
+    biographerTopicEducation: 'Образование',
+    biographerTopicWork: 'Работа',
+    biographerTopicRelationships: 'Отношения',
+    biographerTopicPlaces: 'Места',
+    biographerTopicTraditions: 'Традиции',
+    biographerTopicValues: 'Ценности',
     biographerMoreDetailsNeeded: 'Нужно больше деталей',
     biographerReadyForReview: 'Готово к проверке владельцем.',
     biographerGoToReview: 'Перейти к проверке',
@@ -1199,6 +1265,7 @@ export default function MemorialWorkspace({ lang }: { lang: Lang }) {
                   {activeTab === 'biographer' && maySubmit && (
                     <BiographerPanel
                       lang={lang}
+                      onNavigateToBiography={role === 'owner' ? () => setActiveTab('biography') : null}
                       onNavigateToReview={() => setActiveTab('review')}
                       profileId={selected.id}
                       t={t}
@@ -2212,18 +2279,50 @@ export function biographerLocale(lang: Lang): 'cs' | 'ru' {
   return lang === 'ru' ? 'ru' : 'cs';
 }
 
+export function biographerTopicLabel(t: Copy, topic: string): string {
+  switch (topic) {
+    case 'childhood':
+      return t.biographerTopicChildhood;
+    case 'family':
+      return t.biographerTopicFamily;
+    case 'education':
+      return t.biographerTopicEducation;
+    case 'work':
+      return t.biographerTopicWork;
+    case 'relationships':
+      return t.biographerTopicRelationships;
+    case 'places':
+      return t.biographerTopicPlaces;
+    case 'traditions':
+      return t.biographerTopicTraditions;
+    case 'values':
+      return t.biographerTopicValues;
+    default:
+      // Unknown/future topic keys still render something readable rather
+      // than the raw enum value as the primary label.
+      return roleLabel(topic);
+  }
+}
+
+//: Blocked reasons where re-polling makes sense (indexing is actively
+//: running in the background) - every other reason requires the owner to
+//: take an action first, so polling would spin forever for no reason.
+const BIOGRAPHER_POLL_BLOCKED_REASONS: ReadonlySet<BiographerBlockedReason> = new Set(['indexing_in_progress']);
+
 export function BiographerPanel({
   token,
   profileId,
   t,
   lang,
-  onNavigateToReview
+  onNavigateToReview,
+  onNavigateToBiography
 }: {
   token: string;
   profileId: number;
   t: Copy;
   lang: Lang;
   onNavigateToReview: () => void;
+  onNavigateToBiography: (() => void) | null;
 }) {
   const [eligibility, setEligibility] = useState<BiographerEligibilityRead | null>(null);
   const [question, setQuestion] = useState<BiographerQuestionRead | null>(null);
@@ -2234,6 +2333,7 @@ export function BiographerPanel({
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState(false);
   const [readyForReview, setReadyForReview] = useState(false);
+  const [generationFailed, setGenerationFailed] = useState(false);
 
   const locale = biographerLocale(lang);
 
@@ -2241,6 +2341,7 @@ export function BiographerPanel({
     setLoading(true);
     setError(null);
     setDone(false);
+    setGenerationFailed(false);
     try {
       const nextEligibility = await getBiographerEligibility(token, profileId);
       setEligibility(nextEligibility);
@@ -2252,7 +2353,11 @@ export function BiographerPanel({
         setQuestion(null);
       }
     } catch (loadError) {
-      setError(safeError(loadError));
+      if (loadError instanceof MemorialApiError && loadError.status === 503) {
+        setGenerationFailed(true);
+      } else {
+        setError(safeError(loadError));
+      }
     } finally {
       setLoading(false);
     }
@@ -2262,6 +2367,17 @@ export function BiographerPanel({
     void load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token, profileId, locale]);
+
+  useEffect(() => {
+    // Auto-refresh only while biography indexing is genuinely in progress
+    // (Part 31/33 of the task spec) - every other blocked reason needs an
+    // owner action first, so polling would never resolve on its own.
+    if (!eligibility || eligibility.eligible) return;
+    if (!BIOGRAPHER_POLL_BLOCKED_REASONS.has(eligibility.blocked_reason as BiographerBlockedReason)) return;
+    const timer = setTimeout(() => void load(), BIOGRAPHY_POLL_INTERVAL_MS);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [eligibility, token, profileId, locale]);
 
   async function submitAnswer(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -2326,6 +2442,27 @@ export function BiographerPanel({
     }
   }
 
+  async function postpone() {
+    if (!question) return;
+    setBusy(true);
+    setError(null);
+    setReadyForReview(false);
+    try {
+      await postponeBiographerQuestion(token, profileId, question.id);
+      await load();
+    } catch (postponeError) {
+      setError(safeError(postponeError));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const showBiographyCta =
+    onNavigateToBiography !== null &&
+    (eligibility?.blocked_reason === 'biography_missing' ||
+      eligibility?.blocked_reason === 'biography_not_indexed' ||
+      eligibility?.blocked_reason === 'biography_stale');
+
   return (
     <div className="min-w-0 space-y-5">
       <div>
@@ -2334,12 +2471,32 @@ export function BiographerPanel({
       </div>
       {loading && <p className="text-sm text-fg/55">{t.working}</p>}
       {error && <p className="rounded-2xl border border-red-400/30 bg-red-500/10 px-4 py-3 text-sm text-red-100">{error}</p>}
-      {!loading && eligibility && !eligibility.eligible && (
-        <p className="rounded-2xl border border-white/10 bg-black/20 p-4 text-sm text-fg/60">
-          {eligibility.blocked_reason === 'biography_missing' && t.biographerBlockedMissing}
-          {eligibility.blocked_reason === 'biography_not_indexed' && t.biographerBlockedNotIndexed}
-          {eligibility.blocked_reason === 'active_candidate_requires_answer' && t.biographerBlockedActive}
+      {generationFailed && (
+        <p className="rounded-2xl border border-red-400/30 bg-red-500/10 px-4 py-3 text-sm text-red-100">
+          {t.biographerGenerationFailed}
         </p>
+      )}
+      {!loading && eligibility && !eligibility.eligible && (
+        <div className="grid gap-3 rounded-2xl border border-white/10 bg-black/20 p-4 text-sm text-fg/60">
+          <p>
+            {eligibility.blocked_reason === 'biography_missing' && t.biographerBlockedMissing}
+            {eligibility.blocked_reason === 'biography_not_indexed' && t.biographerBlockedNotIndexed}
+            {eligibility.blocked_reason === 'indexing_in_progress' && t.biographerBlockedIndexing}
+            {eligibility.blocked_reason === 'biography_stale' && t.biographerBlockedStale}
+            {eligibility.blocked_reason === 'active_clarification_exists' && t.biographerBlockedActive}
+            {eligibility.blocked_reason === 'candidate_waiting_for_review' && t.biographerBlockedWaitingReview}
+            {eligibility.blocked_reason === 'permission_denied' && t.biographerBlockedPermission}
+          </p>
+          {showBiographyCta && onNavigateToBiography && (
+            <button
+              className="shrink-0 self-start rounded-full bg-gradient-to-r from-cyan to-violet px-5 py-2.5 text-sm font-semibold text-ink"
+              onClick={onNavigateToBiography}
+              type="button"
+            >
+              {t.biographerGoToBiography}
+            </button>
+          )}
+        </div>
       )}
       {readyForReview && (
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-cyan/25 bg-cyan/10 p-4">
@@ -2365,8 +2522,11 @@ export function BiographerPanel({
       )}
       {!loading && !activeCandidateId && eligibility?.eligible && question && (
         <form className="grid gap-4 rounded-3xl border border-white/10 bg-black/20 p-4" onSubmit={(event) => void submitAnswer(event)}>
-          <Badge>{t.biographerTopicLabel}: {roleLabel(question.topic)}</Badge>
+          <Badge>{t.biographerTopicLabel}: {biographerTopicLabel(t, question.topic)}</Badge>
           <p className="text-lg font-semibold text-fg">{question.question_text}</p>
+          <p className="text-xs text-fg/45">
+            {t.biographerRelevanceTemplate.replace('{topic}', biographerTopicLabel(t, question.topic))}
+          </p>
           <Textarea label={t.biographerAnswerPlaceholder} value={answerText} onChange={setAnswerText} required maxLength={2000} />
           <div className="flex flex-wrap gap-3">
             <button className="rounded-full bg-gradient-to-r from-cyan to-violet px-6 py-3 text-sm font-semibold text-ink disabled:opacity-55" disabled={busy || !answerText.trim()} type="submit">
@@ -2379,6 +2539,14 @@ export function BiographerPanel({
               type="button"
             >
               {t.biographerSkip}
+            </button>
+            <button
+              className="rounded-full border border-white/15 px-6 py-3 text-sm text-fg/75 transition hover:bg-white/10 disabled:opacity-55"
+              disabled={busy}
+              onClick={() => void postpone()}
+              type="button"
+            >
+              {t.biographerPostpone}
             </button>
           </div>
         </form>

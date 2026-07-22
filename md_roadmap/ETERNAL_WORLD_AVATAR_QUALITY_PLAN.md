@@ -1829,3 +1829,63 @@ Testy: 7 nových backendových testů pro `/history` endpoint. Frontend měl nul
 Task 65.4 se **považuje za kompletně dokončený** - plný synteticky ověřený workflow prošel, ne jen TypeScript kompilace nebo API-only testy.
 
 Další doporučený task: **Task 66.2 — Cost Analytics and Admin API** (samostatný budoucí task, nedotčen tímto navazujícím taskem).
+
+## 23. Task 65.6 status (2026-07-22) — AI biograf je nyní kontextově uvědomělý
+
+Task 65.6 — Context-Aware AI Biographer, Coverage Tracking, and Duplicate-Question Prevention — byl proveden a **dokončen, živě ověřen proti reálné infrastruktuře**. Plný popis (root-cause analýza, nová architektura, testy, živé ověření, přesná reálná cena) je v `PROJECT_PROGRESS.md`, sekce "Task 65.6 - Context-Aware AI Biographer, Coverage Tracking, and Duplicate-Question Prevention (2026-07-22)".
+
+Prokázaná skutečná příčina: Task 65.2 biograf byl zcela deterministický (pevná sada 8 témat, každé s natvrdo daným textem otázky v cs/ru, jedno téma nabídnuté nejvýše jednou za celou existenci memorialu) — nikdy nečetl `profile.biography`, nikdy nevolal RAG retrieval, nikdy neporovnával obsah otázek, jen kontroloval, zda dané téma už bylo použito.
+
+Stručně, co se změnilo:
+
+```text
+Nová vrstva uvnitř existujícího modulu (žádný druhý systém biografa):
+  coverage.py — deterministické vyhodnocení pokrytí tématu (not_started/weak/
+    basic/rich/skipped/postponed/exhausted) a výběr dalšího tématu podle
+    priority, ne vždy "childhood" první
+  context_package.py — omezený RAG retrieval (existující rag_retrieval,
+    žádná nová implementace) pro zaindexovaný životopis + schválené vzpomínky
+  question_generation.py — DeepSeek strukturovaný výstup přes existující
+    Task 66.1 instrumentaci (AiFeature.AVATAR_BIOGRAPHER_QUESTION - už
+    rezervováno, nepoužito), max. jedno omezené přegenerování, deterministický
+    fallback
+  duplicate_prevention.py — konzervativní, čistě textová (žádný model)
+    kontrola duplicit a "už známého faktu"
+  DB migrace 20260722_0025 — uvolnění "jedno téma navždy" omezení, DB-level
+    partial unique index proti dvěma souběžným čekajícím otázkám, bezpečná
+    provenience (nikdy neukládá text promptu/odpovědi)
+```
+
+Živě ověřeno (syntetické účty, reálný Postgres/Qdrant/BGE-M3/Celery worker/DeepSeek, nikdy skutečný memorial vlastníka):
+
+```text
+Český syntetický životopis obsahující přesně scénář z hlášené chyby
+  (dětství u Uherského Hradiště, kolo, fotbal, les, "vždy mě zajímalo
+  rozebírání starých přístrojů") -> otázka biografa: "Který starý přístroj
+  ti nejvíc utkvěl v paměti a co konkrétně jsi na něm rozebíral?" —
+  NEPTÁ SE "kde jste prožili dětství" (přesně ta chyba z hlášení), ptá se
+  na konkrétní chybějící detail
+Opakované volání bez odpovědi -> vrácena stejná otázka (duplicate smoke),
+  žádná nová otázka, žádné další volání provideru
+Ruský syntetický životopis -> ruská otázka, stejná kvalita, žádný únik
+  do češtiny
+Neindexovaný životopis -> blocked_reason=biography_not_indexed, nula
+  volání provideru (ověřeno přímo v tabulce ai_actions)
+Task 66.1 stopa: přesně 3 řádky AiAction pro avatar_biographer_question,
+  každý provider_call_count=1 — celková reálná cena 0,000144345 USD,
+  hluboko pod limitem 0,01 USD
+```
+
+Během vývoje testů byla nalezena a **v rámci tohoto tasku rovnou opravena** vlastní chyba: tento vývojový kontejner má v reálném prostředí nastaveno `AI_BRAIN_PROVIDER=openai_compatible` se skutečným DeepSeek klíčem (kvůli živému ověřování) — `app.core.config.settings` je procesní singleton, takže první verze `test_avatar_biographer.py` (bez vynuceného `mock` providera) tiše volala skutečný, placený DeepSeek při každém testu generování otázky — stejný mechanismus, jaký už dříve způsobil zdokumentovanou nesouvisející chybu v `test_chat.py`. Opraveno přidáním `autouse` fixture vynucující `ai_brain_provider="mock"`; izolovaný běh po opravě: 28/28 prošlo za 75 s (dříve 185 s bez opravy — potvrzuje, že reálná síťová volání skutečně probíhala).
+
+Backend testy: 28/28 nových/upravených v `test_avatar_biographer.py`. Plná regrese (11 souborů, 154 testů): 148 prošlo, 6 selhání — všech 6 prokázáno nesouvisejících (nulový překryv souborů s touto úlohou + deterministická reprodukce v izolaci): `test_chat.py` už dříve zdokumentovaná chyba stejného typu (reálné prostředí v testech), 4x `test_metrics.py` (chyba v podpisu volání `demo_fa_chat` orchestrátoru, kód nedotčený touto úlohou), `test_rag_retrieval.py` (reálný sentence_transformers model místo mocku — stejná třída chyby jako u AI_BRAIN_PROVIDER, v kódu embeddings providerů nedotčeném touto úlohou). Jedna oprava byla nutná a provedena: `test_alembic.py` mělo natvrdo danou předchozí hlavní revizi, aktualizováno na `20260722_0025`.
+
+Frontend (`frontend/react-export/`): `BiographerPanel` přepracován — rozlišené stavy pro každý blokovaný důvod (chybí/neindexováno/probíhá indexace/zastaralé/aktivní upřesnění/čeká na kontrolu), tlačítko "Spustit indexaci životopisu" jen pro vlastníka, lokalizované popisky témat (žádná syrová anglická hodnota jako primární popisek), tlačítko "Zeptat se později" (nový endpoint `postpone`). 59/59 testů prošlo, `tsc`/`build` čisté. Next.js frontend (`frontend/`) beze změny, izolace potvrzena (`typecheck`/`test`/`build` čisté, react-export nikdy neproskenováno).
+
+Docker: pouze `docker compose restart backend celery_worker` (bind-mount, žádný rebuild image). Frontend Vite kontejner vyžadoval `--build --renew-anon-volumes` (povolená výjimka) kvůli zastaralému anonymnímu svazku `node_modules` z předchozí session. Žádný PyTorch/Transformers/BGE-M3/CUDA download.
+
+Známá omezení (zdokumentována, ne skryta): sken pokrytí volá RAG retrieval až 16x sekvenčně na jeden požadavek (první živý dotaz trval ~117 s na CPU inferenci) — budoucí optimalizace, mimo rozsah tohoto tasku, protože by riskovala zásah do zakázaného retrieval/ranking chování; čistě textový detektor duplicit záměrně nezachytí každou sémanticky podobnou, ale jinak formulovanou otázku (pozorováno živě u tématu "family", které zůstalo tematicky blízké předchozímu tématu "childhood" kvůli tenkému zdrojovému textu) — vědomý kompromis, ne chyba.
+
+Task 65.6 se **považuje za kompletně dokončený** v rozsahu definovaném zadáním a živě ověřený proti reálné infrastruktuře, včetně vlastního nalezeného a opraveného incidentu (únik reálného providera do konceptu testů).
+
+Další doporučený task: **Task 66.2 — Cost Analytics and Admin API** (nedotčen touto úlohou), případně úzce vymezené doladění promptu biografa pro tematické zaostření při tenkém zdrojovém textu (pozorované omezení výše), pokud si to vlastník bude přát.

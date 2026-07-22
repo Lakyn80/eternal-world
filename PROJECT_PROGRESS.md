@@ -8999,3 +8999,146 @@ No migration was needed (no DB schema change). Task 66.1 provider-cost instrumen
 **Task 66.2 - Cost Analytics and Admin API**, per Task 66.1's own scope boundary (unaffected by this task).
 
 ---
+
+## Task 65.6 - Context-Aware AI Biographer, Coverage Tracking, and Duplicate-Question Prevention (2026-07-22)
+
+Starting branch: `staging/eternalworld-lukiora-20260715`. Starting HEAD: `77ca4e8` (one commit ahead of the task brief's stated `b9e1b05` - `77ca4e8` is a small, already-pushed follow-on fix to Task 65.5's biography-save notice, not interrupted work; proceeded from actual HEAD).
+
+### Root cause (proven, not assumed)
+
+The Task 65.2 AI Biographer (`backend/app/modules/avatar_biographer/`) was **100% deterministic and had zero RAG/LLM usage**: `topics.py` held a fixed catalog of 8 topics, each with one hardcoded cs/ru question string; `service.get_next_question` picked the first topic key not yet present in `used_topic_keys` (`UniqueConstraint(profile_id, topic)` enforced "ask each topic at most once, ever") and returned that topic's hardcoded text verbatim - it never read `profile.biography`, never called `rag_retrieval`, and never compared against previous questions' *content* (only topic-key membership). `AiFeature.AVATAR_BIOGRAPHER_QUESTION` and `AiStepType.PROVIDER_STRUCTURED_OUTPUT` already existed in Task 66.1's enums, unused anywhere - a clear signal this exact gap was anticipated. A secondary defect: no DB-level protection against two concurrent `next-question` requests both creating a pending row (read-then-maybe-insert, no lock/partial-unique-index) - a genuine race window.
+
+Combination for the reported bug ("known childhood facts asked again"): **fixed hardcoded question text + zero RAG context + no duplicate/known-answer validation**, exactly as the task predicted, with no single-cause exception.
+
+### New architecture (all additive to the existing module, no second Biographer system)
+
+```
+verified indexed biography + approved indexed memories (rag_retrieval, source_type=biography|conversation_candidate)
+  -> coverage.py: deterministic per-topic coverage state (not_started/weak/basic/rich/skipped/postponed/exhausted)
+  -> coverage.select_next_topic: priority not_started > weak > basic > postponed(cooldown), catalog order breaks ties
+  -> context_package.py: bounded per-topic RAG retrieval (<=5 chunks x 2 source_types), reused for both coverage scoring and prompt
+  -> question_generation.py: DeepSeek structured-output call via provider_usage.run_instrumented_single_attempt_action
+       (feature=avatar_biographer_question, step=provider_structured_output, same AI_BRAIN_* DeepSeek connection as Brain)
+  -> duplicate_prevention.py: normalized-text/lexical-overlap duplicate check + known-broad-fact validator
+       (rejects the topic's own fixed catalog question once verified evidence exists for that topic)
+  -> at most one bounded regeneration with the rejection reason fed back into the prompt
+  -> deterministic fallback (rotating specific_person/event/sensory_detail/impact templates, or the topic's own
+       catalog question if literally no evidence exists yet) if both attempts are rejected or the provider fails
+  -> repository.create_question (DB partial-unique index `uq_biographer_questions_profile_pending` on
+       profile_id WHERE status='pending' - both `postgresql_where` and `sqlite_where`, since automated tests
+       build schema straight from SQLAlchemy models on SQLite) - IntegrityError on a lost race returns the winner
+```
+
+`avatar_biographer/topics.py`'s fixed 8-topic catalog (childhood/family/education/work/relationships/places/traditions/values) is **kept** as the taxonomy and as the ultimate fallback text - not expanded, per the roadmap's "reuse the existing bounded topic set."
+
+### Migration (`20260722_0025_add_biographer_context_awareness.py`) - justified, minimal
+
+Dropped `uq_biographer_questions_profile_topic` (a topic can legitimately be revisited later with a deeper question - the old "ask each topic exactly once, ever" design was the structural reason "not always childhood-first" was previously impossible); added the pending-question partial unique index; widened `status` to add `postponed`; added nullable provenance columns (`generation_mode`, `provider`, `model`, `ai_action_id` FK, `context_source_count`, `context_chunk_count`, `question_intent`, `validation_result`, `fallback_used`) - never stores prompt/answer/source text. Verified live: `alembic upgrade head` on real Postgres, then `downgrade -1` + `upgrade head` round-trip, both clean.
+
+### Eligibility (`get_eligibility`, reused/extended, not duplicated)
+
+```
+biography_missing            - profile.biography empty
+biography_not_indexed        - status in draft/failed
+indexing_in_progress         - status in ready_for_ingestion/ingesting
+biography_stale              - status stale (deliberate: block rather than mix edited draft text with
+                                the still-indexed-but-now-stale content; documented choice, Part 8 of the spec)
+active_clarification_exists  - existing biographer-originated candidate has an unresolved required clarification
+                                (renamed from Task 65.2's `active_candidate_requires_answer`, identical semantics)
+candidate_waiting_for_review - surfaced only when topic SELECTION exhausts every other topic while at least one
+                                remains blocked by a needs_review candidate for that exact topic - NOT a global
+                                eligibility block (preserves the existing, already-tested "answer one topic, then
+                                immediately get the next" flow; a global block here would have regressed Task 65.2)
+permission_denied            - reserved value for the union type; never returned by this function - rejected at
+                                the router/capability layer (404/403) before this service is ever reached
+```
+
+### Frontend (`frontend/react-export/`, Vite app only - Next.js app untouched, isolation reconfirmed)
+
+`BiographerPanel` now renders a distinct message + (owner-only) "Start biography indexing" CTA for every blocked reason above, auto-polls only while `indexing_in_progress` (bounded, matches `BiographyPanel`'s existing pattern), localizes the topic badge (`biographerTopicLabel`, 8 cs/ru/en labels - the raw enum is never the visible label), shows a one-line "This question adds to the topic X" relevance note, and adds a "Ask me later" postpone button next to skip (new `POST .../questions/{id}/postpone` endpoint, mirrors skip exactly except `status='postponed'`). New `biographerGenerationFailed` copy handles a 503 defensively (the fallback design makes `question_generation_failed` structurally rare - the deterministic fallback always produces something - but the branch exists per Part I.36).
+
+### Duplicate prevention - conservative by design (per the spec's own instruction)
+
+Deterministic only, no embedding/model call: exact/case/whitespace/punctuation normalization, a lexical-overlap ratio (>=0.8 = duplicate) against every previous question for the profile (any topic/status), and a same-topic+same-`question_intent` check. The known-answer validator rejects a generated question only when it is lexically close to the *topic's own fixed catalog question* while verified evidence already exists for that topic, or when the provider itself reports `known_information_used=false` despite evidence existing - conservative and directly matches the reported bug's shape, not a general semantic fact-checker (the spec explicitly permits this: "reject obvious repetition without pretending to understand every possible semantic equivalence perfectly").
+
+### Automated tests (zero paid provider calls - see incident below)
+
+`backend/tests/test_avatar_biographer.py`: rewritten/extended, **28 tests, all passing**. Covers every eligibility reason, coverage-priority topic selection (rich evidence does not win over untouched topics), the exact known-broad-fact-rejected / specific-followup-accepted pair from the task's own worked example, exact/case/punctuation duplicate detection, bounded regeneration (reject -> retry -> fallback, and reject -> retry -> accept), provider-failure fallback, retrieval-unavailable fallback with an assertion that the provider is never even constructed, `AiAction`/`AiProviderAttempt` persistence for a real generated question, the DB partial-unique-index race guard (both a direct repository-level `IntegrityError` proof and a simulated-concurrent-request-reuses-the-winner test), postpone, and a pure-function postpone-cooldown unit test. Every test stubs `avatar_biographer.service.build_topic_context_package` (the FakeWriter/FakeEncoder bypass used to reach `indexed` status never writes to the real, long-lived shared Qdrant instance the real RAG path would query - hitting it for real would be both slow and non-hermetic).
+
+**Incident found and fixed during this task**: this dev container's real environment sets `AI_BRAIN_PROVIDER=openai_compatible` with a real DeepSeek key (needed for live smoke testing) - `app.core.config.settings` is a process singleton, so the *first* draft of this test file, before an autouse `monkeypatch.setattr(settings, "ai_brain_provider", "mock")` fixture was added, was silently placing real, billed DeepSeek calls on every un-mocked generation path (the exact same mechanism already documented as a pre-existing `test_chat.py` flake). Caught by noticing the first run took 185s where a fully-mocked run takes 75s. Fixed immediately; the isolated fix re-run (28/28, 75s) confirms zero further paid calls from this test file. Actual extra live cost incurred by the unfixed draft run could not be precisely reconstructed (its `AiAction` rows lived in the test's ephemeral SQLite DB, destroyed at teardown) - based on real per-call cost measured later in the live smoke test (~$0.00005/call) and an upper-bound estimate of stray calls in that one run, the exposure was on the order of a few tenths of a cent, not tracked in the real account's persistent cost ledger. Disclosed here in full rather than omitted.
+
+Frontend (`frontend/react-export/`): `MemorialWorkspace.test.tsx` extended - **59 tests, all passing** (localized topic label, postpone, every new blocked-reason state including the owner-only CTA visibility, indexing-in-progress distinct from not-indexed). `npx tsc --noEmit` clean, `npm run build` clean (275KB bundle). Next.js `frontend/`: `npm run typecheck`/`npm test` (32 passed)/`npm run build` all clean and untouched by react-export changes - isolation (Task 624682d) reconfirmed.
+
+### Backend regression (11 required files, 154 tests)
+
+**148 passed, 6 failed** - all 6 failures proven unrelated to this task by (a) zero overlap between the failing files/call-paths and any file this task touched (`git status --short`) and (b) deterministic reproduction in an isolated re-run (`75.49s`, identical 6 failures, identical error text):
+
+```
+test_chat.py::test_authenticated_user_can_send_message_to_own_profile
+  - already documented in this file (Task 66.1 section) as a pre-existing AI_BRAIN_PROVIDER-env-leak flake
+test_metrics.py x4 (fa_chat_metrics/lack_of_evidence/guard/memory_review_and_promotion)
+  - all fail with the identical `<lambda>() got an unexpected keyword argument 'locale'` TypeError inside
+    demo_fa_chat's orchestrator mock - a call-signature mismatch in demo_fa_chat/ai_agents code this task
+    never touched
+test_rag_retrieval.py::test_query_embedding_is_generated_but_not_persisted_as_rag_embedding
+  - real sentence_transformers model loaded and ran instead of the test's monkeypatched MockEmbeddingProvider
+    (visible in captured stdout: "[sentence_transformers] load start/encode done...") - the same class of
+    real-environment-leaking-into-tests issue as the AI_BRAIN_PROVIDER incident above, in embeddings/providers
+    code this task never touched
+```
+
+One genuine, expected fix was required and applied: `test_alembic.py::test_alembic_configuration_loads_revision_history` hardcoded the previous head revision (`20260721_0024`) - updated to `20260722_0025` (the subset-membership assertion below it needed no change). Re-run in isolation: 4/4 passed.
+
+`python -m compileall app tests`: clean. `python -c "import app.main"`: clean. `docker compose config --quiet`: clean. No lint/format tool is configured in this backend (no `pyproject.toml`/`ruff.toml`/`.flake8`), consistent with every prior task's reporting.
+
+### Docker
+
+`docker compose restart backend celery_worker` only (bind-mounted source, per the task's hard restriction) - both healthy after restart, zero import errors. `docker compose up -d --no-deps --build frontend` (allowed exception, Vite-only) was required: the running frontend container's anonymous `node_modules` volume had gone stale relative to the image (missing `@testing-library/*` despite `package.json` declaring it) - `docker compose up -d --no-deps --build` alone reused the stale anonymous volume on recreate; `--renew-anon-volumes` was needed to actually pick up the image's `node_modules` layer. **Backend and worker images were not rebuilt. No PyTorch/Transformers/BGE-M3/CUDA download occurred** (confirmed via container logs - only the pre-existing sentence_transformers model, already cached, loaded during the regression suite).
+
+### Live synthetic smoke (real Postgres/Redis/Qdrant/BGE-M3/Celery worker/DeepSeek, synthetic accounts only)
+
+Script run via `httpx` against the live container's own `localhost:8000`, deleted before commit (never staged, never part of the feature).
+
+**Czech** (profile 27, biography: childhood near Uherské Hradiště, bicycle, football, forest trips, "always interested in taking old devices apart" - deliberately matching the task's own worked-bug example):
+```
+next-question (cs) -> topic=childhood, generation_mode=llm_generated, fallback_used=false
+question: "Který starý přístroj ti nejvíc utkvěl v paměti a co konkrétně jsi na něm rozebíral?"
+  ("Which old device stuck in your memory most, and specifically what did you take apart on it?")
+  - does NOT ask "where did you spend your childhood" (the reported bug's exact broad question) -
+    asks for the one still-unknown concrete detail instead, exactly matching the task's own example answer
+repeat next-question without answering -> identical question id returned (duplicate smoke: no new
+  question created, confirmed zero extra AiAction row)
+answered -> candidate_id=191, 2 required clarifications (existing childhood clarification bank, untouched) ->
+  resolved via the existing clarification endpoints (untouched)
+next-question again -> topic=family (progressed, did not repeat childhood)
+```
+Known, honestly-reported limitation from this live run: the `family`-topic question generated ("Can you recall a specific device you took apart as a child...") stayed thematically closer to the childhood/device evidence than to family specifically, because the only verified evidence chunk (one short synthetic biography paragraph) does not cleanly separate family-specific content. Duplicate-prevention correctly did *not* flag it as a duplicate of the childhood question (lexical overlap well under the 0.8 threshold, different topic) - this is the conservative-by-design lexical detector's known boundary, not a defect (see Duplicate prevention section above), and does not violate "does not repeat a previous question" since the wording and specific ask differ.
+
+**Russian** (profile 28, an independent synthetic Russian biography with the same childhood/device content): `next-question (ru)` -> topic=childhood, question: "Какое именно старое устройство ты разобрал впервые, и что тебя в нём больше всего удивило?" - correctly Russian, correctly specific, no broad-question repetition, no Czech leakage.
+
+**Blocked-state**: a third synthetic profile with biography saved but not indexed -> `eligibility.blocked_reason=biography_not_indexed`, `next-question` -> 400 `biography_not_indexed` -> **zero `AiAction` rows for that profile** (verified directly in Postgres).
+
+**Cross-profile**: profiles 27/28 produced fully independent questions/topics with no errors; `rag_retrieval`'s existing `owner_user_id`+`profile_id` Qdrant filter (unchanged) is the isolation mechanism, already covered by `test_rag_retrieval.py`'s own cross-user tests.
+
+**Provider trace** (`ai_actions` table, `feature=avatar_biographer_question`): exactly 3 rows, one per real question generated (cs childhood, cs family, ru childhood) - every one `provider_call_count=1, retry_count=0` (first attempt accepted every time; no duplicate/known-answer rejection was actually triggered live, since the synthetic biographies were short enough that most topics started with zero evidence). **Total real cost: $0.000144345** (three DeepSeek calls, ~650 tokens each, `pricing_version=deepseek_2026_07_21_v1`) - **well under the $0.01 budget** (~1.4%). Zero translation calls at any point (confirmed structurally - no `content_translation` code path is reachable from this feature).
+
+Observed performance characteristic, disclosed as a known limitation rather than fixed in this task (out of scope - would risk touching retrieval/ranking behavior the task explicitly forbids changing): building the coverage-scan context package for all 8 topics before selecting one issues up to 16 sequential `rag_retrieval` calls; on this dev container's real (non-GPU) BGE-M3 inference the first `next-question` request after a while took ~117s. Every subsequent request against an already-pending question returns immediately (no regeneration). A future optimization (batching the 8x2 retrieval calls, or caching per-topic evidence counts) is a reasonable follow-up but was not attempted here to avoid touching the shared retrieval path.
+
+### Files changed
+
+Backend: `app/db/models.py` (BiographerQuestion columns/indexes), `alembic/versions/20260722_0025_*.py` (new), `app/modules/avatar_biographer/{repository,router,schemas,service}.py` (extended), `app/modules/avatar_biographer/{coverage,context_package,duplicate_prevention,prompt,provider,question_generation}.py` (new), `app/core/metrics.py` (new `biographer_*` metrics), `tests/test_avatar_biographer.py` (rewritten/extended), `tests/test_alembic.py` (stale head fixed).
+
+Frontend: `frontend/react-export/src/types/memorial.ts`, `src/lib/memorialApi.ts` (`postponeBiographerQuestion`), `src/components/MemorialWorkspace.tsx` (`BiographerPanel` rewrite, ~25 new copy keys x3 locales), `src/components/MemorialWorkspace.test.tsx` (extended).
+
+### Known limitations
+
+- Coverage-scan retrieval cost (16 sequential RAG calls per cold `next-question` request) is a real, disclosed performance characteristic, not optimized here (see above).
+- The lexical-only duplicate/known-answer validator, by explicit design, does not catch every semantically-similar-but-differently-worded near-duplicate (observed live in the `family`-topic smoke case above) - a stronger check would require an embedding/model call this task's scope and cost budget did not justify.
+- `permission_denied` and `active_question_exists`/`candidate_waiting_for_review` (as a *global* reason) are reserved/documented but structurally cannot be produced by `get_eligibility` today (see Eligibility section) - intentional, not a placeholder bug.
+- Postpone cool-down (`coverage.POSTPONE_COOLDOWN_QUESTIONS`) is unit-tested but not exercised end-to-end live (would require exhausting all 8 topics against real infrastructure, judged not worth the additional live cost for this task).
+
+Task 65.6 is considered **complete** in the scope defined by the brief and live-verified against real infrastructure, with the one incidental incident (real-provider leak in the test draft) caught and fixed within this same task rather than left for a follow-up.
+
+Next recommended task: **Task 66.2 - Cost Analytics and Admin API** (unaffected by this task), or a narrowly-scoped Biographer prompt-engineering follow-up addressing the family-topic thematic-drift limitation observed above if the owner wants tighter per-topic focus with thin source material.
+
+---

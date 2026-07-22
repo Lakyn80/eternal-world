@@ -279,6 +279,151 @@ AVATAR_CORRECTED_MEMORY_RESOLUTION_TOTAL = Counter(
     labelnames=("result",),
 )
 
+# --- Task 65.6: context-aware AI Biographer -------------------------------
+# Every label below is a small closed set (topic/coverage-state/result/
+# generation-mode/reason/locale) - never a profile/user/question/candidate
+# id and never raw question text, matching the AI-cost label convention
+# below (see `_AI_COST_FEATURES` and the comment at line ~730).
+BIOGRAPHER_QUESTIONS_TOTAL = Counter(
+    "biographer_questions_total",
+    "Total AI Biographer questions generated, by locale/topic/result/generation_mode.",
+    labelnames=("locale", "topic", "result", "generation_mode"),
+)
+BIOGRAPHER_BLOCKED_TOTAL = Counter(
+    "biographer_blocked_total",
+    "Total AI Biographer question requests blocked before generation, by reason.",
+    labelnames=("reason", "locale"),
+)
+BIOGRAPHER_TOPIC_SELECTION_TOTAL = Counter(
+    "biographer_topic_selection_total",
+    "Total AI Biographer topic selections, by topic and coverage state.",
+    labelnames=("topic", "coverage_state"),
+)
+BIOGRAPHER_DUPLICATE_PREVENTED_TOTAL = Counter(
+    "biographer_duplicate_prevented_total",
+    "Total AI Biographer generated questions rejected by duplicate/known-answer validation.",
+    labelnames=("reason", "locale"),
+)
+BIOGRAPHER_CONTEXT_SOURCES = Histogram(
+    "biographer_context_sources",
+    "Verified source count used to build one Biographer question's context, by topic.",
+    labelnames=("topic",),
+    buckets=(0, 1, 2, 3, 5, 8, 13),
+)
+BIOGRAPHER_GENERATION_DURATION_SECONDS = Histogram(
+    "biographer_generation_duration_seconds",
+    "Duration of one Biographer question-generation request in seconds, by locale and result.",
+    labelnames=("locale", "result"),
+)
+BIOGRAPHER_FALLBACK_TOTAL = Counter(
+    "biographer_fallback_total",
+    "Total AI Biographer requests that used the deterministic fallback question template.",
+    labelnames=("reason", "locale"),
+)
+
+_BIOGRAPHER_TOPIC_KEYS = frozenset(
+    {"childhood", "family", "education", "work", "relationships", "places", "traditions", "values"}
+)
+_BIOGRAPHER_COVERAGE_STATES = frozenset(
+    {"not_started", "weak", "basic", "rich", "skipped", "postponed", "exhausted"}
+)
+_BIOGRAPHER_BLOCKED_REASONS = frozenset(
+    {
+        "biography_missing",
+        "biography_not_indexed",
+        "biography_stale",
+        "indexing_in_progress",
+        "permission_denied",
+        "active_clarification_exists",
+        "candidate_waiting_for_review",
+    }
+)
+_BIOGRAPHER_RESULTS = frozenset({"accepted", "regenerated", "fallback_used", "generation_failed"})
+_BIOGRAPHER_GENERATION_MODES = frozenset({"llm_generated", "deterministic_fallback"})
+_BIOGRAPHER_DUPLICATE_REASONS = frozenset(
+    {"exact_duplicate", "high_lexical_overlap", "same_topic_intent", "known_broad_fact"}
+)
+_BIOGRAPHER_FALLBACK_REASONS = frozenset(
+    {"retrieval_unavailable", "provider_unavailable", "validation_failed_twice"}
+)
+
+
+def normalize_biographer_topic_label(topic: str | None) -> str:
+    return topic if topic in _BIOGRAPHER_TOPIC_KEYS else "other"
+
+
+def normalize_biographer_coverage_state_label(state: str | None) -> str:
+    return state if state in _BIOGRAPHER_COVERAGE_STATES else "unknown"
+
+
+def normalize_biographer_blocked_reason_label(reason: str | None) -> str:
+    return reason if reason in _BIOGRAPHER_BLOCKED_REASONS else "other"
+
+
+def normalize_biographer_result_label(result: str | None) -> str:
+    return result if result in _BIOGRAPHER_RESULTS else "unknown"
+
+
+def normalize_biographer_generation_mode_label(mode: str | None) -> str:
+    return mode if mode in _BIOGRAPHER_GENERATION_MODES else "unknown"
+
+
+def normalize_biographer_duplicate_reason_label(reason: str | None) -> str:
+    return reason if reason in _BIOGRAPHER_DUPLICATE_REASONS else "other"
+
+
+def normalize_biographer_fallback_reason_label(reason: str | None) -> str:
+    return reason if reason in _BIOGRAPHER_FALLBACK_REASONS else "other"
+
+
+def observe_biographer_question(*, locale: str | None, topic: str, result: str, generation_mode: str) -> None:
+    BIOGRAPHER_QUESTIONS_TOTAL.labels(
+        locale=normalize_ai_locale_label(locale),
+        topic=normalize_biographer_topic_label(topic),
+        result=normalize_biographer_result_label(result),
+        generation_mode=normalize_biographer_generation_mode_label(generation_mode),
+    ).inc()
+
+
+def observe_biographer_blocked(*, reason: str, locale: str | None) -> None:
+    BIOGRAPHER_BLOCKED_TOTAL.labels(
+        reason=normalize_biographer_blocked_reason_label(reason),
+        locale=normalize_ai_locale_label(locale),
+    ).inc()
+
+
+def observe_biographer_topic_selection(*, topic: str, coverage_state: str) -> None:
+    BIOGRAPHER_TOPIC_SELECTION_TOTAL.labels(
+        topic=normalize_biographer_topic_label(topic),
+        coverage_state=normalize_biographer_coverage_state_label(coverage_state),
+    ).inc()
+
+
+def observe_biographer_duplicate_prevented(*, reason: str, locale: str | None) -> None:
+    BIOGRAPHER_DUPLICATE_PREVENTED_TOTAL.labels(
+        reason=normalize_biographer_duplicate_reason_label(reason),
+        locale=normalize_ai_locale_label(locale),
+    ).inc()
+
+
+def observe_biographer_context_sources(*, topic: str, source_count: int) -> None:
+    BIOGRAPHER_CONTEXT_SOURCES.labels(topic=normalize_biographer_topic_label(topic)).observe(source_count)
+
+
+def observe_biographer_generation_duration(*, locale: str | None, result: str, duration_seconds: float) -> None:
+    BIOGRAPHER_GENERATION_DURATION_SECONDS.labels(
+        locale=normalize_ai_locale_label(locale),
+        result=normalize_biographer_result_label(result),
+    ).observe(duration_seconds)
+
+
+def observe_biographer_fallback(*, reason: str, locale: str | None) -> None:
+    BIOGRAPHER_FALLBACK_TOTAL.labels(
+        reason=normalize_biographer_fallback_reason_label(reason),
+        locale=normalize_ai_locale_label(locale),
+    ).inc()
+
+
 _AVATAR_EVAL_GATE_RESULTS = frozenset({"pass", "fail"})
 _AVATAR_MEMORY_QUERY_INTENTS = frozenset(
     {

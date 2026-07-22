@@ -5,6 +5,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, Path, Query, status
 from sqlalchemy.orm import Session
 
+from app.core.logging import get_request_id
 from app.db.models import User
 from app.db.session import get_db
 from app.modules.auth.dependencies import get_current_user
@@ -22,6 +23,7 @@ from app.modules.avatar_biographer.service import (
     answer_question,
     get_eligibility,
     get_next_question,
+    postpone_question,
     skip_question,
 )
 from app.modules.family_memory_enrichment.enums import FamilyMemoryActorRole
@@ -98,7 +100,13 @@ def get_next_biographer_question_endpoint(
     except (MemorialNotFoundError, MemorialForbiddenError) as exc:
         _raise_access_error(exc)
     try:
-        return get_next_question(db, profile=profile, locale=locale)
+        return get_next_question(
+            db,
+            profile=profile,
+            current_user=current_user,
+            locale=locale,
+            trace_id=get_request_id(),
+        )
     except BiographerBlockedError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=exc.reason) from exc
 
@@ -176,6 +184,39 @@ def skip_biographer_question_endpoint(
         _raise_access_error(exc)
     try:
         return skip_question(db, profile=profile, question_id=question_id)
+    except BiographerNotFoundError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except BiographerConflictError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+
+
+@router.post(
+    "/api/memorials/{profile_id}/biographer/questions/{question_id}/postpone",
+    response_model=BiographerQuestionRead,
+    responses={
+        status.HTTP_401_UNAUTHORIZED: {"model": ErrorResponse},
+        status.HTTP_403_FORBIDDEN: {"model": ErrorResponse},
+        status.HTTP_404_NOT_FOUND: {"model": ErrorResponse},
+        status.HTTP_409_CONFLICT: {"model": ErrorResponse},
+    },
+)
+def postpone_biographer_question_endpoint(
+    profile_id: ProfileIdPath,
+    question_id: QuestionIdPath,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> BiographerQuestionRead:
+    try:
+        profile, _membership = resolve_authorized_profile(
+            db,
+            current_user=current_user,
+            profile_id=profile_id,
+            capability=MemorialCapability.SUBMIT_CONTRIBUTION,
+        )
+    except (MemorialNotFoundError, MemorialForbiddenError) as exc:
+        _raise_access_error(exc)
+    try:
+        return postpone_question(db, profile=profile, question_id=question_id)
     except BiographerNotFoundError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     except BiographerConflictError as exc:

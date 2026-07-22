@@ -7,11 +7,12 @@ import {
   CandidatesReviewSection,
   COPY,
   biographerLocale,
+  biographerTopicLabel,
   biographyStatusLabel,
   isBiographyJobActive,
   privacyScopeLabel
 } from './MemorialWorkspace';
-import type { BiographyStatusRead, MemoryCandidateEnrichmentRead } from '../types/memorial';
+import type { BiographerQuestionRead, BiographyStatusRead, MemoryCandidateEnrichmentRead } from '../types/memorial';
 import * as api from '../lib/memorialApi';
 
 vi.mock('../lib/memorialApi', async () => {
@@ -25,6 +26,7 @@ vi.mock('../lib/memorialApi', async () => {
     getNextBiographerQuestion: vi.fn(),
     answerBiographerQuestion: vi.fn(),
     skipBiographerQuestion: vi.fn(),
+    postponeBiographerQuestion: vi.fn(),
     answerCandidateClarification: vi.fn(),
     listMemoryCandidates: vi.fn(),
     ownerReviewCandidate: vi.fn(),
@@ -32,6 +34,23 @@ vi.mock('../lib/memorialApi', async () => {
     getCandidateHistory: vi.fn()
   };
 });
+
+function baseBiographerQuestion(overrides: Partial<BiographerQuestionRead> = {}): BiographerQuestionRead {
+  return {
+    id: 1,
+    profile_id: 7,
+    topic: 'childhood',
+    locale: 'cs',
+    question_text: 'Where did you grow up?',
+    status: 'pending',
+    asked_at: '2026-01-01T00:00:00Z',
+    answered_at: null,
+    resulting_candidate_id: null,
+    generation_mode: 'llm_generated',
+    fallback_used: false,
+    ...overrides
+  };
+}
 
 const t = COPY.en;
 
@@ -80,6 +99,13 @@ describe('pure helpers', () => {
     expect(biographerLocale('ru')).toBe('ru');
     expect(biographerLocale('cs')).toBe('cs');
     expect(biographerLocale('en')).toBe('cs');
+  });
+
+  it('biographerTopicLabel localizes every known topic and falls back for unknown ones', () => {
+    expect(biographerTopicLabel(t, 'childhood')).toBe(t.biographerTopicChildhood);
+    expect(biographerTopicLabel(t, 'values')).toBe(t.biographerTopicValues);
+    expect(biographerTopicLabel(t, 'childhood')).not.toBe('childhood');
+    expect(biographerTopicLabel(t, 'some_future_topic')).toBe('some future topic');
   });
 
   it('biographyStatusLabel covers every backend status', () => {
@@ -180,45 +206,44 @@ describe('BiographerPanel', () => {
     vi.clearAllMocks();
   });
 
-  it('shows the active question with its topic and lets the owner answer it', async () => {
+  function renderPanel(overrides: { lang?: 'cs' | 'ru' | 'en'; onNavigateToBiography?: (() => void) | null } = {}) {
+    const onNavigateToReview = vi.fn();
+    // `??` would treat an explicitly-passed `null` the same as "not
+    // provided" and silently substitute a spy - checking key presence
+    // keeps "hides the CTA when the callback is null" actually testable.
+    const onNavigateToBiography = Object.prototype.hasOwnProperty.call(overrides, 'onNavigateToBiography')
+      ? (overrides.onNavigateToBiography as (() => void) | null)
+      : vi.fn();
+    const utils = render(
+      <BiographerPanel
+        lang={overrides.lang ?? 'cs'}
+        onNavigateToBiography={onNavigateToBiography}
+        onNavigateToReview={onNavigateToReview}
+        profileId={7}
+        t={t}
+        token="tok"
+      />
+    );
+    return { ...utils, onNavigateToReview, onNavigateToBiography };
+  }
+
+  it('shows the active question with a localized topic label and lets the owner answer it', async () => {
     vi.mocked(api.getBiographerEligibility).mockResolvedValue({ eligible: true, blocked_reason: null });
-    vi.mocked(api.getNextBiographerQuestion).mockResolvedValue({
-      id: 1,
-      profile_id: 7,
-      topic: 'childhood',
-      locale: 'cs',
-      question_text: 'Where did you grow up?',
-      status: 'pending',
-      asked_at: '2026-01-01T00:00:00Z',
-      answered_at: null,
-      resulting_candidate_id: null
-    });
+    vi.mocked(api.getNextBiographerQuestion).mockResolvedValue(baseBiographerQuestion());
     vi.mocked(api.answerBiographerQuestion).mockResolvedValue({
-      question: {
-        id: 1,
-        profile_id: 7,
-        topic: 'childhood',
-        locale: 'cs',
-        question_text: 'Where did you grow up?',
-        status: 'answered',
-        asked_at: '2026-01-01T00:00:00Z',
-        answered_at: '2026-01-01T00:01:00Z',
-        resulting_candidate_id: 5
-      },
+      question: baseBiographerQuestion({ status: 'answered', answered_at: '2026-01-01T00:01:00Z', resulting_candidate_id: 5 }),
       candidate_id: 5,
       enrichment_status: 'ready_for_owner_review',
       unresolved_clarification_count: 0
     });
-    vi.mocked(api.getBiographerEligibility).mockResolvedValue({ eligible: true, blocked_reason: null });
 
     const user = userEvent.setup();
-    const onNavigateToReview = vi.fn();
-    render(
-      <BiographerPanel lang="cs" onNavigateToReview={onNavigateToReview} profileId={7} t={t} token="tok" />
-    );
+    renderPanel();
 
     expect(await screen.findByText('Where did you grow up?')).toBeInTheDocument();
-    expect(screen.getByText(new RegExp(t.biographerTopicLabel))).toBeInTheDocument();
+    // Both the topic badge and the relevance sentence mention the topic
+    // name, so match the badge's distinct "Topic: <name>" shape specifically.
+    expect(screen.getByText(new RegExp(`${t.biographerTopicLabel}.*${t.biographerTopicChildhood}`))).toBeInTheDocument();
 
     await user.type(screen.getByLabelText(t.biographerAnswerPlaceholder), 'In a small village.');
     await user.click(screen.getByRole('button', { name: t.biographerSubmit }));
@@ -227,39 +252,87 @@ describe('BiographerPanel', () => {
     expect(await screen.findByText(t.biographerReadyForReview)).toBeInTheDocument();
   });
 
-  it('skip calls the skip endpoint, not the answer endpoint', async () => {
+  it('skip calls the skip endpoint, not the answer or postpone endpoint', async () => {
     vi.mocked(api.getBiographerEligibility).mockResolvedValue({ eligible: true, blocked_reason: null });
-    vi.mocked(api.getNextBiographerQuestion).mockResolvedValue({
-      id: 2,
-      profile_id: 7,
-      topic: 'family',
-      locale: 'ru',
-      question_text: 'Расскажи о своей семье.',
-      status: 'pending',
-      asked_at: '2026-01-01T00:00:00Z',
-      answered_at: null,
-      resulting_candidate_id: null
-    });
-    vi.mocked(api.skipBiographerQuestion).mockResolvedValue({
-      id: 2,
-      profile_id: 7,
-      topic: 'family',
-      locale: 'ru',
-      question_text: 'Расскажи о своей семье.',
-      status: 'skipped',
-      asked_at: '2026-01-01T00:00:00Z',
-      answered_at: null,
-      resulting_candidate_id: null
-    });
+    vi.mocked(api.getNextBiographerQuestion).mockResolvedValue(
+      baseBiographerQuestion({ id: 2, topic: 'family', locale: 'ru', question_text: 'Расскажи о своей семье.' })
+    );
+    vi.mocked(api.skipBiographerQuestion).mockResolvedValue(
+      baseBiographerQuestion({ id: 2, topic: 'family', locale: 'ru', question_text: 'Расскажи о своей семье.', status: 'skipped' })
+    );
 
     const user = userEvent.setup();
-    render(<BiographerPanel lang="ru" onNavigateToReview={vi.fn()} profileId={7} t={t} token="tok" />);
+    renderPanel({ lang: 'ru' });
 
     await screen.findByText('Расскажи о своей семье.');
     await user.click(screen.getByRole('button', { name: t.biographerSkip }));
 
     await waitFor(() => expect(api.skipBiographerQuestion).toHaveBeenCalledWith('tok', 7, 2));
     expect(api.answerBiographerQuestion).not.toHaveBeenCalled();
+    expect(api.postponeBiographerQuestion).not.toHaveBeenCalled();
+  });
+
+  it('postpone calls the postpone endpoint, not skip or answer', async () => {
+    vi.mocked(api.getBiographerEligibility).mockResolvedValue({ eligible: true, blocked_reason: null });
+    vi.mocked(api.getNextBiographerQuestion).mockResolvedValue(baseBiographerQuestion({ id: 3 }));
+    vi.mocked(api.postponeBiographerQuestion).mockResolvedValue(baseBiographerQuestion({ id: 3, status: 'postponed' }));
+
+    const user = userEvent.setup();
+    renderPanel();
+
+    await screen.findByText('Where did you grow up?');
+    await user.click(screen.getByRole('button', { name: t.biographerPostpone }));
+
+    await waitFor(() => expect(api.postponeBiographerQuestion).toHaveBeenCalledWith('tok', 7, 3));
+    expect(api.skipBiographerQuestion).not.toHaveBeenCalled();
+    expect(api.answerBiographerQuestion).not.toHaveBeenCalled();
+  });
+
+  it('shows a blocked message with no question when the biography is not indexed, and never a generic question', async () => {
+    vi.mocked(api.getBiographerEligibility).mockResolvedValue({ eligible: false, blocked_reason: 'biography_not_indexed' });
+
+    renderPanel();
+
+    expect(await screen.findByText(t.biographerBlockedNotIndexed)).toBeInTheDocument();
+    expect(api.getNextBiographerQuestion).not.toHaveBeenCalled();
+    expect(screen.queryByLabelText(t.biographerAnswerPlaceholder)).not.toBeInTheDocument();
+  });
+
+  it('shows an indexing-in-progress message distinct from not-indexed', async () => {
+    vi.mocked(api.getBiographerEligibility).mockResolvedValue({ eligible: false, blocked_reason: 'indexing_in_progress' });
+
+    renderPanel();
+
+    expect(await screen.findByText(t.biographerBlockedIndexing)).toBeInTheDocument();
+    expect(screen.queryByText(t.biographerBlockedNotIndexed)).not.toBeInTheDocument();
+  });
+
+  it('shows a stale-biography message with a re-index call to action for the owner', async () => {
+    vi.mocked(api.getBiographerEligibility).mockResolvedValue({ eligible: false, blocked_reason: 'biography_stale' });
+
+    const { onNavigateToBiography } = renderPanel();
+
+    expect(await screen.findByText(t.biographerBlockedStale)).toBeInTheDocument();
+    const cta = screen.getByRole('button', { name: t.biographerGoToBiography });
+    await userEvent.setup().click(cta);
+    expect(onNavigateToBiography).toHaveBeenCalledTimes(1);
+  });
+
+  it('hides the biography call to action for non-owners (onNavigateToBiography=null)', async () => {
+    vi.mocked(api.getBiographerEligibility).mockResolvedValue({ eligible: false, blocked_reason: 'biography_not_indexed' });
+
+    renderPanel({ onNavigateToBiography: null });
+
+    await screen.findByText(t.biographerBlockedNotIndexed);
+    expect(screen.queryByRole('button', { name: t.biographerGoToBiography })).not.toBeInTheDocument();
+  });
+
+  it('shows the candidate-waiting-for-review blocked reason distinctly', async () => {
+    vi.mocked(api.getBiographerEligibility).mockResolvedValue({ eligible: false, blocked_reason: 'candidate_waiting_for_review' });
+
+    renderPanel();
+
+    expect(await screen.findByText(t.biographerBlockedWaitingReview)).toBeInTheDocument();
   });
 });
 

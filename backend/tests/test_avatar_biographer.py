@@ -1,19 +1,61 @@
-"""Task 65.2 - AI Biographer question/answer/clarification loop.
+"""Task 65.2 - AI Biographer question/answer/clarification loop, extended in
+Task 65.6 to be context-aware (coverage tracking, duplicate-question
+prevention, known-answer validation, deterministic fallback).
 
 Reuses the fake-safe writer/encoder pattern to get a profile's biography
 into `indexed` state (a precondition for Biographer eligibility) without any
 real Qdrant/model calls, then exercises the authenticated HTTP surface.
+
+Every test in this module stubs `avatar_biographer.service.build_topic_context_package`
+(see `_stub_context_retrieval` below) instead of relying on the real
+`rag_retrieval`/Qdrant path: the `FakeWriter`/`FakeEncoder` bypass used to
+put a biography into `indexed` state never actually writes to the real
+Qdrant instance the RAG retrieval path would query, and that Qdrant
+instance is a long-lived shared server (not reset per test run) - hitting
+it for real here would be both slow (16 network round trips per
+`next-question` call) and non-hermetic (behavior would depend on whatever
+unrelated data the shared server happens to hold). Tests that specifically
+exercise context-aware behavior override the stub per-topic via
+`_patch_context_by_topic`.
 """
 
 from __future__ import annotations
 
-from app.db.models import BiographerQuestion, ConversationMemoryCandidate
+import pytest
+from sqlalchemy.exc import IntegrityError
+
+from app.core.config import settings
+from app.db.models import AiAction, BiographerQuestion, ConversationMemoryCandidate
 from app.main import app
+from app.modules.avatar_biographer import coverage, duplicate_prevention, repository
+from app.modules.avatar_biographer import service as biographer_service
+from app.modules.avatar_biographer import topics as topic_catalog
+from app.modules.avatar_biographer.context_package import TopicContextPackage, empty_context_package
+from app.modules.avatar_biographer.provider import (
+    BiographerProviderRequestError,
+    BiographerProviderResponse,
+)
+from app.modules.avatar_biographer.schemas import ProviderQuestionResult
 from app.modules.biography_ingestion.service import index_biography
 from app.modules.embeddings.providers.base import EmbeddingVector
+from app.modules.provider_usage.enums import AiFeature
 
 
 PASSWORD = "StrongPass123"
+
+
+@pytest.fixture(autouse=True)
+def _force_mock_ai_brain_provider(monkeypatch):
+    """This dev container's real environment sets `AI_BRAIN_PROVIDER=openai_compatible`
+    with a real DeepSeek key (needed for live smoke testing) - `app.core.config.settings`
+    is a process-level singleton that picks that up for every pytest run too,
+    not just the running uvicorn server (the same mechanism already documented
+    as a pre-existing `test_chat.py` flake). Without forcing this back to
+    `mock` here, every un-monkeypatched `build_biographer_question_provider()`
+    call in this file would silently place a real, billed DeepSeek call -
+    violating the zero-paid-call requirement for automated tests."""
+
+    monkeypatch.setattr(settings, "ai_brain_provider", "mock")
 
 
 class FakeEncoder:
@@ -80,6 +122,98 @@ def _create_memorial_with_indexed_biography(client, email: str, biography: str =
     return token, profile_id
 
 
+def _no_evidence_context(topic) -> TopicContextPackage:
+    """Retrieval genuinely ran and found nothing yet for this topic -
+    distinct from `empty_context_package` (retrieval unavailable/degraded,
+    Part 11 of the task spec), which must skip generation entirely instead
+    of still attempting one. This is the default stub used by every test
+    below unless overridden, matching the previous (Task 65.2) behavior of
+    always attempting a question even with no verified evidence yet."""
+
+    return TopicContextPackage(
+        topic_key=topic.key,
+        retrieval_used=True,
+        available_verified_sources=0,
+        selected_source_count=0,
+        selected_chunk_count=0,
+        context_character_count=0,
+        estimated_context_tokens=0,
+        retrieval_duration_ms=1,
+        chunk_excerpts=[],
+    )
+
+
+def _empty_context(db, *, current_user, profile_id, topic, locale):
+    return _no_evidence_context(topic)
+
+
+@pytest.fixture(autouse=True)
+def _stub_context_retrieval(monkeypatch):
+    monkeypatch.setattr(biographer_service, "build_topic_context_package", _empty_context)
+
+
+def _patch_context_by_topic(monkeypatch, overrides: dict[str, TopicContextPackage]) -> None:
+    def _fake(db, *, current_user, profile_id, topic, locale):
+        return overrides.get(topic.key, empty_context_package(topic))
+
+    monkeypatch.setattr(biographer_service, "build_topic_context_package", _fake)
+
+
+def _rich_context(topic_key: str, excerpts: list[str]) -> TopicContextPackage:
+    return TopicContextPackage(
+        topic_key=topic_key,
+        retrieval_used=True,
+        available_verified_sources=1,
+        selected_source_count=1,
+        selected_chunk_count=len(excerpts),
+        context_character_count=sum(len(e) for e in excerpts),
+        estimated_context_tokens=sum(len(e) for e in excerpts) // 4,
+        retrieval_duration_ms=5,
+        chunk_excerpts=excerpts,
+    )
+
+
+def _all_topics_basic_except(monkeypatch, topic_key: str, excerpts: list[str]) -> None:
+    """Gives every catalog topic exactly one generic `basic`-coverage chunk
+    (so none of them out-rank each other as `not_started`), except
+    `topic_key`, which gets the given excerpts (kept below the `rich`
+    threshold so it stays selectable). Within a tied coverage band,
+    selection falls back to fixed catalog order, so `topic_key` - being
+    listed first for `"childhood"` - wins deterministically. This isolates
+    "does generation/validation behave correctly for the topic under test"
+    from "which topic does coverage pick", which is covered separately."""
+
+    assert len(excerpts) < coverage.RICH_EVIDENCE_CHUNK_THRESHOLD
+    overrides = {
+        topic.key: _rich_context(topic.key, ["Obecný neutrální kontext."])
+        for topic in topic_catalog.BIOGRAPHER_TOPICS
+        if topic.key != topic_key
+    }
+    overrides[topic_key] = _rich_context(topic_key, excerpts)
+    _patch_context_by_topic(monkeypatch, overrides)
+
+
+def _patch_provider_responses(monkeypatch, responses: list[ProviderQuestionResult | Exception]) -> None:
+    """Each call to the (mock) provider's `generate_question` pops the next
+    scripted response/exception, in order."""
+
+    remaining = list(responses)
+
+    class _ScriptedProvider:
+        provider_name = "mock"
+        model = "mock"
+
+        def generate_question(self, *, system_prompt: str, user_prompt: str) -> BiographerProviderResponse:
+            item = remaining.pop(0)
+            if isinstance(item, Exception):
+                raise item
+            return BiographerProviderResponse(result=item, provider_name="mock", model="mock", latency_ms=0)
+
+    import app.modules.avatar_biographer.question_generation as question_generation_module
+
+    monkeypatch.setattr(question_generation_module, "build_biographer_question_provider", lambda: _ScriptedProvider())
+
+
 def test_eligibility_blocked_when_biography_missing(client):
     token = _register_and_login(client, "biographer-owner1@example.com")
     profile_id = _create_memorial(client, token)
@@ -105,6 +239,48 @@ def test_eligibility_blocked_when_biography_saved_but_not_indexed(client):
     body = response.json()
     assert body["eligible"] is False
     assert body["blocked_reason"] == "biography_not_indexed"
+
+
+def test_eligibility_blocked_while_indexing_in_progress(client):
+    token = _register_and_login(client, "biographer-owner-ingesting@example.com")
+    profile_id = _create_memorial(client, token)
+    client.patch(
+        f"/api/memorials/{profile_id}/biography",
+        headers=_auth_headers(token),
+        json={"biography": "Text ke zpracovani."},
+    )
+    start = client.post(f"/api/memorials/{profile_id}/biography/ingest", headers=_auth_headers(token))
+    assert start.status_code == 202
+
+    response = client.get(f"/api/memorials/{profile_id}/biographer/eligibility", headers=_auth_headers(token))
+    assert response.status_code == 200
+    body = response.json()
+    assert body["eligible"] is False
+    assert body["blocked_reason"] == "indexing_in_progress"
+
+
+def test_eligibility_blocked_when_biography_stale(client):
+    token, profile_id = _create_memorial_with_indexed_biography(client, "biographer-owner-stale@example.com")
+    edit = client.patch(
+        f"/api/memorials/{profile_id}/biography",
+        headers=_auth_headers(token),
+        json={"biography": "Upraveny text po indexaci."},
+    )
+    assert edit.status_code == 200
+
+    response = client.get(f"/api/memorials/{profile_id}/biographer/eligibility", headers=_auth_headers(token))
+    assert response.status_code == 200
+    body = response.json()
+    assert body["eligible"] is False
+    assert body["blocked_reason"] == "biography_stale"
+
+    blocked = client.get(
+        f"/api/memorials/{profile_id}/biographer/next-question",
+        params={"locale": "cs"},
+        headers=_auth_headers(token),
+    )
+    assert blocked.status_code == 400
+    assert blocked.json()["detail"] == "biography_stale"
 
 
 def test_eligible_once_biography_indexed(client):
@@ -163,7 +339,7 @@ def test_answering_childhood_question_creates_candidate_with_required_clarificat
         db.close()
 
 
-def test_active_candidate_with_unresolved_clarification_blocks_new_topic(client):
+def test_active_clarification_blocks_new_topic(client):
     token, profile_id = _create_memorial_with_indexed_biography(client, "biographer-owner6@example.com")
     childhood_question = client.get(
         f"/api/memorials/{profile_id}/biographer/next-question",
@@ -181,7 +357,7 @@ def test_active_candidate_with_unresolved_clarification_blocks_new_topic(client)
     # until they are answered, never silently skip ahead.
     eligibility = client.get(f"/api/memorials/{profile_id}/biographer/eligibility", headers=_auth_headers(token)).json()
     assert eligibility["eligible"] is False
-    assert eligibility["blocked_reason"] == "active_candidate_requires_answer"
+    assert eligibility["blocked_reason"] == "active_clarification_exists"
 
     blocked = client.get(
         f"/api/memorials/{profile_id}/biographer/next-question",
@@ -205,9 +381,6 @@ def test_answering_general_topic_question_has_no_required_clarification(client):
     ).json()
     candidate_id = answer["candidate_id"]
 
-    # Resolve both required "childhood" clarifications via the shared
-    # authenticated candidate/clarification endpoints (Task 65.2's owner-
-    # review wrapper), so the candidate finalizes and a new topic unlocks.
     for answer_text in ["V malém bytě ve městě.", "Bylo mi asi šest let."]:
         resolve = client.post(
             f"/api/memorials/{profile_id}/candidates/{candidate_id}/clarifications/answer",
@@ -268,6 +441,31 @@ def test_skip_question_never_creates_a_candidate(client):
         db.close()
 
 
+def test_postpone_question_marks_status_and_never_creates_a_candidate(client):
+    token, profile_id = _create_memorial_with_indexed_biography(client, "biographer-owner-postpone@example.com")
+    question = client.get(
+        f"/api/memorials/{profile_id}/biographer/next-question",
+        params={"locale": "cs"},
+        headers=_auth_headers(token),
+    ).json()
+
+    response = client.post(
+        f"/api/memorials/{profile_id}/biographer/questions/{question['id']}/postpone",
+        headers=_auth_headers(token),
+    )
+    assert response.status_code == 200
+    assert response.json()["status"] == "postponed"
+    assert response.json()["resulting_candidate_id"] is None
+
+    # A second postpone attempt on the same (no longer pending) question is
+    # a conflict, not a silent no-op.
+    conflict = client.post(
+        f"/api/memorials/{profile_id}/biographer/questions/{question['id']}/postpone",
+        headers=_auth_headers(token),
+    )
+    assert conflict.status_code == 409
+
+
 def test_topics_are_never_repeated_across_multiple_next_question_calls(client):
     token, profile_id = _create_memorial_with_indexed_biography(client, "biographer-owner8@example.com")
     seen_topics: set[str] = set()
@@ -326,3 +524,354 @@ def test_viewer_cannot_answer_biographer_questions(client):
         headers=_auth_headers(viewer_token),
     )
     assert response.status_code == 403
+
+
+# --- Task 65.6: coverage, duplicate prevention, generation, provenance ----
+
+
+def test_coverage_topic_with_rich_evidence_is_not_selected_before_untouched_topics(client, monkeypatch):
+    token, profile_id = _create_memorial_with_indexed_biography(client, "biographer-coverage1@example.com")
+    _patch_context_by_topic(
+        monkeypatch,
+        {
+            "childhood": _rich_context(
+                "childhood",
+                [
+                    "Dětství jsem prožil poblíž Uherského Hradiště.",
+                    "Jezdil jsem na kole a hrál fotbal.",
+                    "Chodil jsem do lesa s kamarády.",
+                    "Rád jsem rozebíral staré přístroje.",
+                ],
+            )
+        },
+    )
+
+    response = client.get(
+        f"/api/memorials/{profile_id}/biographer/next-question",
+        params={"locale": "cs"},
+        headers=_auth_headers(token),
+    )
+    assert response.status_code == 200
+    # "childhood" already has rich verified evidence (>= RICH_EVIDENCE_CHUNK_THRESHOLD
+    # chunks) while every other topic is untouched (`not_started`) - coverage
+    # priority must offer a `not_started` topic first, proving topic
+    # selection is not unconditionally childhood-first.
+    assert response.json()["topic"] != "childhood"
+
+
+def test_known_broad_question_rejected_when_evidence_already_covers_it():
+    topic = topic_catalog.get_topic("childhood")
+    broad_question_cs = topic.questions["cs"]
+    result = duplicate_prevention.find_known_answer_violation(
+        broad_question_cs,
+        topic=topic,
+        verified_chunk_count=4,
+        known_information_used_reported_by_provider=False,
+    )
+    assert result.accepted is False
+    assert result.reason == duplicate_prevention.RejectionReason.KNOWN_BROAD_FACT
+
+
+def test_specific_followup_question_accepted_when_it_uses_known_context():
+    topic = topic_catalog.get_topic("childhood")
+    deep_question = "Který konkrétní přístroj jste jako dítě rozebral a co jste se při tom naučil?"
+    result = duplicate_prevention.find_known_answer_violation(
+        deep_question,
+        topic=topic,
+        verified_chunk_count=4,
+        known_information_used_reported_by_provider=True,
+    )
+    assert result.accepted is True
+
+
+def test_broad_question_still_allowed_when_nothing_is_known_yet():
+    topic = topic_catalog.get_topic("childhood")
+    result = duplicate_prevention.find_known_answer_violation(
+        topic.questions["cs"], topic=topic, verified_chunk_count=0, known_information_used_reported_by_provider=False
+    )
+    assert result.accepted is True
+
+
+def test_duplicate_question_text_rejected_regardless_of_case_and_punctuation():
+    question = BiographerQuestion(
+        id=1, profile_id=1, topic="family", locale="cs", status="answered",
+        question_text="Kdo byl pro vás nejdůležitější?",
+    )
+    result = duplicate_prevention.find_duplicate_against_history(
+        "kdo byl pro vás nejdůležitější???",
+        topic_key="family",
+        candidate_question_intent=None,
+        previous_questions=[question],
+    )
+    assert result.accepted is False
+    assert result.reason == duplicate_prevention.RejectionReason.EXACT_DUPLICATE
+
+
+def test_generation_regenerates_once_then_falls_back_to_deterministic_question(client, monkeypatch):
+    token, profile_id = _create_memorial_with_indexed_biography(client, "biographer-fallback1@example.com")
+    _all_topics_basic_except(
+        monkeypatch,
+        "childhood",
+        ["Dětství jsem prožil poblíž Uherského Hradiště.", "Jezdil jsem na kole.", "Hrál jsem fotbal."],
+    )
+
+    banned_question = ProviderQuestionResult(
+        question=topic_catalog.get_topic("childhood").questions["cs"],
+        known_information_used=False,
+        question_intent="general_fact",
+        confidence="low",
+    )
+    _patch_provider_responses(monkeypatch, [banned_question, banned_question])
+
+    response = client.get(
+        f"/api/memorials/{profile_id}/biographer/next-question",
+        params={"locale": "cs"},
+        headers=_auth_headers(token),
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["topic"] == "childhood"
+    assert body["generation_mode"] == "deterministic_fallback"
+    assert body["fallback_used"] is True
+
+    db = _db()
+    try:
+        question = db.get(BiographerQuestion, body["id"])
+        assert question.validation_result == "fallback_used"
+    finally:
+        db.close()
+
+
+def test_generation_accepts_second_attempt_after_first_rejection(client, monkeypatch):
+    token, profile_id = _create_memorial_with_indexed_biography(client, "biographer-regenerate1@example.com")
+    _all_topics_basic_except(
+        monkeypatch,
+        "childhood",
+        ["Dětství jsem prožil poblíž Uherského Hradiště.", "Jezdil jsem na kole.", "Hrál jsem fotbal."],
+    )
+
+    banned_question = ProviderQuestionResult(
+        question=topic_catalog.get_topic("childhood").questions["cs"],
+        known_information_used=False,
+        question_intent="general_fact",
+        confidence="low",
+    )
+    good_question = ProviderQuestionResult(
+        question="Který konkrétní přístroj jste jako dítě rozebral a co jste se při tom naučil?",
+        known_information_used=True,
+        question_intent="specific_memory",
+        confidence="high",
+    )
+    _patch_provider_responses(monkeypatch, [banned_question, good_question])
+
+    response = client.get(
+        f"/api/memorials/{profile_id}/biographer/next-question",
+        params={"locale": "cs"},
+        headers=_auth_headers(token),
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["generation_mode"] == "llm_generated"
+    assert body["question_text"] == good_question.question
+
+    db = _db()
+    try:
+        question = db.get(BiographerQuestion, body["id"])
+        assert question.validation_result == "regenerated"
+        assert question.question_intent == "specific_memory"
+    finally:
+        db.close()
+
+
+def test_provider_failure_falls_back_to_deterministic_question(client, monkeypatch):
+    token, profile_id = _create_memorial_with_indexed_biography(client, "biographer-providerdown@example.com")
+
+    import app.modules.avatar_biographer.question_generation as question_generation_module
+
+    class _FailingProvider:
+        provider_name = "openai_compatible"
+        model = "deepseek-chat"
+
+        def generate_question(self, *, system_prompt: str, user_prompt: str):
+            raise BiographerProviderRequestError("simulated network failure")
+
+    monkeypatch.setattr(question_generation_module, "build_biographer_question_provider", lambda: _FailingProvider())
+    _all_topics_basic_except(monkeypatch, "childhood", ["Dětství jsem prožil na vesnici."])
+
+    response = client.get(
+        f"/api/memorials/{profile_id}/biographer/next-question",
+        params={"locale": "cs"},
+        headers=_auth_headers(token),
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["generation_mode"] == "deterministic_fallback"
+    assert body["fallback_used"] is True
+
+
+def test_successful_llm_generated_question_persists_ai_action(client):
+    # Default autouse stub returns zero evidence for every topic, so the
+    # (mock) provider's single canned response is accepted outright for the
+    # very first-ever question (nothing to duplicate against yet).
+    token, profile_id = _create_memorial_with_indexed_biography(client, "biographer-aiaction1@example.com")
+
+    response = client.get(
+        f"/api/memorials/{profile_id}/biographer/next-question",
+        params={"locale": "cs"},
+        headers=_auth_headers(token),
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["generation_mode"] == "llm_generated"
+
+    db = _db()
+    try:
+        question = db.get(BiographerQuestion, body["id"])
+        assert question.ai_action_id is not None
+        action = db.get(AiAction, question.ai_action_id)
+        assert action.feature == AiFeature.AVATAR_BIOGRAPHER_QUESTION.value
+        assert action.status == "succeeded"
+        assert action.provider_call_count == 1
+    finally:
+        db.close()
+
+
+def test_retrieval_unavailable_falls_back_without_any_provider_call(client, monkeypatch):
+    """Part 11/65 of the task spec: a degraded retrieval path (Qdrant down,
+    embedding model unavailable, etc.) must fall back deterministically
+    without ever attempting a paid provider call - proven here by
+    monkeypatching the (mock) provider to explode if it is ever
+    constructed at all."""
+
+    token, profile_id = _create_memorial_with_indexed_biography(client, "biographer-retrievaldown@example.com")
+
+    def _unavailable(db, *, current_user, profile_id, topic, locale):
+        return empty_context_package(topic)
+
+    monkeypatch.setattr(biographer_service, "build_topic_context_package", _unavailable)
+
+    import app.modules.avatar_biographer.question_generation as question_generation_module
+
+    def _explode():
+        raise AssertionError("provider must never be constructed when retrieval is unavailable")
+
+    monkeypatch.setattr(question_generation_module, "build_biographer_question_provider", _explode)
+
+    response = client.get(
+        f"/api/memorials/{profile_id}/biographer/next-question",
+        params={"locale": "cs"},
+        headers=_auth_headers(token),
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["generation_mode"] == "deterministic_fallback"
+    assert body["question_text"] == topic_catalog.get_topic("childhood").questions["cs"]
+
+    db = _db()
+    try:
+        action_count = db.query(AiAction).filter(AiAction.feature == AiFeature.AVATAR_BIOGRAPHER_QUESTION.value).count()
+        assert action_count == 0
+    finally:
+        db.close()
+
+
+def test_partial_unique_index_prevents_two_pending_questions_for_same_profile(client):
+    token, profile_id = _create_memorial_with_indexed_biography(client, "biographer-race1@example.com")
+    db = _db()
+    try:
+        repository.create_question(db, profile_id=profile_id, topic="childhood", locale="cs", question_text="Q1")
+        db.commit()
+        with pytest.raises(IntegrityError):
+            repository.create_question(db, profile_id=profile_id, topic="family", locale="cs", question_text="Q2")
+    finally:
+        db.rollback()
+        db.close()
+
+
+def test_concurrent_next_question_requests_reuse_the_winning_pending_question(client, monkeypatch):
+    token, profile_id = _create_memorial_with_indexed_biography(client, "biographer-race2@example.com")
+
+    real_get_pending_question = repository.get_pending_question
+    call_count = {"n": 0}
+
+    def _racy_get_pending_question(db, *, profile_id):
+        call_count["n"] += 1
+        if call_count["n"] == 1:
+            # Simulate another request winning the race right after this
+            # request already decided there was no pending question.
+            winner_db = _db()
+            try:
+                repository.create_question(
+                    winner_db, profile_id=profile_id, topic="childhood", locale="cs", question_text="Winner question"
+                )
+                winner_db.commit()
+            finally:
+                winner_db.close()
+            return None
+        return real_get_pending_question(db, profile_id=profile_id)
+
+    monkeypatch.setattr(repository, "get_pending_question", _racy_get_pending_question)
+
+    response = client.get(
+        f"/api/memorials/{profile_id}/biographer/next-question",
+        params={"locale": "cs"},
+        headers=_auth_headers(token),
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["question_text"] == "Winner question"
+
+    db = _db()
+    try:
+        pending_count = (
+            db.query(BiographerQuestion)
+            .filter(BiographerQuestion.profile_id == profile_id, BiographerQuestion.status == "pending")
+            .count()
+        )
+        assert pending_count == 1
+    finally:
+        db.close()
+
+
+def test_postpone_cooldown_pure_unit():
+    childhood = topic_catalog.get_topic("childhood")
+    postponed_question = BiographerQuestion(
+        id=1, profile_id=1, topic="childhood", locale="cs", status="postponed",
+    )
+    coverage_row = coverage.evaluate_topic_coverage(
+        topic=childhood,
+        topic_questions=[postponed_question],
+        verified_chunk_count=0,
+        has_unresolved_candidate_for_topic=False,
+        sequence_by_question_id={1: 0},
+    )
+    assert coverage_row.state == coverage.TopicCoverageState.POSTPONED
+
+    not_yet_selectable = coverage.select_next_topic(
+        [
+            coverage_row,
+            *(
+                coverage.evaluate_topic_coverage(
+                    topic=other,
+                    topic_questions=[],
+                    verified_chunk_count=0,
+                    has_unresolved_candidate_for_topic=False,
+                    sequence_by_question_id={},
+                )
+                for other in topic_catalog.BIOGRAPHER_TOPICS
+                if other.key != "childhood"
+            ),
+        ],
+        total_questions_asked=1,
+    )
+    # Every other topic is `not_started`, strictly higher priority than a
+    # `postponed` topic regardless of cool-down - proves postponed topics
+    # never jump the queue ahead of untouched ones.
+    assert not_yet_selectable is not None
+    assert not_yet_selectable.state == coverage.TopicCoverageState.NOT_STARTED
+
+
+def test_normalize_question_text_ignores_whitespace_and_punctuation():
+    a = duplicate_prevention.normalize_question_text("Kde jste  prožil dětství?!")
+    b = duplicate_prevention.normalize_question_text("kde jste prožil dětství")
+    assert a == b

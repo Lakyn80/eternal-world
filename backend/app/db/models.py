@@ -1367,11 +1367,26 @@ class BiographerQuestion(TimestampMixin, Base):
     __tablename__ = "biographer_questions"
     __table_args__ = (
         CheckConstraint(
-            "status IN ('pending', 'answered', 'skipped')",
+            "status IN ('pending', 'answered', 'skipped', 'postponed')",
             name="biographer_questions_status",
         ),
-        UniqueConstraint("profile_id", "topic", name="uq_biographer_questions_profile_topic"),
         Index("ix_biographer_questions_profile_status", "profile_id", "status"),
+        Index("ix_biographer_questions_profile_topic", "profile_id", "topic"),
+        Index(
+            "uq_biographer_questions_profile_pending",
+            "profile_id",
+            unique=True,
+            # Both dialect kwargs are needed: Postgres backs real
+            # deployments (via the Alembic migration), SQLite backs the
+            # automated test suite (`Base.metadata.create_all`, which
+            # builds tables straight from these models, bypassing Alembic
+            # entirely) - without `sqlite_where` this would silently become
+            # a full (non-partial) unique index on `profile_id` under
+            # SQLite, incorrectly forbidding more than one question ever
+            # per profile.
+            postgresql_where=text("status = 'pending'"),
+            sqlite_where=text("status = 'pending'"),
+        ),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)
@@ -1389,11 +1404,30 @@ class BiographerQuestion(TimestampMixin, Base):
     )
     answered_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     skipped_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    postponed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     answered_by_user_id: Mapped[int | None] = mapped_column(
         ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
     resulting_candidate_id: Mapped[int | None] = mapped_column(
         ForeignKey("conversation_memory_candidates.id", ondelete="SET NULL"), nullable=True
+    )
+    #: Task 65.6 provenance - never stores prompt/answer/source text, only
+    #: safe bounded classification and counts (see `avatar_biographer`).
+    generation_mode: Mapped[str] = mapped_column(
+        String(32), nullable=False, default="deterministic_fallback",
+        server_default=text("'deterministic_fallback'"),
+    )
+    provider: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    model: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    ai_action_id: Mapped[int | None] = mapped_column(
+        ForeignKey("ai_actions.id", ondelete="SET NULL"), nullable=True
+    )
+    context_source_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    context_chunk_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    question_intent: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    validation_result: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    fallback_used: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default=text("false")
     )
 
     memory_profile: Mapped[MemoryProfile] = relationship(

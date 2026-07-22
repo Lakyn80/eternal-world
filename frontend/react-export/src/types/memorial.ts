@@ -122,15 +122,20 @@ export type BiographyIngestionStartResponse = {
 export type BiographerBlockedReason =
   | 'biography_missing'
   | 'biography_not_indexed'
+  | 'biography_stale'
+  | 'indexing_in_progress'
   | 'permission_denied'
-  | 'active_candidate_requires_answer';
+  | 'active_clarification_exists'
+  | 'candidate_waiting_for_review';
 
 export type BiographerEligibilityRead = {
   eligible: boolean;
   blocked_reason: BiographerBlockedReason | null;
 };
 
-export type BiographerQuestionStatus = 'pending' | 'answered' | 'skipped';
+export type BiographerQuestionStatus = 'pending' | 'answered' | 'skipped' | 'postponed';
+
+export type BiographerGenerationMode = 'llm_generated' | 'deterministic_fallback';
 
 export type BiographerQuestionRead = {
   id: number;
@@ -142,6 +147,8 @@ export type BiographerQuestionRead = {
   asked_at: string;
   answered_at: string | null;
   resulting_candidate_id: number | null;
+  generation_mode: BiographerGenerationMode;
+  fallback_used: boolean;
 };
 
 export type BiographerAnswerResponse = {
