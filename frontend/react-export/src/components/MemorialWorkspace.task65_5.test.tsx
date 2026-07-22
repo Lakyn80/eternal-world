@@ -320,6 +320,49 @@ function baseBiographyStatus(overrides: Partial<BiographyStatusRead> = {}): Biog
   };
 }
 
+describe('BiographyPanel - save() does not contradict an already-indexed state', () => {
+  it('re-saving unchanged, already-indexed text never shows "saved, not indexed yet"', async () => {
+    // Reported live by the real account owner: saving the exact same
+    // already-indexed biography text is a no-op on the backend
+    // (`update_biography` short-circuits when the normalized text matches
+    // what is already stored), so `status` stays 'indexed' - but the
+    // frontend used to unconditionally show "Biography saved. It has not
+    // been indexed yet." after every save click, directly contradicting
+    // the still-correct "Indexed / up to date" badges shown above it.
+    const indexedStatus = baseBiographyStatus({
+      status: 'indexed',
+      indexed_at: '2026-07-22T07:39:41Z'
+    });
+    vi.mocked(api.getBiographyStatus).mockResolvedValue(indexedStatus);
+    vi.mocked(api.updateBiography).mockResolvedValue(indexedStatus);
+    const user = userEvent.setup();
+
+    render(<BiographyPanel initialBiography="Already indexed text." lang="en" profileId={7} t={t} token="tok" />);
+    await screen.findByText(t.biographyUpToDate);
+
+    await user.click(screen.getByRole('button', { name: t.biographySave }));
+
+    await waitFor(() => expect(api.updateBiography).toHaveBeenCalledTimes(1));
+    expect(screen.queryByText(t.biographySavedNotIndexed)).not.toBeInTheDocument();
+    expect(screen.getByText(t.biographyUpToDate)).toBeInTheDocument();
+  });
+
+  it('editing an already-indexed biography (now stale) still shows the not-indexed notice', async () => {
+    vi.mocked(api.getBiographyStatus).mockResolvedValue(
+      baseBiographyStatus({ status: 'indexed', indexed_at: '2026-07-22T07:39:41Z' })
+    );
+    vi.mocked(api.updateBiography).mockResolvedValue(baseBiographyStatus({ status: 'stale' }));
+    const user = userEvent.setup();
+
+    render(<BiographyPanel initialBiography="Original text." lang="en" profileId={7} t={t} token="tok" />);
+    const textarea = await screen.findByLabelText(t.biographyTextLabel);
+    await user.type(textarea, ' Edited.');
+    await user.click(screen.getByRole('button', { name: t.biographySave }));
+
+    expect(await screen.findByText(t.biographySavedNotIndexed)).toBeInTheDocument();
+  });
+});
+
 describe('BiographyPanel - clear biography (separate from deleting the memorial)', () => {
   it('shows the indexing explanation once the biography can be indexed', async () => {
     vi.mocked(api.getBiographyStatus).mockResolvedValue(baseBiographyStatus());

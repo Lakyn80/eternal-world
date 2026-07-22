@@ -2012,7 +2012,15 @@ export function BiographyPanel({
     try {
       const next = await updateBiography(token, profileId, text);
       setStatus(next);
-      setNotice(t.biographySavedNotIndexed);
+      // `update_biography` is idempotent: saving text identical to what is
+      // already stored is a no-op and leaves status exactly as it was. If
+      // the biography was already `indexed`, showing "saved, not indexed
+      // yet" here would contradict the still-correct "Indexed / up to
+      // date" state shown above - only claim "not indexed" when saving
+      // actually left it in a not-yet-indexed state.
+      if (next.status !== 'indexed') {
+        setNotice(t.biographySavedNotIndexed);
+      }
     } catch (saveError) {
       setError(safeError(saveError));
     } finally {
