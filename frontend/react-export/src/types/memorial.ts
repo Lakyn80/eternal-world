@@ -83,11 +83,21 @@ export type ChatMessageRead = {
 export type ChatSendResponse = {
   message_id: number;
   profile_id: number;
+  conversation_id: string;
   user_message: string;
   ai_response_text: string;
   audio_url: string | null;
   video_url: string | null;
   created_at: string;
+};
+
+export type ChatRestoredFrom = 'redis' | 'database' | 'empty';
+
+export type ChatActiveRead = {
+  profile_id: number;
+  conversation_id: string;
+  messages: ChatMessageRead[];
+  restored_from: ChatRestoredFrom;
 };
 
 export type ContributionIndexingState = 'not_applicable' | 'pending' | 'indexed' | 'failed' | 'retired';
@@ -156,6 +166,30 @@ export type BiographerAnswerResponse = {
   candidate_id: number | null;
   enrichment_status: string | null;
   unresolved_clarification_count: number | null;
+};
+
+export type BiographerResumeNextAction =
+  | 'biography_not_indexed'
+  | 'biography_indexing'
+  | 'question_ready'
+  | 'candidate_ready_for_review'
+  | 'candidate_needs_owner_action'
+  | 'candidate_pending_index'
+  | 'candidate_indexed'
+  | 'blocked';
+
+export type BiographerResumeRead = {
+  profile_id: number;
+  biography_status: string;
+  eligible: boolean;
+  blocked_reason: BiographerBlockedReason | null;
+  active_question: BiographerQuestionRead | null;
+  candidate_id: number | null;
+  review_status: string | null;
+  enrichment_status: string | null;
+  unresolved_clarification_count: number | null;
+  promotion_status: string | null;
+  next_action: BiographerResumeNextAction;
 };
 
 export type ClarificationStatus = 'pending' | 'answered' | 'skipped';

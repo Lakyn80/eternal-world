@@ -3,10 +3,12 @@ import type {
   BiographerAnswerResponse,
   BiographerEligibilityRead,
   BiographerQuestionRead,
+  BiographerResumeRead,
   BillingLimitsRead,
   BiographyIngestionStartResponse,
   BiographyStatusRead,
   CandidateHistoryRead,
+  ChatActiveRead,
   ChatMessageRead,
   ChatSendResponse,
   ContributionRead,
@@ -94,6 +96,17 @@ async function parseError(response: Response): Promise<string> {
   return 'The request could not be completed.';
 }
 
+// Task 65.7: these three paths are called specifically to CHECK/ESTABLISH
+// authentication state, not to perform an already-authenticated action - a
+// 401 from any of them is an expected, silent outcome (e.g. "no session
+// cookie yet on first visit"), never a sign of a session that WAS active
+// suddenly expiring. Every other call goes through the shared
+// onUnauthorized wiring below regardless of whether it happens to carry a
+// bearer token or relies purely on the browser-session cookie (Part B) -
+// unlike the previous accessToken-truthiness check, this also correctly
+// signs out a cookie-only (no in-memory token) session on a genuine 401.
+const ANONYMOUS_TOLERANT_PATHS = new Set(['/api/auth/login', '/api/auth/register', '/api/auth/session']);
+
 async function requestJson<T>(path: string, init: RequestInit | undefined = {}, accessToken?: string): Promise<T> {
   const requestInit = init ?? {};
   const headers = new Headers(requestInit.headers);
@@ -107,16 +120,22 @@ async function requestJson<T>(path: string, init: RequestInit | undefined = {}, 
 
   let response: Response;
   try {
-    response = await fetch(buildApiUrl(path), { ...requestInit, headers });
+    response = await fetch(buildApiUrl(path), {
+      ...requestInit,
+      headers,
+      // Task 65.7: the browser-session cookie is the fallback (and, after
+      // a fresh page load, primary) auth channel - it must always ride
+      // along, including cross-origin (the Vite dev server and the API
+      // are different origins/ports).
+      credentials: 'include'
+    });
   } catch {
     throw new MemorialApiError(0, 'The server could not be reached.');
   }
 
   if (!response.ok) {
     const detail = await parseError(response);
-    if (response.status === 401 && accessToken) {
-      // Only an authenticated request's own expiry triggers sign-out - an
-      // anonymous login/register attempt returning 401 must not.
+    if (response.status === 401 && !ANONYMOUS_TOLERANT_PATHS.has(path)) {
       onUnauthorized?.();
     }
     throw new MemorialApiError(response.status, detail);
@@ -141,6 +160,26 @@ export async function register(email: string, password: string, fullName: string
     method: 'POST',
     body: JSON.stringify({ email, password, full_name: fullName })
   });
+}
+
+export type SessionUser = {
+  id: number;
+  email: string;
+};
+
+/** Task 65.7 (Part B.13): the startup rehydration probe - resolves the
+ * browser-session cookie (set by `login`) into the current user, with no
+ * bearer token at all. Throws `MemorialApiError(401, ...)` for "no/expired
+ * session", which the caller treats as "show the login form", never as a
+ * sign-out-with-message event (see `ANONYMOUS_TOLERANT_PATHS` above). */
+export async function getSession(): Promise<SessionUser> {
+  return requestJson<SessionUser>('/api/auth/session');
+}
+
+/** Revokes the browser-session cookie server-side. Safe to call even if no
+ * session exists (the backend treats it as a no-op, never an error). */
+export async function logoutSession(): Promise<void> {
+  await requestJson<void>('/api/auth/logout', { method: 'POST' });
 }
 
 export async function listMemorials(accessToken: string): Promise<MemorialRead[]> {
@@ -258,6 +297,10 @@ export async function startBiographyIngestion(
     { method: 'POST' },
     accessToken
   );
+}
+
+export async function getBiographerResume(accessToken: string, profileId: number): Promise<BiographerResumeRead> {
+  return requestJson<BiographerResumeRead>(`/api/memorials/${profileId}/biographer/resume`, undefined, accessToken);
 }
 
 export async function getBiographerEligibility(accessToken: string, profileId: number): Promise<BiographerEligibilityRead> {
@@ -395,6 +438,18 @@ export async function sendChatMessage(accessToken: string, profileId: number, me
     { method: 'POST', body: JSON.stringify({ message }) },
     accessToken
   );
+}
+
+/** Task 65.7 (Part E.35) - restores the active conversation transcript
+ * (Redis fast-path, Postgres fallback/rebuild on a cache miss). */
+export async function getActiveChat(accessToken: string, profileId: number): Promise<ChatActiveRead> {
+  return requestJson<ChatActiveRead>(`/api/chat/${profileId}/active`, undefined, accessToken);
+}
+
+/** "Obnovit chat" - starts a brand-new empty active conversation. Prior
+ * messages are preserved (never deleted), just no longer active. */
+export async function resetChat(accessToken: string, profileId: number): Promise<ChatActiveRead> {
+  return requestJson<ChatActiveRead>(`/api/chat/${profileId}/reset`, { method: 'POST' }, accessToken);
 }
 
 export async function listContributions(accessToken: string, profileId: number): Promise<ContributionRead[]> {

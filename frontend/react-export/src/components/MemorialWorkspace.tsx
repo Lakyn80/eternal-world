@@ -8,11 +8,14 @@ import {
   createMemorial,
   deleteMemorial,
   fetchMemorial,
+  getActiveChat,
   getBiographerEligibility,
   getBillingLimits,
   getBiographyStatus,
+  getBiographerResume,
   getCandidateHistory,
   getNextBiographerQuestion,
+  getSession,
   indexCandidateMemory,
   inviteParticipant,
   listChatMessages,
@@ -22,9 +25,11 @@ import {
   listMemoryCandidates,
   listReviewQueue,
   login,
+  logoutSession,
   MemorialApiError,
   ownerReviewCandidate,
   register,
+  resetChat,
   reviewContribution,
   sendChatMessage,
   setUnauthorizedHandler,
@@ -79,6 +84,11 @@ export type Copy = {
   chatSend: string;
   chatYou: string;
   chatAvatar: string;
+  chatReset: string;
+  chatResetConfirmTitle: string;
+  chatResetConfirmYes: string;
+  chatResetConfirmCancel: string;
+  chatResetDone: string;
   biography: string;
   biographyIntro: string;
   biographyPlaceholder: string;
@@ -123,6 +133,8 @@ export type Copy = {
   biographerRelevanceTemplate: string;
   biographerMoreDetailsNeeded: string;
   biographerReadyForReview: string;
+  biographerCandidatePendingIndex: string;
+  biographerCandidateIndexed: string;
   biographerGoToReview: string;
   biographerTopicChildhood: string;
   biographerTopicFamily: string;
@@ -201,6 +213,35 @@ export type Copy = {
   members: string;
   invitations: string;
   role: string;
+  roleOwner: string;
+  roleTrustedReviewer: string;
+  roleContributor: string;
+  roleViewer: string;
+  roleSystem: string;
+  statusDraft: string;
+  statusNeedsReview: string;
+  statusApproved: string;
+  statusRejected: string;
+  statusArchived: string;
+  statusSuperseded: string;
+  statusPendingIndex: string;
+  statusIndexed: string;
+  statusPromotionFailed: string;
+  statusPromotionCancelled: string;
+  disputeStatusNone: string;
+  disputeStatusDisputed: string;
+  disputeStatusResolved: string;
+  clarificationStatusPending: string;
+  clarificationStatusAnswered: string;
+  clarificationStatusSkipped: string;
+  clarificationStatusCancelled: string;
+  contributionTypeInitialClaim: string;
+  contributionTypeClarificationAnswer: string;
+  contributionTypeOwnerCorrection: string;
+  contributionTypeOwnerConfirmation: string;
+  contributionTypeReviewerNote: string;
+  contributionTypeDisputeStatement: string;
+  contributionTypeSystemNormalization: string;
   submitMemory: string;
   titleLabel: string;
   memoryText: string;
@@ -273,6 +314,11 @@ export const COPY: Record<Lang, Copy> = {
     chatSend: 'Send',
     chatYou: 'You',
     chatAvatar: 'Avatar',
+    chatReset: 'Reset chat',
+    chatResetConfirmTitle: 'Clear the current chat and start a new one?',
+    chatResetConfirmYes: 'Yes, start new chat',
+    chatResetConfirmCancel: 'Cancel',
+    chatResetDone: 'New chat is ready.',
     biography: 'Biography',
     biographyIntro: 'Write the memorial\'s initial life story. Nothing becomes avatar memory until you explicitly start indexing.',
     biographyPlaceholder: 'Write the biography here...',
@@ -317,6 +363,8 @@ export const COPY: Record<Lang, Copy> = {
     biographerRelevanceTemplate: 'This question adds to the topic {topic}.',
     biographerMoreDetailsNeeded: 'More details required',
     biographerReadyForReview: 'Ready for owner review.',
+    biographerCandidatePendingIndex: 'Approved and waiting to be indexed.',
+    biographerCandidateIndexed: 'This memory has been indexed.',
     biographerGoToReview: 'Go to Review',
     biographerTopicChildhood: 'Childhood',
     biographerTopicFamily: 'Family',
@@ -395,6 +443,35 @@ export const COPY: Record<Lang, Copy> = {
     members: 'Members',
     invitations: 'Invitations',
     role: 'Role',
+    roleOwner: 'Owner',
+    roleTrustedReviewer: 'Trusted reviewer',
+    roleContributor: 'Contributor',
+    roleViewer: 'Viewer',
+    roleSystem: 'System',
+    statusDraft: 'Saved, not indexed',
+    statusNeedsReview: 'Waiting for review',
+    statusApproved: 'Approved',
+    statusRejected: 'Rejected',
+    statusArchived: 'Archived',
+    statusSuperseded: 'Superseded',
+    statusPendingIndex: 'Approved, waiting to be indexed',
+    statusIndexed: 'Indexed',
+    statusPromotionFailed: 'Indexing failed',
+    statusPromotionCancelled: 'Indexing cancelled',
+    disputeStatusNone: 'No dispute',
+    disputeStatusDisputed: 'Disputed memory',
+    disputeStatusResolved: 'Dispute resolved',
+    clarificationStatusPending: 'Waiting for an answer',
+    clarificationStatusAnswered: 'Answered',
+    clarificationStatusSkipped: 'Skipped',
+    clarificationStatusCancelled: 'Not required',
+    contributionTypeInitialClaim: 'Original answer',
+    contributionTypeClarificationAnswer: 'Clarification answer',
+    contributionTypeOwnerCorrection: 'Owner correction',
+    contributionTypeOwnerConfirmation: 'Owner confirmation',
+    contributionTypeReviewerNote: 'Reviewer note',
+    contributionTypeDisputeStatement: 'Dispute statement',
+    contributionTypeSystemNormalization: 'System update',
     submitMemory: 'Submit a memory',
     titleLabel: 'Title',
     memoryText: 'Memory text',
@@ -405,7 +482,7 @@ export const COPY: Record<Lang, Copy> = {
     noContributions: 'No contributions are visible for this role.',
     notActiveMemory: 'Not active memory',
     activeMemory: 'Active-memory eligible',
-    noPending: 'No pending contributions.',
+    noPending: 'No family contributions are waiting for review. (Biographer-sourced memories are listed separately below.)',
     approve: 'Approve',
     reject: 'Reject',
     archive: 'Archive',
@@ -469,6 +546,11 @@ export const COPY: Record<Lang, Copy> = {
     chatSend: 'Odeslat',
     chatYou: 'Vy',
     chatAvatar: 'Avatar',
+    chatReset: 'Obnovit chat',
+    chatResetConfirmTitle: 'Vymazat současný chat a začít nový?',
+    chatResetConfirmYes: 'Ano, začít nový chat',
+    chatResetConfirmCancel: 'Zrušit',
+    chatResetDone: 'Nový chat je připraven.',
     biography: 'Životopis',
     biographyIntro: 'Napište počáteční životní příběh memorialu. Nic se nestane pamětí avatara, dokud výslovně nespustíte indexaci.',
     biographyPlaceholder: 'Sem napište životopis...',
@@ -521,6 +603,8 @@ export const COPY: Record<Lang, Copy> = {
     biographerTopicValues: 'Hodnoty',
     biographerMoreDetailsNeeded: 'Je potřeba více podrobností',
     biographerReadyForReview: 'Připraveno ke kontrole vlastníkem.',
+    biographerCandidatePendingIndex: 'Schváleno, čeká na zaindexování.',
+    biographerCandidateIndexed: 'Tato vzpomínka byla zaindexována.',
     biographerGoToReview: 'Přejít na Kontrolu',
     candidatesTitle: 'Vzpomínky od biografa',
     candidatesSubtitle: 'Vzpomínkoví kandidáti čekající na kontrolu vlastníkem nebo již zkontrolovaní - odděleno od vzpomínek/příspěvků rodiny výše.',
@@ -591,6 +675,35 @@ export const COPY: Record<Lang, Copy> = {
     members: 'Členové',
     invitations: 'Pozvánky',
     role: 'Role',
+    roleOwner: 'Vlastník',
+    roleTrustedReviewer: 'Důvěryhodný kontrolor',
+    roleContributor: 'Přispěvatel',
+    roleViewer: 'Čtenář',
+    roleSystem: 'Systém',
+    statusDraft: 'Uloženo, nezaindexováno',
+    statusNeedsReview: 'Čeká na kontrolu',
+    statusApproved: 'Schváleno',
+    statusRejected: 'Zamítnuto',
+    statusArchived: 'Archivováno',
+    statusSuperseded: 'Nahrazeno novější verzí',
+    statusPendingIndex: 'Schváleno, čeká na indexaci',
+    statusIndexed: 'Zaindexováno',
+    statusPromotionFailed: 'Indexace se nezdařila',
+    statusPromotionCancelled: 'Indexace zrušena',
+    disputeStatusNone: 'Bez sporu',
+    disputeStatusDisputed: 'Sporná vzpomínka',
+    disputeStatusResolved: 'Spor vyřešen',
+    clarificationStatusPending: 'Čeká na odpověď',
+    clarificationStatusAnswered: 'Zodpovězeno',
+    clarificationStatusSkipped: 'Přeskočeno',
+    clarificationStatusCancelled: 'Není potřeba',
+    contributionTypeInitialClaim: 'Původní odpověď',
+    contributionTypeClarificationAnswer: 'Odpověď na doplňující otázku',
+    contributionTypeOwnerCorrection: 'Oprava vlastníkem',
+    contributionTypeOwnerConfirmation: 'Potvrzení vlastníkem',
+    contributionTypeReviewerNote: 'Poznámka kontrolora',
+    contributionTypeDisputeStatement: 'Vyjádření ke sporu',
+    contributionTypeSystemNormalization: 'Systémová úprava',
     submitMemory: 'Přidat vzpomínku',
     titleLabel: 'Název',
     memoryText: 'Text vzpomínky',
@@ -601,7 +714,7 @@ export const COPY: Record<Lang, Copy> = {
     noContributions: 'Pro tuto roli nejsou viditelné žádné vzpomínky.',
     notActiveMemory: 'Není aktivní paměť',
     activeMemory: 'Vhodné pro aktivní paměť',
-    noPending: 'Nic nečeká na kontrolu.',
+    noPending: 'Žádné příspěvky od rodiny nečekají na kontrolu. (Vzpomínky od AI biografa jsou v samostatném seznamu níže.)',
     approve: 'Schválit',
     reject: 'Odmítnout',
     archive: 'Archivovat',
@@ -665,6 +778,11 @@ export const COPY: Record<Lang, Copy> = {
     chatSend: 'Отправить',
     chatYou: 'Вы',
     chatAvatar: 'Аватар',
+    chatReset: 'Обновить чат',
+    chatResetConfirmTitle: 'Очистить текущий чат и начать новый?',
+    chatResetConfirmYes: 'Да, начать новый чат',
+    chatResetConfirmCancel: 'Отмена',
+    chatResetDone: 'Новый чат готов.',
     biography: 'Биография',
     biographyIntro: 'Напишите начальную историю жизни мемориала. Ничто не станет памятью аватара, пока вы явно не запустите индексацию.',
     biographyPlaceholder: 'Напишите биографию здесь...',
@@ -717,6 +835,8 @@ export const COPY: Record<Lang, Copy> = {
     biographerTopicValues: 'Ценности',
     biographerMoreDetailsNeeded: 'Нужно больше деталей',
     biographerReadyForReview: 'Готово к проверке владельцем.',
+    biographerCandidatePendingIndex: 'Одобрено, ожидает индексации.',
+    biographerCandidateIndexed: 'Это воспоминание проиндексировано.',
     biographerGoToReview: 'Перейти к проверке',
     candidatesTitle: 'Воспоминания от биографа',
     candidatesSubtitle: 'Кандидаты в воспоминания, ожидающие или прошедшие проверку владельцем - отдельно от вкладов/воспоминаний семьи выше.',
@@ -787,6 +907,35 @@ export const COPY: Record<Lang, Copy> = {
     members: 'Участники',
     invitations: 'Приглашения',
     role: 'Роль',
+    roleOwner: 'Владелец',
+    roleTrustedReviewer: 'Доверенный рецензент',
+    roleContributor: 'Соавтор',
+    roleViewer: 'Читатель',
+    roleSystem: 'Система',
+    statusDraft: 'Сохранено, не проиндексировано',
+    statusNeedsReview: 'Ожидает проверки',
+    statusApproved: 'Одобрено',
+    statusRejected: 'Отклонено',
+    statusArchived: 'В архиве',
+    statusSuperseded: 'Заменено новой версией',
+    statusPendingIndex: 'Одобрено, ожидает индексации',
+    statusIndexed: 'Проиндексировано',
+    statusPromotionFailed: 'Индексация не удалась',
+    statusPromotionCancelled: 'Индексация отменена',
+    disputeStatusNone: 'Без спора',
+    disputeStatusDisputed: 'Спорное воспоминание',
+    disputeStatusResolved: 'Спор разрешён',
+    clarificationStatusPending: 'Ожидает ответа',
+    clarificationStatusAnswered: 'Отвечено',
+    clarificationStatusSkipped: 'Пропущено',
+    clarificationStatusCancelled: 'Не требуется',
+    contributionTypeInitialClaim: 'Первоначальный ответ',
+    contributionTypeClarificationAnswer: 'Ответ на уточняющий вопрос',
+    contributionTypeOwnerCorrection: 'Исправление владельцем',
+    contributionTypeOwnerConfirmation: 'Подтверждение владельцем',
+    contributionTypeReviewerNote: 'Заметка рецензента',
+    contributionTypeDisputeStatement: 'Заявление по спору',
+    contributionTypeSystemNormalization: 'Системное обновление',
     submitMemory: 'Добавить воспоминание',
     titleLabel: 'Название',
     memoryText: 'Текст воспоминания',
@@ -797,7 +946,7 @@ export const COPY: Record<Lang, Copy> = {
     noContributions: 'Для этой роли нет видимых воспоминаний.',
     notActiveMemory: 'Не активная память',
     activeMemory: 'Подходит для активной памяти',
-    noPending: 'Нет записей на проверке.',
+    noPending: 'Нет записей от семьи, ожидающих проверки. (Воспоминания от ИИ-биографа перечислены отдельно ниже.)',
     approve: 'Одобрить',
     reject: 'Отклонить',
     archive: 'Архивировать',
@@ -853,8 +1002,127 @@ function safeError(error: unknown): string {
   return error instanceof MemorialApiError ? error.detail : 'The action could not be completed.';
 }
 
-function roleLabel(value: string): string {
+// Task 65.7 (Part G.49): the last-resort fallback for a genuinely unknown
+// enum value - never the primary label for a known one. Every localizer
+// below falls back to this (with a console warning) instead of ever
+// silently rendering nothing.
+function prettifyEnumFallback(value: string): string {
   return value.replace(/_/g, ' ');
+}
+
+function warnUnknownEnum(category: string, value: string): void {
+  // eslint-disable-next-line no-console
+  console.warn(`[localization] unknown ${category} value: "${value}"`);
+}
+
+function roleLabel(t: Copy, role: string): string {
+  switch (role) {
+    case 'owner':
+      return t.roleOwner;
+    case 'trusted_reviewer':
+      return t.roleTrustedReviewer;
+    case 'contributor':
+      return t.roleContributor;
+    case 'viewer':
+      return t.roleViewer;
+    case 'system':
+      return t.roleSystem;
+    default:
+      warnUnknownEnum('role', role);
+      return prettifyEnumFallback(role);
+  }
+}
+
+// Shared by both `ConversationMemoryCandidate.status` ("review_status" in
+// `CandidateEnrichmentRead`) and `FamilyMemoryContribution.status` - the
+// same underlying concept (a review-lifecycle status) uses the same label
+// regardless of which record carries it.
+function candidateStatusLabel(t: Copy, status: string): string {
+  switch (status) {
+    case 'draft':
+      return t.statusDraft;
+    case 'needs_review':
+      return t.statusNeedsReview;
+    case 'approved':
+      return t.statusApproved;
+    case 'rejected':
+      return t.statusRejected;
+    case 'archived':
+      return t.statusArchived;
+    case 'superseded':
+      return t.statusSuperseded;
+    default:
+      warnUnknownEnum('candidate/contribution status', status);
+      return prettifyEnumFallback(status);
+  }
+}
+
+function disputeStatusLabel(t: Copy, status: string): string {
+  switch (status) {
+    case 'none':
+      return t.disputeStatusNone;
+    case 'disputed':
+      return t.disputeStatusDisputed;
+    case 'resolved':
+      return t.disputeStatusResolved;
+    default:
+      warnUnknownEnum('dispute status', status);
+      return prettifyEnumFallback(status);
+  }
+}
+
+function clarificationStatusLabel(t: Copy, status: string): string {
+  switch (status) {
+    case 'pending':
+      return t.clarificationStatusPending;
+    case 'answered':
+      return t.clarificationStatusAnswered;
+    case 'skipped':
+      return t.clarificationStatusSkipped;
+    case 'cancelled':
+      return t.clarificationStatusCancelled;
+    default:
+      warnUnknownEnum('clarification status', status);
+      return prettifyEnumFallback(status);
+  }
+}
+
+function contributionTypeLabel(t: Copy, type: string): string {
+  switch (type) {
+    case 'initial_claim':
+      return t.contributionTypeInitialClaim;
+    case 'clarification_answer':
+      return t.contributionTypeClarificationAnswer;
+    case 'owner_correction':
+      return t.contributionTypeOwnerCorrection;
+    case 'owner_confirmation':
+      return t.contributionTypeOwnerConfirmation;
+    case 'reviewer_note':
+      return t.contributionTypeReviewerNote;
+    case 'dispute_statement':
+      return t.contributionTypeDisputeStatement;
+    case 'system_normalization':
+      return t.contributionTypeSystemNormalization;
+    default:
+      warnUnknownEnum('contribution type', type);
+      return prettifyEnumFallback(type);
+  }
+}
+
+function promotionStatusLabel(t: Copy, status: string): string {
+  switch (status) {
+    case 'pending_index':
+      return t.statusPendingIndex;
+    case 'indexed':
+      return t.statusIndexed;
+    case 'failed':
+      return t.statusPromotionFailed;
+    case 'cancelled':
+      return t.statusPromotionCancelled;
+    default:
+      warnUnknownEnum('promotion status', status);
+      return prettifyEnumFallback(status);
+  }
 }
 
 function formatDate(value: string | null, lang: Lang): string {
@@ -898,6 +1166,11 @@ export default function MemorialWorkspace({ lang }: { lang: Lang }) {
   const [notice, setNotice] = useState<string | null>(null);
   const [invitationToken, setInvitationToken] = useState<string | null>(null);
   const [billingLimits, setBillingLimits] = useState<BillingLimitsRead | null>(null);
+  // Task 65.7 (Part B.13): bounded startup rehydration - true only while
+  // the one-shot `GET /api/auth/session` probe below is in flight, so the
+  // login form is never briefly flashed for an already-logged-in user
+  // returning from navigation/a page refresh.
+  const [sessionHydrating, setSessionHydrating] = useState(true);
 
   const role = selected?.current_user_role;
   const mayInvite = role ? canInvite(role) : false;
@@ -933,7 +1206,10 @@ export default function MemorialWorkspace({ lang }: { lang: Lang }) {
   }, [mayInvite, mayReview, maySubmit, role]);
 
   async function loadMemorials(accessToken = session?.accessToken, options: { resolveBootstrap?: boolean } = {}) {
-    if (!accessToken) return;
+    // An empty string is a valid, intentional "authenticate via the
+    // browser-session cookie only" value (Task 65.7) - only `undefined`
+    // (no session resolved at all yet) skips loading.
+    if (accessToken === undefined) return;
     setLoading(true);
     setError(null);
     try {
@@ -1013,7 +1289,7 @@ export default function MemorialWorkspace({ lang }: { lang: Lang }) {
   }
 
   async function loadWorkspace(profileId: number, accessToken = session?.accessToken) {
-    if (!accessToken) return;
+    if (accessToken === undefined) return;
     setLoading(true);
     setError(null);
     setMembers([]);
@@ -1064,6 +1340,21 @@ export default function MemorialWorkspace({ lang }: { lang: Lang }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab]);
 
+  useEffect(() => {
+    // The family-contribution review queue (unlike CandidatesReviewSection,
+    // which fetches fresh on its own mount) is plain state handed down as a
+    // prop, so it goes stale if a contribution reaches needs_review after
+    // the initial workspace load. Re-fetch it every time the owner/reviewer
+    // actually switches onto the Review tab so "nothing pending" is never a
+    // stale read.
+    if (activeTab === 'review' && selected && session && canReview(selected.current_user_role)) {
+      void listReviewQueue(session.accessToken, selected.id)
+        .then(setReviewQueue)
+        .catch(() => {});
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab]);
+
   function onAuthenticated(nextSession: AuthSession) {
     setSession(nextSession);
     void loadMemorials(nextSession.accessToken, { resolveBootstrap: true });
@@ -1078,10 +1369,45 @@ export default function MemorialWorkspace({ lang }: { lang: Lang }) {
     setReviewQueue([]);
     setError(null);
     setNotice(reason === 'expired' ? t.sessionExpired : null);
+    void logoutSession().catch(() => {});
     // Clear the active-memorial URL too, so a subsequently logged-in user
     // (same browser tab) never lands back on the previous user's deep link.
     navigate(APP_ROOT_PATH);
   }
+
+  useEffect(() => {
+    // Task 65.7 (Part B.13/B.15): the one-shot startup rehydration probe -
+    // resolves the HttpOnly browser-session cookie set by a prior `login`
+    // (Part B.11) into a restored session, so navigating from the
+    // workspace to the main marketing page and back (which fully unmounts
+    // and remounts this component, see `App.tsx`'s route-boundary comment)
+    // - or a plain browser refresh - never forces another login. A 401
+    // here (no/expired session) is expected and silent: it just leaves
+    // `session` null so `AuthPanel` renders normally, never an "expired"
+    // notice (the user may simply have never logged in yet).
+    let cancelled = false;
+    getSession()
+      .then((user) => {
+        if (cancelled) return;
+        // No bearer token is available from a cookie-only resume - every
+        // `memorialApi` call already falls back to the session cookie
+        // (`credentials: 'include'`) whenever no token is supplied, so an
+        // empty string here is intentional, not a placeholder bug.
+        const restoredSession: AuthSession = { accessToken: '', email: user.email };
+        setSession(restoredSession);
+        void loadMemorials('', { resolveBootstrap: true });
+      })
+      .catch(() => {
+        // No valid session - fall through to the login form.
+      })
+      .finally(() => {
+        if (!cancelled) setSessionHydrating(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     // Part 38 (Task 65.4): any authenticated request coming back 401
@@ -1121,7 +1447,9 @@ export default function MemorialWorkspace({ lang }: { lang: Lang }) {
           />
         )}
 
-        {!session ? (
+        {sessionHydrating ? (
+          <p className="text-center text-sm text-fg/55">{t.working}</p>
+        ) : !session ? (
           invitationToken ? null : (
           <AuthPanel onAuthenticated={onAuthenticated} t={t} />
           )
@@ -1190,7 +1518,7 @@ export default function MemorialWorkspace({ lang }: { lang: Lang }) {
                   </button>
                   <h3 className="break-words font-serif text-3xl leading-tight">{selected.name}</h3>
                   <p className="mt-2 text-sm text-fg/55">
-                    {t.role}: {roleLabel(selected.current_user_role)}
+                    {t.role}: {roleLabel(t, selected.current_user_role)}
                   </p>
                   <div className="mt-6 grid gap-2" role="tablist" aria-label="Workspace sections">
                     {visibleTabs.map((tab) => {
@@ -1264,6 +1592,7 @@ export default function MemorialWorkspace({ lang }: { lang: Lang }) {
                   )}
                   {activeTab === 'biographer' && maySubmit && (
                     <BiographerPanel
+                      email={session.email}
                       lang={lang}
                       onNavigateToBiography={role === 'owner' ? () => setActiveTab('biography') : null}
                       onNavigateToReview={() => setActiveTab('review')}
@@ -1272,7 +1601,9 @@ export default function MemorialWorkspace({ lang }: { lang: Lang }) {
                       token={session.accessToken}
                     />
                   )}
-                  {activeTab === 'chat' && <ChatPanel profileId={selected.id} t={t} token={session.accessToken} />}
+                  {activeTab === 'chat' && (
+                    <ChatPanel email={session.email} profileId={selected.id} t={t} token={session.accessToken} />
+                  )}
                   {activeTab === 'contributions' && (
                     <ContributionsSection
                       contributions={contributions}
@@ -1581,7 +1912,7 @@ export function MemorialList({
                 <p className="mt-2 line-clamp-3 text-sm leading-6 text-fg/55">{shortTextPreview(memorial.biography) || t.description}</p>
                 <p className="mt-2 text-xs text-fg/38">{formatDate(memorial.created_at, lang)}</p>
               </div>
-              <span className="w-fit rounded-full bg-white/10 px-3 py-1 text-xs text-cyan">{roleLabel(memorial.current_user_role)}</span>
+              <span className="w-fit rounded-full bg-white/10 px-3 py-1 text-xs text-cyan">{roleLabel(t, memorial.current_user_role)}</span>
             </div>
             <button className="mt-4 w-full rounded-full border border-white/15 px-4 py-3 text-sm text-fg/75 transition hover:bg-white/10 sm:w-auto" onClick={() => onOpen(memorial.id)} type="button">
               {t.openWorkspace}
@@ -1783,7 +2114,7 @@ export function Overview({
         <p className="break-words text-sm leading-7 text-fg/65">{shortTextPreview(memorial.biography) || t.empty}</p>
       )}
       <div className="flex flex-wrap gap-2">
-        <Badge>{t.role}: {roleLabel(memorial.current_user_role)}</Badge>
+        <Badge>{t.role}: {roleLabel(t, memorial.current_user_role)}</Badge>
         <Badge>{formatDate(memorial.created_at, lang)}</Badge>
       </div>
 
@@ -1888,20 +2219,35 @@ export function Overview({
   );
 }
 
-function ChatPanel({ token, profileId, t }: { token: string; profileId: number; t: Copy }) {
+const CHAT_DRAFT_STORAGE_PREFIX = 'eternal_world:chat_draft';
+
+function chatDraftKey({ email, profileId }: { email: string; profileId: number }): string {
+  return `${CHAT_DRAFT_STORAGE_PREFIX}:${email}:${profileId}`;
+}
+
+function ChatPanel({ token, profileId, email, t }: { token: string; profileId: number; email: string; t: Copy }) {
   const [messages, setMessages] = useState<ChatMessageRead[]>([]);
-  const [text, setText] = useState('');
+  const [text, setText] = useState(() => {
+    try {
+      return window.sessionStorage.getItem(chatDraftKey({ email, profileId })) ?? '';
+    } catch {
+      return '';
+    }
+  });
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [confirmingReset, setConfirmingReset] = useState(false);
+  const [resetBusy, setResetBusy] = useState(false);
+  const [resetNotice, setResetNotice] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
     setError(null);
-    listChatMessages(token, profileId)
-      .then((history) => {
-        if (!cancelled) setMessages(history);
+    getActiveChat(token, profileId)
+      .then((active) => {
+        if (!cancelled) setMessages(active.messages);
       })
       .catch((loadError) => {
         if (!cancelled) setError(safeError(loadError));
@@ -1914,12 +2260,30 @@ function ChatPanel({ token, profileId, t }: { token: string; profileId: number; 
     };
   }, [token, profileId]);
 
+  // Task 65.7 (Part 26/53): unsaved chat input survives navigation away and
+  // back within the same browser session - never submitted data, which the
+  // backend already restores via `getActiveChat` above.
+  useEffect(() => {
+    try {
+      const key = chatDraftKey({ email, profileId });
+      if (text.trim()) {
+        window.sessionStorage.setItem(key, text);
+      } else {
+        window.sessionStorage.removeItem(key);
+      }
+    } catch {
+      // sessionStorage may be unavailable (private browsing) - drafts are a
+      // convenience, never required for correctness.
+    }
+  }, [text, email, profileId]);
+
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const trimmed = text.trim();
     if (!trimmed) return;
     setBusy(true);
     setError(null);
+    setResetNotice(false);
     const optimisticUserMessage: ChatMessageRead = {
       id: -Date.now(),
       profile_id: profileId,
@@ -1945,9 +2309,57 @@ function ChatPanel({ token, profileId, t }: { token: string; profileId: number; 
     }
   }
 
+  async function confirmReset() {
+    setResetBusy(true);
+    setError(null);
+    try {
+      const fresh = await resetChat(token, profileId);
+      setMessages(fresh.messages);
+      setConfirmingReset(false);
+      setResetNotice(true);
+    } catch (resetError) {
+      setError(safeError(resetError));
+    } finally {
+      setResetBusy(false);
+    }
+  }
+
   return (
     <div className="min-w-0 space-y-5">
-      <h3 className="font-serif text-3xl">{t.chat}</h3>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h3 className="font-serif text-3xl">{t.chat}</h3>
+        {!confirmingReset ? (
+          <button
+            className="shrink-0 rounded-full border border-white/15 px-4 py-2 text-sm text-fg/75 transition hover:bg-white/10 disabled:opacity-55"
+            disabled={loading || messages.length === 0}
+            onClick={() => setConfirmingReset(true)}
+            type="button"
+          >
+            {t.chatReset}
+          </button>
+        ) : (
+          <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-cyan/25 bg-cyan/10 px-3 py-2">
+            <span className="text-sm text-fg/80">{t.chatResetConfirmTitle}</span>
+            <button
+              className="rounded-full bg-gradient-to-r from-cyan to-violet px-4 py-1.5 text-xs font-semibold text-ink disabled:opacity-55"
+              disabled={resetBusy}
+              onClick={() => void confirmReset()}
+              type="button"
+            >
+              {resetBusy ? t.working : t.chatResetConfirmYes}
+            </button>
+            <button
+              className="rounded-full border border-white/15 px-4 py-1.5 text-xs text-fg/75 transition hover:bg-white/10"
+              disabled={resetBusy}
+              onClick={() => setConfirmingReset(false)}
+              type="button"
+            >
+              {t.chatResetConfirmCancel}
+            </button>
+          </div>
+        )}
+      </div>
+      {resetNotice && <p className="rounded-2xl border border-cyan/30 bg-cyan/10 px-4 py-3 text-sm text-cyan">{t.chatResetDone}</p>}
       <div className="min-w-0 space-y-3 rounded-3xl border border-white/10 bg-black/20 p-4">
         {loading && <p className="text-sm text-fg/55">{t.working}</p>}
         {!loading && messages.length === 0 && <p className="text-sm text-fg/60">{t.chatEmpty}</p>}
@@ -2300,7 +2712,8 @@ export function biographerTopicLabel(t: Copy, topic: string): string {
     default:
       // Unknown/future topic keys still render something readable rather
       // than the raw enum value as the primary label.
-      return roleLabel(topic);
+      warnUnknownEnum('biographer topic', topic);
+      return prettifyEnumFallback(topic);
   }
 }
 
@@ -2309,9 +2722,24 @@ export function biographerTopicLabel(t: Copy, topic: string): string {
 //: take an action first, so polling would spin forever for no reason.
 const BIOGRAPHER_POLL_BLOCKED_REASONS: ReadonlySet<BiographerBlockedReason> = new Set(['indexing_in_progress']);
 
+const BIOGRAPHER_DRAFT_STORAGE_PREFIX = 'eternal_world:biographer_draft';
+
+function biographerDraftKey({
+  email,
+  profileId,
+  questionId
+}: {
+  email: string;
+  profileId: number;
+  questionId: number;
+}): string {
+  return `${BIOGRAPHER_DRAFT_STORAGE_PREFIX}:${email}:${profileId}:${questionId}`;
+}
+
 export function BiographerPanel({
   token,
   profileId,
+  email,
   t,
   lang,
   onNavigateToReview,
@@ -2319,6 +2747,7 @@ export function BiographerPanel({
 }: {
   token: string;
   profileId: number;
+  email: string;
   t: Copy;
   lang: Lang;
   onNavigateToReview: () => void;
@@ -2333,9 +2762,48 @@ export function BiographerPanel({
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState(false);
   const [readyForReview, setReadyForReview] = useState(false);
+  const [pendingIndex, setPendingIndex] = useState(false);
+  const [indexed, setIndexed] = useState(false);
   const [generationFailed, setGenerationFailed] = useState(false);
 
   const locale = biographerLocale(lang);
+
+  // Task 65.7 (Part 26/28): restores an unsubmitted draft answer for the
+  // SAME question after navigating away and back - never restored onto a
+  // different question, and cleared automatically once that question is no
+  // longer the active one (see the effect below).
+  useEffect(() => {
+    if (!question) return;
+    try {
+      const draft = window.sessionStorage.getItem(biographerDraftKey({ email, profileId, questionId: question.id }));
+      if (draft) setAnswerText(draft);
+    } catch {
+      // sessionStorage may be unavailable - drafts are a convenience only.
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [question?.id]);
+
+  useEffect(() => {
+    if (!question) return;
+    try {
+      const key = biographerDraftKey({ email, profileId, questionId: question.id });
+      if (answerText.trim()) {
+        window.sessionStorage.setItem(key, answerText);
+      } else {
+        window.sessionStorage.removeItem(key);
+      }
+    } catch {
+      // Ignored - see above.
+    }
+  }, [answerText, email, profileId, question]);
+
+  function clearDraft(questionId: number) {
+    try {
+      window.sessionStorage.removeItem(biographerDraftKey({ email, profileId, questionId }));
+    } catch {
+      // Ignored - see above.
+    }
+  }
 
   async function load() {
     setLoading(true);
@@ -2343,9 +2811,26 @@ export function BiographerPanel({
     setDone(false);
     setGenerationFailed(false);
     try {
-      const nextEligibility = await getBiographerEligibility(token, profileId);
-      setEligibility(nextEligibility);
-      if (nextEligibility.eligible) {
+      // Task 65.7 (Part D.25/27): the resume endpoint is the primary state
+      // source - it reflects exactly what the backend already knows
+      // (a just-answered candidate ready for review, pending index, or
+      // already indexed) without triggering a new question generation.
+      // `next-question` is only ever called when resume itself says a new
+      // question should be fetched/generated.
+      const resume = await getBiographerResume(token, profileId);
+      setEligibility({ eligible: resume.eligible, blocked_reason: resume.blocked_reason });
+      setReadyForReview(resume.next_action === 'candidate_ready_for_review');
+      setPendingIndex(resume.next_action === 'candidate_pending_index');
+      setIndexed(resume.next_action === 'candidate_indexed');
+      if (!resume.eligible) {
+        setQuestion(null);
+        return;
+      }
+      if (resume.active_question) {
+        setQuestion(resume.active_question);
+        return;
+      }
+      if (resume.next_action === 'question_ready') {
         const nextQuestion = await getNextBiographerQuestion(token, profileId, locale);
         setQuestion(nextQuestion);
         setDone(nextQuestion === null);
@@ -2387,6 +2872,7 @@ export function BiographerPanel({
     setReadyForReview(false);
     try {
       const response = await answerBiographerQuestion(token, profileId, question.id, locale, answerText.trim());
+      clearDraft(question.id);
       setAnswerText('');
       if (response.unresolved_clarification_count && response.unresolved_clarification_count > 0 && response.candidate_id) {
         setActiveCandidateId(response.candidate_id);
@@ -2434,6 +2920,8 @@ export function BiographerPanel({
     setReadyForReview(false);
     try {
       await skipBiographerQuestion(token, profileId, question.id);
+      clearDraft(question.id);
+      setAnswerText('');
       await load();
     } catch (skipError) {
       setError(safeError(skipError));
@@ -2449,6 +2937,8 @@ export function BiographerPanel({
     setReadyForReview(false);
     try {
       await postponeBiographerQuestion(token, profileId, question.id);
+      clearDraft(question.id);
+      setAnswerText('');
       await load();
     } catch (postponeError) {
       setError(safeError(postponeError));
@@ -2510,6 +3000,19 @@ export function BiographerPanel({
           </button>
         </div>
       )}
+      {pendingIndex && (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-cyan/25 bg-cyan/10 p-4">
+          <p className="text-sm text-fg/80">{t.biographerCandidatePendingIndex}</p>
+          <button
+            className="shrink-0 rounded-full bg-gradient-to-r from-cyan to-violet px-5 py-2.5 text-sm font-semibold text-ink"
+            onClick={onNavigateToReview}
+            type="button"
+          >
+            {t.biographerGoToReview}
+          </button>
+        </div>
+      )}
+      {indexed && <p className="rounded-2xl border border-white/10 bg-black/20 p-4 text-sm text-fg/60">{t.biographerCandidateIndexed}</p>}
       {!loading && activeCandidateId && (
         <form className="grid gap-4 rounded-3xl border border-cyan/20 bg-cyan/10 p-4" onSubmit={(event) => void submitClarification(event)}>
           <p className="text-xs uppercase tracking-[.18em] text-cyan/60">{t.biographerMoreDetailsNeeded}</p>
@@ -2721,9 +3224,9 @@ export function CandidatesReviewSection({
             <article className="min-w-0 rounded-3xl border border-white/10 bg-black/20 p-4" key={candidate.candidate_id}>
               <p className="break-words text-sm leading-6 text-fg/80">{candidate.finalized_memory_text || '-'}</p>
               <div className="mt-3 flex flex-wrap gap-2">
-                <Badge>{candidate.review_status}</Badge>
+                <Badge>{candidateStatusLabel(t, candidate.review_status)}</Badge>
                 <Badge>{privacyScopeLabel(t, candidate.privacy_scope)}</Badge>
-                {candidate.dispute_status === 'disputed' && <Badge tone="danger">{candidate.dispute_status}</Badge>}
+                {candidate.dispute_status === 'disputed' && <Badge tone="danger">{disputeStatusLabel(t, candidate.dispute_status)}</Badge>}
                 {candidate.searchable_as_fact && <Badge tone="cyan">{t.candidateIndexedLabel}</Badge>}
                 {candidate.explicit_indexing_required && !candidate.searchable_as_fact && (
                   <Badge tone="muted">{t.candidatePendingIndexLabel}</Badge>
@@ -2752,7 +3255,7 @@ export function CandidatesReviewSection({
                             <div className="rounded-xl border border-white/10 bg-black/20 p-2.5" key={contribution.contribution_id}>
                               <p className="break-words text-xs leading-5 text-fg/75">{contribution.contribution_text}</p>
                               <p className="mt-1 text-[10px] uppercase tracking-[.14em] text-fg/35">
-                                {contribution.contribution_type} - {roleLabel(contribution.actor_role)} - {formatDate(contribution.created_at, lang)}
+                                {contributionTypeLabel(t, contribution.contribution_type)} - {roleLabel(t, contribution.actor_role)} - {formatDate(contribution.created_at, lang)}
                               </p>
                             </div>
                           ))}
@@ -2765,7 +3268,7 @@ export function CandidatesReviewSection({
                           {history.clarifications.map((clarification) => (
                             <div className="rounded-xl border border-white/10 bg-black/20 p-2.5" key={clarification.clarification_id}>
                               <p className="break-words text-xs leading-5 text-fg/75">{clarification.question_text}</p>
-                              <p className="mt-1 text-[10px] uppercase tracking-[.14em] text-fg/35">{clarification.status}</p>
+                              <p className="mt-1 text-[10px] uppercase tracking-[.14em] text-fg/35">{clarificationStatusLabel(t, clarification.status)}</p>
                             </div>
                           ))}
                         </div>
@@ -2991,7 +3494,7 @@ function ContributionsSection({
   );
 }
 
-function ContributionForm({
+export function ContributionForm({
   token,
   profileId,
   t,
@@ -3045,7 +3548,7 @@ function ContributionForm({
         <select className="min-w-0 rounded-2xl border border-white/10 bg-ink px-4 py-3 text-fg outline-none focus:border-cyan/70" onChange={(event) => setPrivacyScope(event.target.value as PrivacyScope)} value={privacyScope}>
           {PRIVACY_SCOPES.map((scope) => (
             <option key={scope} value={scope}>
-              {scope}
+              {privacyScopeLabel(t, scope)}
             </option>
           ))}
         </select>
@@ -3058,7 +3561,7 @@ function ContributionForm({
   );
 }
 
-function ContributionList({ contributions, lang, t }: { contributions: ContributionRead[]; lang: Lang; t: Copy }) {
+export function ContributionList({ contributions, lang, t }: { contributions: ContributionRead[]; lang: Lang; t: Copy }) {
   if (contributions.length === 0) {
     return <p className="rounded-2xl border border-white/10 bg-black/20 p-4 text-sm text-fg/60">{t.noContributions}</p>;
   }
@@ -3076,7 +3579,7 @@ function ContributionList({ contributions, lang, t }: { contributions: Contribut
               {contribution.rejection_reason && <p className="mt-2 text-sm text-red-100">{contribution.rejection_reason}</p>}
             </div>
             <div className="flex shrink-0 flex-wrap gap-2 lg:justify-end">
-              <Badge>{contribution.status}</Badge>
+              <Badge>{candidateStatusLabel(t, contribution.status)}</Badge>
               <Badge tone={isActiveMemoryEligible(contribution) ? 'cyan' : 'muted'}>
                 {isActiveMemoryEligible(contribution) ? t.activeMemory : t.notActiveMemory}
               </Badge>
@@ -3147,7 +3650,7 @@ function ReviewQueue({
   );
 }
 
-function MembersSection({ members, t }: { members: MembershipRead[]; t: Copy }) {
+export function MembersSection({ members, t }: { members: MembershipRead[]; t: Copy }) {
   return (
     <div className="min-w-0 space-y-5">
       <h3 className="font-serif text-3xl">{t.members}</h3>
@@ -3158,7 +3661,7 @@ function MembersSection({ members, t }: { members: MembershipRead[]; t: Copy }) 
               <h4 className="truncate text-base font-semibold">{member.email}</h4>
               <p className="text-sm text-fg/45">{member.full_name || '-'}</p>
             </div>
-            <Badge>{roleLabel(member.role)}</Badge>
+            <Badge>{roleLabel(t, member.role)}</Badge>
           </article>
         ))}
       </div>
@@ -3166,7 +3669,7 @@ function MembersSection({ members, t }: { members: MembershipRead[]; t: Copy }) 
   );
 }
 
-function InvitationSection({ token, profileId, t, onInvited }: { token: string; profileId: number; t: Copy; onInvited: (invitation: InvitationCreateResponse) => void }) {
+export function InvitationSection({ token, profileId, t, onInvited }: { token: string; profileId: number; t: Copy; onInvited: (invitation: InvitationCreateResponse) => void }) {
   const [email, setEmail] = useState('');
   const [role, setRole] = useState<InvitableMemorialRole>('contributor');
   const [busy, setBusy] = useState(false);
@@ -3207,7 +3710,7 @@ function InvitationSection({ token, profileId, t, onInvited }: { token: string; 
           <select className="min-w-0 rounded-2xl border border-white/10 bg-ink px-4 py-3 text-fg outline-none focus:border-cyan/70" onChange={(event) => setRole(event.target.value as InvitableMemorialRole)} value={role}>
             {INVITE_ROLES.map((item) => (
               <option key={item} value={item}>
-                {roleLabel(item)}
+                {roleLabel(t, item)}
               </option>
             ))}
           </select>

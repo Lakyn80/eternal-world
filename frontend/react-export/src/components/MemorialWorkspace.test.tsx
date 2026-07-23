@@ -12,7 +12,12 @@ import {
   isBiographyJobActive,
   privacyScopeLabel
 } from './MemorialWorkspace';
-import type { BiographerQuestionRead, BiographyStatusRead, MemoryCandidateEnrichmentRead } from '../types/memorial';
+import type {
+  BiographerQuestionRead,
+  BiographerResumeRead,
+  BiographyStatusRead,
+  MemoryCandidateEnrichmentRead
+} from '../types/memorial';
 import * as api from '../lib/memorialApi';
 
 vi.mock('../lib/memorialApi', async () => {
@@ -23,6 +28,7 @@ vi.mock('../lib/memorialApi', async () => {
     updateBiography: vi.fn(),
     startBiographyIngestion: vi.fn(),
     getBiographerEligibility: vi.fn(),
+    getBiographerResume: vi.fn(),
     getNextBiographerQuestion: vi.fn(),
     answerBiographerQuestion: vi.fn(),
     skipBiographerQuestion: vi.fn(),
@@ -31,7 +37,12 @@ vi.mock('../lib/memorialApi', async () => {
     listMemoryCandidates: vi.fn(),
     ownerReviewCandidate: vi.fn(),
     indexCandidateMemory: vi.fn(),
-    getCandidateHistory: vi.fn()
+    getCandidateHistory: vi.fn(),
+    getActiveChat: vi.fn(),
+    resetChat: vi.fn(),
+    sendChatMessage: vi.fn(),
+    getSession: vi.fn(),
+    logoutSession: vi.fn()
   };
 });
 
@@ -48,6 +59,23 @@ function baseBiographerQuestion(overrides: Partial<BiographerQuestionRead> = {})
     resulting_candidate_id: null,
     generation_mode: 'llm_generated',
     fallback_used: false,
+    ...overrides
+  };
+}
+
+function baseResume(overrides: Partial<BiographerResumeRead> = {}): BiographerResumeRead {
+  return {
+    profile_id: 7,
+    biography_status: 'indexed',
+    eligible: true,
+    blocked_reason: null,
+    active_question: baseBiographerQuestion(),
+    candidate_id: null,
+    review_status: null,
+    enrichment_status: null,
+    unresolved_clarification_count: null,
+    promotion_status: null,
+    next_action: 'question_ready',
     ...overrides
   };
 }
@@ -216,6 +244,7 @@ describe('BiographerPanel', () => {
       : vi.fn();
     const utils = render(
       <BiographerPanel
+        email="panel-test@example.com"
         lang={overrides.lang ?? 'cs'}
         onNavigateToBiography={onNavigateToBiography}
         onNavigateToReview={onNavigateToReview}
@@ -228,8 +257,12 @@ describe('BiographerPanel', () => {
   }
 
   it('shows the active question with a localized topic label and lets the owner answer it', async () => {
-    vi.mocked(api.getBiographerEligibility).mockResolvedValue({ eligible: true, blocked_reason: null });
-    vi.mocked(api.getNextBiographerQuestion).mockResolvedValue(baseBiographerQuestion());
+    // `load()` (called both on mount and again after a successful answer)
+    // calls `getBiographerResume` each time - the second call must reflect
+    // the post-answer backend state, exactly like the real API would.
+    vi.mocked(api.getBiographerResume)
+      .mockResolvedValueOnce(baseResume())
+      .mockResolvedValue(baseResume({ active_question: null, candidate_id: 5, next_action: 'candidate_ready_for_review' }));
     vi.mocked(api.answerBiographerQuestion).mockResolvedValue({
       question: baseBiographerQuestion({ status: 'answered', answered_at: '2026-01-01T00:01:00Z', resulting_candidate_id: 5 }),
       candidate_id: 5,
@@ -253,9 +286,10 @@ describe('BiographerPanel', () => {
   });
 
   it('skip calls the skip endpoint, not the answer or postpone endpoint', async () => {
-    vi.mocked(api.getBiographerEligibility).mockResolvedValue({ eligible: true, blocked_reason: null });
-    vi.mocked(api.getNextBiographerQuestion).mockResolvedValue(
-      baseBiographerQuestion({ id: 2, topic: 'family', locale: 'ru', question_text: 'Расскажи о своей семье.' })
+    vi.mocked(api.getBiographerResume).mockResolvedValue(
+      baseResume({
+        active_question: baseBiographerQuestion({ id: 2, topic: 'family', locale: 'ru', question_text: 'Расскажи о своей семье.' })
+      })
     );
     vi.mocked(api.skipBiographerQuestion).mockResolvedValue(
       baseBiographerQuestion({ id: 2, topic: 'family', locale: 'ru', question_text: 'Расскажи о своей семье.', status: 'skipped' })
@@ -273,8 +307,7 @@ describe('BiographerPanel', () => {
   });
 
   it('postpone calls the postpone endpoint, not skip or answer', async () => {
-    vi.mocked(api.getBiographerEligibility).mockResolvedValue({ eligible: true, blocked_reason: null });
-    vi.mocked(api.getNextBiographerQuestion).mockResolvedValue(baseBiographerQuestion({ id: 3 }));
+    vi.mocked(api.getBiographerResume).mockResolvedValue(baseResume({ active_question: baseBiographerQuestion({ id: 3 }) }));
     vi.mocked(api.postponeBiographerQuestion).mockResolvedValue(baseBiographerQuestion({ id: 3, status: 'postponed' }));
 
     const user = userEvent.setup();
@@ -289,7 +322,9 @@ describe('BiographerPanel', () => {
   });
 
   it('shows a blocked message with no question when the biography is not indexed, and never a generic question', async () => {
-    vi.mocked(api.getBiographerEligibility).mockResolvedValue({ eligible: false, blocked_reason: 'biography_not_indexed' });
+    vi.mocked(api.getBiographerResume).mockResolvedValue(
+      baseResume({ eligible: false, blocked_reason: 'biography_not_indexed', active_question: null, next_action: 'biography_not_indexed' })
+    );
 
     renderPanel();
 
@@ -299,7 +334,9 @@ describe('BiographerPanel', () => {
   });
 
   it('shows an indexing-in-progress message distinct from not-indexed', async () => {
-    vi.mocked(api.getBiographerEligibility).mockResolvedValue({ eligible: false, blocked_reason: 'indexing_in_progress' });
+    vi.mocked(api.getBiographerResume).mockResolvedValue(
+      baseResume({ eligible: false, blocked_reason: 'indexing_in_progress', active_question: null, next_action: 'biography_indexing' })
+    );
 
     renderPanel();
 
@@ -308,7 +345,9 @@ describe('BiographerPanel', () => {
   });
 
   it('shows a stale-biography message with a re-index call to action for the owner', async () => {
-    vi.mocked(api.getBiographerEligibility).mockResolvedValue({ eligible: false, blocked_reason: 'biography_stale' });
+    vi.mocked(api.getBiographerResume).mockResolvedValue(
+      baseResume({ eligible: false, blocked_reason: 'biography_stale', active_question: null, next_action: 'biography_not_indexed' })
+    );
 
     const { onNavigateToBiography } = renderPanel();
 
@@ -319,7 +358,9 @@ describe('BiographerPanel', () => {
   });
 
   it('hides the biography call to action for non-owners (onNavigateToBiography=null)', async () => {
-    vi.mocked(api.getBiographerEligibility).mockResolvedValue({ eligible: false, blocked_reason: 'biography_not_indexed' });
+    vi.mocked(api.getBiographerResume).mockResolvedValue(
+      baseResume({ eligible: false, blocked_reason: 'biography_not_indexed', active_question: null, next_action: 'biography_not_indexed' })
+    );
 
     renderPanel({ onNavigateToBiography: null });
 
@@ -328,11 +369,75 @@ describe('BiographerPanel', () => {
   });
 
   it('shows the candidate-waiting-for-review blocked reason distinctly', async () => {
-    vi.mocked(api.getBiographerEligibility).mockResolvedValue({ eligible: false, blocked_reason: 'candidate_waiting_for_review' });
+    vi.mocked(api.getBiographerResume).mockResolvedValue(
+      baseResume({ eligible: false, blocked_reason: 'candidate_waiting_for_review', active_question: null, next_action: 'blocked' })
+    );
 
     renderPanel();
 
     expect(await screen.findByText(t.biographerBlockedWaitingReview)).toBeInTheDocument();
+  });
+
+  it('resume restores the ready-for-review state without generating a new question after navigating back', async () => {
+    vi.mocked(api.getBiographerResume).mockResolvedValue(
+      baseResume({ active_question: null, candidate_id: 42, next_action: 'candidate_ready_for_review' })
+    );
+
+    renderPanel();
+
+    expect(await screen.findByText(t.biographerReadyForReview)).toBeInTheDocument();
+    expect(api.getNextBiographerQuestion).not.toHaveBeenCalled();
+    expect(screen.queryByLabelText(t.biographerAnswerPlaceholder)).not.toBeInTheDocument();
+  });
+
+  it('resume shows the pending-index state with a Review CTA', async () => {
+    vi.mocked(api.getBiographerResume).mockResolvedValue(
+      baseResume({ active_question: null, candidate_id: 42, next_action: 'candidate_pending_index' })
+    );
+
+    renderPanel();
+
+    expect(await screen.findByText(t.biographerCandidatePendingIndex)).toBeInTheDocument();
+  });
+
+  it('resume shows the indexed state', async () => {
+    vi.mocked(api.getBiographerResume).mockResolvedValue(
+      baseResume({ active_question: null, candidate_id: 42, next_action: 'candidate_indexed' })
+    );
+
+    renderPanel();
+
+    expect(await screen.findByText(t.biographerCandidateIndexed)).toBeInTheDocument();
+  });
+
+  it('restores an unsubmitted draft answer for the same question after remounting', async () => {
+    vi.mocked(api.getBiographerResume).mockResolvedValue(baseResume());
+    const user = userEvent.setup();
+    const { unmount } = renderPanel();
+
+    await screen.findByText('Where did you grow up?');
+    await user.type(screen.getByLabelText(t.biographerAnswerPlaceholder), 'A draft in progress');
+    unmount();
+
+    renderPanel();
+    await screen.findByText('Where did you grow up?');
+    expect(screen.getByLabelText(t.biographerAnswerPlaceholder)).toHaveValue('A draft in progress');
+  });
+
+  it('does not restore a draft onto a different question', async () => {
+    vi.mocked(api.getBiographerResume).mockResolvedValue(baseResume());
+    const user = userEvent.setup();
+    const { unmount } = renderPanel();
+    await screen.findByText('Where did you grow up?');
+    await user.type(screen.getByLabelText(t.biographerAnswerPlaceholder), 'A draft in progress');
+    unmount();
+
+    vi.mocked(api.getBiographerResume).mockResolvedValue(
+      baseResume({ active_question: baseBiographerQuestion({ id: 99, question_text: 'A different question?' }) })
+    );
+    renderPanel();
+    await screen.findByText('A different question?');
+    expect(screen.getByLabelText(t.biographerAnswerPlaceholder)).toHaveValue('');
   });
 });
 
