@@ -6,6 +6,8 @@ database-verified `MemorialMembership`, never from client input."""
 
 from __future__ import annotations
 
+from datetime import datetime
+
 from pydantic import BaseModel, Field, field_validator
 
 from app.modules.family_memory_enrichment.enums import OwnerReviewAction, PrivacyScope
@@ -62,3 +64,22 @@ class CandidateHistoryRead(BaseModel):
     candidate: CandidateEnrichmentRead
     contributions: list[FamilyMemoryContributionRead]
     clarifications: list[ClarificationQuestionRead]
+
+
+class BiographyMemoryEntryRead(BaseModel):
+    """Task 65.6.1 (Part E) - one approved, promoted candidate memory
+    projected into the Biography tab as confirmed evidence, distinct from
+    the manually-authored `biography` free-text field. Only current,
+    approved candidates the viewer is authorized to see are ever included
+    (see `avatar_memory_promotions.service.list_biography_memory_entries`) -
+    never a pending/rejected/archived draft, and never another member's
+    owner-only memory."""
+
+    promotion_id: int
+    candidate_id: int
+    text: str
+    privacy_scope: PrivacyScope
+    promotion_status: str
+    searchable_as_fact: bool
+    created_at: datetime
+    indexed_at: datetime | None = None

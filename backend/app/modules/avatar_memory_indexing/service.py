@@ -41,6 +41,8 @@ from app.modules.embeddings.providers import build_embedding_provider
 from app.modules.embeddings.providers.base import EmbeddingVector
 from app.modules.embeddings.providers.bge_m3_hybrid import BgeM3HybridEmbeddingAdapter
 from app.modules.embeddings.runtime import assert_real_embedding_runtime_for_e2e
+from app.modules.job_tracking.enums import BackgroundJobType
+from app.modules.job_tracking.service import attach_celery_task_id, create_job
 from app.modules.qdrant_indexing import repository as qdrant_index_repository
 from app.modules.rag_chunks.validation import estimate_token_count
 from app.modules.family_memory_enrichment.eligibility import (
@@ -59,6 +61,12 @@ PROVENANCE = "review_approved_conversation_candidate"
 MEMORY_STATUS = "verified"
 MAX_MEMORY_TEXT_LENGTH = 500
 SAFE_FAILURE_MESSAGE = "Approved memory indexing failed"
+
+#: Same `input_payload["workflow"]` convention as
+#: `memorial_contribution_indexing.service.INDEXING_JOB_WORKFLOW` - lets a
+#: shared `background_jobs` row family stay disambiguated by workflow
+#: without inventing a parallel job-tracking model (Task 65.6.1, Part G).
+INDEXING_JOB_WORKFLOW = "avatar_memory_promotion_indexing"
 IMMUTABLE_PAYLOAD_KEYS = (
     "owner_user_id",
     "profile_id",
@@ -503,6 +511,43 @@ def _build_read(promotion: AvatarMemoryPromotion, *, result: str) -> AvatarMemor
     )
 
 
+def enqueue_indexing_job(
+    db: Session,
+    *,
+    profile: MemoryProfile,
+    promotion: AvatarMemoryPromotion,
+):
+    """Enqueue the heavy embedding/Qdrant step on the existing Celery worker
+    instead of running it inline inside the HTTP request that just approved
+    the candidate (Task 65.6.1, Part C/G/D). Mirrors
+    `memorial_contribution_indexing.service.enqueue_indexing_job` exactly -
+    same `background_jobs` row via `job_tracking.service.create_job`, same
+    `BackgroundJobType.QDRANT_INDEXING` job type, same
+    fire-and-forget-from-the-caller's-perspective shape. Callers must invoke
+    this only after the promotion-creating transaction has already
+    committed (never inside the same open transaction), so a worker that
+    picks the job up immediately always sees a durable, committed
+    `pending_index` promotion row.
+    """
+
+    background_job = create_job(
+        db,
+        owner_user_id=profile.user_id,
+        profile_id=profile.id,
+        job_type=BackgroundJobType.QDRANT_INDEXING,
+        input_payload={
+            "workflow": INDEXING_JOB_WORKFLOW,
+            "candidate_id": promotion.candidate_id,
+            "promotion_id": promotion.id,
+        },
+    )
+
+    from app.worker.tasks import run_avatar_memory_indexing_job
+
+    async_result = run_avatar_memory_indexing_job.delay(background_job.id)
+    return attach_celery_task_id(db, job_id=background_job.id, celery_task_id=async_result.id)
+
+
 def index_promotion(
     db: Session,
     *,
@@ -524,7 +569,11 @@ def index_promotion(
     if promotion is None:
         observe_memory_indexing_finished(result="skipped", duration_seconds=perf_counter() - started_at)
         raise AvatarMemoryIndexingNotFoundError("Avatar memory promotion not found")
-    if promotion.promotion_status not in {"pending_index", "indexed"}:
+    # `failed` is retryable (mirrors `memorial_contribution_indexing.
+    # index_contribution_promotion`) - a promotion that failed once (e.g. a
+    # transient Qdrant error) must not be stuck forever with no safe way
+    # back to `indexed` short of a manual DB edit.
+    if promotion.promotion_status not in {"pending_index", "indexed", "failed"}:
         observe_memory_indexing_finished(result="skipped", duration_seconds=perf_counter() - started_at)
         raise AvatarMemoryIndexingEligibilityError(
             f"Promotion status `{promotion.promotion_status}` is not eligible for indexing"
@@ -540,7 +589,7 @@ def index_promotion(
         point_id = plan.point_id
         existing_records = repository.get_evidence_records(db, promotion=promotion)
 
-        if promotion.promotion_status == "pending_index":
+        if promotion.promotion_status in {"pending_index", "failed"}:
             promotion.indexing_attempt_count += 1
             promotion.target_collection_name = plan.collection_name
             promotion.qdrant_point_id = plan.point_id
@@ -673,8 +722,8 @@ def index_promotion(
             collection_name=collection_name,
             point_id=point_id,
             error=exc,
-            increment_attempt=started_status == "pending_index",
-            preserve_if_indexed=started_status == "pending_index",
+            increment_attempt=started_status in {"pending_index", "failed"},
+            preserve_if_indexed=started_status in {"pending_index", "failed"},
         )
         observe_memory_indexing_finished(result="failed", duration_seconds=perf_counter() - started_at)
         raise
@@ -685,8 +734,8 @@ def index_promotion(
             collection_name=collection_name,
             point_id=point_id,
             error=exc,
-            increment_attempt=started_status == "pending_index",
-            preserve_if_indexed=started_status == "pending_index",
+            increment_attempt=started_status in {"pending_index", "failed"},
+            preserve_if_indexed=started_status in {"pending_index", "failed"},
         )
         observe_memory_indexing_finished(result="failed", duration_seconds=perf_counter() - started_at)
         if isinstance(exc, AvatarMemoryIndexingExecutionError):

@@ -3,6 +3,11 @@ from __future__ import annotations
 from celery.utils.log import get_task_logger
 
 from app.db.session import SessionLocal
+from app.modules.avatar_memory_indexing.service import (
+    AvatarMemoryIndexingEligibilityError,
+    AvatarMemoryIndexingNotFoundError,
+    index_promotion,
+)
 from app.modules.biography_ingestion.service import (
     BiographyIngestionEligibilityError,
     BiographyIngestionNotFoundError,
@@ -215,6 +220,89 @@ def run_memorial_contribution_indexing_job(self, job_id: int) -> dict[str, objec
             result_payload={
                 "promotion_id": result.promotion_id,
                 "contribution_id": result.contribution_id,
+                "promotion_status": result.promotion_status,
+                "searchable_as_fact": result.searchable_as_fact,
+            },
+        )
+        return {"job_id": job_id, "status": "succeeded"}
+    finally:
+        db.close()
+
+
+@celery_app.task(bind=True, name="app.worker.tasks.run_avatar_memory_indexing_job")
+def run_avatar_memory_indexing_job(self, job_id: int) -> dict[str, object]:
+    """Runs the heavy embedding/Qdrant step of the Task 65.6.1 approved-
+    candidate promotion/indexing bridge outside the HTTP request that
+    approved the candidate. Domain-level ineligibility/not-found (e.g. a
+    candidate that was superseded or the promotion cancelled between
+    enqueue and execution) is recorded as a skipped job, not a Celery retry
+    storm - mirrors `run_memorial_contribution_indexing_job` exactly."""
+
+    session_factory = get_session_factory()
+    db = session_factory()
+    try:
+        background_job = job_tracking_repository.get_background_job_by_id(db, job_id=job_id)
+        if background_job is None:
+            # Enqueued from an isolated test database that the worker does
+            # not share - nothing to do, and nothing to alarm on.
+            return {"job_id": job_id, "status": "skipped", "reason": "job_not_found"}
+
+        promotion_id = (background_job.input_payload or {}).get("promotion_id")
+        if not isinstance(promotion_id, int):
+            mark_failed(
+                db,
+                job_id=job_id,
+                error_message="Avatar memory indexing job payload is missing promotion_id",
+            )
+            return {"job_id": job_id, "status": "failed"}
+
+        mark_running(db, job_id=job_id, celery_task_id=self.request.id)
+        append_job_event(db, job_id=job_id, stage="avatar_memory_indexing", status="running")
+        try:
+            result = index_promotion(
+                db,
+                owner_user_id=background_job.owner_user_id,
+                promotion_id=promotion_id,
+            )
+        except (AvatarMemoryIndexingNotFoundError, AvatarMemoryIndexingEligibilityError) as exc:
+            append_job_event(
+                db,
+                job_id=job_id,
+                stage="avatar_memory_indexing",
+                status="skipped",
+                details={"reason": str(exc)},
+            )
+            mark_succeeded(db, job_id=job_id, result_payload={"skipped": True, "reason": str(exc)})
+            return {"job_id": job_id, "status": "skipped"}
+        except Exception as exc:
+            logger.exception("avatar_memory_indexing_job_failed", extra={"job_id": job_id})
+            append_job_event(
+                db,
+                job_id=job_id,
+                stage="avatar_memory_indexing",
+                status="failed",
+                details={"exception_type": exc.__class__.__name__},
+            )
+            mark_failed(
+                db,
+                job_id=job_id,
+                error_message="Avatar memory indexing failed",
+                error_payload={"code": "avatar_memory_indexing_failed"},
+            )
+            return {"job_id": job_id, "status": "failed"}
+
+        append_job_event(
+            db,
+            job_id=job_id,
+            stage="avatar_memory_indexing",
+            status="succeeded",
+            details={"result": result.result, "promotion_status": result.promotion_status},
+        )
+        mark_succeeded(
+            db,
+            job_id=job_id,
+            result_payload={
+                "promotion_id": result.promotion_id,
                 "promotion_status": result.promotion_status,
                 "searchable_as_fact": result.searchable_as_fact,
             },

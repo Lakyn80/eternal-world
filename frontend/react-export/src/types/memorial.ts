@@ -231,6 +231,20 @@ export type MemoryCandidateEnrichmentRead = {
   explicit_indexing_required: boolean;
 };
 
+/** Task 65.6.1 (Part E) - one approved, promoted candidate memory projected
+ * into the Biography tab. Distinct from the manually-authored `biography`
+ * free-text field/its own indexing status (`BiographyStatusRead`). */
+export type BiographyMemoryEntryRead = {
+  promotion_id: number;
+  candidate_id: number;
+  text: string;
+  privacy_scope: PrivacyScope;
+  promotion_status: string;
+  searchable_as_fact: boolean;
+  created_at: string;
+  indexed_at: string | null;
+};
+
 export type OwnerReviewCandidateAction =
   | 'confirm'
   | 'edit_and_confirm'

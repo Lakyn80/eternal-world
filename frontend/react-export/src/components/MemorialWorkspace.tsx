@@ -18,6 +18,7 @@ import {
   getSession,
   indexCandidateMemory,
   inviteParticipant,
+  listBiographyMemoryEntries,
   listChatMessages,
   listContributions,
   listMembers,
@@ -48,6 +49,7 @@ import type {
   BiographerEligibilityRead,
   BiographerQuestionRead,
   BillingLimitsRead,
+  BiographyMemoryEntryRead,
   BiographyStatusRead,
   CandidateHistoryRead,
   ChatMessageRead,
@@ -113,6 +115,12 @@ export type Copy = {
   biographyConfirmStartBody: string;
   biographyConfirmStartYes: string;
   biographyConfirmCancel: string;
+  confirmedMemoriesTitle: string;
+  confirmedMemoriesIntro: string;
+  confirmedMemoriesEmpty: string;
+  confirmedMemoriesIndexedBadge: string;
+  confirmedMemoriesPendingBadge: string;
+  confirmedMemoriesFailedBadge: string;
   biographer: string;
   biographerIntro: string;
   biographerBlockedMissing: string;
@@ -160,6 +168,8 @@ export type Copy = {
   candidatePendingIndexLabel: string;
   candidatePendingIndexNotice: string;
   candidateAlreadyIndexed: string;
+  candidateIndexingFailedLabel: string;
+  candidateIndexRetryButton: string;
   candidateIndexConfirmTitle: string;
   candidateIndexConfirmBody: string;
   candidateIndexConfirmYes: string;
@@ -343,6 +353,12 @@ export const COPY: Record<Lang, Copy> = {
     biographyConfirmStartBody: 'After indexing, the avatar may use this biography in its answers.',
     biographyConfirmStartYes: 'Yes, start indexing',
     biographyConfirmCancel: 'Cancel',
+    confirmedMemoriesTitle: 'Confirmed memories',
+    confirmedMemoriesIntro: 'Memories the AI Biographer proposed and you approved. They complement the biography text above and are only shown here once approved.',
+    confirmedMemoriesEmpty: 'No approved biographer memories yet.',
+    confirmedMemoriesIndexedBadge: 'Searchable by the avatar',
+    confirmedMemoriesPendingBadge: 'Approved, not yet searchable',
+    confirmedMemoriesFailedBadge: 'Indexing failed',
     biographer: 'Biographer',
     biographerIntro: 'The AI Biographer works from the indexed biography and approved memories. It first figures out what is already known, then asks one question that adds to the story. Answers are never indexed automatically - they go through review first.',
     biographerBlockedMissing: 'Save the biography first.',
@@ -390,6 +406,8 @@ export const COPY: Record<Lang, Copy> = {
     candidatePendingIndexLabel: 'Approved, not yet indexed',
     candidatePendingIndexNotice: 'Memory approved. Status: pending_index. The memory is approved but not yet searchable by the avatar.',
     candidateAlreadyIndexed: 'This memory is already indexed.',
+    candidateIndexingFailedLabel: 'Indexing failed',
+    candidateIndexRetryButton: 'Retry indexing',
     candidateIndexConfirmTitle: 'Index this memory?',
     candidateIndexConfirmBody: 'This creates an embedding and makes the approved memory available to avatar retrieval.',
     candidateIndexConfirmYes: 'Yes, index memory',
@@ -575,6 +593,12 @@ export const COPY: Record<Lang, Copy> = {
     biographyConfirmStartBody: 'Po zaindexování může avatar tento životopis použít ve svých odpovědích.',
     biographyConfirmStartYes: 'Ano, spustit indexaci',
     biographyConfirmCancel: 'Zrušit',
+    confirmedMemoriesTitle: 'Potvrzené vzpomínky',
+    confirmedMemoriesIntro: 'Vzpomínky, které navrhl AI biograf a vy jste je schválili. Doplňují text životopisu výše a zobrazují se zde až po schválení.',
+    confirmedMemoriesEmpty: 'Zatím žádné schválené vzpomínky od biografa.',
+    confirmedMemoriesIndexedBadge: 'Vyhledatelné avatarem',
+    confirmedMemoriesPendingBadge: 'Schváleno, zatím nevyhledatelné',
+    confirmedMemoriesFailedBadge: 'Indexace selhala',
     biographer: 'AI biograf',
     biographerIntro: 'AI biograf vychází ze zaindexovaného životopisu a schválených vzpomínek. Nejdřív zjistí, co už je známé, a potom položí jednu otázku, která příběh doplní. Odpověď se nikdy nezaindexuje automaticky - nejprve projde kontrolou.',
     biographerBlockedMissing: 'Nejprve uložte životopis.',
@@ -622,6 +646,8 @@ export const COPY: Record<Lang, Copy> = {
     candidatePendingIndexLabel: 'Schváleno, zatím nezaindexováno',
     candidatePendingIndexNotice: 'Vzpomínka schválena. Stav: čeká na indexaci. Vzpomínka je schválena, ale avatar ji zatím nemůže vyhledat.',
     candidateAlreadyIndexed: 'Tato vzpomínka je již zaindexována.',
+    candidateIndexingFailedLabel: 'Indexace selhala',
+    candidateIndexRetryButton: 'Zkusit indexaci znovu',
     candidateIndexConfirmTitle: 'Zaindexovat tuto vzpomínku?',
     candidateIndexConfirmBody: 'Tím se vytvoří embedding a schválená vzpomínka bude dostupná pro vyhledávání avatarem.',
     candidateIndexConfirmYes: 'Ano, zaindexovat vzpomínku',
@@ -807,6 +833,12 @@ export const COPY: Record<Lang, Copy> = {
     biographyConfirmStartBody: 'После индексации аватар сможет использовать эту биографию в своих ответах.',
     biographyConfirmStartYes: 'Да, запустить индексацию',
     biographyConfirmCancel: 'Отмена',
+    confirmedMemoriesTitle: 'Подтверждённые воспоминания',
+    confirmedMemoriesIntro: 'Воспоминания, которые предложил ИИ-биограф и которые вы одобрили. Они дополняют текст биографии выше и отображаются здесь только после одобрения.',
+    confirmedMemoriesEmpty: 'Пока нет одобренных воспоминаний от биографа.',
+    confirmedMemoriesIndexedBadge: 'Доступно для поиска аватаром',
+    confirmedMemoriesPendingBadge: 'Одобрено, ещё не доступно для поиска',
+    confirmedMemoriesFailedBadge: 'Индексация не удалась',
     biographer: 'ИИ-биограф',
     biographerIntro: 'ИИ-биограф использует проиндексированную биографию и одобренные воспоминания. Сначала он определяет, что уже известно, а затем задаёт один вопрос, который дополняет историю. Ответ никогда не индексируется автоматически - сначала он проходит проверку.',
     biographerBlockedMissing: 'Сначала сохраните биографию.',
@@ -854,6 +886,8 @@ export const COPY: Record<Lang, Copy> = {
     candidatePendingIndexLabel: 'Одобрено, ещё не проиндексировано',
     candidatePendingIndexNotice: 'Воспоминание одобрено. Статус: ожидает индексации. Воспоминание одобрено, но пока недоступно для поиска аватаром.',
     candidateAlreadyIndexed: 'Это воспоминание уже проиндексировано.',
+    candidateIndexingFailedLabel: 'Индексация не удалась',
+    candidateIndexRetryButton: 'Повторить индексацию',
     candidateIndexConfirmTitle: 'Проиндексировать это воспоминание?',
     candidateIndexConfirmBody: 'Это создаст embedding и сделает одобренное воспоминание доступным для поиска аватаром.',
     candidateIndexConfirmYes: 'Да, проиндексировать воспоминание',
@@ -2450,11 +2484,38 @@ export function BiographyPanel({
   const [confirmingStart, setConfirmingStart] = useState(false);
   const [confirmingClear, setConfirmingClear] = useState(false);
   const [clearBusy, setClearBusy] = useState(false);
+  const [memoryEntries, setMemoryEntries] = useState<BiographyMemoryEntryRead[]>([]);
+  const [memoryEntriesLoading, setMemoryEntriesLoading] = useState(true);
+  const [memoryEntriesError, setMemoryEntriesError] = useState<string | null>(null);
 
   useEffect(() => {
     setText(initialBiography ?? '');
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [profileId]);
+
+  // Task 65.6.1 (Part E/K): approved candidate memories projected into the
+  // Biography tab - a separate, read-only list from the free-text
+  // `biography` field above. Re-fetched whenever the memorial switches so a
+  // previously-loaded memorial's entries never linger after switching
+  // (Part K: "memorial switching does not leak biography data").
+  useEffect(() => {
+    let cancelled = false;
+    setMemoryEntriesLoading(true);
+    setMemoryEntriesError(null);
+    listBiographyMemoryEntries(token, profileId)
+      .then((entries) => {
+        if (!cancelled) setMemoryEntries(entries);
+      })
+      .catch((loadError) => {
+        if (!cancelled) setMemoryEntriesError(safeError(loadError));
+      })
+      .finally(() => {
+        if (!cancelled) setMemoryEntriesLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [token, profileId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -2644,6 +2705,34 @@ export function BiographyPanel({
           </div>
         </div>
       )}
+      <div className="mt-6 border-t border-white/10 pt-5">
+        <h4 className="font-serif text-xl">{t.confirmedMemoriesTitle}</h4>
+        <p className="mt-1 text-sm leading-6 text-fg/58">{t.confirmedMemoriesIntro}</p>
+        {memoryEntriesLoading && <p className="mt-3 text-sm text-fg/55">{t.working}</p>}
+        {memoryEntriesError && (
+          <p className="mt-3 rounded-2xl border border-red-400/30 bg-red-500/10 px-4 py-3 text-sm text-red-100">
+            {memoryEntriesError}
+          </p>
+        )}
+        {!memoryEntriesLoading && !memoryEntriesError && memoryEntries.length === 0 && (
+          <p className="mt-3 text-sm text-fg/50">{t.confirmedMemoriesEmpty}</p>
+        )}
+        <div className="mt-3 grid gap-3">
+          {memoryEntries.map((entry) => (
+            <article className="min-w-0 rounded-2xl border border-white/10 bg-black/20 p-4" key={entry.promotion_id}>
+              <p className="break-words text-sm leading-6 text-fg/80">{entry.text}</p>
+              <div className="mt-2 flex flex-wrap gap-2">
+                <Badge>{privacyScopeLabel(t, entry.privacy_scope)}</Badge>
+                {entry.searchable_as_fact && <Badge tone="cyan">{t.confirmedMemoriesIndexedBadge}</Badge>}
+                {!entry.searchable_as_fact && entry.promotion_status !== 'failed' && (
+                  <Badge tone="muted">{t.confirmedMemoriesPendingBadge}</Badge>
+                )}
+                {entry.promotion_status === 'failed' && <Badge tone="danger">{t.confirmedMemoriesFailedBadge}</Badge>}
+              </div>
+            </article>
+          ))}
+        </div>
+      </div>
       {hasBiographyContent && (
         <div className="mt-6 border-t border-white/10 pt-5">
           {!confirmingClear ? (
@@ -3231,6 +3320,7 @@ export function CandidatesReviewSection({
                 {candidate.explicit_indexing_required && !candidate.searchable_as_fact && (
                   <Badge tone="muted">{t.candidatePendingIndexLabel}</Badge>
                 )}
+                {candidate.promotion_status === 'failed' && <Badge tone="danger">{t.candidateIndexingFailedLabel}</Badge>}
               </div>
 
               {notice && <p className="mt-3 rounded-2xl border border-cyan/25 bg-cyan/10 px-3 py-2 text-xs text-cyan">{notice}</p>}
@@ -3426,7 +3516,7 @@ export function CandidatesReviewSection({
                 </div>
               )}
 
-              {candidate.explicit_indexing_required && isOwner && (
+              {(candidate.explicit_indexing_required || candidate.promotion_status === 'failed') && isOwner && (
                 <div className="mt-4">
                   {isConfirmingIndex ? (
                     <div className="grid gap-3 rounded-2xl border border-cyan/25 bg-cyan/10 p-4">
@@ -3450,9 +3540,9 @@ export function CandidatesReviewSection({
                   ) : (
                     <ActionButton
                       disabled={isBusy}
-                      label={t.candidateIndexButton}
+                      label={candidate.promotion_status === 'failed' ? t.candidateIndexRetryButton : t.candidateIndexButton}
                       onClick={() => setConfirmingIndexId(candidate.candidate_id)}
-                      tone="primary"
+                      tone={candidate.promotion_status === 'failed' ? 'danger' : 'primary'}
                     />
                   )}
                 </div>

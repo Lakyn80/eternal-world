@@ -31,8 +31,10 @@ from app.modules.avatar_memory_indexing.service import (
 from app.modules.avatar_memory_promotions.service import (
     AvatarMemoryPromotionCandidateStateError,
     AvatarMemoryPromotionNotFoundError,
+    list_biography_memory_entries,
 )
 from app.modules.family_memory_enrichment.clarification import localize_question_text
+from app.modules.family_memory_enrichment.eligibility import FamilyMemoryEligibilityError
 from app.modules.conversation_memory_candidates.service import (
     ConversationMemoryCandidateNotFoundError,
     list_candidates as list_conversation_candidates,
@@ -60,6 +62,7 @@ from app.modules.family_memory_enrichment.service import (
 from app.modules.memorial_access.capabilities import MemorialCapability, resolve_authorized_profile
 from app.modules.memorial_access.service import MemorialForbiddenError, MemorialNotFoundError
 from app.modules.memorial_candidates.schemas import (
+    BiographyMemoryEntryRead,
     CandidateHistoryRead,
     ClarificationAnswerBody,
     OwnerReviewBody,
@@ -168,6 +171,52 @@ def list_candidates_endpoint(
             # excluded from the list rather than surfaced as a 500.
             continue
     return results
+
+
+@router.get(
+    "/api/memorials/{profile_id}/biography/memory-entries",
+    response_model=list[BiographyMemoryEntryRead],
+    responses={
+        status.HTTP_401_UNAUTHORIZED: {"model": ErrorResponse},
+        status.HTTP_403_FORBIDDEN: {"model": ErrorResponse},
+        status.HTTP_404_NOT_FOUND: {"model": ErrorResponse},
+    },
+)
+def list_biography_memory_entries_endpoint(
+    profile_id: ProfileIdPath,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> list[BiographyMemoryEntryRead]:
+    """Task 65.6.1 (Part E) - approved, promoted candidate memories
+    projected into the Biography tab, separate from the manually-authored
+    `biography` free-text field. Read-only; never mutates the biography
+    text and never surfaces a pending/rejected/archived draft."""
+
+    profile, _membership = _resolve_profile(
+        db,
+        current_user=current_user,
+        profile_id=profile_id,
+        capability=MemorialCapability.VIEW_MEMORIAL,
+    )
+    entries = list_biography_memory_entries(
+        db,
+        owner_user_id=profile.user_id,
+        profile_id=profile.id,
+        viewer_is_profile_owner=current_user.id == profile.user_id,
+    )
+    return [
+        BiographyMemoryEntryRead(
+            promotion_id=promotion.id,
+            candidate_id=promotion.candidate_id,
+            text=promotion.approved_memory_text,
+            privacy_scope=promotion.candidate.privacy_scope,
+            promotion_status=promotion.promotion_status,
+            searchable_as_fact=promotion.promotion_status == "indexed",
+            created_at=promotion.created_at,
+            indexed_at=promotion.indexed_at,
+        )
+        for promotion in entries
+    ]
 
 
 @router.get(
@@ -383,6 +432,21 @@ def owner_review_endpoint(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
     except FamilyMemoryAuthorizationError as exc:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
+    except FamilyMemoryEligibilityError as exc:
+        # Task 65.6.1 (Part C): before this fix, a candidate that failed
+        # promotion eligibility at the exact moment of approval (e.g. a
+        # Czech-origin candidate whose Russian translation is still
+        # pending/failed) raised this uncaught, producing a raw 500 with no
+        # indication of why - `owner_review`'s approval-state mutation and
+        # its promotion-creation attempt share one DB transaction, so the
+        # candidate correctly stays `needs_review` (the whole transaction
+        # rolls back together; nothing is left half-applied), but the
+        # owner had no way to know that, or why, without reading server
+        # logs. Surfacing this as a clear 400 with the concrete block
+        # reason lets the owner retry the same approval once the blocking
+        # condition clears (e.g. the translation finishes) - "clear errors
+        # and safe failure modes" instead of an opaque server error.
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"promotion_blocked:{exc.reason}") from exc
 
 
 @router.post(

@@ -15,6 +15,7 @@ import {
 import type {
   BiographerQuestionRead,
   BiographerResumeRead,
+  BiographyMemoryEntryRead,
   BiographyStatusRead,
   MemoryCandidateEnrichmentRead
 } from '../types/memorial';
@@ -35,6 +36,7 @@ vi.mock('../lib/memorialApi', async () => {
     postponeBiographerQuestion: vi.fn(),
     answerCandidateClarification: vi.fn(),
     listMemoryCandidates: vi.fn(),
+    listBiographyMemoryEntries: vi.fn(),
     ownerReviewCandidate: vi.fn(),
     indexCandidateMemory: vi.fn(),
     getCandidateHistory: vi.fn(),
@@ -122,6 +124,20 @@ function baseCandidate(overrides: Partial<MemoryCandidateEnrichmentRead> = {}): 
   };
 }
 
+function baseMemoryEntry(overrides: Partial<BiographyMemoryEntryRead> = {}): BiographyMemoryEntryRead {
+  return {
+    promotion_id: 1,
+    candidate_id: 5,
+    text: 'Early childhood was spent in a specific approved place.',
+    privacy_scope: 'private_owner',
+    promotion_status: 'pending_index',
+    searchable_as_fact: false,
+    created_at: '2026-07-22T18:48:28.021Z',
+    indexed_at: null,
+    ...overrides
+  };
+}
+
 describe('pure helpers', () => {
   it('biographerLocale falls back to Czech for the marketing "en" locale', () => {
     expect(biographerLocale('ru')).toBe('ru');
@@ -167,6 +183,7 @@ describe('localization', () => {
 describe('BiographyPanel', () => {
   beforeEach(() => {
     vi.mocked(api.getBiographyStatus).mockResolvedValue(baseBiographyStatus());
+    vi.mocked(api.listBiographyMemoryEntries).mockResolvedValue([]);
   });
 
   afterEach(() => {
@@ -180,6 +197,62 @@ describe('BiographyPanel', () => {
 
     const textarea = await screen.findByLabelText(t.biographyTextLabel);
     expect(textarea).toHaveValue('Already written life story.');
+  });
+
+  it('shows an empty state when no candidate memory has been approved yet', async () => {
+    render(<BiographyPanel initialBiography="Text." lang="en" profileId={7} t={t} token="tok" />);
+    expect(await screen.findByText(t.confirmedMemoriesEmpty)).toBeInTheDocument();
+  });
+
+  it('shows a pending-index badge for an approved-but-not-yet-searchable memory, never a searchable one', async () => {
+    vi.mocked(api.listBiographyMemoryEntries).mockResolvedValue([
+      baseMemoryEntry({ promotion_status: 'pending_index', searchable_as_fact: false })
+    ]);
+
+    render(<BiographyPanel initialBiography="Text." lang="en" profileId={7} t={t} token="tok" />);
+
+    expect(await screen.findByText('Early childhood was spent in a specific approved place.')).toBeInTheDocument();
+    expect(screen.getByText(t.confirmedMemoriesPendingBadge)).toBeInTheDocument();
+    expect(screen.queryByText(t.confirmedMemoriesIndexedBadge)).not.toBeInTheDocument();
+  });
+
+  it('shows a searchable badge once the promoted memory has been indexed', async () => {
+    vi.mocked(api.listBiographyMemoryEntries).mockResolvedValue([
+      baseMemoryEntry({ promotion_status: 'indexed', searchable_as_fact: true })
+    ]);
+
+    render(<BiographyPanel initialBiography="Text." lang="en" profileId={7} t={t} token="tok" />);
+
+    expect(await screen.findByText(t.confirmedMemoriesIndexedBadge)).toBeInTheDocument();
+    expect(screen.queryByText(t.confirmedMemoriesPendingBadge)).not.toBeInTheDocument();
+  });
+
+  it('shows a failed-indexing badge, distinct from the pending/searchable states', async () => {
+    vi.mocked(api.listBiographyMemoryEntries).mockResolvedValue([
+      baseMemoryEntry({ promotion_status: 'failed', searchable_as_fact: false })
+    ]);
+
+    render(<BiographyPanel initialBiography="Text." lang="en" profileId={7} t={t} token="tok" />);
+
+    expect(await screen.findByText(t.confirmedMemoriesFailedBadge)).toBeInTheDocument();
+    expect(screen.queryByText(t.confirmedMemoriesPendingBadge)).not.toBeInTheDocument();
+    expect(screen.queryByText(t.confirmedMemoriesIndexedBadge)).not.toBeInTheDocument();
+  });
+
+  it('re-fetches confirmed memories when the memorial (profileId) switches, never keeping the previous one\'s entries', async () => {
+    vi.mocked(api.listBiographyMemoryEntries).mockImplementation(async (_token, profileId) =>
+      profileId === 7 ? [baseMemoryEntry({ promotion_id: 1, text: 'Memorial seven memory.' })] : []
+    );
+
+    const { rerender } = render(
+      <BiographyPanel initialBiography="Text." lang="en" profileId={7} t={t} token="tok" />
+    );
+    expect(await screen.findByText('Memorial seven memory.')).toBeInTheDocument();
+
+    rerender(<BiographyPanel initialBiography="Other text." lang="en" profileId={8} t={t} token="tok" />);
+
+    await waitFor(() => expect(screen.queryByText('Memorial seven memory.')).not.toBeInTheDocument());
+    expect(await screen.findByText(t.confirmedMemoriesEmpty)).toBeInTheDocument();
   });
 
   it('saving calls updateBiography but never startBiographyIngestion', async () => {
@@ -505,6 +578,26 @@ describe('CandidatesReviewSection', () => {
         expect.objectContaining({ rejection_reason: 'Not accurate' })
       )
     );
+  });
+
+  it('a failed indexing attempt shows a distinct failed badge and a retry button, never a pending/searchable badge', async () => {
+    vi.mocked(api.listMemoryCandidates).mockResolvedValue([
+      baseCandidate({
+        review_status: 'approved',
+        promotion_id: 9,
+        promotion_status: 'failed',
+        searchable_as_fact: false,
+        explicit_indexing_required: false
+      })
+    ]);
+
+    render(<CandidatesReviewSection isOwner lang="en" profileId={7} t={t} token="tok" />);
+    await screen.findByText('Grandma loved gardening.');
+
+    expect(screen.getByText(t.candidateIndexingFailedLabel)).toBeInTheDocument();
+    expect(screen.queryByText(t.candidatePendingIndexLabel)).not.toBeInTheDocument();
+    expect(screen.queryByText(t.candidateIndexedLabel)).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: t.candidateIndexRetryButton })).toBeInTheDocument();
   });
 
   it('multiple perspectives is only offered when the candidate is disputed', async () => {

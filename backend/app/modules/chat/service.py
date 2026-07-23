@@ -4,7 +4,12 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.core.logging import get_request_id
-from app.modules.ai_agents.brain.context import build_grounded_context, build_rag_evidence_items
+from app.modules.ai_agents.brain.context import (
+    build_grounded_context,
+    build_rag_evidence_items,
+    filter_learned_memory_results_by_question_intent,
+    prioritize_corrected_memory_evidence,
+)
 from app.db.models import ChatMessage, MemoryProfile, User
 from app.modules.ai_agents import get_agent_orchestrator
 from app.modules.ai_agents.schemas import (
@@ -137,7 +142,22 @@ def _retrieve_rag_evidence_safely(
     ):
         return []
 
-    return build_rag_evidence_items(retrieval_response.results)
+    # Task 65.6.1 (Part F/I): the authenticated chat path retrieves the same
+    # top-k pool the demo learned-memory path does, but was missing the
+    # demo path's evidence-ordering step (`app.modules.demo_fa_chat.
+    # service`) - so an owner-approved, verified learned memory that WAS
+    # correctly retrieved could still be outranked in the prompt by several
+    # unrelated/older archival chunks, purely by raw vector score. Reusing
+    # these two existing, already-tested functions unchanged (never
+    # re-implemented here) reorders and caps the already-retrieved,
+    # already-top_k'd pool - it does not change retrieval, ranking, or
+    # top_k itself (see their own docstrings in `ai_agents.brain.context`).
+    filtered_results = filter_learned_memory_results_by_question_intent(
+        retrieval_response.results,
+        user_message=user_message,
+    )
+    prioritized_results = prioritize_corrected_memory_evidence(filtered_results)
+    return build_rag_evidence_items(prioritized_results)
 
 
 def send_chat_message(

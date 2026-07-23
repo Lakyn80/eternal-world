@@ -5,7 +5,7 @@
  */
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { BiographyPanel, COPY, CreateMemorialForm, MemorialList, Overview, shortTextPreview } from './MemorialWorkspace';
 import type { BillingLimitsRead, BiographyStatusRead, MemorialRead } from '../types/memorial';
 import * as api from '../lib/memorialApi';
@@ -19,11 +19,16 @@ vi.mock('../lib/memorialApi', async () => {
     updateBiography: vi.fn(),
     clearBiography: vi.fn(),
     updateMemorialMetadata: vi.fn(),
-    deleteMemorial: vi.fn()
+    deleteMemorial: vi.fn(),
+    listBiographyMemoryEntries: vi.fn()
   };
 });
 
 const t = COPY.en;
+
+beforeEach(() => {
+  vi.mocked(api.listBiographyMemoryEntries).mockResolvedValue([]);
+});
 
 /** The plan-limit message is a two-line string (`\n`-joined); RTL's default
  * text normalizer collapses DOM whitespace to single spaces, so a literal

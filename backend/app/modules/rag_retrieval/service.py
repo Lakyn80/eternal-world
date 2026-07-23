@@ -48,6 +48,37 @@ def _ensure_retrieval_enabled() -> None:
         raise RagRetrievalDisabledError("Qdrant retrieval is disabled")
 
 
+#: Payload `privacy_scope` values that must never be surfaced to a member
+#: who is not the memorial's own owning account, even though the point is
+#: correctly scoped to the right `profile_id`/`owner_user_id` (Task 65.6.1).
+#: Retrieval is otherwise indexed and filtered per-memorial, not per-member -
+#: any active member (owner/trusted_reviewer/contributor/viewer) with the
+#: `search_approved_memory`/`chat_with_avatar` capability shares the same
+#: Qdrant collection filter. Owner-only evidence therefore needs this one
+#: additional, narrow check so that promoting `private_owner`-scoped
+#: Biographer/family memories into the shared index (see
+#: `family_memory_enrichment.eligibility.INDEXABLE_PRIVACY_SCOPES`) cannot
+#: leak owner-only content to a different member chatting with the same
+#: avatar. Points without a `privacy_scope` payload key (e.g. the initial
+#: free-text biography ingestion) are unaffected - only an explicit
+#: owner-only marking restricts visibility.
+_OWNER_ONLY_PRIVACY_SCOPES = frozenset({"private_owner"})
+
+
+def _is_owner_only_evidence(payload_metadata: dict[str, object]) -> bool:
+    return payload_metadata.get("privacy_scope") in _OWNER_ONLY_PRIVACY_SCOPES
+
+
+def _is_visible_to_viewer(
+    payload_metadata: dict[str, object],
+    *,
+    viewer_is_profile_owner: bool,
+) -> bool:
+    if viewer_is_profile_owner:
+        return True
+    return not _is_owner_only_evidence(payload_metadata)
+
+
 def _resolve_model(model_code: str | None):
     try:
         model = get_default_embedding_model() if model_code is None else get_embedding_model(model_code)
@@ -193,6 +224,7 @@ def _retrieve_hybrid_dense_sparse(
     payload: RagRetrievalRequest,
     model,
     qdrant_collection: str,
+    viewer_is_profile_owner: bool,
     query_encoder: Callable[[str, str], HybridQueryVectors] | None = None,
 ) -> RagRetrievalResponseRead:
     query_vectors = encode_hybrid_query_vectors(
@@ -277,6 +309,11 @@ def _retrieve_hybrid_dense_sparse(
         if payload.language is not None and evidence_record.language != payload.language:
             continue
         if payload.source_type is not None and evidence_record.source_type != payload.source_type:
+            continue
+        if not _is_visible_to_viewer(
+            fused_result.payload_metadata,
+            viewer_is_profile_owner=viewer_is_profile_owner,
+        ):
             continue
 
         hydrated_results.append(
@@ -377,6 +414,8 @@ def retrieve_profile_rag_for_collection(
         collection_name=collection_name,
     )
 
+    viewer_is_profile_owner = current_user.id == profile.user_id
+
     if _should_use_hybrid_dense_sparse_path(
         model_code=model.code,
         retrieval_mode=retrieval_mode,
@@ -388,6 +427,7 @@ def retrieve_profile_rag_for_collection(
             payload=payload,
             model=model,
             qdrant_collection=qdrant_collection,
+            viewer_is_profile_owner=viewer_is_profile_owner,
             query_encoder=query_encoder,
         )
 
@@ -467,6 +507,11 @@ def retrieve_profile_rag_for_collection(
         if payload.language is not None and evidence_record.language != payload.language:
             continue
         if payload.source_type is not None and evidence_record.source_type != payload.source_type:
+            continue
+        if not _is_visible_to_viewer(
+            item["payload_metadata"],
+            viewer_is_profile_owner=viewer_is_profile_owner,
+        ):
             continue
 
         hydrated_results.append(

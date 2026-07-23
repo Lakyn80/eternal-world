@@ -6,6 +6,7 @@ import type {
   BiographerResumeRead,
   BillingLimitsRead,
   BiographyIngestionStartResponse,
+  BiographyMemoryEntryRead,
   BiographyStatusRead,
   CandidateHistoryRead,
   ChatActiveRead,
@@ -295,6 +296,20 @@ export async function startBiographyIngestion(
   return requestJson<BiographyIngestionStartResponse>(
     `/api/memorials/${profileId}/biography/ingest`,
     { method: 'POST' },
+    accessToken
+  );
+}
+
+/** Task 65.6.1 (Part E) - approved, promoted candidate memories projected
+ * into the Biography tab. Read-only; separate from the free-text
+ * `biography` field and its own `getBiographyStatus`/indexing state. */
+export async function listBiographyMemoryEntries(
+  accessToken: string,
+  profileId: number
+): Promise<BiographyMemoryEntryRead[]> {
+  return requestJson<BiographyMemoryEntryRead[]>(
+    `/api/memorials/${profileId}/biography/memory-entries`,
+    undefined,
     accessToken
   );
 }

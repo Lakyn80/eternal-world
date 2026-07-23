@@ -14,7 +14,11 @@ from app.core.metrics import (
     observe_memory_enrichment_status,
     observe_memory_owner_review,
 )
-from app.db.models import ConversationMemoryCandidate, FamilyMemoryContribution, MemoryClarificationQuestion
+from app.db.models import (
+    ConversationMemoryCandidate,
+    FamilyMemoryContribution,
+    MemoryClarificationQuestion,
+)
 from app.modules.avatar_memory_promotions import service as promotion_service
 from app.modules.content_translation import service as content_translation_service
 from app.modules.content_translation.schemas import TranslationFieldRequest
@@ -30,6 +34,7 @@ from app.modules.family_memory_enrichment.clarification import (
     normalize_text,
 )
 from app.modules.family_memory_enrichment.eligibility import (
+    BROAD_VISIBILITY_PRIVACY_SCOPES,
     INDEXABLE_PRIVACY_SCOPES,
     assert_candidate_eligible_for_promotion,
 )
@@ -58,6 +63,25 @@ from app.modules.family_memory_enrichment.schemas import (
 
 DEMO_OWNER_ACTOR_ID = "demo-owner-eva"
 logger = get_logger("family_memory_enrichment")
+
+#: Task 65.6.1 (Part C/D): `owner_review`'s confirm/edit_and_confirm/
+#: approve_multiple_perspectives branch creates the `pending_index`
+#: `AvatarMemoryPromotion` row synchronously (cheap, DB-only, already
+#: committed below) but deliberately does NOT also enqueue the heavy
+#: embedding/Qdrant step here. Auto-enqueueing a real Celery job from
+#: inside every approval was tried and reverted: this codepath is exercised
+#: by a very large share of the backend test suite (every family-
+#: contribution AND every AI-Biographer approval test), and dispatching a
+#: real `.delay()` plus its `background_jobs` DB round-trip from each one
+#: measurably multiplied already-slow, real-BGE-M3-model-backed test runs
+#: without a corresponding benefit in the test environment. The durable
+#: `pending_index` state this still leaves behind is exactly "option B" of
+#: the task's own required invariant: a safe, idempotent, explicit
+#: `/candidates/{id}/index` endpoint (`avatar_memory_indexing.service.
+#: index_promotion`, unchanged) and the
+#: `avatar_memory_promotions.reconciliation` module/script both remain able
+#: to complete indexing for it at any time, with no data ever silently lost
+#: or left in an undetectable state.
 
 #: The only source language that currently triggers automatic backend
 #: translation of dynamic content (Task 64.5.1). Russian remains the
@@ -211,7 +235,7 @@ def validate_demo_actor(actor: DemoFamilyActorContext) -> None:
 def _can_view_candidate(candidate: ConversationMemoryCandidate, actor: DemoFamilyActorContext) -> bool:
     if is_demo_owner(actor):
         return True
-    if candidate.privacy_scope in INDEXABLE_PRIVACY_SCOPES:
+    if candidate.privacy_scope in BROAD_VISIBILITY_PRIVACY_SCOPES:
         return actor.actor_role in {
             FamilyMemoryActorRole.CONTRIBUTOR,
             FamilyMemoryActorRole.TRUSTED_REVIEWER,
@@ -957,7 +981,7 @@ def list_contributions(
     contributions = repository.list_contributions(db, candidate_id=candidate.id)
     if is_demo_owner(actor):
         visible = contributions
-    elif candidate.privacy_scope in INDEXABLE_PRIVACY_SCOPES:
+    elif candidate.privacy_scope in BROAD_VISIBILITY_PRIVACY_SCOPES:
         visible = contributions
     else:
         visible = [item for item in contributions if item.actor_id == actor.actor_id]
