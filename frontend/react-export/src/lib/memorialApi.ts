@@ -489,3 +489,19 @@ export async function reviewContribution(
     accessToken
   );
 }
+
+/** Task 65.8 (Part I) - authorized reviewer retry of a failed contribution
+ * indexing attempt. Only valid once the contribution is approved+current
+ * and its indexing status is `failed`; the backend re-derives and returns
+ * the resulting content + indexing status, it is never inferred here. */
+export async function retryContributionIndexing(
+  accessToken: string,
+  profileId: number,
+  contributionId: number
+): Promise<ContributionRead> {
+  return requestJson<ContributionRead>(
+    `/api/memorials/${profileId}/contributions/${contributionId}/retry-indexing`,
+    { method: 'POST' },
+    accessToken
+  );
+}

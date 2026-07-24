@@ -19,7 +19,12 @@ from app.modules.auth.schemas import ErrorResponse
 from app.modules.billing.schemas import BillingLimitExceededResponse
 from app.modules.memorial_contribution_indexing import repository as contribution_indexing_repository
 from app.modules.memorial_contribution_indexing.schemas import ContributionIndexingStatusRead
-from app.modules.memorial_contribution_indexing.service import get_indexing_status_for_contribution
+from app.modules.memorial_contribution_indexing.service import (
+    ContributionIndexingConflictError,
+    ContributionIndexingEligibilityError,
+    ContributionIndexingNotFoundError,
+    get_indexing_status_for_contribution,
+)
 from app.modules.memorial_access.schemas import (
     ContributionCreate,
     ContributionRead,
@@ -54,6 +59,7 @@ from app.modules.memorial_access.service import (
     list_memorials,
     list_review_queue,
     reject_contribution,
+    retry_contribution_indexing,
     submit_contribution,
 )
 
@@ -484,6 +490,52 @@ def archive_contribution_endpoint(
     # A superseded contribution (already retired, see approve_contribution)
     # can still be archived afterwards - reflect its real promotion state
     # rather than silently reporting "not_applicable".
+    promotion = contribution_indexing_repository.get_promotion_by_contribution_id(
+        db,
+        contribution_id=contribution.id,
+    )
+    return _build_contribution_read(contribution, promotion=promotion)
+
+
+@router.post(
+    "/api/memorials/{profile_id}/contributions/{contribution_id}/retry-indexing",
+    response_model=ContributionRead,
+    responses={
+        status.HTTP_400_BAD_REQUEST: {"model": ErrorResponse},
+        status.HTTP_401_UNAUTHORIZED: {"model": ErrorResponse},
+        status.HTTP_403_FORBIDDEN: {"model": ErrorResponse},
+        status.HTTP_404_NOT_FOUND: {"model": ErrorResponse},
+    },
+)
+def retry_contribution_indexing_endpoint(
+    profile_id: ProfileIdPath,
+    contribution_id: ContributionIdPath,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> ContributionRead:
+    """Task 65.8 (Part I) - safe, authorized retry of a failed indexing
+    attempt. Only reachable for an approved+current contribution whose
+    promotion is currently `failed`; idempotent and reuses the same
+    canonical memory/promotion/Qdrant point (see
+    `memorial_access.service.retry_contribution_indexing`)."""
+
+    try:
+        contribution = retry_contribution_indexing(
+            db,
+            current_user=current_user,
+            profile_id=profile_id,
+            contribution_id=contribution_id,
+        )
+    except (MemorialNotFoundError, MemorialForbiddenError, MemorialConflictError) as exc:
+        _raise_access_error(exc)
+    except ContributionNotFoundError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except ContributionIndexingNotFoundError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except ContributionInvalidTransitionError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    except (ContributionIndexingEligibilityError, ContributionIndexingConflictError) as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
     promotion = contribution_indexing_repository.get_promotion_by_contribution_id(
         db,
         contribution_id=contribution.id,

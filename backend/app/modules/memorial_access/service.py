@@ -19,6 +19,7 @@ from app.modules.memorial_access.schemas import (
     InvitationCreate,
     MemorialCreate,
 )
+from app.modules.memorial_contribution_indexing import repository as contribution_indexing_repository
 from app.modules.memorial_contribution_indexing import service as contribution_indexing_service
 from app.modules.memory_profiles import repository as memory_profiles_repository
 
@@ -403,6 +404,69 @@ def archive_contribution(
     db.commit()
     db.refresh(contribution)
     return contribution
+
+
+def retry_contribution_indexing(
+    db: Session,
+    *,
+    current_user: User,
+    profile_id: int,
+    contribution_id: int,
+) -> MemorialContribution:
+    """Explicit, reviewer-triggered retry of a *failed* indexing attempt -
+    the memory-contribution equivalent of the AI biography workflow's
+    explicit `POST .../candidates/{id}/index` button
+    (`app.modules.memorial_candidates.router.index_candidate_memory_endpoint`),
+    which also doubles as that pipeline's retry action because
+    `avatar_memory_indexing.index_promotion` is itself idempotent/retry-safe.
+
+    Mirrors that same synchronous, explicit-action shape rather than
+    enqueueing a second Celery job: this is a rare, reviewer-initiated
+    action (not the automatic post-approval trigger, which stays
+    Celery-based - see `_promote_and_enqueue_indexing_safely`), so running
+    the already-idempotent `index_contribution_promotion` inline here gives
+    the reviewer an immediate, definitive result without inventing a
+    parallel "retry job" concept. Restricted to `REVIEW_ROLES` (owner,
+    trusted_reviewer) per the task's authorization requirement, and only
+    reachable once the promotion has already recorded a `failed` attempt -
+    never for a contribution that is only `pending`/still queued (that has
+    an active, not-yet-run Celery job already) or already `indexed`/`retired`.
+    """
+
+    _require_role(db, profile_id=profile_id, user=current_user, allowed_roles=REVIEW_ROLES)
+    contribution = repository.get_contribution(db, profile_id=profile_id, contribution_id=contribution_id)
+    if contribution is None:
+        raise ContributionNotFoundError("Contribution not found")
+    if contribution.status != "approved" or not contribution.is_current:
+        raise ContributionInvalidTransitionError(
+            "Indexing can only be retried for an approved, current contribution"
+        )
+
+    promotion = contribution_indexing_repository.get_promotion_by_contribution_id(
+        db,
+        contribution_id=contribution.id,
+    )
+    if promotion is None or promotion.promotion_status != "failed":
+        raise ContributionInvalidTransitionError(
+            "Indexing can only be retried after a failed indexing attempt"
+        )
+
+    try:
+        contribution_indexing_service.index_contribution_promotion(
+            db,
+            profile_id=profile_id,
+            promotion_id=promotion.id,
+        )
+    except contribution_indexing_service.ContributionIndexingExecutionError:
+        # Already recorded on the promotion row as `failed` with a safe,
+        # generic reason by `index_contribution_promotion` itself - the
+        # caller re-reads the contribution's current (still-failed) state
+        # below rather than receiving a raw 500/stack trace for a domain
+        # failure that has already been handled and logged.
+        pass
+
+    refreshed = repository.get_contribution(db, profile_id=profile_id, contribution_id=contribution_id)
+    return refreshed if refreshed is not None else contribution
 
 
 def list_active_memory_contributions(db: Session, *, profile_id: int) -> list[MemorialContribution]:

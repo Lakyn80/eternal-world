@@ -31,6 +31,7 @@ import {
   ownerReviewCandidate,
   register,
   resetChat,
+  retryContributionIndexing,
   reviewContribution,
   sendChatMessage,
   setUnauthorizedHandler,
@@ -283,6 +284,8 @@ export type Copy = {
   indexingIndexed: string;
   indexingFailed: string;
   indexingRetired: string;
+  retryIndexing: string;
+  retryIndexingSuccess: string;
   backToSite: string;
   planLimitReachedMessage: string;
   openExistingMemorial: string;
@@ -521,6 +524,8 @@ export const COPY: Record<Lang, Copy> = {
     indexingIndexed: 'Indexed and searchable',
     indexingFailed: 'Indexing failed',
     indexingRetired: 'No longer active evidence',
+    retryIndexing: 'Retry indexing',
+    retryIndexingSuccess: 'Indexing retried.',
     backToSite: 'Back to site',
     planLimitReachedMessage:
       'Your current plan already includes the maximum number of memorials.\nOpen your existing memorial to edit its biography.',
@@ -761,6 +766,8 @@ export const COPY: Record<Lang, Copy> = {
     indexingIndexed: 'Indexováno a vyhledatelné',
     indexingFailed: 'Indexace selhala',
     indexingRetired: 'Již není aktivní znalost',
+    retryIndexing: 'Zkusit indexaci znovu',
+    retryIndexingSuccess: 'Indexace byla zopakována.',
     backToSite: 'Zpět na web',
     planLimitReachedMessage:
       'V aktuálním plánu už máte maximální počet memorialů.\nOtevřete existující memorial a upravte jeho životopis.',
@@ -1001,6 +1008,8 @@ export const COPY: Record<Lang, Copy> = {
     indexingIndexed: 'Проиндексировано и доступно для поиска',
     indexingFailed: 'Индексация не удалась',
     indexingRetired: 'Больше не активное знание',
+    retryIndexing: 'Повторить индексацию',
+    retryIndexingSuccess: 'Индексация повторена.',
     backToSite: 'Вернуться на сайт',
     planLimitReachedMessage:
       'В текущем тарифе уже создано максимальное количество мемориалов.\nОткройте существующий мемориал и измените его биографию.',
@@ -1642,7 +1651,11 @@ export default function MemorialWorkspace({ lang }: { lang: Lang }) {
                     <ContributionsSection
                       contributions={contributions}
                       lang={lang}
+                      mayReview={mayReview}
                       maySubmit={maySubmit}
+                      onIndexingRetried={(updated) => {
+                        setContributions((items) => items.map((item) => (item.id === updated.id ? updated : item)));
+                      }}
                       onSubmitted={(contribution) => {
                         setContributions((items) => [contribution, ...items]);
                         if (mayReview && contribution.status === 'needs_review') {
@@ -3558,7 +3571,9 @@ export function CandidatesReviewSection({
 function ContributionsSection({
   contributions,
   lang,
+  mayReview,
   maySubmit,
+  onIndexingRetried,
   onSubmitted,
   profileId,
   t,
@@ -3566,7 +3581,9 @@ function ContributionsSection({
 }: {
   contributions: ContributionRead[];
   lang: Lang;
+  mayReview: boolean;
   maySubmit: boolean;
+  onIndexingRetried: (contribution: ContributionRead) => void;
   onSubmitted: (contribution: ContributionRead) => void;
   profileId: number;
   t: Copy;
@@ -3579,7 +3596,15 @@ function ContributionsSection({
         <p className="mt-2 text-sm leading-6 text-fg/58">{t.submitMemory}</p>
       </div>
       {maySubmit ? <ContributionForm onSubmitted={onSubmitted} profileId={profileId} t={t} token={token} /> : <p className="rounded-2xl border border-white/10 bg-black/20 p-4 text-sm text-fg/60">{t.viewerReadOnly}</p>}
-      <ContributionList contributions={contributions} lang={lang} t={t} />
+      <ContributionList
+        contributions={contributions}
+        lang={lang}
+        canRetryIndexing={mayReview}
+        onIndexingRetried={onIndexingRetried}
+        profileId={profileId}
+        t={t}
+        token={token}
+      />
     </div>
   );
 }
@@ -3651,37 +3676,93 @@ export function ContributionForm({
   );
 }
 
-export function ContributionList({ contributions, lang, t }: { contributions: ContributionRead[]; lang: Lang; t: Copy }) {
+export function ContributionList({
+  contributions,
+  lang,
+  t,
+  canRetryIndexing = false,
+  onIndexingRetried,
+  profileId,
+  token
+}: {
+  contributions: ContributionRead[];
+  lang: Lang;
+  t: Copy;
+  /** Task 65.8 (Part I/J): backend-authorized reviewers only - mirrors the
+   * `mayReview` capability already gating the review queue. The frontend
+   * flag only controls whether the button is *offered*; the backend
+   * re-checks authorization and eligibility on every request regardless. */
+  canRetryIndexing?: boolean;
+  onIndexingRetried?: (contribution: ContributionRead) => void;
+  profileId?: number;
+  token?: string;
+}) {
+  const [retryingId, setRetryingId] = useState<number | null>(null);
+  const [retryErrorById, setRetryErrorById] = useState<Record<number, string>>({});
+  const canOfferRetry = canRetryIndexing && typeof profileId === 'number' && typeof token === 'string' && !!onIndexingRetried;
+
+  async function retryIndexing(contribution: ContributionRead) {
+    if (!canOfferRetry || typeof profileId !== 'number' || typeof token !== 'string' || !onIndexingRetried) return;
+    setRetryingId(contribution.id);
+    setRetryErrorById((current) => {
+      const { [contribution.id]: _removed, ...rest } = current;
+      return rest;
+    });
+    try {
+      const updated = await retryContributionIndexing(token, profileId, contribution.id);
+      onIndexingRetried(updated);
+    } catch (retryError) {
+      setRetryErrorById((current) => ({ ...current, [contribution.id]: safeError(retryError) }));
+    } finally {
+      setRetryingId(null);
+    }
+  }
+
   if (contributions.length === 0) {
     return <p className="rounded-2xl border border-white/10 bg-black/20 p-4 text-sm text-fg/60">{t.noContributions}</p>;
   }
   return (
     <div className="grid min-w-0 gap-3">
-      {contributions.map((contribution) => (
-        <article className="min-w-0 rounded-3xl border border-white/10 bg-black/20 p-4" key={contribution.id}>
-          <div className="flex min-w-0 flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-            <div className="min-w-0">
-              <h4 className="break-words text-lg font-semibold">{contribution.title}</h4>
-              <p className="mt-2 break-words text-sm leading-6 text-fg/60">{contribution.memory_text}</p>
-              <p className="mt-3 text-xs text-fg/38">
-                {contribution.author_email} · {formatDate(contribution.created_at, lang)}
-              </p>
-              {contribution.rejection_reason && <p className="mt-2 text-sm text-red-100">{contribution.rejection_reason}</p>}
-            </div>
-            <div className="flex shrink-0 flex-wrap gap-2 lg:justify-end">
-              <Badge>{candidateStatusLabel(t, contribution.status)}</Badge>
-              <Badge tone={isActiveMemoryEligible(contribution) ? 'cyan' : 'muted'}>
-                {isActiveMemoryEligible(contribution) ? t.activeMemory : t.notActiveMemory}
-              </Badge>
-              {indexingStatusLabel(t, contribution.indexing_status.state) && (
-                <Badge tone={indexingStatusTone(contribution.indexing_status.state)}>
-                  {indexingStatusLabel(t, contribution.indexing_status.state)}
+      {contributions.map((contribution) => {
+        const showRetry = canOfferRetry && contribution.indexing_status.state === 'failed';
+        const retryError = retryErrorById[contribution.id];
+        return (
+          <article className="min-w-0 rounded-3xl border border-white/10 bg-black/20 p-4" key={contribution.id}>
+            <div className="flex min-w-0 flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+              <div className="min-w-0">
+                <h4 className="break-words text-lg font-semibold">{contribution.title}</h4>
+                <p className="mt-2 break-words text-sm leading-6 text-fg/60">{contribution.memory_text}</p>
+                <p className="mt-3 text-xs text-fg/38">
+                  {contribution.author_email} · {formatDate(contribution.created_at, lang)}
+                </p>
+                {contribution.rejection_reason && <p className="mt-2 text-sm text-red-100">{contribution.rejection_reason}</p>}
+              </div>
+              <div className="flex shrink-0 flex-wrap gap-2 lg:justify-end">
+                <Badge>{candidateStatusLabel(t, contribution.status)}</Badge>
+                <Badge tone={isActiveMemoryEligible(contribution) ? 'cyan' : 'muted'}>
+                  {isActiveMemoryEligible(contribution) ? t.activeMemory : t.notActiveMemory}
                 </Badge>
-              )}
+                {indexingStatusLabel(t, contribution.indexing_status.state) && (
+                  <Badge tone={indexingStatusTone(contribution.indexing_status.state)}>
+                    {indexingStatusLabel(t, contribution.indexing_status.state)}
+                  </Badge>
+                )}
+              </div>
             </div>
-          </div>
-        </article>
-      ))}
+            {showRetry && (
+              <div className="mt-3 flex flex-col items-start gap-2">
+                <ActionButton
+                  disabled={retryingId === contribution.id}
+                  label={t.retryIndexing}
+                  onClick={() => void retryIndexing(contribution)}
+                  tone="secondary"
+                />
+                {retryError && <p className="text-sm text-red-100">{retryError}</p>}
+              </div>
+            )}
+          </article>
+        );
+      })}
     </div>
   );
 }

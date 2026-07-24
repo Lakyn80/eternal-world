@@ -5,6 +5,7 @@ import {
   BiographerPanel,
   BiographyPanel,
   CandidatesReviewSection,
+  ContributionList,
   COPY,
   biographerLocale,
   biographerTopicLabel,
@@ -17,6 +18,7 @@ import type {
   BiographerResumeRead,
   BiographyMemoryEntryRead,
   BiographyStatusRead,
+  ContributionRead,
   MemoryCandidateEnrichmentRead
 } from '../types/memorial';
 import * as api from '../lib/memorialApi';
@@ -44,7 +46,8 @@ vi.mock('../lib/memorialApi', async () => {
     resetChat: vi.fn(),
     sendChatMessage: vi.fn(),
     getSession: vi.fn(),
-    logoutSession: vi.fn()
+    logoutSession: vi.fn(),
+    retryContributionIndexing: vi.fn()
   };
 });
 
@@ -134,6 +137,31 @@ function baseMemoryEntry(overrides: Partial<BiographyMemoryEntryRead> = {}): Bio
     searchable_as_fact: false,
     created_at: '2026-07-22T18:48:28.021Z',
     indexed_at: null,
+    ...overrides
+  };
+}
+
+function baseContribution(overrides: Partial<ContributionRead> = {}): ContributionRead {
+  return {
+    id: 11,
+    profile_id: 7,
+    author_user_id: 1,
+    author_email: 'author@example.com',
+    title: 'A recollection',
+    memory_text: 'A specific family recollection.',
+    source_note: null,
+    privacy_scope: 'all_family',
+    status: 'approved',
+    is_current: true,
+    supersedes_contribution_id: null,
+    reviewed_at: '2026-07-23T00:00:00Z',
+    reviewed_by_user_id: 1,
+    review_note: null,
+    rejection_reason: null,
+    active_memory_eligible: true,
+    indexing_status: { state: 'failed', indexed_at: null, attempt_count: 1, failure_reason: 'Contribution indexing failed' },
+    created_at: '2026-07-22T00:00:00Z',
+    updated_at: '2026-07-23T00:00:00Z',
     ...overrides
   };
 }
@@ -666,5 +694,145 @@ describe('CandidatesReviewSection', () => {
     await user.click(screen.getByRole('button', { name: t.candidateIndexConfirmYes }));
 
     expect(await screen.findByText(t.candidateAlreadyIndexed)).toBeInTheDocument();
+  });
+});
+
+describe('ContributionList - Task 65.8 retry indexing', () => {
+  afterEach(() => {
+    vi.mocked(api.retryContributionIndexing).mockReset();
+  });
+
+  it('shows the failed badge and a retry button to an authorized reviewer', () => {
+    render(
+      <ContributionList
+        contributions={[baseContribution()]}
+        lang="en"
+        t={t}
+        canRetryIndexing
+        onIndexingRetried={vi.fn()}
+        profileId={7}
+        token="tok"
+      />
+    );
+
+    expect(screen.getByText(t.indexingFailed)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: t.retryIndexing })).toBeInTheDocument();
+  });
+
+  it('never offers retry to a contributor/viewer even for failed indexing', () => {
+    render(
+      <ContributionList
+        contributions={[baseContribution()]}
+        lang="en"
+        t={t}
+        canRetryIndexing={false}
+        onIndexingRetried={vi.fn()}
+        profileId={7}
+        token="tok"
+      />
+    );
+
+    expect(screen.queryByRole('button', { name: t.retryIndexing })).not.toBeInTheDocument();
+  });
+
+  it('never offers retry for a contribution that is not currently failed', () => {
+    render(
+      <ContributionList
+        contributions={[baseContribution({ indexing_status: { state: 'indexed', indexed_at: '2026-07-23T00:00:00Z', attempt_count: 1, failure_reason: null } })]}
+        lang="en"
+        t={t}
+        canRetryIndexing
+        onIndexingRetried={vi.fn()}
+        profileId={7}
+        token="tok"
+      />
+    );
+
+    expect(screen.queryByRole('button', { name: t.retryIndexing })).not.toBeInTheDocument();
+    expect(screen.getByText(t.indexingIndexed)).toBeInTheDocument();
+  });
+
+  it('retrying calls the API exactly once, disables the button meanwhile, and reports the updated state upward', async () => {
+    const onIndexingRetried = vi.fn();
+    let resolveRetry: (value: ContributionRead) => void = () => {};
+    vi.mocked(api.retryContributionIndexing).mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveRetry = resolve;
+        })
+    );
+    const user = userEvent.setup();
+
+    render(
+      <ContributionList
+        contributions={[baseContribution()]}
+        lang="en"
+        t={t}
+        canRetryIndexing
+        onIndexingRetried={onIndexingRetried}
+        profileId={7}
+        token="tok"
+      />
+    );
+
+    const retryButton = screen.getByRole('button', { name: t.retryIndexing });
+    await user.click(retryButton);
+
+    expect(api.retryContributionIndexing).toHaveBeenCalledTimes(1);
+    expect(api.retryContributionIndexing).toHaveBeenCalledWith('tok', 7, 11);
+    expect(retryButton).toBeDisabled();
+
+    // A second click while the request is still in flight must not fire a
+    // second API call - the button being disabled already prevents this,
+    // asserted explicitly so a future regression (e.g. removing `disabled`)
+    // is caught here rather than only in a real double-submit.
+    await user.click(retryButton);
+    expect(api.retryContributionIndexing).toHaveBeenCalledTimes(1);
+
+    resolveRetry({
+      ...baseContribution({ indexing_status: { state: 'indexed', indexed_at: '2026-07-23T01:00:00Z', attempt_count: 2, failure_reason: null } })
+    });
+
+    await waitFor(() => expect(onIndexingRetried).toHaveBeenCalledTimes(1));
+    expect(onIndexingRetried.mock.calls[0][0].indexing_status.state).toBe('indexed');
+  });
+
+  it('shows a safe error message and leaves the button re-clickable when the API call fails', async () => {
+    vi.mocked(api.retryContributionIndexing).mockRejectedValue(new Error('boom'));
+    const user = userEvent.setup();
+
+    render(
+      <ContributionList
+        contributions={[baseContribution()]}
+        lang="en"
+        t={t}
+        canRetryIndexing
+        onIndexingRetried={vi.fn()}
+        profileId={7}
+        token="tok"
+      />
+    );
+
+    await user.click(screen.getByRole('button', { name: t.retryIndexing }));
+
+    await waitFor(() => expect(screen.getByRole('button', { name: t.retryIndexing })).not.toBeDisabled());
+    expect(screen.queryByText(/boom|stack|Traceback/i)).not.toBeInTheDocument();
+  });
+
+  it('never labels non-indexed contributions as searchable', () => {
+    render(
+      <ContributionList
+        contributions={[
+          baseContribution({ id: 1, status: 'needs_review', active_memory_eligible: false, indexing_status: { state: 'not_applicable', indexed_at: null, attempt_count: 0, failure_reason: null } }),
+          baseContribution({ id: 2, status: 'rejected', active_memory_eligible: false, indexing_status: { state: 'not_applicable', indexed_at: null, attempt_count: 0, failure_reason: null } }),
+          baseContribution({ id: 3, status: 'archived', is_current: false, active_memory_eligible: false, indexing_status: { state: 'retired', indexed_at: null, attempt_count: 1, failure_reason: null } }),
+          baseContribution({ id: 4, status: 'superseded', is_current: false, active_memory_eligible: false, indexing_status: { state: 'retired', indexed_at: null, attempt_count: 1, failure_reason: null } })
+        ]}
+        lang="en"
+        t={t}
+      />
+    );
+
+    expect(screen.queryByText(t.indexingIndexed)).not.toBeInTheDocument();
   });
 });
