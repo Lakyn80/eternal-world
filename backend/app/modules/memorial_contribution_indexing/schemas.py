@@ -14,6 +14,12 @@ class ContributionIndexingStatusRead(BaseModel):
     indexed_at: datetime | None = None
     attempt_count: int = 0
     failure_reason: str | None = None
+    #: Task 65.9.1 (Part F) - the active background job id backing a
+    #: `pending` state, when one currently exists, so the frontend can poll
+    #: `GET /api/jobs/{job_id}` for the full lifecycle instead of only
+    #: reloading the whole contribution list. Always `None` for every other
+    #: state (indexed/failed/retired/not_applicable have no active job).
+    job_id: int | None = None
 
 
 class ContributionIndexingRead(BaseModel):

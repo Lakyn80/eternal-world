@@ -1,5 +1,6 @@
 import type {
   AvatarMemoryIndexingRead,
+  BackgroundJobRead,
   BiographerAnswerResponse,
   BiographerEligibilityRead,
   BiographerQuestionRead,
@@ -494,6 +495,16 @@ export async function reviewContribution(
  * indexing attempt. Only valid once the contribution is approved+current
  * and its indexing status is `failed`; the backend re-derives and returns
  * the resulting content + indexing status, it is never inferred here. */
+/** Task 65.9.1 (Part F) - authorization-scoped async job status read, used
+ * by the frontend job-status poller for both "Index memory" and
+ * retry-indexing. A 404 here means either the job never existed or (Part N)
+ * belongs to a different account - the backend deliberately returns the
+ * same 404 for both so this call can never be used to probe for another
+ * user's job ids. */
+export async function getBackgroundJob(accessToken: string, jobId: number): Promise<BackgroundJobRead> {
+  return requestJson<BackgroundJobRead>(`/api/jobs/${jobId}`, undefined, accessToken);
+}
+
 export async function retryContributionIndexing(
   accessToken: string,
   profileId: number,

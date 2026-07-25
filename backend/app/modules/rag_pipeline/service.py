@@ -11,7 +11,6 @@ from app.modules.embeddings.service import embed_source_chunks
 from app.modules.job_tracking.enums import BackgroundJobType
 from app.modules.job_tracking.service import (
     append_job_event,
-    attach_celery_task_id,
     create_job,
     mark_failed,
     mark_running,
@@ -212,6 +211,19 @@ def enqueue_rag_source_processing(
         source_id=source_id,
     )
     request_payload = payload or RagSourceProcessRequest()
+    #: Task 65.9.1 (Part I) - this document-processing/embedding pipeline
+    #: (chunk -> embed -> Qdrant index, routed to the `embedding` queue -
+    #: see `app.worker.celery_app.task_routes`) is exactly the kind of
+    #: heavy entry point Part I requires backpressure on; Task 65.9 only
+    #: wired the centralized per-user/per-profile/global limits into the
+    #: two candidate/contribution indexing paths, leaving this endpoint
+    #: (already existing, already routed to `embedding`) as an unintended
+    #: gap. `queue="embedding"` + a deterministic `idempotency_key` bring it
+    #: under the same `_enforce_heavy_job_backpressure` check as the other
+    #: heavy endpoints, and additionally make a duplicate "process" click
+    #: for the same source+model converge on the same active job instead of
+    #: creating a second one.
+    idempotency_key = f"rag_source_processing:{rag_source.id}:{request_payload.model_code or 'default'}:process"
     background_job = create_job(
         db,
         owner_user_id=current_user.id,
@@ -229,15 +241,28 @@ def enqueue_rag_source_processing(
         },
         progress_current=0,
         progress_total=PIPELINE_PROGRESS_TOTAL,
+        queue="embedding",
+        idempotency_key=idempotency_key,
     )
 
-    from app.worker.tasks import run_rag_source_processing_job
+    #: Task 65.9.1 (Part I) - migrated from an unconditional `.delay()`
+    #: call to the transactional-outbox dispatch path (Task 65.9's own
+    #: `enqueue_job_with_outbox`, already used by the candidate/contribution/
+    #: biography indexing endpoints) for two reasons: (1) a broker publish
+    #: failure right after `create_job` committed must not silently lose
+    #: this job the way a bare `.delay()` would; (2) when `create_job`
+    #: above returns a *reused* job (idempotency hit on the same
+    #: source+model), `enqueue_job_with_outbox` is itself idempotent
+    #: (`_dispatch_one` is a no-op once the existing outbox row is already
+    #: `published`), so a duplicate "process" click can never double-dispatch
+    #: the same job id to Celery.
+    from app.modules.job_outbox.service import enqueue_job_with_outbox
 
-    async_result = run_rag_source_processing_job.delay(background_job.id)
-    return attach_celery_task_id(
+    return enqueue_job_with_outbox(
         db,
-        job_id=background_job.id,
-        celery_task_id=async_result.id,
+        job=background_job,
+        task_name="app.worker.tasks.run_rag_source_processing_job",
+        queue="embedding",
     )
 
 

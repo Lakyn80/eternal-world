@@ -779,3 +779,20 @@ def get_indexing_status_for_contribution(
             return "pending", None
         return "not_applicable", None
     return _PROMOTION_STATUS_TO_INDEXING_STATE[promotion.promotion_status], promotion
+
+
+def get_active_indexing_job_id_for_promotion(db: Session, *, promotion_id: int) -> int | None:
+    """Task 65.9.1 (Part F/I) - resolves the currently-active (non-terminal)
+    background job id for a contribution's indexing promotion, if any, so
+    the frontend can poll `GET /api/jobs/{job_id}` immediately after
+    approval/retry rather than only after a full page reload. Uses the
+    exact same deterministic idempotency key `enqueue_indexing_job` creates
+    the job with (`INDEXING_JOB_WORKFLOW:{promotion_id}:index`) - never
+    guesses/searches by other criteria, so this can never surface a
+    different promotion's or a different profile's job."""
+
+    from app.modules.job_tracking import repository as job_tracking_repository
+
+    idempotency_key = f"{INDEXING_JOB_WORKFLOW}:{promotion_id}:index"
+    job = job_tracking_repository.get_active_background_job_by_idempotency_key(db, idempotency_key=idempotency_key)
+    return job.id if job is not None else None

@@ -17,12 +17,18 @@ from app.db.session import get_db
 from app.modules.auth.dependencies import get_current_user
 from app.modules.auth.schemas import ErrorResponse
 from app.modules.billing.schemas import BillingLimitExceededResponse
+from app.modules.job_tracking.exceptions import (
+    GlobalQueueSaturationError,
+    PerProfileActiveJobLimitExceededError,
+    PerUserActiveJobLimitExceededError,
+)
 from app.modules.memorial_contribution_indexing import repository as contribution_indexing_repository
 from app.modules.memorial_contribution_indexing.schemas import ContributionIndexingStatusRead
 from app.modules.memorial_contribution_indexing.service import (
     ContributionIndexingConflictError,
     ContributionIndexingEligibilityError,
     ContributionIndexingNotFoundError,
+    get_active_indexing_job_id_for_promotion,
     get_indexing_status_for_contribution,
 )
 from app.modules.memorial_access.schemas import (
@@ -125,13 +131,24 @@ def _build_invitation_response(invitation: MemorialInvitation, token: str) -> In
 def _build_indexing_status_read(
     contribution: MemorialContribution,
     promotion: MemorialContributionPromotion | None,
+    *,
+    db: Session | None = None,
 ) -> ContributionIndexingStatusRead:
     state, resolved_promotion = get_indexing_status_for_contribution(contribution, promotion)
+    #: Task 65.9.1 (Part F) - only a `pending` state can have an active job
+    #: (indexed/failed/retired/not_applicable never do), and only when a
+    #: `db` session was supplied by the caller.
+    job_id = (
+        get_active_indexing_job_id_for_promotion(db, promotion_id=resolved_promotion.id)
+        if state == "pending" and resolved_promotion is not None and db is not None
+        else None
+    )
     return ContributionIndexingStatusRead(
         state=state,
         indexed_at=resolved_promotion.indexed_at if resolved_promotion else None,
         attempt_count=resolved_promotion.indexing_attempt_count if resolved_promotion else 0,
         failure_reason=resolved_promotion.failure_reason if resolved_promotion else None,
+        job_id=job_id,
     )
 
 
@@ -139,6 +156,7 @@ def _build_contribution_read(
     contribution: MemorialContribution,
     *,
     promotion: MemorialContributionPromotion | None = None,
+    db: Session | None = None,
 ) -> ContributionRead:
     return ContributionRead(
         id=contribution.id,
@@ -157,7 +175,7 @@ def _build_contribution_read(
         review_note=contribution.review_note,
         rejection_reason=contribution.rejection_reason,
         active_memory_eligible=contribution_is_active_memory(contribution),
-        indexing_status=_build_indexing_status_read(contribution, promotion),
+        indexing_status=_build_indexing_status_read(contribution, promotion, db=db),
         created_at=contribution.created_at,
         updated_at=contribution.updated_at,
     )
@@ -171,10 +189,15 @@ def _build_contribution_reads(
         db,
         contribution_ids=[contribution.id for contribution in contributions],
     )
+    #: Task 65.9.1 (Part F.14) - `db` is passed through here too so a
+    #: browser refresh that re-lists contributions can recover an
+    #: in-flight indexing job id from persistent backend state, not only
+    #: the single-contribution response paths (approve/retry-indexing).
     return [
         _build_contribution_read(
             contribution,
             promotion=promotions_by_contribution_id.get(contribution.id),
+            db=db,
         )
         for contribution in contributions
     ]
@@ -419,7 +442,7 @@ def approve_contribution_endpoint(
         db,
         contribution_id=contribution.id,
     )
-    return _build_contribution_read(contribution, promotion=promotion)
+    return _build_contribution_read(contribution, promotion=promotion, db=db)
 
 
 @router.post(
@@ -494,7 +517,7 @@ def archive_contribution_endpoint(
         db,
         contribution_id=contribution.id,
     )
-    return _build_contribution_read(contribution, promotion=promotion)
+    return _build_contribution_read(contribution, promotion=promotion, db=db)
 
 
 @router.post(
@@ -506,6 +529,8 @@ def archive_contribution_endpoint(
         status.HTTP_401_UNAUTHORIZED: {"model": ErrorResponse},
         status.HTTP_403_FORBIDDEN: {"model": ErrorResponse},
         status.HTTP_404_NOT_FOUND: {"model": ErrorResponse},
+        status.HTTP_429_TOO_MANY_REQUESTS: {"model": ErrorResponse},
+        status.HTTP_503_SERVICE_UNAVAILABLE: {"model": ErrorResponse},
     },
 )
 def retry_contribution_indexing_endpoint(
@@ -540,9 +565,25 @@ def retry_contribution_indexing_endpoint(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
     except (ContributionIndexingEligibilityError, ContributionIndexingConflictError) as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    #: Task 65.9.1 (Part I) - this explicit, reviewer-triggered retry action
+    #: is exactly the kind of heavy entry point Part I requires consistent
+    #: backpressure responses on (`enqueue_indexing_job` inside
+    #: `retry_contribution_indexing` already enforces the same
+    #: per-user/per-profile/global limits `create_job` uses everywhere -
+    #: this endpoint simply never translated the resulting exception into
+    #: an HTTP response, so a saturated limit surfaced as an unhandled 500
+    #: instead of 429/503).
+    except (PerUserActiveJobLimitExceededError, PerProfileActiveJobLimitExceededError) as exc:
+        raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail=str(exc)) from exc
+    except GlobalQueueSaturationError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=str(exc),
+            headers={"Retry-After": str(exc.retry_after_seconds)},
+        ) from exc
     promotion = contribution_indexing_repository.get_promotion_by_contribution_id(
         db,
         contribution_id=contribution.id,
     )
-    return _build_contribution_read(contribution, promotion=promotion)
+    return _build_contribution_read(contribution, promotion=promotion, db=db)
 

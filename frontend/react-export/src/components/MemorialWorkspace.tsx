@@ -1,4 +1,4 @@
-import { FormEvent, type ReactNode, useEffect, useMemo, useState } from 'react';
+import { FormEvent, type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 import type { Lang } from '../i18n';
 import {
   acceptInvitation,
@@ -44,8 +44,11 @@ import {
 } from '../lib/memorialApi';
 import { canInvite, canReview, canSubmitContribution, isActiveMemoryEligible } from '../lib/memorialPermissions';
 import { APP_ROOT_PATH, buildMemorialPath, navigate, parseAppRoute, usePathname } from '../lib/router';
+import { useJobStatusPoller } from '../hooks/useJobStatusPoller';
 import type {
   AuthSession,
+  BackgroundJobRead,
+  BackgroundJobStatusValue,
   BiographerBlockedReason,
   BiographerEligibilityRead,
   BiographerQuestionRead,
@@ -286,6 +289,19 @@ export type Copy = {
   indexingRetired: string;
   retryIndexing: string;
   retryIndexingSuccess: string;
+  // Task 65.9.1 (Part F/G): localized labels for every BackgroundJob
+  // status the async job-status poller can observe, covering both
+  // "Index memory" and contribution retry-indexing.
+  jobStatusPending: string;
+  jobStatusQueued: string;
+  jobStatusProcessing: string;
+  jobStatusRetryScheduled: string;
+  jobStatusRecoveryPending: string;
+  jobStatusSucceeded: string;
+  jobStatusFailed: string;
+  jobStatusCancelled: string;
+  jobStatusUnauthorized: string;
+  jobStatusNetworkRetrying: string;
   backToSite: string;
   planLimitReachedMessage: string;
   openExistingMemorial: string;
@@ -526,6 +542,16 @@ export const COPY: Record<Lang, Copy> = {
     indexingRetired: 'No longer active evidence',
     retryIndexing: 'Retry indexing',
     retryIndexingSuccess: 'Indexing retried.',
+    jobStatusPending: 'Waiting to start',
+    jobStatusQueued: 'Queued for indexing',
+    jobStatusProcessing: 'Indexing in progress',
+    jobStatusRetryScheduled: 'Temporary issue - retrying automatically',
+    jobStatusRecoveryPending: 'Recovering the indexing service - retrying automatically',
+    jobStatusSucceeded: 'Indexed and searchable',
+    jobStatusFailed: 'Indexing failed',
+    jobStatusCancelled: 'Indexing cancelled',
+    jobStatusUnauthorized: 'Sign in again to see the latest indexing status.',
+    jobStatusNetworkRetrying: 'Reconnecting to check indexing status...',
     backToSite: 'Back to site',
     planLimitReachedMessage:
       'Your current plan already includes the maximum number of memorials.\nOpen your existing memorial to edit its biography.',
@@ -768,6 +794,16 @@ export const COPY: Record<Lang, Copy> = {
     indexingRetired: 'Již není aktivní znalost',
     retryIndexing: 'Zkusit indexaci znovu',
     retryIndexingSuccess: 'Indexace byla zopakována.',
+    jobStatusPending: 'Čeká na zahájení',
+    jobStatusQueued: 'Zařazeno do fronty na indexaci',
+    jobStatusProcessing: 'Probíhá indexace',
+    jobStatusRetryScheduled: 'Dočasný problém - automaticky se opakuje',
+    jobStatusRecoveryPending: 'Obnovuji indexační službu - automaticky se opakuje',
+    jobStatusSucceeded: 'Indexováno a vyhledatelné',
+    jobStatusFailed: 'Indexace selhala',
+    jobStatusCancelled: 'Indexace zrušena',
+    jobStatusUnauthorized: 'Přihlaste se znovu pro zobrazení aktuálního stavu indexace.',
+    jobStatusNetworkRetrying: 'Obnovuji připojení pro kontrolu stavu indexace...',
     backToSite: 'Zpět na web',
     planLimitReachedMessage:
       'V aktuálním plánu už máte maximální počet memorialů.\nOtevřete existující memorial a upravte jeho životopis.',
@@ -1010,6 +1046,16 @@ export const COPY: Record<Lang, Copy> = {
     indexingRetired: 'Больше не активное знание',
     retryIndexing: 'Повторить индексацию',
     retryIndexingSuccess: 'Индексация повторена.',
+    jobStatusPending: 'Ожидает начала',
+    jobStatusQueued: 'В очереди на индексацию',
+    jobStatusProcessing: 'Идёт индексация',
+    jobStatusRetryScheduled: 'Временная проблема - повтор выполняется автоматически',
+    jobStatusRecoveryPending: 'Восстанавливаем службу индексации - повтор выполняется автоматически',
+    jobStatusSucceeded: 'Проиндексировано и доступно для поиска',
+    jobStatusFailed: 'Индексация не удалась',
+    jobStatusCancelled: 'Индексация отменена',
+    jobStatusUnauthorized: 'Войдите снова, чтобы увидеть актуальный статус индексации.',
+    jobStatusNetworkRetrying: 'Восстанавливаем соединение для проверки статуса индексации...',
     backToSite: 'Вернуться на сайт',
     planLimitReachedMessage:
       'В текущем тарифе уже создано максимальное количество мемориалов.\nОткройте существующий мемориал и измените его биографию.',
@@ -1372,6 +1418,23 @@ export default function MemorialWorkspace({ lang }: { lang: Lang }) {
     }
   }
 
+  // Task 65.9.1 (Part F) - reconciles the contribution list from the
+  // backend once a polled retry-indexing job reaches a terminal state
+  // (see `ContributionList`'s `JobStatusBadge` usage below) - lighter than
+  // re-running the full `loadWorkspace` (members/review-queue/biography
+  // all stay untouched), and always reads the current `selected`/`session`
+  // via closure rather than being passed stale values as props.
+  async function refreshContributions() {
+    if (!selected || !session) return;
+    try {
+      setContributions(await listContributions(session.accessToken, selected.id));
+    } catch {
+      // Transient failure: keep the previous (still authoritative-enough)
+      // list rather than clearing it - the next successful poll/tab
+      // switch will reconcile it.
+    }
+  }
+
   useEffect(() => {
     if (activeTab === 'overview' && selected && session) {
       refreshOverviewSummary(session.accessToken, selected.id, selected.current_user_role);
@@ -1656,6 +1719,7 @@ export default function MemorialWorkspace({ lang }: { lang: Lang }) {
                       onIndexingRetried={(updated) => {
                         setContributions((items) => items.map((item) => (item.id === updated.id ? updated : item)));
                       }}
+                      onIndexingSettled={refreshContributions}
                       onSubmitted={(contribution) => {
                         setContributions((items) => [contribution, ...items]);
                         if (mayReview && contribution.status === 'needs_review') {
@@ -2475,6 +2539,44 @@ export function isBiographyJobActive(status: BiographyStatusRead): boolean {
   );
 }
 
+// Task 65.9.1 (Part F/G) - localized label for a polled BackgroundJob
+// status, shared by both the candidate "Index memory" and contribution
+// retry-indexing poll displays. Never returns a raw backend enum string to
+// the user (Part 8 of the roadmap's core rules: no raw internal codes in
+// client-facing text) - an unrecognized/future status falls back to the
+// generic `jobStatusProcessing` label rather than leaking the raw value.
+export function jobStatusLabel(t: Copy, status: BackgroundJobStatusValue | null | undefined): string {
+  switch (status) {
+    case 'pending':
+      return t.jobStatusPending;
+    case 'queued':
+      return t.jobStatusQueued;
+    case 'running':
+      return t.jobStatusProcessing;
+    case 'retry_scheduled':
+      return t.jobStatusRetryScheduled;
+    case 'recovery_pending':
+      return t.jobStatusRecoveryPending;
+    case 'succeeded':
+      return t.jobStatusSucceeded;
+    case 'failed':
+      return t.jobStatusFailed;
+    case 'cancelled':
+      return t.jobStatusCancelled;
+    default:
+      return t.jobStatusProcessing;
+  }
+}
+
+// Task 65.9.1 (Part F.13): "Retry indexing" must only ever be offered once
+// the backend itself has reached a permanent failure - never while a
+// bounded infrastructure retry/provider-recovery attempt is still legally
+// in flight for the exact same job (that would risk a second, redundant
+// job for work already converging safely).
+export function isJobRetryEligible(job: BackgroundJobRead | null): boolean {
+  return job !== null && job.status === 'failed';
+}
+
 export function BiographyPanel({
   token,
   profileId,
@@ -3178,6 +3280,55 @@ export function privacyScopeLabel(t: Copy, scope: PrivacyScope): string {
   }
 }
 
+/** Task 65.9.1 (Part F) - polls exactly one background job's status and
+ * reports its terminal outcome to the caller. A separate component (rather
+ * than calling `useJobStatusPoller` conditionally inside a list-rendering
+ * parent) so React's rules of hooks are respected even when zero, one, or
+ * many candidates/contributions each have their own in-flight job at once
+ * - mounting/unmounting this component per job id is what starts/stops
+ * that job's poller (Part F.8: one poller per job, never more). */
+function JobStatusBadge({
+  token,
+  accountKey,
+  profileId,
+  jobId,
+  t,
+  onTerminal
+}: {
+  token: string;
+  accountKey: string;
+  profileId: number;
+  jobId: number;
+  t: Copy;
+  onTerminal: (job: BackgroundJobRead) => void;
+}) {
+  const { job, fatalError, isTerminal } = useJobStatusPoller(token, {
+    accountKey,
+    profileKey: profileId,
+    jobId
+  });
+  const firedRef = useRef(false);
+
+  useEffect(() => {
+    firedRef.current = false;
+  }, [jobId]);
+
+  useEffect(() => {
+    if (isTerminal && job && !firedRef.current) {
+      firedRef.current = true;
+      onTerminal(job);
+    }
+  }, [isTerminal, job, onTerminal]);
+
+  if (fatalError === 'unauthorized') {
+    return <Badge tone="danger">{t.jobStatusUnauthorized}</Badge>;
+  }
+  if (fatalError === 'not_found' || !job) {
+    return null;
+  }
+  return <Badge tone={job.status === 'failed' ? 'danger' : 'muted'}>{jobStatusLabel(t, job.status)}</Badge>;
+}
+
 export function CandidatesReviewSection({
   token,
   profileId,
@@ -3203,6 +3354,10 @@ export function CandidatesReviewSection({
   const [rejectReasonDrafts, setRejectReasonDrafts] = useState<Record<number, string>>({});
   const [confirmingIndexId, setConfirmingIndexId] = useState<number | null>(null);
   const [resultNotices, setResultNotices] = useState<Record<number, string>>({});
+  // Task 65.9.1 (Part F) - candidate id -> the background job id currently
+  // being polled for it (only ever set for a freshly-queued index action;
+  // cleared as soon as that job reaches a terminal state).
+  const [activeJobIdByCandidate, setActiveJobIdByCandidate] = useState<Record<number, number>>({});
   const [historyOpenId, setHistoryOpenId] = useState<number | null>(null);
   const [historyById, setHistoryById] = useState<Record<number, CandidateHistoryRead>>({});
   const [historyLoadingId, setHistoryLoadingId] = useState<number | null>(null);
@@ -3220,6 +3375,10 @@ export function CandidatesReviewSection({
   }
 
   useEffect(() => {
+    // Task 65.9.1 (Part F.9/F.10): switching memorial/profile (or account,
+    // via `token`) must never keep polling/showing a job status that
+    // belonged to a different memorial's candidate.
+    setActiveJobIdByCandidate({});
     void load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token, profileId]);
@@ -3286,12 +3445,31 @@ export function CandidatesReviewSection({
         ...notices,
         [candidateId]: noticeByResult[result.result]
       }));
+      // Task 65.9.1 (Part F): a freshly-queued job gets tracked for live
+      // polling instead of only relying on the single `load()` reload
+      // below - `onJobTerminal` (rendered via `JobStatusBadge`) is what
+      // eventually reconciles the canonical searchable/failed state.
+      if (result.result === 'queued' && typeof result.job_id === 'number') {
+        setActiveJobIdByCandidate((current) => ({ ...current, [candidateId]: result.job_id as number }));
+      }
       await load();
     } catch (indexError) {
       setError(safeError(indexError));
     } finally {
       setBusyId(null);
     }
+  }
+
+  function onJobTerminal(candidateId: number) {
+    setActiveJobIdByCandidate((current) => {
+      const { [candidateId]: _removed, ...rest } = current;
+      return rest;
+    });
+    // The job reached a terminal state (succeeded/failed/cancelled) -
+    // reload from the backend so the candidate's own
+    // searchable_as_fact/promotion_status reflects the confirmed outcome
+    // rather than being inferred client-side (Part F.3).
+    void load();
   }
 
   async function toggleHistory(candidateId: number) {
@@ -3344,6 +3522,16 @@ export function CandidatesReviewSection({
                   <Badge tone="muted">{t.candidatePendingIndexLabel}</Badge>
                 )}
                 {candidate.promotion_status === 'failed' && <Badge tone="danger">{t.candidateIndexingFailedLabel}</Badge>}
+                {activeJobIdByCandidate[candidate.candidate_id] !== undefined && (
+                  <JobStatusBadge
+                    accountKey={token}
+                    jobId={activeJobIdByCandidate[candidate.candidate_id]}
+                    onTerminal={() => onJobTerminal(candidate.candidate_id)}
+                    profileId={profileId}
+                    t={t}
+                    token={token}
+                  />
+                )}
               </div>
 
               {notice && <p className="mt-3 rounded-2xl border border-cyan/25 bg-cyan/10 px-3 py-2 text-xs text-cyan">{notice}</p>}
@@ -3584,6 +3772,7 @@ function ContributionsSection({
   mayReview,
   maySubmit,
   onIndexingRetried,
+  onIndexingSettled,
   onSubmitted,
   profileId,
   t,
@@ -3594,6 +3783,10 @@ function ContributionsSection({
   mayReview: boolean;
   maySubmit: boolean;
   onIndexingRetried: (contribution: ContributionRead) => void;
+  /** Task 65.9.1 (Part F) - called once a polled indexing job (retry or
+   * approval-triggered) reaches a terminal state, so the list can be
+   * reconciled with the backend's confirmed outcome. */
+  onIndexingSettled?: () => void;
   onSubmitted: (contribution: ContributionRead) => void;
   profileId: number;
   t: Copy;
@@ -3611,6 +3804,7 @@ function ContributionsSection({
         lang={lang}
         canRetryIndexing={mayReview}
         onIndexingRetried={onIndexingRetried}
+        onIndexingSettled={onIndexingSettled}
         profileId={profileId}
         t={t}
         token={token}
@@ -3692,6 +3886,7 @@ export function ContributionList({
   t,
   canRetryIndexing = false,
   onIndexingRetried,
+  onIndexingSettled,
   profileId,
   token
 }: {
@@ -3704,12 +3899,46 @@ export function ContributionList({
    * re-checks authorization and eligibility on every request regardless. */
   canRetryIndexing?: boolean;
   onIndexingRetried?: (contribution: ContributionRead) => void;
+  onIndexingSettled?: () => void;
   profileId?: number;
   token?: string;
 }) {
   const [retryingId, setRetryingId] = useState<number | null>(null);
   const [retryErrorById, setRetryErrorById] = useState<Record<number, string>>({});
+  // Task 65.9.1 (Part F) - contribution id -> the background job id
+  // currently being polled for it. Seeded/kept in sync from
+  // `contribution.indexing_status.job_id` (Part F.14: recovers an
+  // in-flight job after a browser refresh, not only right after this
+  // component itself triggered the retry).
+  const [activeJobIdByContribution, setActiveJobIdByContribution] = useState<Record<number, number>>({});
   const canOfferRetry = canRetryIndexing && typeof profileId === 'number' && typeof token === 'string' && !!onIndexingRetried;
+
+  useEffect(() => {
+    setActiveJobIdByContribution((current) => {
+      const next: Record<number, number> = {};
+      for (const contribution of contributions) {
+        const jobId = contribution.indexing_status.job_id;
+        if (contribution.indexing_status.state === 'pending' && typeof jobId === 'number') {
+          next[contribution.id] = jobId;
+        }
+      }
+      // Avoid a needless state update (and re-render) when nothing
+      // actually changed - a plain reference-equality shortcut is enough
+      // since both objects are small closed-set maps built fresh here.
+      const unchanged =
+        Object.keys(current).length === Object.keys(next).length &&
+        Object.entries(next).every(([id, jobId]) => current[Number(id)] === jobId);
+      return unchanged ? current : next;
+    });
+  }, [contributions]);
+
+  function onJobTerminal(contributionId: number) {
+    setActiveJobIdByContribution((current) => {
+      const { [contributionId]: _removed, ...rest } = current;
+      return rest;
+    });
+    onIndexingSettled?.();
+  }
 
   async function retryIndexing(contribution: ContributionRead) {
     if (!canOfferRetry || typeof profileId !== 'number' || typeof token !== 'string' || !onIndexingRetried) return;
@@ -3721,6 +3950,10 @@ export function ContributionList({
     try {
       const updated = await retryContributionIndexing(token, profileId, contribution.id);
       onIndexingRetried(updated);
+      const jobId = updated.indexing_status.job_id;
+      if (updated.indexing_status.state === 'pending' && typeof jobId === 'number') {
+        setActiveJobIdByContribution((current) => ({ ...current, [contribution.id]: jobId }));
+      }
     } catch (retryError) {
       setRetryErrorById((current) => ({ ...current, [contribution.id]: safeError(retryError) }));
     } finally {
@@ -3757,6 +3990,18 @@ export function ContributionList({
                     {indexingStatusLabel(t, contribution.indexing_status.state)}
                   </Badge>
                 )}
+                {typeof token === 'string' &&
+                  typeof profileId === 'number' &&
+                  activeJobIdByContribution[contribution.id] !== undefined && (
+                    <JobStatusBadge
+                      accountKey={token}
+                      jobId={activeJobIdByContribution[contribution.id]}
+                      onTerminal={() => onJobTerminal(contribution.id)}
+                      profileId={profileId}
+                      t={t}
+                      token={token}
+                    />
+                  )}
               </div>
             </div>
             {showRetry && (

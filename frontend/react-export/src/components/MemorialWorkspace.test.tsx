@@ -47,7 +47,14 @@ vi.mock('../lib/memorialApi', async () => {
     sendChatMessage: vi.fn(),
     getSession: vi.fn(),
     logoutSession: vi.fn(),
-    retryContributionIndexing: vi.fn()
+    retryContributionIndexing: vi.fn(),
+    // Task 65.9.1 (Part F/G): defaults to an immediate, harmless 404 so any
+    // test that triggers a job-tracking JobStatusBadge (via a `job_id` in
+    // an indexCandidateMemory/retryContributionIndexing mock response)
+    // without itself caring about live polling never makes a real fetch()
+    // call or spins up a real-timer retry loop; tests that DO care about
+    // the polling lifecycle override this per-test.
+    getBackgroundJob: vi.fn().mockRejectedValue(new actual.MemorialApiError(404, 'Background job not found'))
   };
 });
 
@@ -728,6 +735,83 @@ describe('CandidatesReviewSection', () => {
     // correct, expected outcome here, not zero and not a single stale one.
     await waitFor(() => expect(screen.getAllByText(t.candidatePendingIndexLabel).length).toBeGreaterThanOrEqual(2));
     expect(screen.queryByText(t.candidateIndexedLabel)).not.toBeInTheDocument();
+  });
+
+  it('Task 65.9.1 (Part F/G): polls the queued job to a terminal state and then reconciles the list', async () => {
+    const approvedCandidate = baseCandidate({
+      review_status: 'approved',
+      promotion_id: 9,
+      promotion_status: 'pending_index',
+      explicit_indexing_required: true,
+      searchable_as_fact: false
+    });
+    const indexedCandidate = { ...approvedCandidate, promotion_status: 'indexed', searchable_as_fact: true };
+    // Called three times: initial mount, the `await load()` immediately
+    // after the queued 202 response, and once more when the poller
+    // observes the job's terminal `succeeded` state.
+    vi.mocked(api.listMemoryCandidates)
+      .mockResolvedValueOnce([approvedCandidate])
+      .mockResolvedValueOnce([approvedCandidate])
+      .mockResolvedValueOnce([indexedCandidate]);
+    vi.mocked(api.indexCandidateMemory).mockResolvedValue({
+      promotion_id: 9,
+      promotion_status: 'pending_index',
+      indexed_at: null,
+      target_collection_name: null,
+      qdrant_point_id: null,
+      searchable_as_fact: false,
+      result: 'queued',
+      job_id: 42
+    });
+    vi.mocked(api.getBackgroundJob).mockResolvedValue({
+      id: 42,
+      owner_user_id: 1,
+      profile_id: 7,
+      job_type: 'qdrant_indexing',
+      status: 'succeeded',
+      progress_current: 1,
+      progress_total: 1,
+      celery_task_id: null,
+      result_payload: null,
+      error_payload: null,
+      error_message: null,
+      queue: 'embedding',
+      attempt_count: 0,
+      max_attempts: 3,
+      safe_error_category: null,
+      created_at: '2026-01-01T00:00:00Z',
+      updated_at: '2026-01-01T00:00:00Z'
+    });
+    const user = userEvent.setup();
+
+    render(<CandidatesReviewSection isOwner lang="en" profileId={7} t={t} token="tok" />);
+    await screen.findByText('Grandma loved gardening.');
+    await user.click(screen.getByRole('button', { name: t.candidateIndexButton }));
+    await user.click(screen.getByRole('button', { name: t.candidateIndexConfirmYes }));
+
+    // The poller observes the terminal `succeeded` status (never displayed
+    // as "indexed" from the queued response itself, only from the
+    // backend-confirmed job) and reconciles by reloading the candidate
+    // list, which now reports the promotion as actually indexed.
+    await waitFor(() => expect(api.getBackgroundJob).toHaveBeenCalledWith('tok', 42));
+    await waitFor(() => expect(api.listMemoryCandidates).toHaveBeenCalledTimes(3));
+    expect(await screen.findByText(t.candidateIndexedLabel)).toBeInTheDocument();
+  });
+
+  it('Task 65.9.1 (Part G): job-status labels exist for cs/en/ru', () => {
+    for (const lang of ['en', 'cs', 'ru'] as const) {
+      const copy = COPY[lang];
+      expect(copy.jobStatusPending).toBeTruthy();
+      expect(copy.jobStatusQueued).toBeTruthy();
+      expect(copy.jobStatusProcessing).toBeTruthy();
+      expect(copy.jobStatusRetryScheduled).toBeTruthy();
+      expect(copy.jobStatusRecoveryPending).toBeTruthy();
+      expect(copy.jobStatusSucceeded).toBeTruthy();
+      expect(copy.jobStatusFailed).toBeTruthy();
+      expect(copy.jobStatusCancelled).toBeTruthy();
+      expect(copy.jobStatusUnauthorized).toBeTruthy();
+      expect(copy.jobStatusNetworkRetrying).toBeTruthy();
+    }
   });
 });
 

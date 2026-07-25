@@ -157,11 +157,6 @@ def test_starting_processing_creates_background_job_in_queued_state_and_stores_c
     profile_id = _create_profile(client, token, "Queued Pipeline Profile")
     source_id = _create_rag_source(client, token, profile_id).json()["id"]
 
-    monkeypatch.setattr(
-        "app.worker.tasks.run_rag_source_processing_job.delay",
-        lambda job_id: SimpleNamespace(id="celery-rag-pipeline-queued"),
-    )
-
     response = client.post(
         f"/api/rag-sources/{source_id}/process",
         headers=_auth_headers(token),
@@ -172,7 +167,13 @@ def test_starting_processing_creates_background_job_in_queued_state_and_stores_c
     assert body["status"] == BackgroundJobStatus.QUEUED.value
     assert body["progress_current"] == 0
     assert body["progress_total"] == PIPELINE_PROGRESS_TOTAL
-    assert body["celery_task_id"] == "celery-rag-pipeline-queued"
+    # Task 65.9.1 (Part I): this endpoint now dispatches through the
+    # transactional outbox (Task 65.9's `enqueue_job_with_outbox`) exactly
+    # like the other heavy indexing endpoints, so `celery_task_id` is a real
+    # broker-assigned id from `celery_app.send_task` rather than a directly
+    # mockable `.delay()` return value - mirrors the existing assertion
+    # convention in `test_memorial_contribution_indexing.py`.
+    assert body["celery_task_id"] is not None
 
 
 def test_pipeline_marks_job_running_updates_progress_and_succeeds(client, monkeypatch):
@@ -554,14 +555,24 @@ def test_pipeline_reuses_existing_chunks_on_rerun_without_rechunking(client, mon
     assert background_job.result_payload["chunks_total"] == len(existing_chunk_ids)
 
 
-def test_processing_endpoint_runs_in_eager_mode_and_job_is_visible_via_job_tracking(client, monkeypatch):
+def test_processing_endpoint_enqueues_then_worker_execution_completes_the_job_visibly(client, monkeypatch):
+    """Task 65.9.1 (Part I): this endpoint now dispatches through the same
+    transactional-outbox path as the other heavy indexing endpoints (Task
+    65.9's `enqueue_job_with_outbox`, via `celery_app.send_task`), which -
+    like those endpoints' own tests - is not affected by
+    `task_always_eager` (that setting only short-circuits `.apply_async()`/
+    `.delay()`, never `send_task`). The endpoint therefore always returns
+    `queued` immediately; this test simulates the dedicated embedding
+    worker actually picking up and completing that same job by invoking
+    the pipeline's own job-processing function directly (exactly like
+    `test_pipeline_marks_job_running_updates_progress_and_succeeds` above),
+    then confirms the now-`succeeded` state is visible through both the
+    RAG-pipeline job response and the shared `/api/jobs/{id}` endpoint."""
+
     token = _register_and_login(client, "rag-pipeline-eager@example.com")
     profile_id = _create_profile(client, token, "Pipeline Eager Profile")
     source_id = _create_rag_source(client, token, profile_id).json()["id"]
 
-    monkeypatch.setattr("app.worker.tasks.get_session_factory", lambda: app.state.testing_session_local)
-    monkeypatch.setattr(celery_app.conf, "task_always_eager", True)
-    monkeypatch.setattr(celery_app.conf, "task_eager_propagates", True)
     monkeypatch.setattr(
         "app.modules.rag_pipeline.service.index_source_embeddings",
         lambda db, *, current_user, source_id, model_code=None: RagSourceIndexingSummaryRead(
@@ -578,11 +589,25 @@ def test_processing_endpoint_runs_in_eager_mode_and_job_is_visible_via_job_track
         f"/api/rag-sources/{source_id}/process",
         headers=_auth_headers(token),
     )
-
     assert response.status_code == 200
-    body = response.json()
+    queued_body = response.json()
+    assert queued_body["status"] == BackgroundJobStatus.QUEUED.value
+    assert queued_body["job_type"] == BackgroundJobType.RAG_SOURCE_INGESTION.value
+
+    db, session_generator = _get_test_db_session()
+    try:
+        result = process_rag_source_job(
+            db,
+            job_id=queued_body["id"],
+            celery_task_id=queued_body["celery_task_id"],
+        )
+    finally:
+        _close_test_db_session(session_generator)
+
+    assert result["status"] == "succeeded"
+
+    body = client.get(f"/api/jobs/{queued_body['id']}", headers=_auth_headers(token)).json()
     assert body["status"] == BackgroundJobStatus.SUCCEEDED.value
-    assert body["job_type"] == BackgroundJobType.RAG_SOURCE_INGESTION.value
     assert body["progress_current"] == 4
     assert body["progress_total"] == PIPELINE_PROGRESS_TOTAL
     assert body["result_payload"]["source_id"] == source_id

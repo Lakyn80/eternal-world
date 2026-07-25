@@ -71,10 +71,17 @@ services:
       retries: 20
       start_period: 20s
 
+  # Task 65.9.1 (Part D) - general-purpose worker, explicitly restricted to
+  # the non-embedding, non-maintenance queues. See the matching comment in
+  # docker-compose.yml for the full rationale.
   celery_worker:
     image: ${BACKEND_IMAGE:-ghcr.io/lakyn80/eternal-world-backend:latest}
     restart: unless-stopped
-    command: ["celery", "-A", "app.worker.celery_app.celery_app", "worker", "--loglevel=info"]
+    command: >
+      celery -A app.worker.celery_app.celery_app worker
+      -Q document_processing,ai_generation,media,notifications
+      --loglevel=info
+      -n celery_worker@%h
     env_file:
       - .env.prod
     environment:

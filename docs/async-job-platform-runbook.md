@@ -2,10 +2,73 @@
 
 Task 65.9 — Scalable Asynchronous Job Platform, Dedicated Embedding Workers,
 Self-Healing Provider Recovery, and 100k-User Readiness Foundation.
+Extended by Task 65.9.1 — Queue Isolation, Async Status Polling, and
+Production Scale Verification Closure (worker `-Q` restriction, §0/§13/§19;
+periodic queue/job metric updater, §4a; expanded backpressure coverage;
+disposable scale/stress profiles, §18/§20).
 
 All commands below are exact, repository-specific, and assume the local
 dev stack (`docker-compose.yml`). For production (`docker-compose.prod.yml`)
-substitute the compose file and container names accordingly.
+substitute the compose file and production container names.
+
+## 0. Inspecting each worker's queue subscription (Task 65.9.1, Part D)
+
+```bash
+docker compose exec celery_worker celery -A app.worker.celery_app.celery_app inspect active_queues
+docker compose exec embedding_worker celery -A app.worker.celery_app.celery_app inspect active_queues
+docker compose exec maintenance_worker celery -A app.worker.celery_app.celery_app inspect active_queues
+```
+
+Each should report exactly the queues declared in that container's `-Q`
+flag in `docker-compose.yml` — nothing else. Confirm the raw command lines
+directly (no Celery broker round-trip needed):
+
+```bash
+docker compose exec celery_worker sh -c "ps aux | grep '[c]elery.*worker'"
+```
+
+should show `-Q document_processing,ai_generation,media,notifications`;
+`embedding_worker` should show `-Q embedding`; `maintenance_worker` should
+show `-Q maintenance`. The static Compose-topology contract test asserts
+the same thing structurally (see §19).
+
+## 0a. Confirming the general worker cannot consume `embedding`
+
+```bash
+docker compose exec celery_worker celery -A app.worker.celery_app.celery_app inspect active_queues | grep -i embedding
+```
+
+Must return **no output** — `celery_worker`'s `-Q` flag never includes
+`embedding`. Cross-check the source of truth directly:
+
+```bash
+docker compose exec backend python -c "
+from app.worker.celery_app import GENERAL_WORKER_QUEUES
+assert 'embedding' not in GENERAL_WORKER_QUEUES
+assert 'maintenance' not in GENERAL_WORKER_QUEUES
+print(GENERAL_WORKER_QUEUES)"
+```
+
+## 0b. Confirming `embedding_worker` consumes only `embedding`
+
+```bash
+docker compose exec embedding_worker celery -A app.worker.celery_app.celery_app inspect active_queues
+```
+
+Must show exactly one queue, `embedding`. This is also the only container
+with `EMBEDDING_WORKER_SELF_RECYCLE_ENABLED=true` (§10) and
+`--concurrency=1 --prefetch-multiplier=1`.
+
+## 0c. Confirming `maintenance_worker` consumes only `maintenance`
+
+```bash
+docker compose exec maintenance_worker celery -A app.worker.celery_app.celery_app inspect active_queues
+```
+
+Must show exactly one queue, `maintenance`. This container also runs the
+embedded Beat scheduler (`-B`) — `outbox dispatch (15s)`,
+`stale-job recovery (60s)`, and `async queue/job metric refresh (20s,
+Task 65.9.1 §4a)` all run here, never on `celery_worker`/`embedding_worker`.
 
 ## 1. API liveness and readiness
 
@@ -56,10 +119,77 @@ docker compose exec db psql -U eternal_user -d eternal_world -c "
   ORDER BY created_at ASC LIMIT 10;"
 ```
 
-Also exposed as the `async_oldest_job_age_seconds{queue="embedding"}`
-gauge if a metrics-refresh task is wired to `set_async_oldest_job_age_seconds`
-(see Known Limitations — this gauge's setter exists but is not yet
-scheduled by default).
+Also exposed as the `async_oldest_job_age_seconds{queue="embedding"}` gauge,
+refreshed every 20 seconds by the maintenance worker's Beat schedule (§4a) —
+no manual scrape timing assumptions needed.
+
+## 4a. Periodic queue/job metric updater (Task 65.9.1, Part H)
+
+`async_queue_depth{queue=...}` and `async_oldest_job_age_seconds{queue=...}`
+existed as gauge *setters* since Task 65.9 but had no scheduled caller —
+Task 65.9.1 wired a new Beat entry, `refresh-async-queue-metrics`, running
+every **20 seconds** in `maintenance_worker` (`app.worker.celery_app`'s
+`beat_schedule`). 20s: frequent enough that a backlog is visible within
+roughly one scrape interval, cheap enough (a handful of grouped
+`COUNT`/`MIN` queries over `background_jobs.status`/`.queue`/`.created_at`)
+that it is negligible load even 3x more often than stale-job recovery, and
+safely idempotent under any number of concurrent `maintenance_worker`
+replicas (each run is a full re-read-and-set from the current
+authoritative Postgres counts, never an increment).
+
+Inspect directly:
+
+```bash
+curl -s http://localhost:8033/metrics | grep -E "^async_queue_depth|^async_oldest_job_age_seconds"
+```
+
+Every one of the six declared queues (`embedding`, `document_processing`,
+`ai_generation`, `media`, `notifications`, `maintenance`) is always present
+— a queue with zero active jobs reports `0`/`0.0` explicitly rather than
+being absent or holding a stale prior value. A database failure during
+refresh increments `async_queue_metrics_refresh_failure_total` (also
+scraped above) and logs one structured `async_queue_metrics_refresh_failed`
+event — it never raises into the Beat scheduler and never affects API
+liveness (this task runs only in `maintenance_worker`, not `backend`).
+
+Trigger it manually (e.g. right after seeding test jobs):
+
+```bash
+docker compose exec backend python -c "
+from app.worker.tasks import run_async_queue_metrics_refresh_job
+print(run_async_queue_metrics_refresh_job())"
+```
+
+## 4b. Inspecting stuck polling states (frontend/API perspective)
+
+The frontend job-status poller (`frontend/react-export/src/hooks/
+useJobStatusPoller.ts`) polls `GET /api/jobs/{job_id}` until a terminal
+state. If a user reports a stuck "pending"/"processing" indicator:
+
+```bash
+# 1. Confirm the job the frontend is polling actually exists and is owned
+#    by that account (a 404 here means the frontend has a stale/foreign
+#    job id - it should already have cleared it per Part F.11):
+curl -s -H "Authorization: Bearer <token>" http://localhost:8033/api/jobs/<job_id>
+
+# 2. Check whether the job is *genuinely* stuck server-side vs. still
+#    correctly polling (this is the same job-freshness check as §4/§6):
+docker compose exec db psql -U eternal_user -d eternal_world -c "
+  SELECT id, status, queue, heartbeat_at, next_attempt_at, attempt_count,
+         max_attempts, safe_error_category
+  FROM background_jobs WHERE id = <job_id>;"
+```
+
+- `status IN ('pending','queued')` with no `heartbeat_at` for longer than
+  the outbox dispatch interval (15s) → check §5 (outbox backlog) — the
+  job may be stuck at the broker-publish step, not the worker.
+- `status = 'running'` with a stale `heartbeat_at` → will self-heal via
+  stale-job recovery (§13) within `JOB_STALE_HEARTBEAT_TIMEOUT_SECONDS`.
+- `status = 'recovery_pending'` → provider self-healing in progress (§8);
+  expected to resolve within the bounded 3-attempt policy.
+- Frontend never shows "stuck" indefinitely without cause: the poller
+  backs off to a 12s cap (never polls forever at 1s) and pauses to a 20s
+  cadence while the tab is hidden, resuming immediately on refocus.
 
 ## 5. Outbox backlog
 
@@ -152,6 +282,30 @@ Each replica runs `--concurrency=1 --prefetch-multiplier=1`, so 3 replicas
 means at most 3 embedding jobs processed concurrently — throughput scales
 by adding replicas, never by raising concurrency against one loaded model.
 
+## 11a. Comparing queue drain throughput before/after scaling
+
+```bash
+# 1. Snapshot queue depth and oldest age before scaling:
+curl -s http://localhost:8033/metrics | grep 'queue="embedding"'
+
+# 2. Scale up (or down):
+docker compose up -d --scale embedding_worker=3
+
+# 3. Generate a burst of embedding-queue work (isolated disposable
+#    environment only - see §18/§20, never against this dev stack's real
+#    data), then repeatedly sample the same series and time how long
+#    async_queue_depth{queue="embedding"} takes to return to 0:
+watch -n 5 "curl -s http://localhost:8033/metrics | grep 'queue=\"embedding\"'"
+```
+
+Adding embedding-worker replicas is expected to increase drain throughput
+(more concurrent `--concurrency=1` processes = more jobs in flight at
+once) — decreasing replicas must never affect *correctness* (no lost job,
+no duplicate point), only how long draining the same backlog takes. If a
+scale-up does not measurably reduce drain time, that is a result to report
+honestly (Part L.8: "the result is documented honestly"), not evidence to
+suppress.
+
 ## 12. Confirm exactly one deterministic Qdrant point exists
 
 ```bash
@@ -235,27 +389,127 @@ or `maintenance_worker` never runs a migration or a data reset.
 
 ## 18. Running smoke / scale / stress load profiles
 
+All three profiles (Task 65.9.1) run inside **this same `backend`
+container** — they are hermetic (in-memory SQLite database, fake
+embedding provider, fake Qdrant writer, `unittest.mock.patch`-replaced
+outbox sender) and never touch the real `db`/`redis`/`qdrant` services or
+the shared dev/staging/production data those services hold. No
+`docker compose down -v`, no reused production volume name, no real
+DeepSeek call, no model download, in any of the three profiles.
+
 ```bash
-# smoke - local, fake provider/broker, small dataset, fully hermetic
-# (isolated in-memory SQLite, no shared dev data touched). Safe to run
-# anytime, anywhere, including this dev container:
+# smoke - small dataset, quick correctness validation.
 docker compose exec -T -e HF_HUB_OFFLINE=1 -e TRANSFORMERS_OFFLINE=1 backend \
-  python scripts/run_async_job_load_smoke.py --profile smoke --users 25
+  python scripts/run_async_job_load_smoke.py --profile smoke --users 25 --json
 
-# scale - isolated staging only, NEVER against this dev stack or production:
-docker compose -f docker-compose.prod.yml exec backend \
+# scale - configurable registered-user cardinality (bulk SQL insert, up to
+# 100,000+), a smaller "daily active" subset driven through the real HTTP
+# flow at configurable concurrency, and a configurable simulated worker-
+# replica count (reporting only - the actual draining loop is single-
+# process, see the script's own module docstring for the exact, honest
+# scope of what this measures):
+docker compose exec -T -e HF_HUB_OFFLINE=1 -e TRANSFORMERS_OFFLINE=1 backend \
   python scripts/run_async_job_load_smoke.py --profile scale \
-  --users 20000 --api-concurrency 50 --worker-replicas 4
+  --registered-users 100000 --daily-active-users 200 \
+  --api-concurrency 16 --worker-replicas 2 --json
 
-# stress - deliberately exceeds capacity, verifies backpressure/degradation,
-# isolated staging only:
-docker compose -f docker-compose.prod.yml exec backend \
+# stress - deliberately tightens per-user/global backpressure limits and
+# drives a concurrent approval/indexing burst until 429/503 is observed,
+# stopping on max-duration / error-rate / max-queued-job bounds:
+docker compose exec -T -e HF_HUB_OFFLINE=1 -e TRANSFORMERS_OFFLINE=1 backend \
   python scripts/run_async_job_load_smoke.py --profile stress \
-  --users 5000 --api-concurrency 500 --worker-replicas 4
+  --api-concurrency 32 --max-duration-seconds 60 \
+  --error-rate-threshold 0.3 --max-queued-jobs 50 --json
 ```
 
-See `backend/scripts/run_async_job_load_smoke.py` for the exact metrics
-each profile records and PROJECT_PROGRESS.md's Task 65.9 entry for the
-actual local `smoke` result (only `smoke` was run this session —
-`scale`/`stress` print the prepared command and exit without executing,
-since no isolated staging environment was available this session).
+To run any of these three profiles against **real** Postgres/Redis/Qdrant
+in a genuinely separate, disposable environment (never this dev stack,
+never staging/production), stand up an isolated Compose project first:
+
+```bash
+# A distinct COMPOSE_PROJECT_NAME gives every container/volume/network a
+# distinct name (e.g. eternalworldloadtest_db, never eternal_world_db) -
+# nothing here can collide with or be confused for the normal project.
+COMPOSE_PROJECT_NAME=eternalworldloadtest docker compose \
+  -f docker-compose.yml up -d db redis qdrant backend
+
+# Run the same script inside that disposable project's backend container:
+COMPOSE_PROJECT_NAME=eternalworldloadtest docker compose \
+  -f docker-compose.yml exec -T backend \
+  python scripts/run_async_job_load_smoke.py --profile scale \
+  --registered-users 100000 --daily-active-users 200 --api-concurrency 16 --json
+
+# Deterministic, disposable-only cleanup (never touches eternal_world_*):
+COMPOSE_PROJECT_NAME=eternalworldloadtest docker compose \
+  -f docker-compose.yml down -v
+```
+
+See `backend/scripts/run_async_job_load_smoke.py`'s module docstring for
+the exact metrics each profile records, and PROJECT_PROGRESS.md's Task
+65.9.1 entry for the actual measured local results (environment, exact
+commands, and honest limitations of what was/was not executed this
+session).
+
+## 19. Static Compose-topology contract test
+
+```bash
+python -m pytest backend/tests_infra -q
+```
+
+Runs entirely with the **host** Python interpreter (see that module's
+docstring: `docker-compose.yml`/`docker-compose.prod.yml` are not visible
+from inside the `backend` container's bind-mounted `./backend` directory,
+so this specific test cannot run via `docker compose exec backend
+pytest`). Structurally parses both Compose files (never string-grep) and
+asserts: `celery_worker` has an explicit `-Q document_processing,
+ai_generation,media,notifications`; `embedding_worker` has `-Q embedding`
+with `--concurrency=1 --prefetch-multiplier=1`; `maintenance_worker` has
+`-Q maintenance`; none of the three worker services mount the Docker
+socket, run privileged, or publish a port.
+
+## 20. Detecting backpressure activation
+
+```bash
+# During/after a stress run, count 429/503 responses directly from the
+# script's own JSON output (`status_counts`), or independently from the
+# API layer:
+curl -s -o /dev/null -w "%{http_code}\n" -X POST \
+  -H "Authorization: Bearer <token>" \
+  http://localhost:8033/api/rag-sources/<source_id>/process
+```
+
+`429` → per-user/per-profile active-heavy-job limit
+(`max_active_heavy_jobs_per_user`/`_per_profile` in typed settings).
+`503` with a `Retry-After` header → global saturation
+(`global_heavy_job_saturation_limit`). Both are read straight from
+PostgreSQL (`count_active_heavy_jobs_for_user/_profile/_global` in
+`app/modules/job_tracking/repository.py`) on every API replica — never a
+process-local counter, so the same limit holds regardless of which
+replica serves the request (verified by the multi-replica harness, see
+`backend/tests/test_task_65_9_1_multi_replica_harness.py`).
+
+## 21. Cleaning only disposable test data safely
+
+- **Hermetic smoke/scale/stress runs** (§18, in-container): nothing to
+  clean up — the in-memory SQLite database and its `TestClient` app
+  overrides are torn down automatically when the script process exits;
+  nothing was ever written to the real `db`/`redis`/`qdrant` services.
+- **Disposable Compose-project runs** (§18's `COMPOSE_PROJECT_NAME`
+  variant): `docker compose -f docker-compose.yml down -v` **using that
+  same `COMPOSE_PROJECT_NAME`** removes only that project's containers and
+  volumes. Never run `down -v` without an explicit, verified
+  `COMPOSE_PROJECT_NAME` pointing at the disposable project — see §22.
+
+## 22. Confirming normal project volumes were not touched
+
+```bash
+docker volume ls | grep eternal_world
+# expected: eternal_world_postgres_data, eternal_world_redis_data,
+# eternal_world_qdrant_data, eternal_world_prometheus_data,
+# eternal_world_grafana_data, eternal_world_bge_m3_cache - all present,
+# none newly created/recreated (check timestamps if in doubt: `docker
+# volume inspect eternal_world_postgres_data`).
+docker compose ps   # normal project's containers still the same ones
+  # (same CONTAINER ID / uptime as before the load test - a disposable
+  # COMPOSE_PROJECT_NAME run never restarts or recreates these).
+```

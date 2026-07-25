@@ -26,6 +26,34 @@ MEDIA_QUEUE = "media"
 NOTIFICATIONS_QUEUE = "notifications"
 MAINTENANCE_QUEUE = "maintenance"
 
+#: Task 65.9.1 (Part H) - the fixed, closed set of queue names used
+#: everywhere a queue label is reported (metrics, routing tests). Bounded
+#: cardinality by construction: this tuple, not arbitrary broker/job data,
+#: is what the periodic metric updater iterates over, so a queue with zero
+#: active jobs still gets its gauge explicitly reset to zero rather than
+#: silently retaining a stale prior value (Part H.5).
+ALL_QUEUES: tuple[str, ...] = (
+    EMBEDDING_QUEUE,
+    DOCUMENT_PROCESSING_QUEUE,
+    AI_GENERATION_QUEUE,
+    MEDIA_QUEUE,
+    NOTIFICATIONS_QUEUE,
+    MAINTENANCE_QUEUE,
+)
+
+#: Task 65.9.1 (Part D) - the general-purpose `celery_worker` container's
+#: explicit `-Q` subscription (document_processing/ai_generation/media/
+#: notifications only - never embedding or maintenance). Exported here so
+#: the Compose-topology contract test (Part E) can assert the compose
+#: command line against this single source of truth instead of duplicating
+#: the queue list as a second hard-coded literal.
+GENERAL_WORKER_QUEUES: tuple[str, ...] = (
+    DOCUMENT_PROCESSING_QUEUE,
+    AI_GENERATION_QUEUE,
+    MEDIA_QUEUE,
+    NOTIFICATIONS_QUEUE,
+)
+
 celery_app.conf.task_queues = (
     Queue(EMBEDDING_QUEUE),
     Queue(DOCUMENT_PROCESSING_QUEUE),
@@ -51,6 +79,7 @@ celery_app.conf.task_routes = {
     "app.worker.tasks.run_outbox_dispatch_job": {"queue": MAINTENANCE_QUEUE},
     "app.worker.tasks.run_stale_job_recovery_job": {"queue": MAINTENANCE_QUEUE},
     "app.worker.tasks.run_job_smoke_test": {"queue": MAINTENANCE_QUEUE},
+    "app.worker.tasks.run_async_queue_metrics_refresh_job": {"queue": MAINTENANCE_QUEUE},
 }
 
 celery_app.conf.update(
@@ -101,6 +130,22 @@ celery_app.conf.beat_schedule = {
     "recover-stale-jobs": {
         "task": "app.worker.tasks.run_stale_job_recovery_job",
         "schedule": 60.0,
+        "options": {"queue": MAINTENANCE_QUEUE},
+    },
+    #: Task 65.9.1 (Part H) - periodic refresh of the `async_queue_depth`
+    #: and `async_oldest_job_age_seconds` gauges (both existed as setters
+    #: since Task 65.9 but had no caller). 20s: frequent enough that a
+    #: Grafana/alerting consumer sees a backlog within roughly one scrape
+    #: interval of it forming, cheap enough (a handful of grouped COUNT/MIN
+    #: queries over an indexed `status`/`queue`/`created_at` - see
+    #: `ix_mcp_profile_status`-style indexes and `BackgroundJob.status`)
+    #: that running it 3x more often than stale-job recovery is negligible
+    #: load, and safely idempotent under multiple concurrent
+    #: maintenance-worker replicas/schedules (each run simply re-sets the
+    #: gauges from the current authoritative Postgres counts - Part H.6).
+    "refresh-async-queue-metrics": {
+        "task": "app.worker.tasks.run_async_queue_metrics_refresh_job",
+        "schedule": 20.0,
         "options": {"queue": MAINTENANCE_QUEUE},
     },
 }

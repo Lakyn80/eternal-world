@@ -23,6 +23,11 @@ from app.modules.biography_ingestion.service import (
     start_biography_ingestion,
     update_biography,
 )
+from app.modules.job_tracking.exceptions import (
+    GlobalQueueSaturationError,
+    PerProfileActiveJobLimitExceededError,
+    PerUserActiveJobLimitExceededError,
+)
 from app.modules.memorial_access.capabilities import MemorialCapability, resolve_authorized_profile
 from app.modules.memorial_access.service import MemorialForbiddenError, MemorialNotFoundError
 
@@ -146,6 +151,8 @@ def get_biography_status_endpoint(
         status.HTTP_403_FORBIDDEN: {"model": ErrorResponse},
         status.HTTP_404_NOT_FOUND: {"model": ErrorResponse},
         status.HTTP_409_CONFLICT: {"model": ErrorResponse},
+        status.HTTP_429_TOO_MANY_REQUESTS: {"model": ErrorResponse},
+        status.HTTP_503_SERVICE_UNAVAILABLE: {"model": ErrorResponse},
     },
 )
 def start_biography_ingestion_endpoint(
@@ -168,6 +175,21 @@ def start_biography_ingestion_endpoint(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
     except BiographyIngestionConflictError as exc:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+    #: Task 65.9.1 (Part I) - `start_biography_ingestion` enqueues through
+    #: `create_job(queue="embedding", idempotency_key=...)` (Task 65.9) and
+    #: is therefore already subject to the same per-user/per-profile/global
+    #: backpressure limits as every other heavy indexing entry point - this
+    #: endpoint simply never translated the resulting exception into an
+    #: HTTP response before, so a saturated limit surfaced as an unhandled
+    #: 500 instead of 429/503.
+    except (PerUserActiveJobLimitExceededError, PerProfileActiveJobLimitExceededError) as exc:
+        raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail=str(exc)) from exc
+    except GlobalQueueSaturationError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=str(exc),
+            headers={"Retry-After": str(exc.retry_after_seconds)},
+        ) from exc
     return BiographyIngestionStartResponse(
         profile_id=profile.id,
         status=profile.biography_status,

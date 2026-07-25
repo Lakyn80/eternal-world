@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
@@ -144,6 +144,49 @@ def count_active_heavy_jobs_global(db: Session) -> int:
         BackgroundJob.queue == "embedding",
     )
     return int(db.scalar(statement) or 0)
+
+
+def get_active_job_counts_by_queue(db: Session) -> dict[str, int]:
+    """Task 65.9.1 (Part H) - active (non-terminal) job counts grouped by
+    queue, straight from PostgreSQL (the authoritative source, never a
+    broker-internal queue-length call). A queue with zero active jobs is
+    simply absent from this dict - the caller (Part H.5) is responsible for
+    explicitly zeroing every known queue, not just the ones returned here,
+    so a queue that just drained does not keep reporting its last nonzero
+    depth forever."""
+
+    statement = (
+        select(BackgroundJob.queue, func.count(BackgroundJob.id))
+        .where(
+            BackgroundJob.status.in_(ACTIVE_BACKGROUND_JOB_STATUSES),
+            BackgroundJob.queue.is_not(None),
+        )
+        .group_by(BackgroundJob.queue)
+    )
+    return {queue: int(count) for queue, count in db.execute(statement).all()}
+
+
+def get_oldest_active_job_created_at_by_queue(db: Session) -> dict[str, datetime]:
+    """Task 65.9.1 (Part H) - oldest `created_at` among active jobs, grouped
+    by queue. Callers convert this to an age-in-seconds gauge relative to
+    "now" at read time; a queue absent from this dict has no active jobs."""
+
+    statement = (
+        select(BackgroundJob.queue, func.min(BackgroundJob.created_at))
+        .where(
+            BackgroundJob.status.in_(ACTIVE_BACKGROUND_JOB_STATUSES),
+            BackgroundJob.queue.is_not(None),
+        )
+        .group_by(BackgroundJob.queue)
+    )
+    result: dict[str, datetime] = {}
+    for queue, oldest_created_at in db.execute(statement).all():
+        if oldest_created_at is None:
+            continue
+        if oldest_created_at.tzinfo is None:
+            oldest_created_at = oldest_created_at.replace(tzinfo=timezone.utc)
+        result[queue] = oldest_created_at
+    return result
 
 
 def list_stale_processing_jobs(

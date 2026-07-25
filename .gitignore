@@ -9,6 +9,7 @@ backend/media/
 backend/artifacts/avatar_quality_eval/runs/
 backend/artifacts/brain_rag_eval/runs/
 backend/artifacts/demo_exports/
+backend/artifacts/memorial_account_binding_audit/
 node_modules/
 .next/
 dist/

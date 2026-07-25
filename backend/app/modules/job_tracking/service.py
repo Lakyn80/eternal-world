@@ -1,9 +1,10 @@
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
@@ -12,6 +13,9 @@ from app.core.metrics import (
     observe_async_job_created,
     observe_async_job_failed,
     observe_async_job_stale_recovered,
+    observe_async_queue_metrics_refresh_failure,
+    set_async_oldest_job_age_seconds,
+    set_async_queue_depth,
 )
 from app.db.models import BackgroundJob, User
 from app.modules.job_tracking import repository
@@ -25,6 +29,9 @@ from app.modules.job_tracking.exceptions import (
 )
 from app.modules.job_tracking.schemas import BackgroundJobBackfillSummaryRead
 from app.modules.memory_profiles import repository as memory_profiles_repository
+
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -440,6 +447,63 @@ def requeue_stale_job(
     db.commit()
     observe_async_job_stale_recovered(queue=background_job.queue)
     return True
+
+
+@dataclass(frozen=True)
+class AsyncQueueMetricsRefreshResult:
+    ok: bool
+    queue_depths: dict[str, int]
+    oldest_ages_seconds: dict[str, float]
+
+
+def refresh_async_queue_metrics(db: Session) -> AsyncQueueMetricsRefreshResult:
+    """Task 65.9.1 (Part H) - the periodic updater for the `async_queue_depth`
+    and `async_oldest_job_age_seconds` gauges, both of which existed as
+    setters since Task 65.9 but had no scheduled caller (documented Task
+    65.9 limitation #4). PostgreSQL (`BackgroundJob`) remains the sole
+    authoritative source - never broker/queue-internal introspection.
+
+    Always resets *every* known queue's gauges on each run (Part H.5): a
+    queue that just fully drained gets explicitly set to 0 / 0.0 rather than
+    silently keeping its last nonzero value forever. Safe under concurrent
+    maintenance-worker replicas/schedules - each run is an idempotent full
+    re-read-and-set from the current authoritative counts, never an
+    increment/decrement.
+
+    On a database failure, this never raises: it increments the safe
+    `async_queue_metrics_refresh_failure_total` counter (no queue/job
+    labels - a DB-wide failure is not a per-queue signal), logs one
+    structured, label-free event, and returns `ok=False` leaving the
+    previous gauge values in place until the next successful run. The
+    caller (the Celery task) never propagates this as a task failure -
+    a transient DB blip here must not create a retry storm on a
+    maintenance-only task (Part H.6, roadmap rule 16).
+    """
+
+    from app.worker.celery_app import ALL_QUEUES
+
+    try:
+        active_counts = repository.get_active_job_counts_by_queue(db)
+        oldest_created_at = repository.get_oldest_active_job_created_at_by_queue(db)
+    except SQLAlchemyError:
+        logger.exception("async_queue_metrics_refresh_failed")
+        observe_async_queue_metrics_refresh_failure()
+        return AsyncQueueMetricsRefreshResult(ok=False, queue_depths={}, oldest_ages_seconds={})
+
+    now = datetime.now(timezone.utc)
+    queue_depths: dict[str, int] = {}
+    oldest_ages_seconds: dict[str, float] = {}
+    for queue in ALL_QUEUES:
+        depth = int(active_counts.get(queue, 0))
+        queue_depths[queue] = depth
+        set_async_queue_depth(queue=queue, depth=depth)
+
+        created_at = oldest_created_at.get(queue)
+        age_seconds = max(0.0, (now - created_at).total_seconds()) if created_at is not None else 0.0
+        oldest_ages_seconds[queue] = age_seconds
+        set_async_oldest_job_age_seconds(queue=queue, age_seconds=age_seconds)
+
+    return AsyncQueueMetricsRefreshResult(ok=True, queue_depths=queue_depths, oldest_ages_seconds=oldest_ages_seconds)
 
 
 @dataclass(frozen=True)

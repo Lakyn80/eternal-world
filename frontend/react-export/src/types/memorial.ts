@@ -107,6 +107,11 @@ export type ContributionIndexingStatus = {
   indexed_at: string | null;
   attempt_count: number;
   failure_reason: string | null;
+  // Task 65.9.1 (Part F): the active background job id backing a `pending`
+  // state, when one currently exists - lets the frontend poll
+  // `GET /api/jobs/{job_id}` for the full lifecycle. Always null/absent for
+  // every other state.
+  job_id?: number | null;
 };
 
 export type BiographyStatusState = 'draft' | 'ready_for_ingestion' | 'ingesting' | 'indexed' | 'failed' | 'stale';
@@ -334,4 +339,40 @@ export type BillingLimitsRead = {
   plan_code: string;
   limits: BillingPlanLimits;
   current_usage: BillingUsageSnapshot;
+};
+
+// Task 65.9.1 (Part F) - the full async-job status lifecycle surface used
+// by the frontend job-status poller. Mirrors backend `BackgroundJobRead`
+// (backend/app/modules/job_tracking/schemas.py) field-for-field; only the
+// fields the poller actually consumes are declared narrowly, everything
+// else is typed loosely so an additive backend field never breaks the
+// frontend build.
+export type BackgroundJobStatusValue =
+  | 'pending'
+  | 'queued'
+  | 'running'
+  | 'recovery_pending'
+  | 'retry_scheduled'
+  | 'succeeded'
+  | 'failed'
+  | 'cancelled';
+
+export type BackgroundJobRead = {
+  id: number;
+  owner_user_id: number;
+  profile_id: number | null;
+  job_type: string;
+  status: BackgroundJobStatusValue;
+  progress_current: number;
+  progress_total: number;
+  celery_task_id: string | null;
+  result_payload: Record<string, unknown> | null;
+  error_payload: Record<string, unknown> | null;
+  error_message: string | null;
+  queue: string | null;
+  attempt_count: number;
+  max_attempts: number;
+  safe_error_category: string | null;
+  created_at: string;
+  updated_at: string;
 };

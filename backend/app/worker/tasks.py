@@ -28,6 +28,7 @@ from app.modules.job_tracking.service import (
     mark_failed,
     mark_running,
     mark_succeeded,
+    refresh_async_queue_metrics,
     requeue_stale_job,
     touch_heartbeat,
     update_progress,
@@ -596,6 +597,30 @@ def run_stale_job_recovery_job() -> dict[str, object]:
             "scanned": len(stale_job_ids),
             "requeued": requeued,
             "permanently_failed": permanently_failed,
+        }
+    finally:
+        db.close()
+
+
+@celery_app.task(name="app.worker.tasks.run_async_queue_metrics_refresh_job")
+def run_async_queue_metrics_refresh_job() -> dict[str, object]:
+    """Task 65.9.1 (Part H) - the maintenance sweep that recomputes the
+    `async_queue_depth`/`async_oldest_job_age_seconds` gauges straight from
+    PostgreSQL. Routed to the `maintenance` queue (never `embedding`) - this
+    task never touches the embedding provider. Never raises: a database
+    failure is recorded via a safe failure counter/log inside
+    `refresh_async_queue_metrics` and reported here as `ok: False` rather
+    than as a Celery task failure, so a transient DB blip cannot create a
+    retry storm on a purely observational task."""
+
+    session_factory = get_session_factory()
+    db = session_factory()
+    try:
+        result = refresh_async_queue_metrics(db)
+        return {
+            "ok": result.ok,
+            "queue_depths": result.queue_depths,
+            "oldest_ages_seconds": result.oldest_ages_seconds,
         }
     finally:
         db.close()

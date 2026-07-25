@@ -739,6 +739,10 @@ OUTBOX_PUBLISH_FAILURE_TOTAL = Counter(
     "outbox_publish_failure_total",
     "Total transactional outbox publish attempts that failed (broker unreachable).",
 )
+ASYNC_QUEUE_METRICS_REFRESH_FAILURE_TOTAL = Counter(
+    "async_queue_metrics_refresh_failure_total",
+    "Total periodic async queue/job metric refresh attempts that failed (e.g. database unavailable).",
+)
 
 EMBEDDING_PROVIDER_HEALTH = Gauge(
     "embedding_provider_health",
@@ -869,6 +873,10 @@ def set_outbox_pending_total(*, count: int) -> None:
 
 def observe_outbox_publish_failure() -> None:
     OUTBOX_PUBLISH_FAILURE_TOTAL.inc()
+
+
+def observe_async_queue_metrics_refresh_failure() -> None:
+    ASYNC_QUEUE_METRICS_REFRESH_FAILURE_TOTAL.inc()
 
 
 def set_embedding_provider_health(*, model_code: str, state: str) -> None:

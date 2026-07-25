@@ -80,13 +80,28 @@ services:
       - ./packages/rag-embedding-benchmark:/packages/rag-embedding-benchmark
       - eternal_world_bge_m3_cache:/models/huggingface
 
+  # Task 65.9.1 (Part D) - the general-purpose worker. Explicitly restricted
+  # to the non-embedding, non-maintenance queues that currently have real
+  # tasks routed to them (see app/worker/celery_app.py task_routes -
+  # document_processing/ai_generation/media/notifications have no real
+  # tasks registered yet, but are declared here ahead of the product
+  # features that will use them, exactly like the queue declarations
+  # themselves). This worker must NEVER consume `embedding` (dedicated to
+  # embedding_worker, Part D.1) or `maintenance` (dedicated to
+  # maintenance_worker, Part D.2) - without an explicit `-Q` flag, Celery
+  # would otherwise subscribe to every queue named in `task_queues`,
+  # including both of those.
   celery_worker:
     build:
       context: ./backend
       dockerfile: Dockerfile
     container_name: eternal_world_celery_worker
     restart: unless-stopped
-    command: celery -A app.worker.celery_app.celery_app worker --loglevel=info
+    command: >
+      celery -A app.worker.celery_app.celery_app worker
+      -Q document_processing,ai_generation,media,notifications
+      --loglevel=info
+      -n celery_worker@%h
     environment:
       DATABASE_URL: postgresql+psycopg://eternal_user:eternal_password@db:5432/eternal_world
       REDIS_URL: redis://redis:6379/0
