@@ -1889,3 +1889,106 @@ Známá omezení (zdokumentována, ne skryta): sken pokrytí volá RAG retrieval
 Task 65.6 se **považuje za kompletně dokončený** v rozsahu definovaném zadáním a živě ověřený proti reálné infrastruktuře, včetně vlastního nalezeného a opraveného incidentu (únik reálného providera do konceptu testů).
 
 Další doporučený task: **Task 66.2 — Cost Analytics and Admin API** (nedotčen touto úlohou), případně úzce vymezené doladění promptu biografa pro tematické zaostření při tenkém zdrojovém textu (pozorované omezení výše), pokud si to vlastník bude přát.
+
+## 24. Task 65.9 status (2026-07-24) — škálovatelná asynchronní jobová platforma a self-healing embedding workery
+
+Task 65.9 — Scalable Asynchronous Job Platform, Dedicated Embedding Workers, Self-Healing Provider Recovery, and 100k-User Readiness Foundation — byl proveden a **dokončen v rozsahu ověřeném testy a lokálním fake-safe load-test smoke profilem**. Plný popis (traceability matice vůči této roadmapě, architektura, testy, live smoke) je v `PROJECT_PROGRESS.md`, sekce "Task 65.9 Scalable Async Jobs and Self-Healing Embedding Workers".
+
+Tento task navazuje přímo na již dříve touto roadmapou akceptované rozhodnutí (bod 8, "Task 65": "background job přes Celery... stav jobu") a dokončuje ho pro poslední dvě zbývající synchronní cesty (tlačítko "Index memory" a retry-indexing pro rodinné příspěvky, Task 65.8), které dosud volaly reálný embedding provider přímo uvnitř HTTP requestu. Neexistuje žádný konflikt s touto roadmapou: embedding model, dimenze, Qdrant kolekce, retrieval/ranking, RRF/BM25 ani schvalovací/eligibility pravidla nebyly touto úlohou změněny — pouze *kdy* se embedding skutečně spouští (vždy až uvnitř dedikovaného embedding workeru, nikdy ve FastAPI procesu).
+
+Stručně:
+
+```text
+Nová trvalá jobová platforma nad existujícím BackgroundJob (čistě aditivní
+  sloupce) + nová job_outbox_events tabulka (transakční outbox) —
+  broker/publish selhání už nikdy neztratí job.
+Explicitní queue topologie (embedding/document_processing/ai_generation/
+  media/notifications/maintenance) + nový dedikovaný embedding_worker
+  a maintenance_worker kontejner (docker-compose.yml i .prod.yml),
+  bez Docker socketu, bez nového portu.
+Explicitní lifecycle embedding provideru + integrity probe navržený přímo
+  z reálného incidentu s meta-tensor na BGE-M3 (zdokumentováno v
+  PROJECT_PROGRESS.md) + ohraničená self-healing politika (max 3 pokusy,
+  max 1 vyžádaný restart embedding-worker kontejneru, nikdy nekonečná
+  smyčka, žádný Docker socket/API v aplikačním kódu).
+Stale-job recovery, backpressure (429/503) per-user/per-profile/globálně,
+  nové bezpečné veřejné chybové kategorie.
+Oba zbývající synchronní HTTP endpointy (index/retry-indexing) nyní vrací
+  202 a nikdy neinstancují encoder v FastAPI procesu.
+38 nových testů (fake-safe) + fake-safe load-test harness (smoke profil
+  skutečně spuštěn lokálně: 15 uživatelů, 0 duplicit/kontaminace/úniků).
+```
+
+Vědomě mimo rozsah / zdokumentováno jako omezení (viz `PROJECT_PROGRESS.md` pro plný seznam): existující `celery_worker` kontejner zatím není omezen na vlastní frontu (v tomto dev compose bez `-Q` flag proto ze zásady odebírá i `embedding` frontu); frontend polling/backoff pro tyto dvě nově-asynchronní akce nebyl dodělán (jen "nikdy netvrdit zaindexováno předčasně" bylo opraveno); `scale`/`stress` load-test profily nebyly spuštěny (chybí izolované staging prostředí).
+
+Task 65.9 se **považuje za kompletně dokončený** v rozsahu definovaném zadáním. Žádná sekce této roadmapy nebyla přepsána; toto je jediná nová sekce, kterou tento task přidal.
+
+Další doporučený task: omezit `celery_worker` na jeho vlastní (ne-embedding) fronty nyní, když `embedding_worker`/`maintenance_worker` existují jako zamýšlení jediní konzumenti frenty `embedding`/`maintenance`. (Poznámka k dokumentační uzávěrce Task 65.9D, 2026-07-25: v době psaní této sekce byla práce Task 65.7 stále necommitnutá; mezitím byla dokončena a commitnuta jako **Task 65.7C** (`aabdd89`), viz sekce 25 níže — tento bod je tedy vyřešen. Formálně dalším číslovaným taskem je **Task 65.9.1 — Queue Isolation, Async Status Polling, and Production Scale Verification Closure**, viz sekce 26.)
+
+## 25. Task 65.7C status (2026-07-24) — dokončení autentizované spolehlivosti workspace, session/cookie architektury a oprava skryté regrese v povinném upřesnění
+
+Task 65.7C dokončil zbývající, dosud necommitnutou backendovou polovinu Task 65.7 (browser-session cookie autentizace, Redis-backed aktivní chat session s resume, AI Biograf resume, oprava zaseknutých kandidátů) a zároveň opravil skutečnou architektonickou regresi, kterou tato necommitnutá práce sama vnesla. Plný popis (traceability matice vůči této roadmapě, přesný root-cause, testy) je v `PROJECT_PROGRESS.md`, sekce "Task 65.7C Authenticated Workspace Reliability Closure".
+
+Nalezený konflikt s touto roadmapou (bod 10 "Unverified memory candidate = cannot be used as factual evidence" a bod 5.2 bezpečného učení): necommitnutá verze Task 65.7 přidala funkci, která při KAŽDÉ nové odpovědi AI Biografa bezpodmínečně zrušila dosud nezodpovězená povinná upřesnění (`bypass_mandatory_clarifications_and_finalize`, volaná automaticky z `answer_question`) a rovnou označila kandidáta jako `ready_for_owner_review`. To přímo odporovalo již dříve touto roadmapou akceptovanému a Taskem 65.6 implementovanému mechanismu povinných upřesnění a rozbilo dva již commitnuté testy (`test_answering_childhood_question_creates_candidate_with_required_clarification`, `test_active_clarification_blocks_new_topic`). Oprava: automatické volání odstraněno z běžného toku odpovědí; funkce samotná zachována výhradně jako explicitní, věkově ohraničený (`asked_at` starší než konfigurovatelný práh, default 24 h) nástroj pro opravu skutečně zaseknutých kandidátů (`avatar_biographer/repair.py`), nikdy automaticky spouštěná.
+
+Stručně:
+
+```text
+Browser-session cookie (Redis-backed, HttpOnly/SameSite=Lax, sliding TTL,
+  additivní k existujícímu bearer JWT) - multi-replica bezpečné, žádný
+  in-process stav.
+Aktivní chat session: Postgres (chat_active_sessions, migrace 20260723_0026)
+  jako zdroj pravdy, Redis jen jako rychlá obnovitelná cache s bezpečným
+  fallbackem na Postgres při výpadku/expiraci.
+AI Biograf resume endpoint - čistě čtecí kompozice existujících stavů.
+Skutečná regrese nalezena a opravena: povinné upřesnění (Task 65.6) bylo
+  necommitnutou verzí Tasku 65.7 tiše obcházeno pro každou novou odpověď -
+  opraveno, ověřeno proti již existujícím commitnutým testům.
+Dříve hlášené "české/ruské lokalizační selhání upřesnění" bylo ve
+  skutečnosti kaskádovým důsledkem výše uvedené regrese, ne chybou v
+  lokalizačním kódu (ten zůstal beze změny a je správný).
+test_alembic.py: nahrazena křehká natvrdo daná revize za kontrolu
+  jediné hlavy + explicitních hran řetězu (20260722_0025 -> 20260723_0026
+  -> 20260724_0027).
+12 testů v 10 souborech opraveno (cookie perzistuje napříč requesty ve
+  sdíleném test klientovi stejně jako v prohlížeči - testy musely
+  explicitně vyčistit cookies, aby simulovaly opravdu nulové přihlášení,
+  produkční chování bylo od začátku správné).
+Task 65.9 (38 testů async job platformy) ověřen nezměněný před i po zásahu.
+```
+
+Task 65.7C se **považuje za kompletně dokončený** v rozsahu definovaném zadáním. Žádná existující sekce této roadmapy nebyla přepsána; toto je jediná nová sekce, kterou tento task přidal. Známá omezení (pre-existující, nesouvisející selhání `test_rag_retrieval.py`/`test_embeddings.py` kvůli skutečnému `sentence_transformers` provideru namísto mocku pro konkrétní `model_code` hodnoty; jeden dávkově-only flake v `test_rag_chunks.py`) jsou zdokumentována v `PROJECT_PROGRESS.md` a nebyla touto úlohou způsobena ani opravena.
+
+Další doporučený task: omezit `celery_worker` na jeho vlastní (ne-embedding) fronty (nezměněné doporučení z Tasku 65.9, tímto taskem nedotčeno). Formálně dalším číslovaným taskem je **Task 65.9.1 — Queue Isolation, Async Status Polling, and Production Scale Verification Closure**, viz sekce 26.
+
+## 26. Task 65.9.1 — definice dalšího čísla tasku (2026-07-25, dokumentováno v rámci Task 65.9D, **neimplementováno**)
+
+Task 65.9D (dokumentační uzávěrka Tasků 65.7C a 65.9) potvrdil oba implementační commity (`aabdd89` pro Task 65.7C, `d6d76ab` pro Task 65.9) přítomné lokálně i na `origin/staging/eternalworld-lukiora-20260715` a definuje zde formálně další task číslo podle skutečných, zdokumentovaných omezení Tasku 65.9 (sekce 24 výše). Tato sekce **pouze definuje** rozsah - žádná implementace neproběhla v rámci Tasku 65.9D.
+
+**Task 65.9.1 — Queue Isolation, Async Status Polling, and Production Scale Verification Closure**
+
+Rozsah (převzato beze změny ze zdokumentovaných omezení Tasku 65.9):
+
+```text
+1. Omezit obecný celery_worker kontejner jen na ne-embedding fronty
+   (document_processing/ai_generation/media/notifications).
+2. Zajistit, že jedině dedikovaný embedding_worker odebírá frontu embedding.
+3. Dokončit frontend polling pro stavy: queued, processing,
+   provider recovery, indexed, failed (pro obě nově-asynchronní akce
+   z Tasku 65.9 - "Index memory" a retry-indexing).
+4. Zapojit periodickou aktualizaci metrik async_queue_depth a
+   async_oldest_job_age_seconds (gauge settery už existují, chybí
+   pravidelný updater task).
+5. Rozšířit backpressure na všechny existující "heavy" (text-přijímající)
+   endpointy, ne jen na explicitní index/retry akce.
+6. Ověřit chování API/session/job napříč více reálnými běžícími replikami
+   (dosud jen code-review audit, ne živý multi-replica důkaz).
+7. Spustit izolované scale testy na zdokumentované infrastruktuře
+   (load-smoke harness z Tasku 65.9 už existuje, scale/stress profily
+   dosud nebyly spuštěny - chybělo izolované staging prostředí).
+8. Spustit řízené stress testy.
+9. Vyprodukovat evidence-based zjištění o produkční kapacitě (žádné tvrzení
+   o konkrétním počtu současných uživatelů bez skutečného měření).
+```
+
+Toto číslo (65.9.1) nekoliduje se žádným existujícím taskem této roadmapy (ověřeno - žádná dřívější sekce ani `PROJECT_PROGRESS.md` záznam toto číslo nepoužívá). Task 65.9.1 **nebyl v rámci Tasku 65.9D implementován** - je zde zdokumentován výhradně jako příští doporučená položka roadmapy.
