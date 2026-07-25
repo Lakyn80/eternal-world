@@ -356,6 +356,16 @@ def test_viewer_cannot_retry_indexing(client):
 
 
 def test_trusted_reviewer_can_retry_failed_indexing(client, monkeypatch):
+    """Task 65.9 (Part I): the retry endpoint itself now only authorizes,
+    reactivates the promotion to `pending_index`, and creates/dispatches
+    the persistent job - it must never call the encoder inline. This is
+    asserted directly (`fake_encoder.calls == 0` right after the HTTP
+    response), then the embedding-worker's own idempotent execution is
+    simulated exactly as `test_memorial_contribution_indexing.py` already
+    does for the original approve->index flow, by calling
+    `index_contribution_promotion` directly with fakes - standing in for
+    "a Celery embedding worker picks up the dispatched job"."""
+
     owner_token = _register_and_login(client, "wf-retry-reviewer-owner@example.com")
     reviewer_token = _register_and_login(client, "wf-retry-reviewer-member@example.com")
     profile_id = _create_memorial(client, owner_token)
@@ -367,30 +377,42 @@ def test_trusted_reviewer_can_retry_failed_indexing(client, monkeypatch):
 
     fake_writer = FakeWriter()
     fake_encoder = FakeEncoder()
-    monkeypatch.setattr(
-        contribution_indexing_service,
-        "DefaultMemorialContributionQdrantWriter",
-        lambda: fake_writer,
-    )
-    monkeypatch.setattr(
-        contribution_indexing_service,
-        "DefaultContributionIndexingEmbeddingEncoder",
-        lambda: fake_encoder,
-    )
 
     retry_response = _retry(client, reviewer_token, profile_id, submitted["id"])
 
-    assert retry_response.status_code == 200
-    assert retry_response.json()["indexing_status"]["state"] == "indexed"
-    assert retry_response.json()["indexing_status"]["failure_reason"] is None
+    assert retry_response.status_code == 202
+    assert retry_response.json()["indexing_status"]["state"] == "pending"
+    assert fake_encoder.calls == 0, "the retry HTTP request itself must never call the encoder"
+
+    db = _db()
+    try:
+        promotion = get_promotion_by_contribution_id(db, contribution_id=submitted["id"])
+        assert promotion is not None
+        result = contribution_indexing_service.index_contribution_promotion(
+            db,
+            profile_id=profile_id,
+            promotion_id=promotion.id,
+            writer=fake_writer,
+            encoder=fake_encoder,
+        )
+        assert result.promotion_status == "indexed"
+        assert result.result == "indexed"
+    finally:
+        db.close()
+
     assert fake_writer.upsert_calls == 1
+
+    final = client.get(f"/api/memorials/{profile_id}/contributions", headers=_auth_headers(owner_token))
+    matching = next(item for item in final.json() if item["id"] == submitted["id"])
+    assert matching["indexing_status"]["state"] == "indexed"
+    assert matching["indexing_status"]["failure_reason"] is None
 
 
 def test_retry_endpoint_actually_reindexes_and_clears_failure(client, monkeypatch):
-    """End-to-end (through the real HTTP endpoint, real service function,
-    fake writer/encoder only) proof that retry transitions
-    `failed -> indexed`, is idempotent on a second call, and never writes a
-    duplicate Qdrant point."""
+    """End-to-end (through the real HTTP endpoint plus a simulated worker
+    execution, fake writer/encoder only) proof that retry transitions
+    `failed -> indexed`, and a second retry request against an already-
+    `indexed` promotion is refused rather than silently re-running."""
 
     owner_token = _register_and_login(client, "wf-retry-e2e-owner@example.com")
     profile_id = _create_memorial(client, owner_token)
@@ -400,22 +422,32 @@ def test_retry_endpoint_actually_reindexes_and_clears_failure(client, monkeypatc
 
     fake_writer = FakeWriter()
     fake_encoder = FakeEncoder()
-    monkeypatch.setattr(
-        contribution_indexing_service,
-        "DefaultMemorialContributionQdrantWriter",
-        lambda: fake_writer,
-    )
-    monkeypatch.setattr(
-        contribution_indexing_service,
-        "DefaultContributionIndexingEmbeddingEncoder",
-        lambda: fake_encoder,
-    )
 
     first_retry = _retry(client, owner_token, profile_id, submitted["id"])
+    assert first_retry.status_code == 202
+    assert first_retry.json()["indexing_status"]["state"] == "pending"
+
+    db = _db()
+    try:
+        promotion = get_promotion_by_contribution_id(db, contribution_id=submitted["id"])
+        assert promotion is not None
+        contribution_indexing_service.index_contribution_promotion(
+            db,
+            profile_id=profile_id,
+            promotion_id=promotion.id,
+            writer=fake_writer,
+            encoder=fake_encoder,
+        )
+    finally:
+        db.close()
+
     second_retry = _retry(client, owner_token, profile_id, submitted["id"])
 
-    assert first_retry.status_code == 200
-    assert first_retry.json()["indexing_status"]["state"] == "indexed"
+    first_status = client.get(
+        f"/api/memorials/{profile_id}/contributions", headers=_auth_headers(owner_token)
+    )
+    first_matching = next(item for item in first_status.json() if item["id"] == submitted["id"])
+    assert first_matching["indexing_status"]["state"] == "indexed"
     # A second retry request against an already-`indexed` promotion is
     # refused (not semantically valid per Part I) rather than silently
     # re-running the embed/Qdrant step a second time.

@@ -3272,9 +3272,19 @@ export function CandidatesReviewSection({
     setError(null);
     try {
       const result = await indexCandidateMemory(token, profileId, candidateId);
+      // Task 65.9 (Part V): indexing is now always asynchronous - the
+      // endpoint returns 202/'queued' the moment the job is created, and
+      // 'indexed'/'already_indexed' is only ever returned for the no-op
+      // path where the backend has *already* confirmed success. Never
+      // show "Indexed and searchable" for a merely-queued job.
+      const noticeByResult: Record<typeof result.result, string> = {
+        already_indexed: t.candidateAlreadyIndexed,
+        indexed: t.candidateIndexedLabel,
+        queued: t.candidatePendingIndexLabel
+      };
       setResultNotices((notices) => ({
         ...notices,
-        [candidateId]: result.result === 'already_indexed' ? t.candidateAlreadyIndexed : t.candidateIndexedLabel
+        [candidateId]: noticeByResult[result.result]
       }));
       await load();
     } catch (indexError) {

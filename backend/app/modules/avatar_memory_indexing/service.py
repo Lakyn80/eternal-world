@@ -42,7 +42,7 @@ from app.modules.embeddings.providers.base import EmbeddingVector
 from app.modules.embeddings.providers.bge_m3_hybrid import BgeM3HybridEmbeddingAdapter
 from app.modules.embeddings.runtime import assert_real_embedding_runtime_for_e2e
 from app.modules.job_tracking.enums import BackgroundJobType
-from app.modules.job_tracking.service import attach_celery_task_id, create_job
+from app.modules.job_tracking.service import create_job
 from app.modules.qdrant_indexing import repository as qdrant_index_repository
 from app.modules.rag_chunks.validation import estimate_token_count
 from app.modules.family_memory_enrichment.eligibility import (
@@ -107,7 +107,27 @@ class AvatarMemoryEmbeddingEncoder(Protocol):
 
 
 class DefaultAvatarMemoryEmbeddingEncoder:
+    """Task 65.9 (Part M): when `self_healing_encoder` is supplied (always
+    the case from the real Celery embedding task, see
+    `app.worker.tasks.run_avatar_memory_indexing_job`), embedding calls go
+    through the process-local provider lifecycle singleton and the bounded
+    provider self-healing policy instead of instantiating a brand-new
+    BGE-M3 provider on every single call. Without it (the legacy path,
+    still used by dev/eval scripts that construct this class directly),
+    behavior is byte-for-byte unchanged from before Task 65.9."""
+
+    def __init__(self, *, self_healing_encoder: object | None = None) -> None:
+        self._self_healing_encoder = self_healing_encoder
+
     def encode(self, *, text: str, model_code: str) -> EmbeddingVector:
+        if self._self_healing_encoder is not None:
+            from app.modules.embeddings.self_healing import ProviderRecoveryExhaustedError
+
+            try:
+                return self._self_healing_encoder.encode(text=text, model_code=model_code)
+            except ProviderRecoveryExhaustedError as exc:
+                raise AvatarMemoryIndexingExecutionError(SAFE_FAILURE_MESSAGE) from exc
+
         provider = build_embedding_provider(model_code=model_code)
         if not isinstance(provider, BgeM3HybridEmbeddingAdapter):
             raise AvatarMemoryIndexingExecutionError(
@@ -517,19 +537,25 @@ def enqueue_indexing_job(
     profile: MemoryProfile,
     promotion: AvatarMemoryPromotion,
 ):
-    """Enqueue the heavy embedding/Qdrant step on the existing Celery worker
-    instead of running it inline inside the HTTP request that just approved
-    the candidate (Task 65.6.1, Part C/G/D). Mirrors
-    `memorial_contribution_indexing.service.enqueue_indexing_job` exactly -
-    same `background_jobs` row via `job_tracking.service.create_job`, same
-    `BackgroundJobType.QDRANT_INDEXING` job type, same
-    fire-and-forget-from-the-caller's-perspective shape. Callers must invoke
-    this only after the promotion-creating transaction has already
-    committed (never inside the same open transaction), so a worker that
-    picks the job up immediately always sees a durable, committed
-    `pending_index` promotion row.
+    """Create the persistent job and its transactional outbox record for
+    the heavy embedding/Qdrant step, instead of running it inline inside
+    the HTTP request that just approved the candidate (Task 65.6.1, Part
+    C/G/D; Task 65.9, Part E/F/I). Mirrors
+    `memorial_contribution_indexing.service.enqueue_indexing_job` exactly.
+    Callers must invoke this only after the promotion-creating transaction
+    has already committed (never inside the same open transaction), so a
+    worker that picks the job up immediately always sees a durable,
+    committed `pending_index` promotion row.
+
+    Idempotency key is `job_type + promotion_id + operation`: one
+    `AvatarMemoryPromotion` row is always exactly one approved content
+    version (a changed candidate text creates a new promotion, never
+    mutates this one in place - see `_validate_promotion_identity`), so a
+    repeated approval click, the explicit "Index memory" button, and the
+    retry-after-failed action all safely converge on the same job.
     """
 
+    idempotency_key = f"{INDEXING_JOB_WORKFLOW}:{promotion.id}:index"
     background_job = create_job(
         db,
         owner_user_id=profile.user_id,
@@ -540,12 +566,18 @@ def enqueue_indexing_job(
             "candidate_id": promotion.candidate_id,
             "promotion_id": promotion.id,
         },
+        queue="embedding",
+        idempotency_key=idempotency_key,
     )
 
-    from app.worker.tasks import run_avatar_memory_indexing_job
+    from app.modules.job_outbox.service import enqueue_job_with_outbox
 
-    async_result = run_avatar_memory_indexing_job.delay(background_job.id)
-    return attach_celery_task_id(db, job_id=background_job.id, celery_task_id=async_result.id)
+    return enqueue_job_with_outbox(
+        db,
+        job=background_job,
+        task_name="app.worker.tasks.run_avatar_memory_indexing_job",
+        queue="embedding",
+    )
 
 
 def index_promotion(

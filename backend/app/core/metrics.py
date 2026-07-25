@@ -680,6 +680,236 @@ def normalize_brain_model_label(model_name: str | None) -> str:
     return normalized_model or "unset"
 
 
+# --- Task 65.9: Scalable Async Job Platform and Self-Healing Embedding ----
+# Workers. Every label below is a small closed set (queue, job_type,
+# result, provider/model code, safe error category, provider state) -
+# never a user id, profile id, memorial id, contribution/promotion id, or
+# raw exception message (Part W's explicit forbidden-label list).
+
+ASYNC_JOBS_CREATED_TOTAL = Counter(
+    "async_jobs_created_total",
+    "Total async job platform jobs created.",
+    labelnames=("queue", "job_type"),
+)
+ASYNC_JOBS_COMPLETED_TOTAL = Counter(
+    "async_jobs_completed_total",
+    "Total async job platform jobs that completed successfully.",
+    labelnames=("queue", "job_type"),
+)
+ASYNC_JOBS_FAILED_TOTAL = Counter(
+    "async_jobs_failed_total",
+    "Total async job platform jobs that failed permanently.",
+    labelnames=("queue", "job_type", "safe_error_category"),
+)
+ASYNC_JOBS_RETRY_TOTAL = Counter(
+    "async_jobs_retry_total",
+    "Total async job platform bounded infrastructure retries.",
+    labelnames=("queue", "job_type"),
+)
+ASYNC_JOBS_DUPLICATE_DELIVERY_TOTAL = Counter(
+    "async_jobs_duplicate_delivery_total",
+    "Total times a job task was delivered/executed more than once (converged safely).",
+    labelnames=("queue", "job_type"),
+)
+ASYNC_JOBS_STALE_RECOVERED_TOTAL = Counter(
+    "async_jobs_stale_recovered_total",
+    "Total jobs recovered from a stale/crashed-worker processing state.",
+    labelnames=("queue",),
+)
+ASYNC_JOB_DURATION_SECONDS = Histogram(
+    "async_job_duration_seconds",
+    "Async job platform job duration in seconds, from started_at to a terminal state.",
+    labelnames=("queue", "job_type", "result"),
+)
+ASYNC_QUEUE_DEPTH = Gauge(
+    "async_queue_depth",
+    "Current number of active (non-terminal) jobs by queue.",
+    labelnames=("queue",),
+)
+ASYNC_OLDEST_JOB_AGE_SECONDS = Gauge(
+    "async_oldest_job_age_seconds",
+    "Age in seconds of the oldest still-active job by queue.",
+    labelnames=("queue",),
+)
+OUTBOX_PENDING_TOTAL = Gauge(
+    "outbox_pending_total",
+    "Current number of pending (not yet published) transactional outbox rows.",
+)
+OUTBOX_PUBLISH_FAILURE_TOTAL = Counter(
+    "outbox_publish_failure_total",
+    "Total transactional outbox publish attempts that failed (broker unreachable).",
+)
+
+EMBEDDING_PROVIDER_HEALTH = Gauge(
+    "embedding_provider_health",
+    "Current embedding provider state (1 for the currently-set state, 0 otherwise).",
+    labelnames=("model_code", "state"),
+)
+EMBEDDING_PROVIDER_INITIALIZATION_TOTAL = Counter(
+    "embedding_provider_initialization_total",
+    "Total embedding provider initialization attempts, by result.",
+    labelnames=("model_code", "result"),
+)
+EMBEDDING_PROVIDER_INITIALIZATION_FAILURE_TOTAL = Counter(
+    "embedding_provider_initialization_failure_total",
+    "Total embedding provider initialization failures.",
+    labelnames=("model_code",),
+)
+EMBEDDING_PROVIDER_META_PARAMETER_TOTAL = Counter(
+    "embedding_provider_meta_parameter_total",
+    "Total times a meta-device parameter/buffer/output was detected on the embedding provider.",
+    labelnames=("model_code",),
+)
+EMBEDDING_PROVIDER_RELOAD_TOTAL = Counter(
+    "embedding_provider_reload_total",
+    "Total embedding provider reload attempts (self-healing recovery).",
+    labelnames=("model_code",),
+)
+EMBEDDING_PROVIDER_PROBE_FAILURE_TOTAL = Counter(
+    "embedding_provider_probe_failure_total",
+    "Total embedding provider integrity probe failures, by safe reason code.",
+    labelnames=("model_code", "reason"),
+)
+EMBEDDING_PROVIDER_RECOVERY_TOTAL = Counter(
+    "embedding_provider_recovery_total",
+    "Total bounded provider-recovery attempts recorded on a job, by outcome.",
+    labelnames=("outcome",),
+)
+EMBEDDING_WORKER_RECYCLE_REQUEST_TOTAL = Counter(
+    "embedding_worker_recycle_request_total",
+    "Total times a job requested a fresh embedding-worker process/container.",
+)
+EMBEDDING_INDEXING_FINAL_FAILURE_TOTAL = Counter(
+    "embedding_indexing_final_failure_total",
+    "Total jobs that reached permanent failure after the bounded self-healing policy was exhausted.",
+)
+EMBEDDING_LAST_SUCCESS_TIMESTAMP = Gauge(
+    "embedding_last_success_timestamp",
+    "Unix timestamp of the last successful embedding provider probe/encode, by model code.",
+    labelnames=("model_code",),
+)
+
+_PROVIDER_STATES = frozenset(
+    {"never_initialized", "initializing", "healthy", "degraded", "recovery_in_progress", "failed"}
+)
+_PROVIDER_RECOVERY_OUTCOMES = frozenset({"reloaded", "fresh_process_requested", "permanent_failure"})
+_SAFE_ERROR_CATEGORIES = frozenset(
+    {
+        "provider_corrupt",
+        "provider_initialization_failed",
+        "invalid_embedding_output",
+        "temporary_broker_failure",
+        "temporary_database_failure",
+        "temporary_qdrant_failure",
+        "permanent_qdrant_validation_failure",
+        "invalid_domain_state",
+        "authorization_failure",
+        "resource_not_found",
+        "content_validation_failure",
+        "worker_lost",
+        "unknown_internal_failure",
+    }
+)
+
+
+def _normalize_queue_label(queue: str | None) -> str:
+    normalized = (queue or "").strip().lower()
+    return normalized or "unknown"
+
+
+def _normalize_safe_error_category_label(category: str | None) -> str:
+    normalized = (category or "").strip().lower()
+    return normalized if normalized in _SAFE_ERROR_CATEGORIES else "unknown_internal_failure"
+
+
+def observe_async_job_created(*, queue: str | None, job_type: str) -> None:
+    ASYNC_JOBS_CREATED_TOTAL.labels(_normalize_queue_label(queue), job_type).inc()
+
+
+def observe_async_job_completed(*, queue: str | None, job_type: str, duration_seconds: float) -> None:
+    normalized_queue = _normalize_queue_label(queue)
+    ASYNC_JOBS_COMPLETED_TOTAL.labels(normalized_queue, job_type).inc()
+    ASYNC_JOB_DURATION_SECONDS.labels(normalized_queue, job_type, "succeeded").observe(max(0.0, duration_seconds))
+
+
+def observe_async_job_failed(
+    *, queue: str | None, job_type: str, safe_error_category: str | None, duration_seconds: float
+) -> None:
+    normalized_queue = _normalize_queue_label(queue)
+    normalized_category = _normalize_safe_error_category_label(safe_error_category)
+    ASYNC_JOBS_FAILED_TOTAL.labels(normalized_queue, job_type, normalized_category).inc()
+    ASYNC_JOB_DURATION_SECONDS.labels(normalized_queue, job_type, "failed").observe(max(0.0, duration_seconds))
+    if normalized_category == "provider_corrupt":
+        EMBEDDING_INDEXING_FINAL_FAILURE_TOTAL.inc()
+
+
+def observe_async_job_retry(*, queue: str | None, job_type: str) -> None:
+    ASYNC_JOBS_RETRY_TOTAL.labels(_normalize_queue_label(queue), job_type).inc()
+
+
+def observe_async_job_duplicate_delivery(*, queue: str | None, job_type: str) -> None:
+    ASYNC_JOBS_DUPLICATE_DELIVERY_TOTAL.labels(_normalize_queue_label(queue), job_type).inc()
+
+
+def observe_async_job_stale_recovered(*, queue: str | None) -> None:
+    ASYNC_JOBS_STALE_RECOVERED_TOTAL.labels(_normalize_queue_label(queue)).inc()
+
+
+def set_async_queue_depth(*, queue: str, depth: int) -> None:
+    ASYNC_QUEUE_DEPTH.labels(_normalize_queue_label(queue)).set(max(0, int(depth)))
+
+
+def set_async_oldest_job_age_seconds(*, queue: str, age_seconds: float) -> None:
+    ASYNC_OLDEST_JOB_AGE_SECONDS.labels(_normalize_queue_label(queue)).set(max(0.0, age_seconds))
+
+
+def set_outbox_pending_total(*, count: int) -> None:
+    OUTBOX_PENDING_TOTAL.set(max(0, int(count)))
+
+
+def observe_outbox_publish_failure() -> None:
+    OUTBOX_PUBLISH_FAILURE_TOTAL.inc()
+
+
+def set_embedding_provider_health(*, model_code: str, state: str) -> None:
+    normalized_state = state if state in _PROVIDER_STATES else "failed"
+    for candidate_state in _PROVIDER_STATES:
+        EMBEDDING_PROVIDER_HEALTH.labels(model_code, candidate_state).set(
+            1 if candidate_state == normalized_state else 0
+        )
+    if normalized_state == "healthy":
+        import time
+
+        EMBEDDING_LAST_SUCCESS_TIMESTAMP.labels(model_code).set(time.time())
+
+
+def observe_embedding_provider_initialization(*, model_code: str, result: str) -> None:
+    normalized_result = result if result in {"success", "failure"} else "failure"
+    EMBEDDING_PROVIDER_INITIALIZATION_TOTAL.labels(model_code, normalized_result).inc()
+    if normalized_result == "failure":
+        EMBEDDING_PROVIDER_INITIALIZATION_FAILURE_TOTAL.labels(model_code).inc()
+
+
+def observe_embedding_provider_reload(*, model_code: str) -> None:
+    EMBEDDING_PROVIDER_RELOAD_TOTAL.labels(model_code).inc()
+
+
+def observe_embedding_provider_probe_failure(*, model_code: str, reason: str) -> None:
+    normalized_reason = (reason or "unknown").strip().lower() or "unknown"
+    EMBEDDING_PROVIDER_PROBE_FAILURE_TOTAL.labels(model_code, normalized_reason).inc()
+    if "meta" in normalized_reason:
+        EMBEDDING_PROVIDER_META_PARAMETER_TOTAL.labels(model_code).inc()
+
+
+def observe_embedding_provider_recovery(*, outcome: str) -> None:
+    normalized_outcome = outcome if outcome in _PROVIDER_RECOVERY_OUTCOMES else "permanent_failure"
+    EMBEDDING_PROVIDER_RECOVERY_TOTAL.labels(normalized_outcome).inc()
+
+
+def observe_embedding_worker_recycle_request() -> None:
+    EMBEDDING_WORKER_RECYCLE_REQUEST_TOTAL.inc()
+
+
 def build_metrics_response() -> Response:
     return Response(generate_latest(), media_type=CONTENT_TYPE_LATEST)
 

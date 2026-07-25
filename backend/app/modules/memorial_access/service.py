@@ -415,22 +415,21 @@ def retry_contribution_indexing(
 ) -> MemorialContribution:
     """Explicit, reviewer-triggered retry of a *failed* indexing attempt -
     the memory-contribution equivalent of the AI biography workflow's
-    explicit `POST .../candidates/{id}/index` button
-    (`app.modules.memorial_candidates.router.index_candidate_memory_endpoint`),
-    which also doubles as that pipeline's retry action because
-    `avatar_memory_indexing.index_promotion` is itself idempotent/retry-safe.
+    explicit `POST .../candidates/{id}/index` button.
 
-    Mirrors that same synchronous, explicit-action shape rather than
-    enqueueing a second Celery job: this is a rare, reviewer-initiated
-    action (not the automatic post-approval trigger, which stays
-    Celery-based - see `_promote_and_enqueue_indexing_safely`), so running
-    the already-idempotent `index_contribution_promotion` inline here gives
-    the reviewer an immediate, definitive result without inventing a
-    parallel "retry job" concept. Restricted to `REVIEW_ROLES` (owner,
-    trusted_reviewer) per the task's authorization requirement, and only
-    reachable once the promotion has already recorded a `failed` attempt -
-    never for a contribution that is only `pending`/still queued (that has
-    an active, not-yet-run Celery job already) or already `indexed`/`retired`.
+    Task 65.9 (Part I): this used to run
+    `index_contribution_promotion` synchronously inline, inside the HTTP
+    request - meaning a real BGE-M3 encode and Qdrant write happened on
+    the FastAPI process itself. That is exactly the invariant Task 65.9
+    exists to close ("retry still performs embedding synchronously" /
+    "FastAPI can initialize BGE-M3"). This now only authorizes, validates
+    retry-eligibility, reactivates the same promotion, and creates/reuses
+    the persistent job + transactional outbox record - the encoder and
+    Qdrant only run inside the Celery embedding-worker task. Restricted to
+    `REVIEW_ROLES` (owner, trusted_reviewer); only reachable once the
+    promotion has already recorded a `failed` attempt - never for a
+    contribution that is only `pending`/still queued (that has an active,
+    not-yet-run job already) or already `indexed`/`retired`.
     """
 
     _require_role(db, profile_id=profile_id, user=current_user, allowed_roles=REVIEW_ROLES)
@@ -451,19 +450,21 @@ def retry_contribution_indexing(
             "Indexing can only be retried after a failed indexing attempt"
         )
 
-    try:
-        contribution_indexing_service.index_contribution_promotion(
-            db,
-            profile_id=profile_id,
-            promotion_id=promotion.id,
-        )
-    except contribution_indexing_service.ContributionIndexingExecutionError:
-        # Already recorded on the promotion row as `failed` with a safe,
-        # generic reason by `index_contribution_promotion` itself - the
-        # caller re-reads the contribution's current (still-failed) state
-        # below rather than receiving a raw 500/stack trace for a domain
-        # failure that has already been handled and logged.
-        pass
+    #: Reactivate the same promotion to `pending_index` so its own
+    #: indexing-status projection reads "pending" (not stale "failed")
+    #: while the new job is queued/running - never claims "indexed" until
+    #: the worker actually confirms it. The promotion row (and therefore
+    #: the deterministic Qdrant point id it derives) is unchanged; only
+    #: its status moves, which `index_contribution_promotion` already
+    #: treats as an eligible starting state.
+    promotion.promotion_status = "pending_index"
+    db.commit()
+
+    profile = db.get(MemoryProfile, profile_id)
+    if profile is None:
+        raise ContributionNotFoundError("Memorial profile not found")
+
+    contribution_indexing_service.enqueue_indexing_job(db, profile=profile, promotion=promotion)
 
     refreshed = repository.get_contribution(db, profile_id=profile_id, contribution_id=contribution_id)
     return refreshed if refreshed is not None else contribution

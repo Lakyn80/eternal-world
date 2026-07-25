@@ -103,6 +103,80 @@ services:
       - media_data:/app/media
       - huggingface_cache:/models/huggingface
 
+  # Task 65.9 (Part H/N/AC) - dedicated embedding worker: the only process
+  # that loads the real BGE-M3 provider for indexing. Scale horizontally
+  # with `docker compose -f docker-compose.prod.yml up -d --scale
+  # embedding_worker=N`; never by raising concurrency on one instance.
+  embedding_worker:
+    image: ${BACKEND_IMAGE:-ghcr.io/lakyn80/eternal-world-backend:latest}
+    restart: unless-stopped
+    command: >
+      celery -A app.worker.celery_app.celery_app worker
+      -Q embedding
+      --concurrency=1
+      --prefetch-multiplier=1
+      --loglevel=info
+      -n embedding_worker@%h
+    env_file:
+      - .env.prod
+    environment:
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+      REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis:6379/1
+      CELERY_RESULT_BACKEND: redis://redis:6379/1
+      QDRANT_URL: http://qdrant:6333
+      MEDIA_ROOT: /app/media
+      MEDIA_PUBLIC_BASE_URL: /media
+      SENTENCE_TRANSFORMERS_CACHE_DIR: /models/huggingface
+      HF_HOME: /models/huggingface
+      HUGGINGFACE_HUB_CACHE: /models/huggingface
+      TRANSFORMERS_CACHE: /models/huggingface
+      SENTENCE_TRANSFORMERS_HOME: /models/huggingface
+      CUDA_VISIBLE_DEVICES: ""
+      NVIDIA_VISIBLE_DEVICES: void
+      #: Safe here only - see the matching comment in docker-compose.yml.
+      EMBEDDING_WORKER_SELF_RECYCLE_ENABLED: "true"
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      qdrant:
+        condition: service_started
+    volumes:
+      - media_data:/app/media
+      - huggingface_cache:/models/huggingface
+
+  # Task 65.9 (Part E/P/AC) - outbox dispatch + stale-job recovery only.
+  maintenance_worker:
+    image: ${BACKEND_IMAGE:-ghcr.io/lakyn80/eternal-world-backend:latest}
+    restart: unless-stopped
+    command: >
+      celery -A app.worker.celery_app.celery_app worker
+      -Q maintenance
+      --concurrency=1
+      --loglevel=info
+      -B
+      -n maintenance_worker@%h
+    env_file:
+      - .env.prod
+    environment:
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+      REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis:6379/1
+      CELERY_RESULT_BACKEND: redis://redis:6379/1
+      QDRANT_URL: http://qdrant:6333
+      EMBEDDING_PROVIDER: mock
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      qdrant:
+        condition: service_started
+    volumes:
+      - media_data:/app/media
+
   frontend:
     image: ${FRONTEND_IMAGE:-ghcr.io/lakyn80/eternal-world-frontend:latest}
     restart: unless-stopped

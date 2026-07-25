@@ -84,8 +84,18 @@ def health():
 
 @app.get("/health/runtime")
 def runtime_health():
+    """Task 65.9 (Part W): readiness only - never initializes the
+    embedding provider (FastAPI must remain alive/ready even when BGE-M3
+    has never been loaded anywhere). Outbox/job-queue visibility here is
+    a cheap read of already-open connections, not a health dependency on
+    the embedding worker itself - a degraded/offline embedding worker
+    never makes this endpoint (or any other API endpoint) unavailable."""
+
     database_status = "ok"
     redis_status = "ok"
+    qdrant_status = "ok"
+    outbox_pending_backlog: int | None = None
+    oldest_active_embedding_job_age_seconds: float | None = None
 
     try:
         with engine.connect() as connection:
@@ -93,11 +103,51 @@ def runtime_health():
     except Exception as exc:
         database_status = f"error: {exc.__class__.__name__}"
 
+    if database_status == "ok":
+        # Best-effort only, and deliberately isolated from the basic
+        # connectivity check above: these two extra readings use
+        # PostgreSQL-specific SQL (`EXTRACT(EPOCH FROM ...)`) and must
+        # never turn a healthy database connection into a reported
+        # "error" just because a dialect-specific convenience query
+        # (e.g. against the SQLite database used by the test suite)
+        # doesn't apply.
+        try:
+            with engine.connect() as connection:
+                outbox_row = connection.execute(
+                    text("SELECT count(*) FROM job_outbox_events WHERE status = 'pending'")
+                ).scalar()
+                outbox_pending_backlog = int(outbox_row or 0)
+        except Exception:
+            outbox_pending_backlog = None
+
+        try:
+            with engine.connect() as connection:
+                oldest_row = connection.execute(
+                    text(
+                        "SELECT EXTRACT(EPOCH FROM (now() - min(created_at))) FROM background_jobs "
+                        "WHERE queue = 'embedding' AND status IN "
+                        "('pending', 'queued', 'running', 'retry_scheduled', 'recovery_pending')"
+                    )
+                ).scalar()
+                if oldest_row is not None:
+                    oldest_active_embedding_job_age_seconds = round(float(oldest_row), 3)
+        except Exception:
+            oldest_active_embedding_job_age_seconds = None
+
     try:
         redis_client = get_redis_client()
         redis_client.ping()
     except Exception as exc:
         redis_status = f"error: {exc.__class__.__name__}"
+
+    try:
+        import httpx
+
+        response = httpx.get(f"{settings.qdrant_url}/collections", timeout=2.0)
+        if response.status_code >= 400:
+            qdrant_status = f"error: http_{response.status_code}"
+    except Exception as exc:
+        qdrant_status = f"error: {exc.__class__.__name__}"
 
     overall_status = "ok"
 
@@ -108,4 +158,7 @@ def runtime_health():
         "status": overall_status,
         "database": database_status,
         "redis": redis_status,
+        "qdrant": qdrant_status,
+        "outbox_pending_backlog": outbox_pending_backlog,
+        "oldest_active_embedding_job_age_seconds": oldest_active_embedding_job_age_seconds,
     }

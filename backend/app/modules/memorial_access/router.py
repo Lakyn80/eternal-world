@@ -500,6 +500,7 @@ def archive_contribution_endpoint(
 @router.post(
     "/api/memorials/{profile_id}/contributions/{contribution_id}/retry-indexing",
     response_model=ContributionRead,
+    status_code=status.HTTP_202_ACCEPTED,
     responses={
         status.HTTP_400_BAD_REQUEST: {"model": ErrorResponse},
         status.HTTP_401_UNAUTHORIZED: {"model": ErrorResponse},
@@ -513,11 +514,14 @@ def retry_contribution_indexing_endpoint(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> ContributionRead:
-    """Task 65.8 (Part I) - safe, authorized retry of a failed indexing
-    attempt. Only reachable for an approved+current contribution whose
-    promotion is currently `failed`; idempotent and reuses the same
+    """Task 65.8/65.9 (Part I) - safe, authorized retry of a failed
+    indexing attempt. Only reachable for an approved+current contribution
+    whose promotion is currently `failed`; idempotent and reuses the same
     canonical memory/promotion/Qdrant point (see
-    `memorial_access.service.retry_contribution_indexing`)."""
+    `memorial_access.service.retry_contribution_indexing`). Returns 202:
+    the response reflects the promotion's newly-`pending` state, never a
+    synchronously-confirmed `indexed` result - the actual embed/Qdrant
+    write now happens only inside the Celery embedding-worker task."""
 
     try:
         contribution = retry_contribution_indexing(

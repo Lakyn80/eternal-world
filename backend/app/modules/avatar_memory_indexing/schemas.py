@@ -13,6 +13,11 @@ class AvatarMemoryIndexingRead(BaseModel):
     qdrant_point_id: str | None
     searchable_as_fact: bool
     result: str
+    #: Task 65.9 (Part C/D) - present when this reflects an async job that
+    #: was just created/reused rather than a synchronously-completed
+    #: result. `None` for the legacy direct-call path (still used by
+    #: internal scripts/tests that call `index_promotion` directly).
+    job_id: int | None = None
 
 
 class AvatarMemoryIndexingPreview(BaseModel):

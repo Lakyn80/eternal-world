@@ -51,7 +51,7 @@ from app.modules.embeddings.providers.base import EmbeddingVector
 from app.modules.embeddings.providers.bge_m3_hybrid import BgeM3HybridEmbeddingAdapter
 from app.modules.embeddings.runtime import assert_real_embedding_runtime_for_e2e
 from app.modules.job_tracking.enums import BackgroundJobType
-from app.modules.job_tracking.service import attach_celery_task_id, create_job
+from app.modules.job_tracking.service import create_job
 from app.modules.qdrant_indexing import repository as qdrant_index_repository
 from app.modules.rag_chunks.validation import estimate_token_count
 
@@ -88,7 +88,21 @@ class BiographyEmbeddingEncoder(Protocol):
 
 
 class DefaultBiographyEmbeddingEncoder:
+    """Task 65.9 (Part M): see `avatar_memory_indexing.service.
+    DefaultAvatarMemoryEmbeddingEncoder` for the full rationale."""
+
+    def __init__(self, *, self_healing_encoder: object | None = None) -> None:
+        self._self_healing_encoder = self_healing_encoder
+
     def encode(self, *, text: str, model_code: str) -> EmbeddingVector:
+        if self._self_healing_encoder is not None:
+            from app.modules.embeddings.self_healing import ProviderRecoveryExhaustedError
+
+            try:
+                return self._self_healing_encoder.encode(text=text, model_code=model_code)
+            except ProviderRecoveryExhaustedError as exc:
+                raise BiographyIngestionExecutionError(SAFE_FAILURE_MESSAGE) from exc
+
         provider = build_embedding_provider(model_code=model_code)
         if not isinstance(provider, BgeM3HybridEmbeddingAdapter):
             raise BiographyIngestionExecutionError("Real BGE-M3 passage embedding provider is unavailable")
@@ -212,12 +226,26 @@ def get_biography_status(profile: MemoryProfile) -> BiographyStatusRead:
 def start_biography_ingestion(db: Session, *, profile: MemoryProfile):
     """Enqueue the heavy ingestion step. Raises if there is no biography text
     yet or a job is already in flight; safe to call again after `failed` or
-    `stale` to retry/re-ingest."""
+    `stale` to retry/re-ingest.
+
+    Task 65.9 (Part E/F/I): creates the persistent job and its
+    transactional outbox record, then returns - the encoder/Qdrant write
+    happens only inside the Celery embedding-worker task, never here. The
+    idempotency key is `job_type + profile_id + content_hash + operation`
+    (Part F's exact prescribed shape): a duplicate request for the exact
+    same biography text reuses the same job instead of creating a second
+    one; a request after the text changed (different `content_hash`) gets
+    its own new job, matching "stale -> re-index" already being a
+    supported, intentional flow.
+    """
 
     if not (profile.biography or "").strip():
         raise BiographyIngestionEligibilityError("Biography text is empty")
     if profile.biography_status == "ingesting":
         raise BiographyIngestionConflictError("Biography ingestion is already in progress")
+
+    content_hash = compute_content_hash(normalize_biography_text(profile.biography or ""))
+    idempotency_key = f"biography_indexing:{profile.id}:{content_hash}:index"
 
     profile.biography_status = "ready_for_ingestion"
     db.commit()
@@ -228,12 +256,18 @@ def start_biography_ingestion(db: Session, *, profile: MemoryProfile):
         profile_id=profile.id,
         job_type=BackgroundJobType.QDRANT_INDEXING,
         input_payload={"workflow": "biography_indexing", "profile_id": profile.id},
+        queue="embedding",
+        idempotency_key=idempotency_key,
     )
 
-    from app.worker.tasks import run_biography_indexing_job
+    from app.modules.job_outbox.service import enqueue_job_with_outbox
 
-    async_result = run_biography_indexing_job.delay(background_job.id)
-    return attach_celery_task_id(db, job_id=background_job.id, celery_task_id=async_result.id)
+    return enqueue_job_with_outbox(
+        db,
+        job=background_job,
+        task_name="app.worker.tasks.run_biography_indexing_job",
+        queue="embedding",
+    )
 
 
 @dataclass(frozen=True)

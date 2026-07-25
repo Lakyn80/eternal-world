@@ -22,17 +22,15 @@ from app.db.models import User
 from app.db.session import get_db
 from app.modules.auth.dependencies import get_current_user
 from app.modules.auth.schemas import ErrorResponse
-from app.modules.avatar_memory_indexing.service import (
-    AvatarMemoryIndexingEligibilityError,
-    AvatarMemoryIndexingExecutionError,
-    AvatarMemoryIndexingNotFoundError,
-    index_promotion,
+from app.modules.avatar_memory_indexing import repository as avatar_memory_indexing_repository
+from app.modules.avatar_memory_indexing.schemas import AvatarMemoryIndexingRead
+from app.modules.avatar_memory_indexing.service import enqueue_indexing_job
+from app.modules.job_tracking.exceptions import (
+    GlobalQueueSaturationError,
+    PerProfileActiveJobLimitExceededError,
+    PerUserActiveJobLimitExceededError,
 )
-from app.modules.avatar_memory_promotions.service import (
-    AvatarMemoryPromotionCandidateStateError,
-    AvatarMemoryPromotionNotFoundError,
-    list_biography_memory_entries,
-)
+from app.modules.avatar_memory_promotions.service import list_biography_memory_entries
 from app.modules.family_memory_enrichment.clarification import localize_question_text
 from app.modules.family_memory_enrichment.eligibility import FamilyMemoryEligibilityError
 from app.modules.conversation_memory_candidates.service import (
@@ -486,11 +484,16 @@ def owner_review_endpoint(
 
 @router.post(
     "/api/memorials/{profile_id}/candidates/{candidate_id}/index",
+    response_model=AvatarMemoryIndexingRead,
+    status_code=status.HTTP_202_ACCEPTED,
     responses={
         status.HTTP_400_BAD_REQUEST: {"model": ErrorResponse},
         status.HTTP_401_UNAUTHORIZED: {"model": ErrorResponse},
         status.HTTP_403_FORBIDDEN: {"model": ErrorResponse},
         status.HTTP_404_NOT_FOUND: {"model": ErrorResponse},
+        status.HTTP_413_REQUEST_ENTITY_TOO_LARGE: {"model": ErrorResponse},
+        status.HTTP_429_TOO_MANY_REQUESTS: {"model": ErrorResponse},
+        status.HTTP_503_SERVICE_UNAVAILABLE: {"model": ErrorResponse},
     },
 )
 def index_candidate_memory_endpoint(
@@ -498,12 +501,20 @@ def index_candidate_memory_endpoint(
     candidate_id: CandidateIdPath,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-):
+) -> AvatarMemoryIndexingRead:
     """Explicit indexing button: never runs automatically after approval.
     Approval (`owner_review` confirm/edit_and_confirm/approve_multiple_
-    perspectives) only ever creates a `pending_index` promotion; this is the
-    separate, owner-triggered step that actually embeds and writes to
-    Qdrant, idempotently."""
+    perspectives) only ever creates a `pending_index` promotion; this is
+    the separate, owner-triggered step that requests indexing. Also
+    doubles as the retry action for a `failed` promotion (idempotent).
+
+    Task 65.9 (Part I): this used to call `index_promotion` directly here
+    - a real BGE-M3 encode and Qdrant write running inside the HTTP
+    request/FastAPI process. It now only authorizes, creates/reuses the
+    persistent job and its transactional outbox record, and returns 202
+    with the promotion's current (not-yet-confirmed) state - the encoder
+    and Qdrant write happen only inside the Celery embedding-worker task
+    (see `app.worker.tasks.run_avatar_memory_indexing_job`)."""
 
     profile, membership = _resolve_profile(
         db,
@@ -521,11 +532,60 @@ def index_candidate_memory_endpoint(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Candidate has not been approved for indexing yet",
         )
+
+    promotion = avatar_memory_indexing_repository.get_promotion_for_owner(
+        db,
+        owner_user_id=profile.user_id,
+        promotion_id=enrichment.promotion_id,
+    )
+    if promotion is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Avatar memory promotion not found")
+    if promotion.promotion_status not in {"pending_index", "failed", "indexed"}:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Promotion status `{promotion.promotion_status}` is not eligible for indexing",
+        )
+
+    if promotion.promotion_status == "indexed":
+        # Idempotent no-op: already confirmed searchable, nothing to
+        # (re)queue - never re-runs the encoder for an already-indexed
+        # promotion just because the button was clicked again.
+        return AvatarMemoryIndexingRead(
+            promotion_id=promotion.id,
+            promotion_status=promotion.promotion_status,
+            indexed_at=promotion.indexed_at,
+            target_collection_name=promotion.target_collection_name,
+            qdrant_point_id=promotion.qdrant_point_id,
+            searchable_as_fact=True,
+            result="already_indexed",
+            job_id=None,
+        )
+
+    if promotion.promotion_status == "failed":
+        # Retry: reactivate to pending so the projection reads "pending",
+        # never a stale "failed", while the new job is in flight.
+        promotion.promotion_status = "pending_index"
+        db.commit()
+
     try:
-        return index_promotion(db, owner_user_id=profile.user_id, promotion_id=enrichment.promotion_id)
-    except (AvatarMemoryIndexingNotFoundError, AvatarMemoryPromotionNotFoundError) as exc:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
-    except (AvatarMemoryIndexingEligibilityError, AvatarMemoryPromotionCandidateStateError) as exc:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
-    except AvatarMemoryIndexingExecutionError as exc:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+        background_job = enqueue_indexing_job(db, profile=profile, promotion=promotion)
+    except (PerUserActiveJobLimitExceededError, PerProfileActiveJobLimitExceededError) as exc:
+        raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail=str(exc)) from exc
+    except GlobalQueueSaturationError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=str(exc),
+            headers={"Retry-After": str(exc.retry_after_seconds)},
+        ) from exc
+
+    db.refresh(promotion)
+    return AvatarMemoryIndexingRead(
+        promotion_id=promotion.id,
+        promotion_status=promotion.promotion_status,
+        indexed_at=promotion.indexed_at,
+        target_collection_name=promotion.target_collection_name,
+        qdrant_point_id=promotion.qdrant_point_id,
+        searchable_as_fact=False,
+        result="queued",
+        job_id=background_job.id,
+    )

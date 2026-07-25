@@ -120,6 +120,106 @@ services:
       - ./backend:/app
       - eternal_world_bge_m3_cache:/models/huggingface
 
+  # Task 65.9 (Part H/N/AC) - dedicated embedding worker. The ONLY process
+  # in this stack that should ever load the real BGE-M3 provider for
+  # indexing work (never FastAPI, never the general celery_worker for new
+  # embedding-heavy tasks - see queue routing in app/worker/celery_app.py).
+  # concurrency=1 + prefetch-multiplier=1: exactly one embedding job in
+  # flight per process, so throughput is scaled by adding replicas
+  # (`docker compose up -d --scale embedding_worker=N`), never by
+  # oversubscribing one Python process against one loaded model object.
+  # No published port. `restart: unless-stopped` is the only recovery
+  # mechanism this container relies on if bounded self-healing (Part M/N)
+  # ever exhausts its in-process retries and exits deliberately.
+  embedding_worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: eternal_world_embedding_worker
+    restart: unless-stopped
+    command: >
+      celery -A app.worker.celery_app.celery_app worker
+      -Q embedding
+      --concurrency=1
+      --prefetch-multiplier=1
+      --loglevel=info
+      -n embedding_worker@%h
+    environment:
+      DATABASE_URL: postgresql+psycopg://eternal_user:eternal_password@db:5432/eternal_world
+      REDIS_URL: redis://redis:6379/0
+      APP_NAME: Eternal World API
+      ENVIRONMENT: local
+      BACKEND_CORS_ORIGINS: http://localhost:8017,http://127.0.0.1:8017
+      AI_BRAIN_PROVIDER: mock
+      AI_BRAIN_TIMEOUT_SECONDS: 30
+      CONTENT_TRANSLATION_PROVIDER: mock
+      EMBEDDING_PROVIDER: sentence_transformers
+      SENTENCE_TRANSFORMERS_DEVICE: cpu
+      SENTENCE_TRANSFORMERS_CACHE_DIR: /models/huggingface
+      CUDA_VISIBLE_DEVICES: ""
+      NVIDIA_VISIBLE_DEVICES: void
+      MEDIA_STORAGE_PROVIDER: local
+      MEDIA_ROOT: /app/media
+      MEDIA_PUBLIC_BASE_URL: /media
+      MEDIA_MAX_FILE_SIZE_BYTES: 20971520
+      QDRANT_URL: http://qdrant:6333
+      QDRANT_COLLECTION_NAME: eternal_world_rag_chunks
+      QDRANT_TIMEOUT_SECONDS: 10
+      QDRANT_INDEXING_ENABLED: "true"
+      CELERY_BROKER_URL: redis://redis:6379/1
+      CELERY_RESULT_BACKEND: redis://redis:6379/1
+      CELERY_TASK_ALWAYS_EAGER: "false"
+      CELERY_TASK_EAGER_PROPAGATES: "false"
+      #: Safe here only: this is the one container type allowed to exit
+      #: itself on exhausted provider self-healing (Part M/N), relying on
+      #: `restart: unless-stopped` above to recreate it.
+      EMBEDDING_WORKER_SELF_RECYCLE_ENABLED: "true"
+    depends_on:
+      - db
+      - redis
+    volumes:
+      - ./backend:/app
+      - eternal_world_bge_m3_cache:/models/huggingface
+
+  # Task 65.9 (Part E/P/AC) - lightweight maintenance worker: outbox
+  # dispatch + stale-job recovery only (embedded beat via `-B`). Never
+  # loads an embedding provider, never handles user-facing product work.
+  maintenance_worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: eternal_world_maintenance_worker
+    restart: unless-stopped
+    command: >
+      celery -A app.worker.celery_app.celery_app worker
+      -Q maintenance
+      --concurrency=1
+      --loglevel=info
+      -B
+      -n maintenance_worker@%h
+    environment:
+      DATABASE_URL: postgresql+psycopg://eternal_user:eternal_password@db:5432/eternal_world
+      REDIS_URL: redis://redis:6379/0
+      APP_NAME: Eternal World API
+      ENVIRONMENT: local
+      BACKEND_CORS_ORIGINS: http://localhost:8017,http://127.0.0.1:8017
+      AI_BRAIN_PROVIDER: mock
+      CONTENT_TRANSLATION_PROVIDER: mock
+      EMBEDDING_PROVIDER: mock
+      QDRANT_URL: http://qdrant:6333
+      QDRANT_COLLECTION_NAME: eternal_world_rag_chunks
+      CELERY_BROKER_URL: redis://redis:6379/1
+      CELERY_RESULT_BACKEND: redis://redis:6379/1
+      CELERY_TASK_ALWAYS_EAGER: "false"
+      CELERY_TASK_EAGER_PROPAGATES: "false"
+      JOB_OUTBOX_DISPATCH_BATCH_SIZE: "50"
+      JOB_STALE_HEARTBEAT_TIMEOUT_SECONDS: "300"
+    depends_on:
+      - db
+      - redis
+    volumes:
+      - ./backend:/app
+
   frontend:
     build:
       context: ./frontend

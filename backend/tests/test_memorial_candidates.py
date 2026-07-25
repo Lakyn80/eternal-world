@@ -9,8 +9,6 @@ triggered, idempotent step.
 
 from __future__ import annotations
 
-from unittest.mock import patch
-
 from app.db.models import AvatarMemoryPromotion
 from app.main import app
 from app.modules.embeddings.providers.base import EmbeddingVector
@@ -178,48 +176,67 @@ def test_unapproved_candidate_cannot_be_indexed(client):
 
 
 def test_explicit_index_writes_qdrant_point_and_is_idempotent(client):
+    """Task 65.9 (Part I): the explicit "Index memory" HTTP endpoint must
+    never call the encoder itself - it only creates/reuses the persistent
+    job and returns 202 with the promotion's current (pending) state. The
+    embedding-worker's execution is simulated directly (as
+    `test_memory_review_indexing_workflow.py` now does for the equivalent
+    contribution-retry flow), then the endpoint's own idempotent no-op
+    path for an already-`indexed` promotion is exercised for the second
+    call - proving no duplicate Qdrant write happens even from the HTTP
+    layer on a repeat click."""
+
     token = _register_and_login(client, "candidates-owner4@example.com")
     profile_id = _create_memorial(client, token)
     _setup_indexed_biography(client, token, profile_id)
     candidate_id, _ = _create_general_candidate_via_biographer(client, token, profile_id)
-    client.post(
+    review = client.post(
         f"/api/memorials/{profile_id}/candidates/{candidate_id}/owner-review",
         headers=_auth_headers(token),
         json={"action": "confirm", "privacy_scope": "all_family"},
     )
+    promotion_id = review.json()["promotion_id"]
 
     fake_writer = FakeWriter()
     fake_encoder = FakeEncoder()
-    with (
-        patch(
-            "app.modules.avatar_memory_indexing.service.DefaultAvatarMemoryQdrantWriter",
-            return_value=fake_writer,
-        ),
-        patch(
-            "app.modules.avatar_memory_indexing.service.DefaultAvatarMemoryEmbeddingEncoder",
-            return_value=fake_encoder,
-        ),
-        patch(
-            "app.modules.avatar_memory_indexing.service.assert_real_embedding_runtime_for_e2e",
-            return_value=None,
-        ),
-    ):
-        first = client.post(
-            f"/api/memorials/{profile_id}/candidates/{candidate_id}/index",
-            headers=_auth_headers(token),
-        )
-        assert first.status_code == 200
-        assert first.json()["result"] == "indexed"
-        assert first.json()["searchable_as_fact"] is True
-        upserts_after_first = fake_writer.upsert_calls
 
-        second = client.post(
-            f"/api/memorials/{profile_id}/candidates/{candidate_id}/index",
-            headers=_auth_headers(token),
+    first = client.post(
+        f"/api/memorials/{profile_id}/candidates/{candidate_id}/index",
+        headers=_auth_headers(token),
+    )
+    assert first.status_code == 202
+    assert first.json()["result"] == "queued"
+    assert first.json()["searchable_as_fact"] is False
+    assert first.json()["job_id"] is not None
+
+    from app.modules.avatar_memory_indexing.service import index_promotion
+
+    db = _db()
+    try:
+        promotion_row = db.get(AvatarMemoryPromotion, promotion_id)
+        assert promotion_row is not None
+        result = index_promotion(
+            db,
+            owner_user_id=promotion_row.owner_user_id,
+            promotion_id=promotion_id,
+            writer=fake_writer,
+            encoder=fake_encoder,
         )
-        assert second.status_code == 200
-        assert second.json()["result"] == "already_indexed"
-        assert fake_writer.upsert_calls == upserts_after_first  # no duplicate write on repeat
+        assert result.result == "indexed"
+    finally:
+        db.close()
+    upserts_after_first = fake_writer.upsert_calls
+    assert upserts_after_first == 1
+
+    second = client.post(
+        f"/api/memorials/{profile_id}/candidates/{candidate_id}/index",
+        headers=_auth_headers(token),
+    )
+    assert second.status_code == 202
+    assert second.json()["result"] == "already_indexed"
+    assert second.json()["searchable_as_fact"] is True
+    assert second.json()["job_id"] is None
+    assert fake_writer.upsert_calls == upserts_after_first  # no duplicate write on repeat
 
 
 def test_czech_clarification_question_is_localized_not_raw_russian(client):

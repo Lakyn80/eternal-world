@@ -901,12 +901,37 @@ class BackgroundJob(TimestampMixin, Base):
             name="background_jobs_job_type",
         ),
         CheckConstraint(
-            "status IN ('queued', 'running', 'succeeded', 'failed', 'cancelled')",
+            (
+                "status IN ("
+                "'pending', 'queued', 'running', 'retry_scheduled', "
+                "'recovery_pending', 'succeeded', 'failed', 'cancelled'"
+                ")"
+            ),
             name="background_jobs_status",
         ),
         Index("ix_background_jobs_created_at", "created_at"),
         Index("ix_background_jobs_owner_user_id_profile_id", "owner_user_id", "profile_id"),
         Index("ix_background_jobs_owner_user_id_status", "owner_user_id", "status"),
+        Index("ix_background_jobs_queue_status", "queue", "status"),
+        Index("ix_background_jobs_status_next_attempt_at", "status", "next_attempt_at"),
+        Index("ix_background_jobs_status_heartbeat_at", "status", "heartbeat_at"),
+        #: Partial unique index (Task 65.9, Part D/F): `idempotency_key`
+        #: only needs to be unique among still-*active* jobs. Once a job
+        #: reaches a terminal state, a later request carrying the exact
+        #: same semantic key (e.g. "retry after a previous failed attempt
+        #: for this same promotion") must be able to create a brand-new
+        #: job rather than being permanently pinned to the old, already-
+        #: finished row - a plain (non-partial) unique index would make a
+        #: second real attempt impossible after the first one failed.
+        Index(
+            "uq_background_jobs_idempotency_key",
+            "idempotency_key",
+            unique=True,
+            postgresql_where=text(
+                "status NOT IN ('succeeded', 'failed', 'cancelled')"
+            ),
+            sqlite_where=text("status NOT IN ('succeeded', 'failed', 'cancelled')"),
+        ),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)
@@ -954,11 +979,99 @@ class BackgroundJob(TimestampMixin, Base):
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
+    #: Task 65.9 (Part D) - asynchronous job platform fields. All additive;
+    #: every pre-existing column above keeps its exact prior meaning.
+    #: Celery queue name this job's work belongs on (e.g. "embedding",
+    #: "maintenance") - a plain descriptive label, never used to select a
+    #: raw task/queue from client-controlled input (Part G).
+    queue: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    #: Deterministic semantic key (job_type + subject identity + content
+    #: version + operation) enforced unique at the DB level so repeated
+    #: approval/retry/duplicate-delivery can never create a second active
+    #: job for the same real-world operation (Part F).
+    idempotency_key: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    priority: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default=text("0"))
+    attempt_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default=text("0"))
+    max_attempts: Mapped[int] = mapped_column(Integer, nullable=False, default=3, server_default=text("3"))
+    #: Bounded provider self-healing counters (Part M) - persisted so they
+    #: survive worker/container restart and duplicate task delivery.
+    provider_recovery_count: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default=text("0")
+    )
+    fresh_process_retry_used: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default=text("false")
+    )
+    worker_recycle_requested: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default=text("false")
+    )
+    queued_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    #: Updated by the worker while actively processing - used by stale-job
+    #: recovery to detect a crashed worker without a permanent lock (Part P).
+    heartbeat_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    next_attempt_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    #: Closed-set safe error category (Part L) - never a raw exception
+    #: string. `error_message`/`error_payload` above remain the existing,
+    #: already-safe human-readable summary fields.
+    safe_error_category: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    internal_correlation_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    payload_schema_version: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=1, server_default=text("1")
+    )
+
     owner: Mapped[User] = relationship(back_populates="background_jobs")
     memory_profile: Mapped[MemoryProfile | None] = relationship(back_populates="background_jobs")
     active_retrieval_configs: Mapped[list[ActiveRetrievalConfig]] = relationship(
         back_populates="source_eval_job",
     )
+    outbox_event: Mapped[JobOutboxEvent | None] = relationship(
+        back_populates="job",
+        uselist=False,
+        cascade="all, delete-orphan",
+    )
+
+
+class JobOutboxEvent(TimestampMixin, Base):
+    """Transactional outbox row (Task 65.9, Part E). Written in the exact
+    same DB transaction as the `BackgroundJob` row and any domain-state
+    change it represents (e.g. a promotion moving to `pending_index`), so a
+    broker publish failure can never silently lose the job: the row simply
+    stays `pending` until a dispatcher (or the recovery sweep) republishes
+    it. One row per job (`UniqueConstraint(job_id)`) - a redispatch (self-
+    healing recovery, stale-job recovery) resets the same row back to
+    `pending` rather than creating a second one, keeping "duplicate
+    publication remains harmless" trivially true."""
+
+    __tablename__ = "job_outbox_events"
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('pending', 'published', 'abandoned')",
+            name="job_outbox_events_status",
+        ),
+        Index("ix_job_outbox_events_status_created_at", "status", "created_at"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    job_id: Mapped[int] = mapped_column(
+        ForeignKey("background_jobs.id", ondelete="CASCADE"),
+        index=True,
+        unique=True,
+        nullable=False,
+    )
+    task_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    queue: Mapped[str] = mapped_column(String(32), nullable=False)
+    task_args: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
+    status: Mapped[str] = mapped_column(
+        String(16),
+        nullable=False,
+        default="pending",
+        server_default=text("'pending'"),
+    )
+    attempts: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default=text("0"))
+    last_error: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    next_attempt_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    job: Mapped[BackgroundJob] = relationship(back_populates="outbox_event")
 
 
 class ActiveRetrievalConfig(TimestampMixin, Base):

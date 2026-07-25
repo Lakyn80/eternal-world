@@ -297,7 +297,12 @@ export type AvatarMemoryIndexingRead = {
   target_collection_name: string | null;
   qdrant_point_id: string | null;
   searchable_as_fact: boolean;
-  result: 'indexed' | 'already_indexed';
+  // Task 65.9 (Part C/I): the endpoint now returns 202 with 'queued' the
+  // moment the async indexing job is created/reused - 'indexed' is only
+  // ever returned for the already-indexed idempotent no-op path, never
+  // synchronously for a freshly-triggered index/retry request.
+  result: 'indexed' | 'already_indexed' | 'queued';
+  job_id?: number | null;
 };
 
 export type BillingPlanLimits = {

@@ -695,6 +695,40 @@ describe('CandidatesReviewSection', () => {
 
     expect(await screen.findByText(t.candidateAlreadyIndexed)).toBeInTheDocument();
   });
+
+  it('Task 65.9 (Part V): shows a pending notice, never "Indexed", for a freshly-queued async job', async () => {
+    const approvedCandidate = baseCandidate({
+      review_status: 'approved',
+      promotion_id: 9,
+      promotion_status: 'pending_index',
+      explicit_indexing_required: true,
+      searchable_as_fact: false
+    });
+    vi.mocked(api.listMemoryCandidates).mockResolvedValue([approvedCandidate]);
+    vi.mocked(api.indexCandidateMemory).mockResolvedValue({
+      promotion_id: 9,
+      promotion_status: 'pending_index',
+      indexed_at: null,
+      target_collection_name: null,
+      qdrant_point_id: null,
+      searchable_as_fact: false,
+      result: 'queued',
+      job_id: 42
+    });
+    const user = userEvent.setup();
+
+    render(<CandidatesReviewSection isOwner lang="en" profileId={7} t={t} token="tok" />);
+    await screen.findByText('Grandma loved gardening.');
+    await user.click(screen.getByRole('button', { name: t.candidateIndexButton }));
+    await user.click(screen.getByRole('button', { name: t.candidateIndexConfirmYes }));
+
+    // The status badge already shows this same "pending, not yet indexed"
+    // label before the click; after the click, the result notice repeats
+    // it (never "Indexed and searchable") - so two occurrences is the
+    // correct, expected outcome here, not zero and not a single stale one.
+    await waitFor(() => expect(screen.getAllByText(t.candidatePendingIndexLabel).length).toBeGreaterThanOrEqual(2));
+    expect(screen.queryByText(t.candidateIndexedLabel)).not.toBeInTheDocument();
+  });
 });
 
 describe('ContributionList - Task 65.8 retry indexing', () => {

@@ -52,7 +52,7 @@ from app.modules.embeddings.providers.base import EmbeddingVector
 from app.modules.embeddings.providers.bge_m3_hybrid import BgeM3HybridEmbeddingAdapter
 from app.modules.embeddings.runtime import assert_real_embedding_runtime_for_e2e
 from app.modules.job_tracking.enums import BackgroundJobType
-from app.modules.job_tracking.service import attach_celery_task_id, create_job
+from app.modules.job_tracking.service import create_job
 from app.modules.memorial_contribution_indexing import repository
 from app.modules.memorial_contribution_indexing.schemas import ContributionIndexingRead
 from app.modules.avatar_memory_indexing.qdrant_writer import (
@@ -111,7 +111,24 @@ class ContributionIndexingEmbeddingEncoder(Protocol):
 
 
 class DefaultContributionIndexingEmbeddingEncoder:
+    """Task 65.9 (Part M): see `avatar_memory_indexing.service.
+    DefaultAvatarMemoryEmbeddingEncoder` for the full rationale - identical
+    pattern, kept independent per module rather than sharing a base class,
+    matching this codebase's existing convention of small parallel encoder
+    classes per pipeline."""
+
+    def __init__(self, *, self_healing_encoder: object | None = None) -> None:
+        self._self_healing_encoder = self_healing_encoder
+
     def encode(self, *, text: str, model_code: str) -> EmbeddingVector:
+        if self._self_healing_encoder is not None:
+            from app.modules.embeddings.self_healing import ProviderRecoveryExhaustedError
+
+            try:
+                return self._self_healing_encoder.encode(text=text, model_code=model_code)
+            except ProviderRecoveryExhaustedError as exc:
+                raise ContributionIndexingExecutionError(SAFE_FAILURE_MESSAGE) from exc
+
         provider = build_embedding_provider(model_code=model_code)
         if not isinstance(provider, BgeM3HybridEmbeddingAdapter):
             raise ContributionIndexingExecutionError(
@@ -191,15 +208,25 @@ def enqueue_indexing_job(
     profile: MemoryProfile,
     promotion: MemorialContributionPromotion,
 ):
-    """Enqueue the heavy embedding/Qdrant step on the existing Celery worker
-    instead of running it inline inside the HTTP request that just approved
-    the contribution - satisfies "no large blocking model load inside the
-    approval transaction" while still making indexing happen automatically.
-    Reuses the existing `background_jobs` job-tracking infrastructure
-    (`job_type="qdrant_indexing"`, the closest existing enum value to what
-    this job actually does) rather than inventing a parallel job model.
+    """Create the persistent job and its transactional outbox record for
+    the heavy embedding/Qdrant step, instead of running it inline inside
+    the HTTP request that just approved the contribution (Task 65.9, Part
+    E/F/I) - satisfies "no large blocking model load inside the approval
+    transaction" while still making indexing happen automatically, and
+    guarantees it is never silently lost if the broker publish itself
+    fails. Reuses the existing `background_jobs` job-tracking
+    infrastructure (`job_type="qdrant_indexing"`, the closest existing
+    enum value to what this job actually does) rather than inventing a
+    parallel job model.
+
+    Idempotency key mirrors `avatar_memory_indexing.service.
+    enqueue_indexing_job`: one `MemorialContributionPromotion` row is
+    always exactly one approved content version, so repeated approval,
+    the explicit retry-indexing action, and duplicate delivery all
+    converge on the same job.
     """
 
+    idempotency_key = f"{INDEXING_JOB_WORKFLOW}:{promotion.id}:index"
     background_job = create_job(
         db,
         owner_user_id=profile.user_id,
@@ -210,12 +237,18 @@ def enqueue_indexing_job(
             "contribution_id": promotion.contribution_id,
             "promotion_id": promotion.id,
         },
+        queue="embedding",
+        idempotency_key=idempotency_key,
     )
 
-    from app.worker.tasks import run_memorial_contribution_indexing_job
+    from app.modules.job_outbox.service import enqueue_job_with_outbox
 
-    async_result = run_memorial_contribution_indexing_job.delay(background_job.id)
-    return attach_celery_task_id(db, job_id=background_job.id, celery_task_id=async_result.id)
+    return enqueue_job_with_outbox(
+        db,
+        job=background_job,
+        task_name="app.worker.tasks.run_memorial_contribution_indexing_job",
+        queue="embedding",
+    )
 
 
 def _validate_promotion_identity(
