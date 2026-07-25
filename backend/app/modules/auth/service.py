@@ -43,7 +43,7 @@ def register_user(db: Session, payload: RegisterRequest) -> User:
     return user
 
 
-def login_user(db: Session, payload: LoginRequest) -> TokenResponse:
+def login_user(db: Session, payload: LoginRequest) -> tuple[TokenResponse, User]:
     normalized_email = payload.email.strip().lower()
     user = users_repository.get_user_by_email(db, normalized_email)
 
@@ -57,4 +57,4 @@ def login_user(db: Session, payload: LoginRequest) -> TokenResponse:
         subject=str(user.id),
         extra_claims={"email": user.email},
     )
-    return TokenResponse(access_token=access_token)
+    return TokenResponse(access_token=access_token), user

@@ -105,6 +105,7 @@ def test_processing_endpoint_requires_authentication(client):
     profile_id = _create_profile(client, token, "Pipeline Auth Profile")
     source_id = _create_rag_source(client, token, profile_id).json()["id"]
 
+    client.cookies.clear()
     response = client.post(f"/api/rag-sources/{source_id}/process")
 
     assert response.status_code == 401

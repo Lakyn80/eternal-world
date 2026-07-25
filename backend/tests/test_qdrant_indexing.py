@@ -200,6 +200,7 @@ def test_unauthenticated_user_cannot_index_embedding(client, monkeypatch):
         "unauth",
     )
 
+    client.cookies.clear()
     response = client.post(f"/api/rag-embeddings/{embedding_id}/index")
 
     assert response.status_code == 401

@@ -424,6 +424,146 @@ def observe_biographer_fallback(*, reason: str, locale: str | None) -> None:
     ).inc()
 
 
+# --- Task 65.7: authenticated workspace reliability -----------------------
+# Every label below is a small closed set - never a user/profile/session/
+# candidate/conversation id, never a raw status message.
+BROWSER_SESSION_OPERATIONS_TOTAL = Counter(
+    "eternal_world_browser_session_operations_total",
+    "Total browser session lifecycle operations, by operation and result.",
+    labelnames=("operation", "result"),
+)
+PROFILE_UPDATES_TOTAL = Counter(
+    "eternal_world_profile_updates_total",
+    "Total memorial/profile metadata update attempts, by result.",
+    labelnames=("result",),
+)
+BIOGRAPHER_RESUME_TOTAL = Counter(
+    "eternal_world_biographer_resume_total",
+    "Total Biographer resume-state loads, by resolved state and result.",
+    labelnames=("state", "result"),
+)
+BIOGRAPHER_ANSWERS_TOTAL = Counter(
+    "eternal_world_biographer_answers_total",
+    "Total Biographer direct-answer submissions, by result and locale.",
+    labelnames=("result", "locale"),
+)
+CHAT_OPERATIONS_TOTAL = Counter(
+    "eternal_world_chat_operations_total",
+    "Total Chat operations (send/reset/restore), by operation and result.",
+    labelnames=("operation", "result"),
+)
+CHAT_REDIS_OPERATIONS_TOTAL = Counter(
+    "eternal_world_chat_redis_operations_total",
+    "Total Chat Redis snapshot operations, by operation and result.",
+    labelnames=("operation", "result"),
+)
+REVIEW_ACTIONS_TOTAL = Counter(
+    "eternal_world_review_actions_total",
+    "Total owner-review actions on memory candidates, by action and result.",
+    labelnames=("action", "result"),
+)
+MEMORY_INDEX_OPERATIONS_TOTAL = Counter(
+    "eternal_world_memory_index_operations_total",
+    "Total explicit memory indexing operations, by result.",
+    labelnames=("result",),
+)
+LOCALIZATION_FALLBACK_TOTAL = Counter(
+    "eternal_world_localization_fallback_total",
+    "Total times a raw/unknown enum value had to be shown via the generic localization fallback.",
+    labelnames=("locale", "category"),
+)
+
+_BROWSER_SESSION_OPERATIONS = frozenset({"create", "resume", "revoke"})
+_BROWSER_SESSION_RESULTS = frozenset({"success", "expired", "invalid", "error"})
+_PROFILE_UPDATE_RESULTS = frozenset({"success", "validation_error", "permission_denied", "error"})
+_BIOGRAPHER_RESUME_STATES = frozenset(
+    {
+        "biography_not_indexed",
+        "biography_indexing",
+        "question_ready",
+        "answer_submitting",
+        "candidate_ready_for_review",
+        "candidate_needs_owner_action",
+        "candidate_pending_index",
+        "candidate_indexed",
+        "clarification_pending",
+        "generation_failed",
+        "blocked",
+    }
+)
+_CHAT_OPERATIONS = frozenset({"send", "restore", "reset"})
+_CHAT_REDIS_OPERATIONS = frozenset({"snapshot_restored", "snapshot_rebuilt", "snapshot_written", "reset"})
+_REVIEW_ACTIONS = frozenset(
+    {"confirm", "edit_and_confirm", "reject", "request_more_details", "mark_disputed", "approve_multiple_perspectives"}
+)
+_LOCALIZATION_CATEGORIES = frozenset(
+    {"privacy_scope", "role", "candidate_status", "dispute_status", "contribution_type", "clarification_status", "history_event", "invitation_status", "job_status"}
+)
+
+
+def _normalize_choice(value: str | None, *, allowed: frozenset[str], fallback: str = "other") -> str:
+    return value if value in allowed else fallback
+
+
+def observe_browser_session_operation(*, operation: str, result: str) -> None:
+    BROWSER_SESSION_OPERATIONS_TOTAL.labels(
+        operation=_normalize_choice(operation, allowed=_BROWSER_SESSION_OPERATIONS),
+        result=_normalize_choice(result, allowed=_BROWSER_SESSION_RESULTS, fallback="error"),
+    ).inc()
+
+
+def observe_profile_update(*, result: str) -> None:
+    PROFILE_UPDATES_TOTAL.labels(result=_normalize_choice(result, allowed=_PROFILE_UPDATE_RESULTS, fallback="error")).inc()
+
+
+def observe_biographer_resume(*, state: str, result: str) -> None:
+    BIOGRAPHER_RESUME_TOTAL.labels(
+        state=_normalize_choice(state, allowed=_BIOGRAPHER_RESUME_STATES, fallback="other"),
+        result=_normalize_choice(result, allowed=frozenset({"success", "error"}), fallback="error"),
+    ).inc()
+
+
+def observe_biographer_direct_answer(*, result: str, locale: str | None) -> None:
+    BIOGRAPHER_ANSWERS_TOTAL.labels(
+        result=_normalize_choice(result, allowed=frozenset({"accepted", "validation_error", "error"}), fallback="error"),
+        locale=normalize_ai_locale_label(locale),
+    ).inc()
+
+
+def observe_chat_operation(*, operation: str, result: str) -> None:
+    CHAT_OPERATIONS_TOTAL.labels(
+        operation=_normalize_choice(operation, allowed=_CHAT_OPERATIONS),
+        result=_normalize_choice(result, allowed=frozenset({"success", "error"}), fallback="error"),
+    ).inc()
+
+
+def observe_chat_redis_operation(*, operation: str, result: str) -> None:
+    CHAT_REDIS_OPERATIONS_TOTAL.labels(
+        operation=_normalize_choice(operation, allowed=_CHAT_REDIS_OPERATIONS),
+        result=_normalize_choice(result, allowed=frozenset({"success", "error"}), fallback="error"),
+    ).inc()
+
+
+def observe_review_action(*, action: str, result: str) -> None:
+    REVIEW_ACTIONS_TOTAL.labels(
+        action=_normalize_choice(action, allowed=_REVIEW_ACTIONS),
+        result=_normalize_choice(result, allowed=frozenset({"success", "error"}), fallback="error"),
+    ).inc()
+
+
+def observe_memory_index_operation(*, result: str) -> None:
+    MEMORY_INDEX_OPERATIONS_TOTAL.labels(
+        result=_normalize_choice(result, allowed=frozenset({"indexed", "already_indexed", "error"}), fallback="error")
+    ).inc()
+
+
+def observe_localization_fallback(*, locale: str | None, category: str) -> None:
+    LOCALIZATION_FALLBACK_TOTAL.labels(
+        locale=normalize_ai_locale_label(locale),
+        category=_normalize_choice(category, allowed=_LOCALIZATION_CATEGORIES, fallback="other"),
+    ).inc()
+
+
 _AVATAR_EVAL_GATE_RESULTS = frozenset({"pass", "fail"})
 _AVATAR_MEMORY_QUERY_INTENTS = frozenset(
     {

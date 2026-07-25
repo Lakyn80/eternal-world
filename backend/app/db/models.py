@@ -551,6 +551,34 @@ class ChatMessage(TimestampMixin, Base):
     memory_profile: Mapped[MemoryProfile | None] = relationship(back_populates="chat_messages")
 
 
+class ChatActiveSession(TimestampMixin, Base):
+    """Task 65.7 - durable pointer to which conversation is currently
+    "active" for a (user, profile) pair. `chat_messages` itself is never
+    schema-changed for this - each message's existing JSON
+    `message_metadata` column carries `{"conversation_id": ...}`, so a
+    conversation boundary is just a value, not a new foreign key. This
+    table exists only so "what is the CURRENT conversation_id" survives a
+    Redis restart/cache-miss (`chat.service` rebuilds the Redis snapshot
+    from Postgres by filtering `chat_messages` to this `conversation_id`).
+    Resetting chat is a plain UPDATE of this one row - no old row is kept,
+    since prior conversations remain fully readable through their messages'
+    own `conversation_id` metadata regardless.
+    """
+
+    __tablename__ = "chat_active_sessions"
+    __table_args__ = (UniqueConstraint("user_id", "profile_id", name="uq_chat_active_sessions_user_profile"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True, nullable=False)
+    profile_id: Mapped[int] = mapped_column(
+        ForeignKey("memory_profiles.id", ondelete="CASCADE"), index=True, nullable=False
+    )
+    conversation_id: Mapped[str] = mapped_column(String(36), nullable=False)
+    started_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+
 class Memory(TimestampMixin, Base):
     __tablename__ = "memories"
     __table_args__ = (

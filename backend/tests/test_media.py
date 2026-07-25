@@ -382,6 +382,7 @@ def test_unauthenticated_profile_photo_binding_is_rejected(client):
     )
     media_id = upload_response.json()["id"]
 
+    client.cookies.clear()
     response = client.post(
         f"/api/memory-profiles/{profile_id}/photo",
         json={"media_id": media_id},

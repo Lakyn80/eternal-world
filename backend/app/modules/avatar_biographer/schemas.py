@@ -68,3 +68,21 @@ class BiographerAnswerResponse(BaseModel):
     candidate_id: int | None
     enrichment_status: str | None
     unresolved_clarification_count: int | None
+
+
+class BiographerResumeRead(BaseModel):
+    """Task 65.7 (Part D.25) - one composed, read-only view of "what should
+    the Biographer tab show right now", so the frontend never has to infer
+    it from several separately-fetched, possibly-stale records."""
+
+    profile_id: int
+    biography_status: str
+    eligible: bool
+    blocked_reason: str | None
+    active_question: BiographerQuestionRead | None
+    candidate_id: int | None
+    review_status: str | None
+    enrichment_status: str | None
+    unresolved_clarification_count: int | None
+    promotion_status: str | None
+    next_action: str

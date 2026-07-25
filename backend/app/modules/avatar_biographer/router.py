@@ -10,11 +10,13 @@ from app.db.models import User
 from app.db.session import get_db
 from app.modules.auth.dependencies import get_current_user
 from app.modules.auth.schemas import ErrorResponse
+from app.modules.avatar_biographer.resume import get_resume_state
 from app.modules.avatar_biographer.schemas import (
     BiographerAnswerRequest,
     BiographerAnswerResponse,
     BiographerEligibilityRead,
     BiographerQuestionRead,
+    BiographerResumeRead,
 )
 from app.modules.avatar_biographer.service import (
     BiographerBlockedError,
@@ -73,6 +75,44 @@ def get_biographer_eligibility_endpoint(
     except (MemorialNotFoundError, MemorialForbiddenError) as exc:
         _raise_access_error(exc)
     return get_eligibility(db, profile=profile)
+
+
+@router.get(
+    "/api/memorials/{profile_id}/biographer/resume",
+    response_model=BiographerResumeRead,
+    responses={
+        status.HTTP_401_UNAUTHORIZED: {"model": ErrorResponse},
+        status.HTTP_404_NOT_FOUND: {"model": ErrorResponse},
+    },
+)
+def get_biographer_resume_endpoint(
+    profile_id: ProfileIdPath,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> BiographerResumeRead:
+    try:
+        profile, _membership = resolve_authorized_profile(
+            db,
+            current_user=current_user,
+            profile_id=profile_id,
+            capability=MemorialCapability.SUBMIT_CONTRIBUTION,
+        )
+    except (MemorialNotFoundError, MemorialForbiddenError) as exc:
+        _raise_access_error(exc)
+    state = get_resume_state(db, profile=profile)
+    return BiographerResumeRead(
+        profile_id=state.profile_id,
+        biography_status=state.biography_status,
+        eligible=state.eligible,
+        blocked_reason=state.blocked_reason,
+        active_question=state.active_question,
+        candidate_id=state.candidate_id,
+        review_status=state.review_status,
+        enrichment_status=state.enrichment_status,
+        unresolved_clarification_count=state.unresolved_clarification_count,
+        promotion_status=state.promotion_status,
+        next_action=state.next_action,
+    )
 
 
 @router.get(

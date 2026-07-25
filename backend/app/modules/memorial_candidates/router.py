@@ -15,7 +15,7 @@ from __future__ import annotations
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Path, status
+from fastapi import APIRouter, Depends, HTTPException, Path, Query, status
 from sqlalchemy.orm import Session
 
 from app.db.models import User
@@ -89,21 +89,36 @@ def _raise_access_error(exc: Exception) -> None:
     raise exc
 
 
-def _localize_enrichment(enrichment: CandidateEnrichmentRead) -> CandidateEnrichmentRead:
+#: Task 65.7 (Part D.42/12): every candidate/clarification endpoint below
+#: accepts this as an explicit query parameter and threads it through -
+#: never inferred from the record's own stored `language`/`question.language`
+#: (that reflects who *originally answered*, not who is *currently
+#: viewing*). Defaults to "cs" only because that matches every other
+#: locale-aware endpoint's default in this codebase (Biographer's own
+#: `next-question` has no default and requires the caller to pass one; this
+#: endpoint family predates that convention and already shipped without a
+#: locale param, so a default keeps it backward compatible for any existing
+#: caller that doesn't pass one yet).
+CandidateLocaleQuery = Annotated[str, Query(pattern="^(cs|ru)$")]
+
+
+def _localize_enrichment(enrichment: CandidateEnrichmentRead, *, viewer_locale: str) -> CandidateEnrichmentRead:
     """`family_memory_enrichment._build_clarification_read` (existing,
     untouched code) always returns the canonical Russian `question_text` -
-    the demo module's own Czech UI re-localizes it via
-    `localize_question_text` before display (`demo_fa_chat/service.py`).
-    This authenticated router does the same, so a Czech-locale clarification
-    is never shown in Russian just because it reuses the same shared
-    candidate/clarification machinery."""
+    re-localized here for display using the CURRENT VIEWER's chosen UI
+    locale (`viewer_locale`), never the candidate's/question's own stored
+    `language` (which only reflects whichever locale the original answerer
+    happened to have selected at write time, and can therefore permanently
+    disagree with a *different, later* viewer's own chosen UI language -
+    the exact mechanism that let raw Russian clarification text leak into a
+    Czech-locale UI, Task 65.7)."""
 
     question = enrichment.next_clarification_question
-    if question is not None and question.language:
+    if question is not None:
         question.question_text = localize_question_text(
             question_key=question.question_key,
             source_text=question.question_text,
-            locale=question.language,
+            locale=viewer_locale,
         )
     return enrichment
 
@@ -140,6 +155,7 @@ def _resolve_profile(
 )
 def list_candidates_endpoint(
     profile_id: ProfileIdPath,
+    locale: CandidateLocaleQuery = "cs",
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> list[CandidateEnrichmentRead]:
@@ -162,7 +178,8 @@ def list_candidates_endpoint(
         try:
             results.append(
                 _localize_enrichment(
-                    get_candidate_enrichment(db, owner_user_id=profile.user_id, candidate_id=candidate.id, actor=actor)
+                    get_candidate_enrichment(db, owner_user_id=profile.user_id, candidate_id=candidate.id, actor=actor),
+                    viewer_locale=locale,
                 )
             )
         except FamilyMemoryNotFoundError:
@@ -231,6 +248,7 @@ def list_biography_memory_entries_endpoint(
 def get_candidate_endpoint(
     profile_id: ProfileIdPath,
     candidate_id: CandidateIdPath,
+    locale: CandidateLocaleQuery = "cs",
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> CandidateEnrichmentRead:
@@ -243,7 +261,8 @@ def get_candidate_endpoint(
     actor = _actor_context(current_user=current_user, role=membership.role)
     try:
         return _localize_enrichment(
-            get_candidate_enrichment(db, owner_user_id=profile.user_id, candidate_id=candidate_id, actor=actor)
+            get_candidate_enrichment(db, owner_user_id=profile.user_id, candidate_id=candidate_id, actor=actor),
+            viewer_locale=locale,
         )
     except (FamilyMemoryNotFoundError, ConversationMemoryCandidateNotFoundError) as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
@@ -261,6 +280,7 @@ def get_candidate_endpoint(
 def get_candidate_history_endpoint(
     profile_id: ProfileIdPath,
     candidate_id: CandidateIdPath,
+    locale: CandidateLocaleQuery = "cs",
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> CandidateHistoryRead:
@@ -280,7 +300,8 @@ def get_candidate_history_endpoint(
     actor = _actor_context(current_user=current_user, role=membership.role)
     try:
         enrichment = _localize_enrichment(
-            get_candidate_enrichment(db, owner_user_id=profile.user_id, candidate_id=candidate_id, actor=actor)
+            get_candidate_enrichment(db, owner_user_id=profile.user_id, candidate_id=candidate_id, actor=actor),
+            viewer_locale=locale,
         )
         contributions = list_contributions(
             db, owner_user_id=profile.user_id, candidate_id=candidate_id, actor=actor
@@ -290,6 +311,15 @@ def get_candidate_history_endpoint(
         )
     except (FamilyMemoryNotFoundError, ConversationMemoryCandidateNotFoundError) as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    # Task 65.7: the append-only history view must never show a stale-
+    # locale clarification question either - same viewer-locale projection
+    # as the "current" clarification above, applied to every historical row.
+    for clarification in clarifications:
+        clarification.question_text = localize_question_text(
+            question_key=clarification.question_key,
+            source_text=clarification.question_text,
+            locale=locale,
+        )
     return CandidateHistoryRead(
         candidate=enrichment,
         contributions=contributions,
@@ -311,6 +341,7 @@ def answer_next_clarification_endpoint(
     profile_id: ProfileIdPath,
     candidate_id: CandidateIdPath,
     payload: ClarificationAnswerBody,
+    locale: CandidateLocaleQuery = "cs",
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> CandidateEnrichmentRead:
@@ -331,7 +362,8 @@ def answer_next_clarification_endpoint(
     )
     try:
         return _localize_enrichment(
-            answer_next_clarification(db, owner_user_id=profile.user_id, candidate_id=candidate_id, payload=request)
+            answer_next_clarification(db, owner_user_id=profile.user_id, candidate_id=candidate_id, payload=request),
+            viewer_locale=locale,
         )
     except (FamilyMemoryNotFoundError, ConversationMemoryCandidateNotFoundError) as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
@@ -355,6 +387,7 @@ def skip_clarification_endpoint(
     profile_id: ProfileIdPath,
     candidate_id: CandidateIdPath,
     clarification_id: ClarificationIdPath,
+    locale: CandidateLocaleQuery = "cs",
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> CandidateEnrichmentRead:
@@ -376,7 +409,8 @@ def skip_clarification_endpoint(
                 candidate_id=candidate_id,
                 clarification_id=clarification_id,
                 payload=request,
-            )
+            ),
+            viewer_locale=locale,
         )
     except (FamilyMemoryNotFoundError, ConversationMemoryCandidateNotFoundError) as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
@@ -398,6 +432,7 @@ def owner_review_endpoint(
     profile_id: ProfileIdPath,
     candidate_id: CandidateIdPath,
     payload: OwnerReviewBody,
+    locale: CandidateLocaleQuery = "cs",
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> OwnerReviewResponse:
@@ -424,7 +459,7 @@ def owner_review_endpoint(
     )
     try:
         response = owner_review(db, owner_user_id=profile.user_id, candidate_id=candidate_id, payload=request)
-        _localize_enrichment(response)
+        _localize_enrichment(response, viewer_locale=locale)
         return response
     except (FamilyMemoryNotFoundError, ConversationMemoryCandidateNotFoundError) as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc

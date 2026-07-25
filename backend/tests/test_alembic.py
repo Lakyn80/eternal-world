@@ -6,6 +6,24 @@ from alembic.script import ScriptDirectory
 
 
 def test_alembic_configuration_loads_revision_history():
+    """Task 65.7C (Part G): this test previously hardcoded a specific
+    revision id (`20260722_0025`) as "the head". That assertion went stale
+    the moment the very next migration (`20260723_0026`, Task 65.7) landed,
+    and would go stale again with every future migration - a brittle,
+    self-defeating check that a real reviewer would have to keep editing
+    forever. It is replaced with three properties that stay true regardless
+    of how many migrations are added later:
+
+    1. Exactly one head exists (catches accidental branching - two
+       migrations authored against the same `down_revision` - which a
+       hardcoded-head assertion would NOT reliably catch either).
+    2. The specific set of revisions this test has always enumerated, plus
+       the two most recent (Task 65.7's `20260723_0026` and Task 65.9's
+       `20260724_0027`), are present and reachable.
+    3. The exact linear edges introduced by this task's own migration work
+       are correct: `20260722_0025 -> 20260723_0026 -> 20260724_0027`.
+    """
+
     backend_dir = Path(__file__).resolve().parents[1]
     config = Config(str(backend_dir / "alembic.ini"))
     config.set_main_option("script_location", str(backend_dir / "alembic"))
@@ -13,9 +31,14 @@ def test_alembic_configuration_loads_revision_history():
     script_directory = ScriptDirectory.from_config(config)
     revisions = list(script_directory.walk_revisions())
     revision_ids = {revision.revision for revision in revisions}
+    revisions_by_id = {revision.revision: revision for revision in revisions}
 
     assert revisions
-    assert script_directory.get_current_head() == "20260722_0025"
+
+    heads = script_directory.get_heads()
+    assert len(heads) == 1, f"expected exactly one Alembic head, found {heads}"
+    assert script_directory.get_current_head() == heads[0]
+
     assert {
         "20260616_0001",
         "20260616_0002",
@@ -41,7 +64,17 @@ def test_alembic_configuration_loads_revision_history():
         "20260719_0022",
         "20260721_0023",
         "20260721_0024",
+        "20260722_0025",
+        "20260723_0026",
+        "20260724_0027",
     }.issubset(revision_ids)
+
+    # Task 65.7 (chat active sessions) and Task 65.9 (async job platform)
+    # must chain linearly onto each other and onto the pre-existing head,
+    # never as a silent second branch.
+    assert revisions_by_id["20260723_0026"].down_revision == "20260722_0025"
+    assert revisions_by_id["20260724_0027"].down_revision == "20260723_0026"
+    assert heads[0] == "20260724_0027"
 
 
 def test_alembic_revision_module_imports():

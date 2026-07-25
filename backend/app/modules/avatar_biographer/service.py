@@ -32,6 +32,7 @@ from app.core.logging import get_logger, log_event
 from app.core.metrics import (
     observe_biographer_blocked,
     observe_biographer_context_sources,
+    observe_biographer_direct_answer,
     observe_biographer_fallback,
     observe_biographer_generation_duration,
     observe_biographer_question,
@@ -428,8 +429,7 @@ def answer_question(
         # `initialize_candidate` classifies `memory_type` from a Russian-
         # keyword heuristic tuned for free-form avatar chat, which will not
         # recognize a topic-driven biographer answer. The topic already
-        # unambiguously determines the correct `memory_type` (and therefore
-        # which clarification questions, if any, are required) - re-running
+        # unambiguously determines the correct `memory_type` - re-running
         # the same deterministic synchronization step the module already
         # uses after every contribution keeps this a single source of
         # truth for the state machine, rather than duplicating it here.
@@ -437,12 +437,45 @@ def answer_question(
         _synchronize_candidate(db, candidate=candidate, finalized_by="system:ai-biographer-topic")
         db.commit()
         db.refresh(candidate)
-        enrichment = get_candidate_enrichment(
-            db,
-            owner_user_id=profile.user_id,
-            candidate_id=candidate.id,
-            actor=actor,
-        )
+
+    # Task 65.7C (Part E/roadmap correction): an earlier, uncommitted Task
+    # 65.7 draft called `bypass_mandatory_clarifications_and_finalize` here
+    # unconditionally, forcing every Biographer answer straight to
+    # `ready_for_owner_review` and cancelling any required clarification the
+    # topic's memory-type mandates (e.g. childhood_memory's required
+    # place/approximate_period questions). That directly contradicted the
+    # already-committed Task 65.6 mandatory-clarification contract
+    # (`test_answering_childhood_question_creates_candidate_with_required_clarification`,
+    # `test_active_clarification_blocks_new_topic`) and this task's own Part
+    # E requirement ("required unanswered clarifications are not silently
+    # skipped") - removed. `initialize_candidate` above already determines
+    # the correct `enrichment_status`/`unresolved_clarification_count` from
+    # the topic's real clarification requirements, exactly as it does for
+    # every other workflow_version=2 candidate; a Biographer answer is no
+    # longer treated as a special case here.
+    #
+    # `bypass_mandatory_clarifications_and_finalize` itself is preserved as
+    # an explicit, non-automatic repair primitive
+    # (`avatar_biographer/repair.py`, `scripts/repair_stuck_biographer_candidates.py`)
+    # for candidates that are independently confirmed stuck - it is
+    # deliberately never called from this normal answer path anymore.
+    enrichment = get_candidate_enrichment(
+        db,
+        owner_user_id=profile.user_id,
+        candidate_id=candidate.id,
+        actor=actor,
+    )
+    log_event(
+        _logger,
+        logging.INFO,
+        "biographer_answer_accepted",
+        profile_id=profile.id,
+        question_id=question.id,
+        candidate_id=candidate.id,
+        enrichment_status=enrichment.enrichment_status.value,
+        unresolved_clarification_count=enrichment.unresolved_clarification_count,
+    )
+    observe_biographer_direct_answer(result="accepted", locale=locale)
 
     repository.mark_answered(
         db,

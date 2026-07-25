@@ -1,9 +1,12 @@
 from __future__ import annotations
 
+import logging
+
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
-from app.core.logging import get_request_id
+from app.core.logging import get_logger, get_request_id, log_event
+from app.core.metrics import observe_chat_operation
 from app.modules.ai_agents.brain.context import (
     build_grounded_context,
     build_rag_evidence_items,
@@ -17,8 +20,9 @@ from app.modules.ai_agents.schemas import (
     MemoryProfileContext,
     OrchestratorChatRequest,
 )
-from app.modules.chat import repository
-from app.modules.chat.schemas import ChatMessageCreate, ChatMessageRead, ChatSendResponse
+from app.modules.chat import active_session, redis_snapshot, repository
+from app.modules.chat.redis_snapshot import ChatSnapshot, SnapshotMessage
+from app.modules.chat.schemas import ChatActiveRead, ChatMessageCreate, ChatMessageRead, ChatSendResponse
 from app.modules.memories import repository as memories_repository
 from app.modules.memorial_access.capabilities import MemorialCapability, resolve_authorized_profile
 from app.modules.memorial_access.service import MemorialForbiddenError, MemorialNotFoundError
@@ -47,6 +51,7 @@ def _extract_brain_token_usage(orchestrator_response):
 
 
 RECENT_HISTORY_LIMIT = 10
+_logger = get_logger("chat")
 
 
 class ChatProfileNotFoundError(Exception):
@@ -202,13 +207,16 @@ def send_chat_message(
         retrieved_evidence_items=retrieved_evidence_items,
     )
 
+    active = active_session.get_or_create_active_session(db, user_id=current_user.id, profile_id=profile_id)
+    conversation_id = active.conversation_id
+
     user_message = repository.create_chat_message(
         db,
         user_id=current_user.id,
         profile_id=profile_id,
         role="user",
         content=payload.message,
-        message_metadata={"source": "chat_api"},
+        message_metadata={"source": "chat_api", "conversation_id": conversation_id},
     )
     db.flush()
 
@@ -250,15 +258,40 @@ def send_chat_message(
             "reply_to_message_id": user_message.id,
             "provider_name": orchestrator_response.provider_name,
             "ai_action_id": ai_action.id,
+            "conversation_id": conversation_id,
             **orchestrator_response.metadata,
         },
     )
     db.commit()
     db.refresh(assistant_message)
+    db.refresh(user_message)
+
+    for message in (user_message, assistant_message):
+        redis_snapshot.append_message(
+            user_id=current_user.id,
+            profile_id=profile_id,
+            conversation_id=conversation_id,
+            message=SnapshotMessage(
+                id=message.id,
+                role=message.role,
+                content=message.content,
+                created_at=message.created_at.isoformat(),
+            ),
+        )
+    observe_chat_operation(operation="send", result="success")
+    log_event(
+        _logger,
+        logging.INFO,
+        "chat_active_loaded",
+        profile_id=profile_id,
+        conversation_id=conversation_id,
+        message_count=2,
+    )
 
     return ChatSendResponse(
         message_id=assistant_message.id,
         profile_id=profile_id,
+        conversation_id=conversation_id,
         user_message=user_message.content,
         ai_response_text=assistant_message.content,
         audio_url=orchestrator_response.audio_url,
@@ -284,3 +317,109 @@ def list_chat_messages(
         profile_id=profile_id,
     )
     return [_build_message_read(message) for message in messages]
+
+
+def _messages_for_conversation(
+    db: Session, *, user_id: int, profile_id: int, conversation_id: str
+) -> list[ChatMessage]:
+    all_messages = repository.list_chat_messages_for_profile(db, user_id=user_id, profile_id=profile_id)
+    return [
+        message
+        for message in all_messages
+        if isinstance(message.message_metadata, dict)
+        and message.message_metadata.get("conversation_id") == conversation_id
+    ]
+
+
+def get_active_chat(db: Session, *, current_user: User, profile_id: int) -> ChatActiveRead:
+    """Restores the active conversation's transcript (Part E.30/33): tries
+    the Redis fast-path snapshot first; on a miss or mismatch (different
+    `conversation_id`, e.g. after a Redis restart), rebuilds it from the
+    durable Postgres record and re-writes the Redis snapshot so the next
+    restore is fast again. Never silently loses messages - a genuinely
+    empty conversation (brand new, or just reset) returns an empty list,
+    not an error."""
+
+    _get_authorized_profile_or_raise(db, current_user=current_user, profile_id=profile_id)
+    active = active_session.get_or_create_active_session(db, user_id=current_user.id, profile_id=profile_id)
+
+    snapshot = redis_snapshot.read_snapshot(user_id=current_user.id, profile_id=profile_id)
+    if snapshot is not None and snapshot.conversation_id == active.conversation_id:
+        log_event(
+            _logger,
+            logging.INFO,
+            "chat_redis_snapshot_restored",
+            profile_id=profile_id,
+            conversation_id=active.conversation_id,
+            message_count=len(snapshot.messages),
+        )
+        messages = [
+            ChatMessageRead(id=m.id, profile_id=profile_id, role=m.role, content=m.content, created_at=m.created_at)
+            for m in snapshot.messages
+        ]
+        return ChatActiveRead(
+            profile_id=profile_id,
+            conversation_id=active.conversation_id,
+            messages=messages,
+            restored_from="redis",
+        )
+
+    db_messages = _messages_for_conversation(
+        db, user_id=current_user.id, profile_id=profile_id, conversation_id=active.conversation_id
+    )
+    rebuilt = ChatSnapshot(
+        conversation_id=active.conversation_id,
+        profile_id=profile_id,
+        locale=None,
+        messages=[
+            SnapshotMessage(id=m.id, role=m.role, content=m.content, created_at=m.created_at.isoformat())
+            for m in db_messages
+        ],
+    )
+    redis_snapshot.write_snapshot(user_id=current_user.id, profile_id=profile_id, snapshot=rebuilt)
+    log_event(
+        _logger,
+        logging.INFO,
+        "chat_redis_snapshot_rebuilt",
+        profile_id=profile_id,
+        conversation_id=active.conversation_id,
+        message_count=len(db_messages),
+    )
+    observe_chat_operation(operation="restore", result="success")
+    return ChatActiveRead(
+        profile_id=profile_id,
+        conversation_id=active.conversation_id,
+        messages=[_build_message_read(m) for m in db_messages],
+        restored_from="database" if db_messages else "empty",
+    )
+
+
+def reset_chat(db: Session, *, current_user: User, profile_id: int) -> ChatActiveRead:
+    """Chat reset (Part E.34): rotates the active-session pointer to a
+    brand-new `conversation_id` and clears the Redis snapshot. Prior
+    messages are never deleted - they simply stop being part of the active
+    conversation (still reachable via `GET .../messages`' full history if
+    ever needed). Returns the new, empty active conversation."""
+
+    _get_authorized_profile_or_raise(db, current_user=current_user, profile_id=profile_id)
+    log_event(_logger, logging.INFO, "chat_reset_started", profile_id=profile_id)
+    try:
+        new_session = active_session.rotate_active_session(db, user_id=current_user.id, profile_id=profile_id)
+        db.commit()
+        db.refresh(new_session)
+        redis_snapshot.delete_snapshot(user_id=current_user.id, profile_id=profile_id)
+    except Exception:
+        db.rollback()
+        log_event(_logger, logging.ERROR, "chat_reset_failed", profile_id=profile_id)
+        observe_chat_operation(operation="reset", result="error")
+        raise
+    log_event(
+        _logger, logging.INFO, "chat_reset_succeeded", profile_id=profile_id, conversation_id=new_session.conversation_id
+    )
+    observe_chat_operation(operation="reset", result="success")
+    return ChatActiveRead(
+        profile_id=profile_id,
+        conversation_id=new_session.conversation_id,
+        messages=[],
+        restored_from="empty",
+    )

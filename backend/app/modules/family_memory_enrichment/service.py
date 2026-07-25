@@ -386,6 +386,20 @@ def _get_or_create_next_clarification(
     return clarification
 
 
+def _finalize_ready_for_review(db: Session, *, candidate: ConversationMemoryCandidate, finalized_by: str) -> None:
+    contributions = repository.list_contributions(db, candidate_id=candidate.id)
+    draft = build_finalized_draft(candidate=candidate, contributions=contributions)
+    candidate.finalized_memory_text = draft.text
+    candidate.finalized_at = datetime.now(timezone.utc)
+    candidate.finalized_by = finalized_by
+    candidate.enrichment_status = EnrichmentStatus.READY_FOR_OWNER_REVIEW.value
+    observe_memory_enrichment_status(status=candidate.enrichment_status)
+    if draft.has_conflict:
+        candidate.dispute_status = DisputeStatus.DISPUTED.value
+        observe_memory_dispute(result=candidate.dispute_status)
+    _translate_finalized_memory_if_czech_origin(db, candidate=candidate)
+
+
 def _synchronize_candidate(
     db: Session,
     *,
@@ -405,17 +419,54 @@ def _synchronize_candidate(
             contributions=contributions,
         )
 
-    draft = build_finalized_draft(candidate=candidate, contributions=contributions)
-    candidate.finalized_memory_text = draft.text
-    candidate.finalized_at = datetime.now(timezone.utc)
-    candidate.finalized_by = finalized_by
-    candidate.enrichment_status = EnrichmentStatus.READY_FOR_OWNER_REVIEW.value
-    observe_memory_enrichment_status(status=candidate.enrichment_status)
-    if draft.has_conflict:
-        candidate.dispute_status = DisputeStatus.DISPUTED.value
-        observe_memory_dispute(result=candidate.dispute_status)
-    _translate_finalized_memory_if_czech_origin(db, candidate=candidate)
+    _finalize_ready_for_review(db, candidate=candidate, finalized_by=finalized_by)
     return None
+
+
+def bypass_mandatory_clarifications_and_finalize(
+    db: Session,
+    *,
+    candidate: ConversationMemoryCandidate,
+    finalized_by: str = "system:ai_biographer_direct_answer",
+) -> int:
+    """Explicit REPAIR primitive only (Task 65.7C, `avatar_biographer/repair.py`)
+    - NOT called from the normal Biographer answer flow. An uncommitted Task
+    65.7 draft called this unconditionally on every new answer, silently
+    disabling the topic's mandatory clarification bank
+    (`CHILDHOOD_MEMORY_QUESTIONS`/`BEDTIME_SONG_QUESTIONS`) for every
+    candidate; Task 65.7C removed that call from
+    `avatar_biographer/service.answer_question` because it directly
+    contradicted the already-committed Task 65.6 mandatory-clarification
+    contract. This function itself is preserved, unchanged, as the
+    mechanism `repair_stuck_biographer_candidates` uses to force-finalize a
+    candidate that is independently confirmed genuinely stuck (age-gated -
+    see `avatar_biographer/repair.py`).
+
+    Cancels every still-pending *required* clarification this candidate
+    currently has and force-finalizes it using the exact same finalize
+    logic `_synchronize_candidate` uses when no required keys are missing.
+
+    Never called for family-contribution or owner-requested-clarification
+    flows - those keep the original required-clarification behavior
+    unchanged (the owner's "Request more details" review action still
+    creates a real, answerable clarification; this function is never
+    invoked from that code path). Idempotent: a candidate with no pending
+    required clarifications left is finalized again safely (harmless
+    no-op on the cancel step, `_finalize_ready_for_review` is itself
+    idempotent).
+
+    Returns the number of clarifications cancelled (0 for a candidate that
+    had none pending - e.g. a `general`-topic answer, or an already-repaired
+    one)."""
+
+    pending = repository.list_pending_required_clarifications(db, candidate_id=candidate.id)
+    for clarification in pending:
+        clarification.status = ClarificationStatus.CANCELLED.value
+        observe_memory_clarification(status=clarification.status)
+    candidate.unresolved_clarification_count = 0
+    candidate.version += 1
+    _finalize_ready_for_review(db, candidate=candidate, finalized_by=finalized_by)
+    return len(pending)
 
 
 def initialize_candidate(

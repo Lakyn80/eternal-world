@@ -279,6 +279,7 @@ def test_unauthenticated_user_cannot_embed_chunk(client):
     assert _chunk_source(client, token, source_id).status_code == 200
     chunk_id = _list_chunks(client, token, source_id).json()[0]["id"]
 
+    client.cookies.clear()
     response = client.post(f"/api/rag-chunks/{chunk_id}/embed")
 
     assert response.status_code == 401

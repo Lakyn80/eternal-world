@@ -62,6 +62,24 @@ class Settings(BaseSettings):
     celery_result_backend: str | None = "redis://redis:6379/1"
     celery_task_always_eager: bool = False
     celery_task_eager_propagates: bool = True
+    #: Task 65.7 - Redis-backed browser session cookie (in addition to, not
+    #: replacing, the existing bearer JWT). Inactivity-based sliding TTL:
+    #: refreshed on every resolved request, so a browser tab left open and
+    #: actively used never hits a hard expiry (the previous 30-minute JWT
+    #: had no refresh mechanism at all).
+    browser_session_cookie_name: str = "eternal_world_session"
+    browser_session_ttl_seconds: int = Field(default=60 * 60 * 24 * 14, gt=0)
+    browser_session_cookie_secure: bool = Field(default=False)
+    browser_session_cookie_domain: str | None = None
+
+    #: Task 65.7C (Part E) - a Biographer candidate's oldest pending
+    #: *required* clarification must be at least this old before
+    #: `find_stuck_biographer_candidates`/repair will ever consider it
+    #: "stuck". Without this floor, a candidate the owner is simply in the
+    #: middle of answering right now (a normal, healthy, temporary state)
+    #: would be indistinguishable from a genuinely abandoned one - the
+    #: repair tool must never race a real user filling out the review form.
+    biographer_stuck_clarification_min_age_hours: int = Field(default=24, gt=0)
 
     model_config = SettingsConfigDict(
         env_file=ENV_FILE_CANDIDATES,

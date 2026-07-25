@@ -93,6 +93,7 @@ def test_unauthenticated_user_cannot_create_memory(client):
     token = _register_and_login(client, "memory-auth-owner@example.com")
     profile_id = _create_profile(client, token, "Protected Profile")
 
+    client.cookies.clear()
     response = client.post(
         f"/api/memory-profiles/{profile_id}/memories",
         json={"title": "Blocked", "memory_type": "text"},

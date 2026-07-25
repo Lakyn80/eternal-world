@@ -176,6 +176,7 @@ export type BiographerResumeNextAction =
   | 'candidate_needs_owner_action'
   | 'candidate_pending_index'
   | 'candidate_indexed'
+  | 'clarification_pending'
   | 'blocked';
 
 export type BiographerResumeRead = {
