@@ -1992,3 +1992,122 @@ Rozsah (převzato beze změny ze zdokumentovaných omezení Tasku 65.9):
 ```
 
 Toto číslo (65.9.1) nekoliduje se žádným existujícím taskem této roadmapy (ověřeno - žádná dřívější sekce ani `PROJECT_PROGRESS.md` záznam toto číslo nepoužívá). Task 65.9.1 **nebyl v rámci Tasku 65.9D implementován** - je zde zdokumentován výhradně jako příští doporučená položka roadmapy.
+
+## 27. Task 65.9.1 status (2026-07-25) — queue isolation, async status polling a production scale verification closure
+
+Task 65.9.1 — Queue Isolation, Async Status Polling, and Production Scale Verification Closure — byl proveden a **uzavírá všech 9 zdokumentovaných omezení Tasku 65.9** (sekce 26 výše) v rozsahu ověřeném testy a skutečně spuštěnými fake-safe smoke/scale/stress load-test profily. Plný popis (traceability matice, přesné příkazy, naměřené výsledky) je v `PROJECT_PROGRESS.md`, sekce "Task 65.9.1 Queue Isolation, Async Status Polling, and Production Scale Verification Closure".
+
+Stručně, co bylo skutečně uzavřeno:
+
+```text
+1-2. Obecný celery_worker nyní má explicitní -Q document_processing,
+     ai_generation,media,notifications (nikdy embedding/maintenance) v
+     obou docker-compose souborech; embedding_worker/maintenance_worker
+     zůstávají jedinými konzumenty svých vlastních front - ověřeno novým
+     strukturálním (ne string-grep) Compose-topology testem.
+3. Frontend nyní má kompletní polling lifecycle (nový hook
+   useJobStatusPoller: explicitní backoff 1s->2s->5s->12s cap, pauza při
+   skrytém tabu, okamžitý poll při návratu, zrušení při unmount/změně
+   profilu/účtu, žádný duplicitní poller) zapojený do obou nově-
+   asynchronních akcí (Index memory i retry-indexing pro rodinné
+   příspěvky) - lokalizace cs/en/ru (poznámka: projekt aktuálně
+   implementuje pouze tyto tři jazyky, ne "ua"/ukrajinštinu - viz Task
+   65.9.1's known limitations).
+4. async_queue_depth/async_oldest_job_age_seconds mají nový pravidelný
+   Celery Beat updater (20s interval) v maintenance_workeru - gauge se
+   vždy explicitně vynuluje pro prázdnou frontu, nikdy nezůstává na staré
+   hodnotě.
+5. Backpressure rozšířen na RAG-source processing endpoint (nový
+   idempotency_key + queue="embedding") a - důležitěji - byly nalezeny a
+   opraveny TŘI reálné, dříve existující produkční chyby: retry-indexing
+   pro rodinné příspěvky, biography-ingestion start a nově přidaný
+   RAG-source processing endpoint všechny nechávaly backpressure výjimky
+   (PerUserActiveJobLimitExceededError/PerProfileActiveJobLimitExceededError/
+   GlobalQueueSaturationError) probublat jako nezachycenou 500 misto
+   dokumentované 429/503 odpovědi - opraveno v jejich routerech.
+6. Nový fake-safe multi-replica test harness (dvě nezávislé TestClient
+   instance sdílející jednu databázi/Redis) ověřuje: session napříč
+   instancemi, revokaci napříč instancemi, viditelnost/autorizaci jobu
+   napříč instancemi, outbox dispatch napříč kontexty, idempotenci
+   duplicitního dispatch, backpressure napříč instancemi, resume aktivního
+   chatu napříč instancemi, že stale-job recovery nikdy neoživí už
+   dokončený job, a že provider lifecycle zůstává worker-local.
+7-9. Load-test harness (backend/scripts/run_async_job_load_smoke.py)
+   rozšířen o skutečně spustitelné scale/stress profily (dříve jen
+   vypisovaly "NOT RUN"); smoke i scale (100 000 bulk-insertovaných
+   registrovaných uživatelů + 100 souběžných "daily active" uživatelů,
+   souběžnost 16) i stress (záměrně nastavené nízké limity, souběžnost 16)
+   byly skutečně spuštěny v tomto hermetickém, jednoprocesovém prostředí
+   (in-memory/dočasný soubor SQLite, fake embedding/Qdrant, žádné reálné
+   volání DeepSeek, žádné stažení modelu) - viz PROJECT_PROGRESS.md pro
+   přesné naměřené hodnoty. Žádné tvrzení o konkrétní produkční kapacitě
+   souběžných uživatelů nebylo učiněno - jen to, co bylo skutečně
+   naměřeno v tomto hermetickém prostředí.
+```
+
+Vědomě mimo rozsah / zdokumentováno jako omezení (viz `PROJECT_PROGRESS.md` pro plný seznam): žádná samostatná, skutečně oddělená Compose disposable staging-like infrastruktura s reálným Postgres/Redis/Qdrant nebyla v tomto sezení postavena a zatížena (scale/stress proto běžely v hermetickém in-process módu popsaném výše, nikoli proti reálné síťové infrastruktuře); jazyk "ua" zmíněný v zadání není v této aplikaci implementovaným jazykem (pouze cs/en/ru existují) - toto NENÍ tímto taskem doplněno, protože přidání čtvrtého jazyka by bylo nesouvisející nová funkce.
+
+Task 65.9.1 se **považuje za dokončený v rozsahu definovaném zadáním, s výše uvedeným poctivě přiznaným omezením** (žádná reálná víceuzlová produkční infrastruktura nebyla zatížena). Žádná existující sekce této roadmapy nebyla přepsána; toto je jediná nová sekce, kterou tento task přidal.
+
+**Closure note (přidáno Taskem 65.9.1D, 2026-07-26):** implementace Tasku 65.9.1 popsaná výše byla ve skutečnosti commitnuta jako `aaa403a` ("feat: close async queue isolation and job-status polling gaps") a potvrzena jako pushnutá na `origin/staging/eternalworld-lukiora-20260715` před začátkem Tasku 65.9.1D (ověřeno v Části A Tasku 65.9.1D: lokální `HEAD` = `origin/HEAD` = `aaa403a`). Žádná věta výše nebyla přepsána - tato poznámka pouze doplňuje skutečný commit hash, stejně jako obdobné closure poznámky u Tasků 65.9/65.7C výše.
+
+## 28. Task 65.9.1D status (2026-07-26) — Docker build-context hygiene a dokumentační uzávěrka
+
+Task 65.9.1D — Docker Build Context Hygiene and Documentation Closure — byl proveden a **dokončen v rozsahu definovaném zadáním** (audit a oprava `.dockerignore` souborů pro oba skutečné Docker build kontexty tohoto repozitáře, plus dokumentační uzávěrka dosud necommitnuté sekce Tasku 65.9.1 výše). Docker hygiene implementační commit: `369d1cf` ("chore: minimize Docker build contexts" - obsahuje výhradně `backend/.dockerignore`, `frontend/.dockerignore` a nový `backend/tests_infra/test_task_65_9_1d_docker_build_context_hygiene.py`). Plný popis (matice build kontextů, empiricky ověřená sémantika Dockerignore, nalezený a opravený reálný defekt v `frontend/react-export/node_modules/`, naměřené velikosti kontextu před/po, výsledky regresních testů) je v `PROJECT_PROGRESS.md`, sekce "Task 65.9.1D Docker Build Context Hygiene and Documentation Closure".
+
+Stručně:
+
+```text
+Auditovány všechny Dockerfile/.dockerignore/Compose build.context/COPY/ADD
+  instrukce v repozitáři. Jediné dva skutečné build kontexty jsou
+  ./backend (Dockerfile, Dockerfile.prod, Dockerfile.ai-base) a ./frontend
+  (Dockerfile, Dockerfile.prod) - docker-compose.prod.yml nemá žádný
+  build: blok (pouze prebuilt ghcr.io image), takže root .dockerignore
+  by nikdy nic neudělal a nebyl vytvořen.
+Empiricky ověřeno (izolovaná busybox reprodukce, mimo tento repozitář):
+  Docker .dockerignore, na rozdíl od .gitignore, matchuje "holé" vzory
+  (bez **/) jen na kořeni build kontextu, nikdy rekurzivně - přesně
+  toto odhalilo skutečný, dříve neobjevený defekt.
+Nalezen a opraven reálný defekt: frontend/.dockerignore mělo holé
+  node_modules/, které matchovalo jen zastaralý top-level Next.js
+  node_modules (367MB, nikdy nekopírovaný), ale NE
+  frontend/react-export/node_modules/ (113MB) - adresář, který Dockerfile
+  skutečně kopíruje. Host (Windows) node_modules s win32-x64 nativními
+  binárkami (@esbuild/@rollup) se proto dostával do produkčního
+  frontend image - potvrzeno přímou inspekcí image před/po opravě
+  (3 win32 soubory -> 0). Opraveno na **/node_modules/ (rekurzivní).
+Backend .dockerignore: __pycache__/*.pyc povýšeny na rekurzivní **/ vzory
+  (desítky vnořených __pycache__ adresářů pod app/**, alembic/versions/,
+  scripts/ nebyly dříve holým vzorem vůbec pokryty).
+Nová strukturální (ne string-grep) kontrakt test
+  (backend/tests_infra/test_task_65_9_1d_docker_build_context_hygiene.py,
+  9 testů) ověřuje existenci a pokrytí obou .dockerignore souborů a
+  absenci nebezpečných širokých vzorů (app/, src/, backend/, frontend/,
+  *.py).
+Naměřeno: frontend context-transfer 98.57MB -> 2.45kB (skutečný
+  docker compose build, úspěšný před i po); backend context-transfer
+  8.45MB -> 3.30MB (izolovaná busybox sonda proti reálnému ./backend
+  kontextu, protože plný backend image build byl v tomto sezení dvakrát
+  zablokován síťovou nespolehlivostí při stahování torch wheelu -
+  poctivě přiznané omezení, NE oslabení ignore pravidel - potvrzeno
+  nezávisle přes docker buildx build --check, který byl čistý pro
+  všechny čtyři Dockerfile).
+Žádný docker prune/rm/deletion příkaz nebyl spuštěn. Žádný existující
+  image/volume/kontejner/databáze/model cache nebyl smazán. Žádný
+  staging/produkční kontejner nebyl restartován. Žádný deployment
+  neproběhl. Žádné reálné volání DeepSeek, žádné stažení modelu.
+Regresní ověření (backend proti již běžícímu, nerestartovanému
+  kontejneru s bind-mountem - dockerignore změna jej neovlivňuje):
+  compileall čisté, alembic jedna hlava beze změny, OpenAPI 97 cest,
+  68 testů Task 65.9/65.9.1 prošlo beze změny. Frontend: 106 testů
+  prošlo, produkční build 49 modulů/294.96 kB - identické s Tasku 65.9.1
+  vlastní zdokumentovanou základní hodnotou.
+```
+
+Vědomě mimo rozsah / zdokumentováno jako omezení (viz `PROJECT_PROGRESS.md` pro plný seznam): plný backend Docker image build nebyl v tomto sezení dokončen kvůli síťové nespolehlivosti k `download.pytorch.org` (nesouvisí se změnami tohoto tasku, potvrzeno strukturálními kontrolami); anonymní `node_modules` volume běžícího frontend dev kontejneru mohl být vytvořen z dřívějšího, kontaminovaného image a nebyl retroaktivně opraven (mimo rozsah/proti omezením tohoto tasku); zastaralá top-level Next.js scaffold uvnitř `frontend` kontextu nebyla odstraněna ani vyloučena (samostatná otázka, pravidlo 7 zadání výslovně zakazuje hádané široké `app/`-style vyloučení); Task 65.9.2 (reálné víceuzlové zatížení) zůstává nezapočaté - nedotčeno tímto taskem.
+
+Tento task **nezměnil žádnou aplikační architekturu, queue topologii, worker ownership, evidence eligibility pravidla, profile isolation, privacy chování ani model-provider chování** - jde výhradně o Docker build-context vstupy a tyto dvě dokumentační sekce. Task 65.9.1D se **považuje za dokončený v rozsahu definovaném zadáním, s výše uvedeným poctivě přiznaným omezením** (plný backend image build nebyl dokončen kvůli síťové nespolehlivosti prostředí, ne kvůli chybě v tomto tasku). Žádná existující sekce této roadmapy nebyla přepsána; toto je jediná nová sekce (kromě closure poznámky k sekci 27 výše), kterou tento task přidal.
+
+Další doporučený task: **Task 65.9.2 — Real Disposable Infrastructure Load Verification** (nezměněno - postavit skutečnou izolovanou Compose infrastrukturu a spustit proti ní `scale`/`stress` profily z Tasku 65.9.1 pro reálné, evidence-based zjištění produkční kapacity; přesné příkazy jsou již zdokumentovány v `docs/async-job-platform-runbook.md` §18).
+
+Další doporučený task: postavit skutečnou izolovanou Compose staging infrastrukturu (samostatný `COMPOSE_PROJECT_NAME`, reálný Postgres/Redis/Qdrant) a proti ní spustit stejné `--profile scale`/`--profile stress` příkazy pro ověření reálné produkční kapacity - přesné příkazy jsou už zdokumentovány v `docs/async-job-platform-runbook.md` (§18). Formálně dalším číslovaným taskem je **Task 65.9.2 — Real Disposable Infrastructure Load Verification** (číslo zvoleno tak, aby nekolidovalo s žádným existujícím taskem).
