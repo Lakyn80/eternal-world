@@ -2111,3 +2111,91 @@ Tento task **nezměnil žádnou aplikační architekturu, queue topologii, worke
 Další doporučený task: **Task 65.9.2 — Real Disposable Infrastructure Load Verification** (nezměněno - postavit skutečnou izolovanou Compose infrastrukturu a spustit proti ní `scale`/`stress` profily z Tasku 65.9.1 pro reálné, evidence-based zjištění produkční kapacity; přesné příkazy jsou již zdokumentovány v `docs/async-job-platform-runbook.md` §18).
 
 Další doporučený task: postavit skutečnou izolovanou Compose staging infrastrukturu (samostatný `COMPOSE_PROJECT_NAME`, reálný Postgres/Redis/Qdrant) a proti ní spustit stejné `--profile scale`/`--profile stress` příkazy pro ověření reálné produkční kapacity - přesné příkazy jsou už zdokumentovány v `docs/async-job-platform-runbook.md` (§18). Formálně dalším číslovaným taskem je **Task 65.9.2 — Real Disposable Infrastructure Load Verification** (číslo zvoleno tak, aby nekolidovalo s žádným existujícím taskem).
+
+## 29. Task 65.9.1F status (2026-07-26/27) — backend dependency integrity repair and local worker topology activation, completed
+
+Task 65.9.1F — Backend Dependency Integrity Repair and Local Worker Topology Activation — provedl důkladnou root-cause analýzu hlášené neshody SHA256 hashe u PyTorch CPU wheelu, implementoval minimální, bezpečnou opravu determinismu závislosti, úspěšně přestavěl backend image (na třetí pokus), ověřil jej Part H preflightem a **aktivoval kompletní queue-izolovanou lokální worker topologii** (embedding_worker/maintenance_worker vytvořeny poprvé, `celery_worker`'s chybějící `-Q` opraveno). Plný popis (přesné hashe, tři build pokusy, preflight, live queue verifikace, regrese) je v `PROJECT_PROGRESS.md`, sekce "Task 65.9.1F Backend Dependency Integrity Repair and Local Worker Topology Activation".
+
+Stručně, co bylo skutečně zjištěno a uzavřeno:
+
+```text
+Root cause (Part C): v tomto repozitáři NEEXISTUJE žádná infrastruktura,
+  která by aktivovala pip's "hash-checking mode" (--require-hashes) -
+  žádný --hash v requirements souborech, žádná PIP_REQUIRE_HASHES/
+  PIP_CONSTRAINT/PIP_CONFIG_FILE proměnná, žádný pip.conf kdekoliv
+  (ověřeno i uvnitř samotného python:3.12-slim base image přes
+  `pip config debug`/`list -v`). Hlášená chyba "Expected SHA256 / Got
+  SHA256" pochází z JINÉHO, vždy-aktivního mechanismu: pip automaticky
+  ověřuje stažený soubor proti hashi, který samotný balíčkový index
+  publikuje ve své simple-repository metadatech (PEP 503/691) - to platí
+  pro download.pytorch.org i PyPI stejně, nezávisle na jakémkoliv
+  projektovém hash-lock souboru.
+Provenance (Part D): dva nezávislé `pip download` běhy stejné URL,
+  stejného oficiálního indexu, s vypnutou cache, vrátily RŮZNÝ obsah -
+  první odpovídal indexu vlastnímu hashi (4ca4a9394b...), druhý byl
+  odmítnut pip's vlastní kontrolou (96547f1f77...). Toto je živý,
+  reprodukovatelný supply-chain/CDN problém, ne chyba projektu - žádný
+  hash proto nebyl vložen do žádného souboru (explicitní bezpečnostní
+  pravidlo tasku) - stejná třída chyby se objevila ještě jednou na JINÉM
+  balíčku (`yarl`, z PyPI) během prvního build pokusu, spolu s dříve
+  zdokumentovaným `mpmath` mismatchem z Tasku 65.9.1D už třetí odlišný
+  balíček/sezení se stejným symptomem.
+Oprava (Part E): nový `backend/requirements-torch-cpu.txt` - torch
+  přesně zamčen na `torch==2.13.0+cpu` (dříve zcela nezamčeno), oficiální
+  CPU index, ZÁMĚRNĚ BEZ hashe (zdokumentováno proč přímo v souboru,
+  hash-locking záměrně odloženo na budoucí session se stabilnějším
+  síťovým ověřením). `backend/Dockerfile` a `Dockerfile.ai-base` obě
+  přestaly duplikovat vlastní ad-hoc `pip install ... torch` řádek.
+Nový test `backend/tests_infra/test_task_65_9_1f_torch_dependency_integrity.py`
+  (12 testů) - `python -m pytest backend/tests_infra -q` -> 37 prošlo.
+Part G (build): tři pokusy - první selhal na hash mismatch (jiný
+  balíček), druhý se klientsky jevil zaseknutý 26+ minut (ale BuildKit
+  na straně daemona ve skutečnosti doběhl na pozadí), třetí (přísně
+  časově omezený 15min pokus s aktivním pollingem) narazil na cache-hit
+  z doběhnutého druhého pokusu a přímou inspekcí byl objeven kompletní,
+  funkční image - ověřeno rigorózně (docker history + import testy), ne
+  jen předpokládáno. `docker compose build` pro všechny 4 služby pak
+  doběhl z cache za <1s/službu (žádná síť). Stávající stará image
+  (`dfc75ab38b56`/`e713b99a64e6`) nebyla explicitně smazána (jen
+  přetagována pryč z `latest`) - žádný `docker rmi`/prune nebyl spuštěn.
+Part H (preflight): VŠECHNY kontroly prošly - importy (app.main,
+  worker.celery_app, worker.tasks, provider_lifecycle), compileall čisté,
+  OpenAPI 97 cest, Alembic 20260724_0027, torch 2.13.0+cpu bez CUDA,
+  žádné BGE-M3 načtení při importu, žádné .env/.git/roadmap/pycache/
+  model-cache v image.
+Part J (recreate): `docker compose up -d --no-deps --force-recreate
+  backend celery_worker embedding_worker maintenance_worker` - všechny 4
+  úspěšně (re)vytvořeny; db/redis/qdrant/prometheus/grafana/frontend
+  nedotčeny (ověřeno beze změny CREATED/uptime).
+Part K (queue verifikace, živě přes `celery inspect active_queues`, ne
+  jen statický text): celery_worker přesně document_processing/
+  ai_generation/media/notifications (žádné embedding/maintenance);
+  embedding_worker přesně embedding; maintenance_worker přesně
+  maintenance. Restart counts 0 u všech čtyř, žádný port, žádný
+  privileged mode, žádný docker.sock mount, embedding_worker
+  --concurrency=1 --prefetch-multiplier=1 potvrzeno. Žádné BGE-M3
+  načtení v celery_worker/maintenance_worker logách.
+Part I/L (baseline/porovnání): Alembic 20260724_0027 beze změny,
+  Postgres počty řádků identické (39/27/180/15/0), Qdrant 37 kolekcí/
+  43586 bodů beze změny, žádný volume nebyl přestavěn (creation
+  timestampy identické), Redis DBSIZE mírně vzrostl (nová broker
+  mingle/registrace tří worker uzlů + inspect provoz, ne byznys data).
+Part M (regrese): 37 host-side tests_infra testů + 90 in-container testů
+  (Task 65.9/65.9.1/65.7C regresní sady), spuštěno DVAKRÁT (před i po
+  rekreaci) - VŠE prošlo oba běhy, 0 selhání, jen pre-existující
+  deprecation warnings.
+```
+
+Vědomě mimo rozsah / zdokumentováno jako omezení (viz `PROJECT_PROGRESS.md` pro plný seznam): žádný hash nebyl vložen do `requirements-torch-cpu.txt` (záměrně, bezpečnostně zdůvodněno - Part D odhalilo reálnou nestabilitu obsahu mezi dvěma stahováními); podkladová síťová/CDN nespolehlivost (Part C/D/G) nebyla "opravena", jen obejita disciplinovaným opakováním a objevením, že build na straně daemona ve skutečnosti doběhl; Task 65.9.2 (reálné víceuzlové zatížení) zůstává nezapočaté.
+
+Tento task **nezměnil žádnou aplikační architekturu, retrieval logiku, embedding logiku, Qdrant kolekce ani persona/charakter chování** - jde výhradně o Docker build-determinismus (Torch dependency pinning) a aktivaci worker-topology. Task 65.9.1F se **považuje za dokončený v rozsahu definovaném zadáním** (root-cause analýza, bezpečná dependency-pinning oprava, úspěšný ověřený image build, a plná aktivace queue-izolované worker topologie - vše dokončeno a otestováno; jediné vědomě odložené položka je hash-locking samotný, z bezpečnostních důvodů zdokumentovaných výše). Žádná existující sekce této roadmapy nebyla přepsána; toto je jediná nová sekce, kterou tento task přidal.
+
+Další doporučený task: **Task 65.9.1G — Docker Volume Ownership and Qdrant Collection Audit**, poté **Task 65.9.2 — Real Disposable Infrastructure Load Verification**. Před oběma, jakmile síťové podmínky k `download.pytorch.org`/PyPI prokáží stabilitu (dva po sobě jdoucí úspěšné full-buildy bez hash mismatche/zaseknutí), znovu spustit Part D provenance kontrolu, přidat potvrzený hash s `--require-hashes`, a dokončit Part G/H/J společně (včetně opravy `celery_worker`'s queue-isolation drift jako součásti stejné rekreace, ne jako izolovaný zkratkový krok).
+
+## 30. Task 65.9.1F.2 status (2026-07-27) — short Torch pin closure, Celery Beat runtime hygiene, commit and push, completed
+
+Task 65.9.1F.2 uzavřel Task 65.9.1F's dosud necommitnutou práci: žádný nový Torch download, žádný Docker rebuild, žádná rekreace kontejnerů. Kroky: (1) ověření startovního stavu (branch/HEAD/working-tree inventář odpovídaly očekávání přesně), (2) read-only ověření běžícího runtime (`/health`, `/health/runtime`, živé `celery inspect active_queues` - topologie beze změny), (3) kompletní review diffů z 65.9.1F, (4) přidání úzkých, přesných Git/Docker ignore pravidel pro `backend/celerybeat-schedule` (GNU dbm runtime soubor Celery Beat, ne aplikační zdrojový kód) - `backend/celerybeat-schedule` a `backend/celerybeat-schedule.*` v `.gitignore`, `celerybeat-schedule`/`celerybeat-schedule.*` v `backend/.dockerignore`, ověřeno `git check-ignore`/`git ls-files`, (5) rozšíření `test_task_65_9_1f_torch_dependency_integrity.py` o 5 nových testů pro tuto hygienu (17 testů celkem), (6) non-build verifikace: `python -m pytest backend/tests_infra -q` → 41 prošlo; in-container regresní sada (`test_task_65_9_async_job_platform.py`/`test_task_65_9_1_queue_isolation_and_scale.py`/`test_task_65_9_1_multi_replica_harness.py`/`test_authenticated_workspace_reliability.py`) → 90 prošlo, 1 (pre-existující) warning; compileall čisté; OpenAPI 97 cest; Alembic `20260724_0027 (head)` beze změny; živé queue subscriptions a restart counts (0) nezměněny. Torch zůstává přesně `torch==2.13.0+cpu`, beze změny verze. **Žádný projektový SHA256 zámek nebyl a není tvrzen** - zůstává výslovně odloženo (Task 65.9.1F's Part D nález reálné cross-download hash nekonzistence na oficiálním PyTorch CDN platí beze změny).
+
+Commit 1 (implementace/runtime-hygiene) `f1b70c6` — `fix: pin CPU Torch and ignore Celery Beat runtime state` — obsahuje přesně: `.gitignore`, `backend/.dockerignore`, `backend/Dockerfile`, `backend/Dockerfile.ai-base`, `backend/requirements-torch-cpu.txt`, `backend/tests_infra/test_task_65_9_1f_torch_dependency_integrity.py`. Commit 2 (dokumentace) obsahuje přesně `PROJECT_PROGRESS.md` a tuto roadmapu. `git add .`/`-A`/`--all` nebyl nikdy použit - všechny `git add` volání byla explicitní cestou. `backend/celerybeat-schedule` nebyl nikdy stagován ani commitnut. Po ověření obou commitů byla větev pushnuta do `origin/staging/eternalworld-lukiora-20260715`. Plný popis viz `PROJECT_PROGRESS.md`, sekce "Task 65.9.1F.2".
+
+Další doporučený task: **Task 65.9.1G — Docker Volume Ownership and Qdrant Collection Audit**. Odložený pozdější task (beze změny, mimo rozsah tohoto tasku): **Strict Torch SHA256 Supply-Chain Lock and Clean Reproducibility Verification** - znovu spustit dvě nezávislá stažení až budou bit-identická, přidat potvrzený hash s `--require-hashes`, a provést skutečně čistý, non-cached build pro důkaz plné reprodukovatelnosti.

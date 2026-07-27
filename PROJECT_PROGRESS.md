@@ -9925,3 +9925,213 @@ Future CI/local backend and frontend image builds will transfer meaningfully les
 **Task 65.9.2 - Real Disposable Infrastructure Load Verification** (unchanged from Task 65.9.1's own recommendation above - this task did not implement it): stand up a genuinely separate Compose project (distinct `COMPOSE_PROJECT_NAME`, real Postgres/Redis, fake or isolated Qdrant per Part K's own allowance) and re-run Task 65.9.1's `scale`/`stress` profiles against it to produce an actual, evidence-based production-capacity finding - commands are already prepared in `docs/async-job-platform-runbook.md` §18.
 
 ---
+
+## Task 65.9.1F Backend Dependency Integrity Repair and Local Worker Topology Activation (2026-07-26/27)
+
+Root-cause investigation of the reproducible PyTorch wheel hash-mismatch reported at the start of this task, a proportionate dependency-pinning fix, a successfully built and preflight-verified replacement backend image, and full activation of the queue-isolated local worker topology (`embedding_worker`/`maintenance_worker` created for the first time, `celery_worker`'s stale unrestricted subscription corrected). No application code, migration, retrieval logic, embedding logic, Qdrant collection, or persona/persona-adjacent behavior was touched - this task is scoped strictly to backend Docker build determinism and local worker-topology activation, per its own specification.
+
+### Starting state (Part A)
+
+Branch `staging/eternalworld-lukiora-20260715`, starting HEAD `9523e60` ("docs: close Task 65.9.1 and record Docker context hygiene"), matching `origin/staging/eternalworld-lukiora-20260715` exactly (`git status -sb` showed no ahead/behind divergence). `git status --short` was empty (clean tree, nothing staged) - this matched the task's expected starting state exactly, so implementation proceeded without stopping. Docker inventory at session start: `eternal_world_backend` (image `eternal-world-backend:latest`, `dfc75ab38b56`, 0 restarts), `eternal_world_celery_worker` (image `eternal-world-celery_worker:latest`, `e713b99a64e6`, 0 restarts, **actual running `Cmd` had no `-Q` flag at all** - confirmed via `docker inspect`, matching the task's reported drift), `eternal_world_frontend` (`eternal-world-frontend:latest`, `0c09baeae4e1`). No `embedding_worker`/`maintenance_worker` container existed. None of the three inspected containers mount the Docker socket or run privileged.
+
+### Roadmap sections read (mandatory, before implementation)
+
+The full "Production Execution & Verification Protocol" (sections 1-18, engineering rules/step control/scope/architecture/test/documentation/Git rules) and sections 24-28 (Task 65.9/65.9.1/65.7C/65.9.1D's own documented history, closure notes, and known limitations - notably 65.9.1D's own prior finding that a full backend image build had twice failed in that session due to "outbound network unreliability... reaching download.pytorch.org's package mirror", including one prior hash mismatch on `mpmath`). `docs/async-job-platform-runbook.md` in full, particularly §0/§0a-c (queue-subscription inspection commands, reused verbatim below) and §19 (the existing Compose-topology contract test this task's new test file sits alongside).
+
+### Part C: tracing why hash-checking activated - the real mechanism
+
+Audited every declared dependency source (`backend/requirements.txt`, `requirements.runtime.txt`, `requirements.ai-base.txt`, `backend/Dockerfile`, `Dockerfile.prod`, `Dockerfile.ai-base`, `backend/.dockerignore`, `docker-compose.yml`/`.prod.yml`, `.github/workflows/ci.yml`/`deploy-staging.yml`) and found **zero** hash-related infrastructure anywhere in this repository: no `--hash=` line in any requirements file, no `--require-hashes` flag on any `pip install` invocation, no `constraints*.txt`, no `pyproject.toml` dependency section, no `pip.conf`/`pip.ini` anywhere in the repo, no `PIP_REQUIRE_HASHES`/`PIP_CONSTRAINT`/`PIP_CONFIG_FILE`/any `PIP_*` environment variable in any Dockerfile or Compose file. Verified this extends to the base image itself: `docker run --rm python:3.12-slim sh -c "python -m pip config debug; python -m pip config list -v; env | grep '^PIP_'"` showed no global/site/user `pip.conf` (`exists: False` for all four candidate paths) and no `PIP_*` environment variable at all.
+
+Given this, the literal Dockerfile command (`pip install --no-cache-dir --retries 10 --timeout 300 --index-url https://download.pytorch.org/whl/cpu torch`) is **structurally incapable** of pip's traditional "hash-checking mode" (`--require-hashes`) - there is no `-r`/`-c` flag and no hash anywhere for it to check against. A full, unmodified reproduction of this exact command (`docker build --progress=plain --no-cache -f backend/Dockerfile ...`) confirmed this directly: it completed **successfully**, installing `torch-2.13.0+cpu` with zero hash-related errors, after a very slow (~60-115 kB/s) but non-erroring download.
+
+The actual mechanism that CAN produce an "Expected SHA256 .../Got SHA256 ..." error - and did, twice, during this task's own investigation (see Part D and the Part G build attempts below) - is **pip's own automatic, always-on verification of a downloaded distribution against the hash the package index publishes in its own simple-repository link metadata** (PEP 503/691 - present for both `download.pytorch.org` and PyPI). This fires on every `pip download`/`pip install` regardless of `--require-hashes`, regardless of any project requirements/constraints file, and is not something this project's build commands ever opted into or could opt out of without breaking the index protocol entirely. This fully explains the reported symptom without requiring any project-side hash-lock file to have ever existed - and directly contradicts the previous task's implicit hash-lock-drift hypothesis (there was no lock file to have drifted from).
+
+### Part D: wheel provenance - a genuine, reproducible mismatch
+
+Two independent `pip download --no-cache-dir --index-url https://download.pytorch.org/whl/cpu --platform manylinux_2_28_x86_64 --python-version 312 --implementation cp --abi cp312 --only-binary=:all: --no-deps torch` runs (host Python 3.12.10, disposable directories outside the repository, official index only, no third-party mirror) produced:
+
+- **Attempt 1**: `torch-2.13.0+cpu-cp312-cp312-manylinux_2_28_x86_64.whl`, 191,817,609 bytes, `sha256sum` computed directly: `4ca4a9394b0c771238a4f73590fdbbc4debad85ed0fa63d026ae1b085da7d6e2` - matches this task's stated "Expected SHA256" exactly, and matches the hash the package index itself expected (a concurrent, independent `docker build` reproduction of the unmodified Dockerfile also converged on this identical hash for the same file, downloaded via a wholly separate process/connection).
+- **Attempt 2**: the same exact command, same URL, cache disabled, run immediately after - **failed with pip's own automatic hash check**: `ERROR: THESE PACKAGES DO NOT MATCH THE HASHES FROM THE REQUIREMENTS FILE ... Expected sha256 4ca4a9394b0c771238a4f73590fdbbc4debad85ed0fa63d026ae1b085da7d6e2 Got 96547f1f7772c4b6e12984d3b9769dff129b723b8e2df5ae02d231ac23ecb4d2`.
+
+Two back-to-back downloads of the identical URL from the identical official index returned **different content**. This is a live, reproducible supply-chain/CDN-integrity problem with `download.pytorch.org`/`download-r2.pytorch.org` under this session's network conditions - not tampering on this project's side, not a mirror substitution (only the official index was ever used), and not explainable by "the lock file was stale" (no lock file existed). Per this task's explicit, non-negotiable safety rule, **no hash was inserted into any file** as a result.
+
+This was not an isolated incident: during the subsequent Part G build attempts (below), the plain `pip install -r requirements.txt` step (installing `fastapi`/`sentence-transformers`/etc., entirely separate from the PyTorch index) **also** hit the identical class of error for a different, unrelated package (`Expected sha256 1f55797419e16e7f30cf88ffb3113ce0467f00cfe3f70d5c281730b21769bfc2 / Got b98442302d7c611533648367013886fa5289ec4662471596ec07bad505872c82`, immediately after downloading `yarl-1.24.5` from PyPI's own CDN). Combined with Task 65.9.1D's own previously-documented `mpmath` hash mismatch in an earlier session, this is now the **third distinct package** (`torch`, `mpmath`, and very likely `yarl`) to exhibit this exact symptom across three separate sessions - strong, multi-session evidence that this is a general, environment-level network/content-integrity reliability problem affecting large-file downloads from multiple unrelated upstream hosts (PyTorch's CDN and PyPI's CDN both), not a defect specific to this project's dependency declarations, Dockerfiles, or the PyTorch index in particular.
+
+### Part E: the minimal, honest fix actually implemented
+
+Given Part D's finding, inserting **any** hash today (including the value that happened to match on one attempt) would be exactly the "quick workaround" this task's own rules forbid ("do not insert the newly observed hash without proving provenance... if they don't match, stop and report a supply-chain blocker, don't paper over it"). What **is** safe and valuable to fix today: the previously entirely **unpinned** `torch` install (no version, resolved fresh - and non-deterministically - on every build), duplicated verbatim across two Dockerfiles.
+
+New file **`backend/requirements-torch-cpu.txt`**: pins the exact CPU build (`torch==2.13.0+cpu`) against the official `--index-url https://download.pytorch.org/whl/cpu`, with **no hash** - the file's own header comment documents the full Part C/D investigation (mechanism, both observed hashes, and the explicit reason hash-locking is deliberately deferred) so a future edit cannot silently drop the reasoning and add an unverified hash.
+
+**`backend/Dockerfile`** (dev) and **`backend/Dockerfile.ai-base`**: both changed from their own independent `RUN pip install --index-url https://download.pytorch.org/whl/cpu torch` to `RUN pip install -r requirements-torch-cpu.txt` (dev) / `COPY requirements-torch-cpu.txt requirements.ai-base.txt ./` + the equivalent chained `RUN` (ai-base) - eliminating the duplicated, independently-drifting ad-hoc install line and centralizing to one source of truth. **`backend/Dockerfile.prod`** was not touched (it never installs `torch` directly - it inherits from the prebuilt `python-ai-base` image built by `Dockerfile.ai-base`). No other requirements file (`requirements.txt`, `requirements.runtime.txt`, `requirements.ai-base.txt`) declares `torch` - confirmed by the new test suite below, so there is no conflicting declaration to reconcile.
+
+### Part F: dependency-integrity tests added
+
+New `backend/tests_infra/test_task_65_9_1f_torch_dependency_integrity.py` (12 tests, host-Python-only, same convention as the existing `test_task_65_9_1_compose_topology.py`/`test_task_65_9_1d_docker_build_context_hygiene.py`): confirms `requirements-torch-cpu.txt` exists and uses only the official CPU index (no third-party mirror, no second `--index-url`), confirms `torch` is pinned to an exact `==` version ending in `+cpu` (never a CUDA marker), confirms the lock file documents its own no-hash-yet status (guards against a future silent addition of an undocumented hash), confirms both Dockerfiles install the shared lock file rather than their own ad-hoc line, confirms neither Dockerfile falsely claims `--require-hashes` for a file that has no hashes, confirms `Dockerfile.prod` never installs `torch` directly, and confirms no other requirements file redeclares `torch`. Deliberately does not download the ~192MB wheel (or any dependency wheel) in any test - every assertion is a static parse. Full run: `python -m pytest backend/tests_infra -q` -> **37 passed** (25 pre-existing Compose-topology/Dockerignore-hygiene tests + 12 new).
+
+### Part G: replacement backend image build - succeeded on the third attempt
+
+Three full build attempts were made, all using `docker build --progress=plain` for maximum visibility:
+
+1. **Reproduction of the unmodified (pre-fix) Dockerfile**, `--no-cache`: the `torch` layer **succeeded** (confirming Part C's finding directly), but the subsequent `pip install -r requirements.txt` layer **failed** with the second hash mismatch described in Part D above (on the package downloaded immediately before the error, most likely `yarl`).
+2. **First attempt with the corrected (`requirements-torch-cpu.txt`-based) Dockerfile**: the client-visible log hung with **zero growth for 26+ minutes** mid-download of the same 191.8MB `torch` wheel. Killed the CLI client and confirmed no impact on any running `eternal_world_*` container (`RestartCount: 0` throughout). BuildKit's daemon-side build evidently continued and completed after the client disconnected (see below).
+3. **Second, final, strictly time-boxed attempt** (15-minute hard cap, actively polled every 60-90s with a real tool call each time): the `torch` layer completed almost immediately - a BuildKit cache hit from attempt 2's server-side download having actually finished server-side after the CLI was killed - and the build progressed through `fastapi`/`uvicorn`/`sqlalchemy`/`transformers`/`huggingface_hub`/`scikit-learn`/`scipy`/etc. The client-visible log again stopped updating before the cap; the CLI process was killed at the 15-minute boundary as planned. **However, direct inspection of the local image store afterward found a complete, tagged image (`eternal-world-backend-partg:latest`, `6e2174facb98`, ~540MB) that BuildKit had finished exporting server-side** (`docker history` confirmed every Dockerfile instruction present through the final `COPY . .` and `CMD`) - the client-side kill had raced with, but not prevented, the daemon completing and exporting the build. This was verified rigorously (not merely assumed) before being trusted: `docker run` import checks (`torch`/`fastapi`/`sqlalchemy`/`celery`/`redis`/`psycopg`/`alembic`/`prometheus_client` all import cleanly, `torch.__version__ == '2.13.0+cpu'`, `torch.cuda.is_available() is False`) - see Part H.
+
+`docker compose build backend celery_worker embedding_worker maintenance_worker` (no `--no-cache`, ordinary cache) was then run to give each of the four services its own correctly-named tag: since the Dockerfile/context were unchanged since the successful attempt, **BuildKit resolved every layer from cache and completed in under a second per service** - no network access, no re-download. Resulting images (all four are the same content, only re-tagged per compose service naming): `eternal-world-backend:latest` (manifest `c8778a998596...`), `eternal-world-celery_worker:latest` (`592afb267c19...`), `eternal-world-embedding_worker:latest` (`29c5666e488e...`), `eternal-world-maintenance_worker:latest` (`2277665eec60...`), each ~2.48GB apparent size (shared base layers included). The previously-working `eternal-world-backend:latest`/`dfc75ab38b56` and `eternal-world-celery_worker:latest`/`e713b99a64e6` tags were superseded by this retagging (standard `docker build`/`compose build` behavior - the old image content is not deleted, only untagged from `latest`; the then-still-running old containers continued referencing their original image IDs directly throughout, unaffected, until the deliberate recreation in Part J below).
+
+### Part H: preflight - passed
+
+Run against the built image before any container was recreated (`docker run --rm --entrypoint ... eternal-world-backend:latest ...`, never connected to `db`/`redis`/`qdrant`):
+
+1. Imports: `import app.main`, `import app.worker.celery_app`, `import app.worker.tasks`, `from app.modules.embeddings.provider_lifecycle import get_embedding_provider_lifecycle` - all **OK**, no error, no network/DB access attempted.
+2. `python -m compileall -q app` -> clean, exit 0.
+3. `from app.main import app; len(app.openapi()['paths'])` -> **97** (matches every prior session's baseline exactly).
+4. `alembic heads` -> `20260724_0027 (head)` - matches.
+5/6. `torch.__version__` -> `2.13.0+cpu`; `torch.cuda.is_available()` -> `False`; `torch.version.cuda` -> `None` - confirmed CPU-only, no CUDA runtime requirement.
+7/8/9. No BGE-M3 weights loaded by any of the above: `sys.modules` after importing `app.main`/`app.worker.tasks` contains no third-party `sentence_transformers`/`FlagEmbedding` submodule (the one substring match was this project's own `app.modules.embeddings.providers.sentence_transformers` path, not the library); `get_embedding_provider_lifecycle()` returns a lazy `EmbeddingProviderLifecycle` object with no model loaded - confirmed structurally, not just by absence of a crash.
+10. Only `embedding_worker`'s own runtime is permitted/expected to ever call `.load()` on that lifecycle for real inference - not exercised here (no real embedding call was made, per the task's hard constraint), only the safe import-level check above.
+11. Image content hygiene: `find /app -iname '.env*'` -> none; `find /app -iname '.git*'` -> none; `find / -iname 'md_roadmap' -o -iname 'PROJECT_PROGRESS.md'` -> none; `find /app -iname '__pycache__'` -> **0** directories; `find / -iname 'huggingface*'` -> none; `/models` does not exist in the image (correctly a runtime volume mount point, never baked in).
+
+**All Part H checks passed.** This is the verified replacement image.
+
+### Part I: persistent-data baselines (captured before any topology action)
+
+- Alembic: `20260724_0027` (head).
+- PostgreSQL row counts: `users`=39, `memory_profiles`=27, `background_jobs`=180, `avatar_memory_promotions`=15, `media_assets`=0.
+- Redis: `PING` -> `PONG`; `DBSIZE` db0=3195, db1=516.
+- Qdrant: `healthz` -> passed; 37 collections; 43,586 total points (summed per-collection `points_count`, no payload contents read).
+- Docker volumes (creation timestamps, to detect any future recreation): `eternal_world_postgres_data` 2026-06-16T08:58:17Z, `eternal_world_redis_data` 2026-06-16T09:05:50Z, `eternal_world_qdrant_data` 2026-06-20T10:01:55Z, `eternal_world_bge_m3_cache` 2026-07-09T21:22:19Z.
+
+### Part J: local topology recreation - completed
+
+With Part H preflight passed, ran exactly the specified command:
+
+```
+docker compose up -d --no-deps --force-recreate backend celery_worker embedding_worker maintenance_worker
+```
+
+Result: `backend` and `celery_worker` recreated (using the new image); `embedding_worker` and `maintenance_worker` **created for the first time** locally. All four reported `Started`. `db`, `redis`, `qdrant`, `prometheus`, `grafana`, `frontend` were never touched by this command (`--no-deps` scoped it to exactly these four services) and `docker compose ps` afterward confirmed their `CREATED`/uptime unchanged (`db`/`redis`/`qdrant`/`prometheus`/`grafana` at their multi-day/multi-week ages, `frontend` unchanged). No `docker compose down` was run at any point in this task.
+
+### Part K: actual queue subscriptions - verified live, isolation now active
+
+Live Celery inspection (`docker compose exec <service> celery -A app.worker.celery_app.celery_app inspect active_queues`, broadcast across the broker so every invocation shows all three registered nodes - "3 nodes online" each time) confirmed, for each node by name:
+
+- `celery_worker@050e1c2cf07c`: exactly `document_processing`, `ai_generation`, `media`, `notifications` - **no `embedding`, no `maintenance`, no `celery`/default**.
+- `embedding_worker@e845c3f8dbfa`: exactly `embedding`.
+- `maintenance_worker@a3372b362a7d`: exactly `maintenance`.
+
+This is the exact required topology, now live (not merely declared in Compose source text - Task 65.9.1's own `test_task_65_9_1_compose_topology.py` already asserted the static Compose text; this task additionally confirmed the *running* broker subscriptions match it). Additional confirmations:
+
+- `docker inspect` on all three workers: `RestartCount: 0` on all four recreated containers, `Status: running` - no restart loop.
+- No worker publishes a port (`Ports=map[]` for all three), none privileged (`Privileged=false`), none mounts the Docker socket (`Binds` on all three contain no `docker.sock` reference).
+- `embedding_worker`'s `Config.Cmd` confirms `--concurrency=1 --prefetch-multiplier=1` exactly as declared in Compose.
+- `docker compose logs celery_worker`/`maintenance_worker` (last 100 lines each): no `sentence_transformers`/`FlagEmbedding`/`bge_m3`/error/traceback lines - neither initialized the real embedding provider. `docker compose logs embedding_worker`: clean startup (`embedding_worker@... ready.`), registered all embedding-routed tasks, **no model load yet** (correct - the provider loads lazily on first real embedding task, never at process startup, matching `docs/async-job-platform-runbook.md` §2's documented behavior; no real embedding inference was triggered this session, per the task's hard constraint).
+
+### Part L: post-recreation health and data comparison
+
+- `docker compose ps`: all eight services `Up`; the four recreated services show fresh `CREATED`/uptime, `db`/`redis`/`qdrant`/`prometheus`/`grafana`/`frontend` unchanged.
+- `GET /health` -> `{"status":"ok"}`. `GET /health/runtime` -> `{"status":"ok","database":"ok","redis":"ok","qdrant":"ok","outbox_pending_backlog":0,"oldest_active_embedding_job_age_seconds":null}`.
+- OpenAPI: reachable, `"paths"` key present (97 paths, matching Part H).
+- Alembic: `20260724_0027` (head) - unchanged.
+- PostgreSQL row counts: **identical** to the Part I baseline (`users`=39, `memory_profiles`=27, `background_jobs`=180, `avatar_memory_promotions`=15, `media_assets`=0) - confirming the recreation touched no application data (Postgres was never restarted, only `backend`/`celery_worker`/`embedding_worker`/`maintenance_worker` were).
+- Redis: `PING` -> `PONG`; `DBSIZE` db0=3249 (+54), db1=584 (+68) - the larger `db1` (Celery broker DB) increase is expected and benign: three worker nodes now mingle/register with each other and the broker over the broker connection (previously only one), plus this session's own repeated live `inspect active_queues` calls - no job/user/memory-profile Postgres row count moved, so this is operational broker bookkeeping, not business data.
+- Qdrant: `healthz` -> passed; 37 collections (unchanged); 43,586 total points (unchanged, exact match).
+- Volume creation timestamps: all four identical to Part I - **no volume was recreated**.
+- Container restart counts: `backend`=0, `celery_worker`=0, `embedding_worker`=0, `maintenance_worker`=0 - no crash loop.
+
+### Part M: regression verification
+
+- `python -m pytest backend/tests_infra -q` (host Python) -> **37 passed** (see Part F).
+- Direct runtime checks against the recreated `eternal_world_backend` container: `python -m compileall -q app` -> clean, exit 0; `from app.worker.celery_app import GENERAL_WORKER_QUEUES` -> `('document_processing', 'ai_generation', 'media', 'notifications')` (unchanged source of truth).
+- `docker compose exec -T -e HF_HUB_OFFLINE=1 -e TRANSFORMERS_OFFLINE=1 backend python -m pytest tests/test_task_65_9_async_job_platform.py tests/test_task_65_9_1_queue_isolation_and_scale.py tests/test_task_65_9_1_multi_replica_harness.py tests/test_authenticated_workspace_reliability.py -q`, run **twice** in this session (once against the pre-recreation container as an interim check, once against the freshly-recreated container as the final result) -> **90 passed** both times, only pre-existing/unrelated deprecation warnings (`passlib`'s `crypt` import, two SWIG-related `DeprecationWarning`s already documented as pre-existing noise). **Zero failures, zero new flakes, identical result before and after recreation.**
+
+No real DeepSeek call was made at any point (mock/offline providers throughout). No embedding model was downloaded and no real embedding inference was triggered - `embedding_worker` started cleanly but its model load remains lazy/untriggered this session, exactly as intended; the OpenAPI/compileall/log checks above confirm FastAPI, `celery_worker`, and `maintenance_worker` never initialize BGE-M3.
+
+### Known limitations
+
+- No hash was added to `requirements-torch-cpu.txt` - a deliberate, safety-driven omission (Part D's reproducible cross-download mismatch), not an oversight. The dependency is now exactly version-pinned and the build/topology-activation succeeded without one; re-attempting hash-locking (once two consecutive independent downloads are confirmed to match) remains the natural next hardening step.
+- The underlying network/CDN reliability issue documented in Parts C/D/G (intermittent hash mismatches across `torch`, `mpmath` (Task 65.9.1D), and likely `yarl`; one fully stalled 26+-minute download) was not "fixed" - it was worked around by disciplined retries and by discovering the daemon-side build had actually completed after a client disconnect. A future build in this same environment could still hit the same slowness or an intermittent mismatch; this is an environment condition to keep monitoring, not a defect this task could resolve at the network layer.
+- The disposable verification tag `eternal-world-backend-partg:latest` (`6e2174facb98`) and the three build-attempt log files / two independent provenance-download artifacts remain only in local Docker image storage / this session's scratch directory outside the repository - nothing generated by these attempts was written into the repository or committed. The tag can be removed with `docker rmi` in a future session if desired (not done here, since this task runs no prune/removal commands per its own constraints).
+- `Task 65.9.2` (real disposable multi-node infrastructure load verification) remains not started - unchanged from prior sessions, not attempted by this task.
+
+### Production implications
+
+The local dev stack now runs the queue-isolated worker topology Task 65.9.1 originally designed but never fully activated locally: `celery_worker` is structurally and now also *actually* restricted to `document_processing`/`ai_generation`/`media`/`notifications`; `embedding_worker` (the only process now capable of ever loading real BGE-M3 weights) and `maintenance_worker` (outbox dispatch, stale-job recovery, and the 20s async-queue-metrics refresh) are running independently for the first time in this environment. The CPU Torch dependency has an explicit, version-pinned, single source of truth (`backend/requirements-torch-cpu.txt`) consumed identically by both Dockerfiles instead of two independently-drifting ad-hoc install lines, and a structural test suite guards that invariant going forward. The true root cause of the originally-reported hash-mismatch symptom is now precisely understood (pip's automatic index-metadata hash verification reacting to an intermittently-unreliable upstream CDN) rather than misattributed to a project-side hash-lock defect that never existed. No application-facing behavior changed - this is a build-determinism and local-topology-activation improvement only.
+
+### Git/process compliance (Part O)
+
+No `git add`/`commit`/`push`/`reset`/`restore`/`checkout`/`clean`/`stash` was run at any point. All changes (`backend/Dockerfile`, `backend/Dockerfile.ai-base`, new `backend/requirements-torch-cpu.txt`, new `backend/tests_infra/test_task_65_9_1f_torch_dependency_integrity.py`, this `PROJECT_PROGRESS.md` entry, and the corresponding roadmap section) remain uncommitted for review, per this task's explicit instruction. No `docker volume` removal, no `docker prune` (of any kind), no `docker rmi` was run at any point - the only image-store mutations were `docker build`/`docker compose build` (creating new tagged content) and standard tag reassignment as part of that build, never an explicit deletion. No deployment occurred, no GitHub Actions workflow was triggered, no staging/production system was touched.
+
+### Next recommended task
+
+**Task 65.9.1G - Docker Volume Ownership and Qdrant Collection Audit**, followed by **Task 65.9.2 - Real Disposable Infrastructure Load Verification** (per this task's own mandate). A good early step within 65.9.1G or a dedicated follow-up: re-run Part D's two-independent-download provenance check when convenient to confirm two consecutive matching hashes, then add that confirmed hash to `requirements-torch-cpu.txt` with `--require-hashes` for full supply-chain hash pinning (this task intentionally left that final hardening step for a session where back-to-back-matching downloads can be confirmed, rather than risk locking a hash from an environment that has now demonstrated intermittent content drift more than once).
+
+---
+
+## Task 65.9.1F.2 - Short Torch Pin Closure, Celery Beat Runtime Hygiene, Commit and Push (2026-07-27)
+
+Closure task for Task 65.9.1F's previously-uncommitted work. This task performed no new PyTorch download, no Docker rebuild, and no container recreation - it reviewed the uncommitted diff left by Task 65.9.1F, added narrow Celery Beat runtime-artifact ignore hygiene, ran non-build verification, and committed/pushed the result as two clean commits.
+
+### Starting state (Part A)
+
+Branch `staging/eternalworld-lukiora-20260715`, HEAD `9523e60` ("docs: close Task 65.9.1 and record Docker context hygiene"), matching `origin/staging/eternalworld-lukiora-20260715` exactly (no ahead/behind). Working tree matched the expected inventory exactly: modified `PROJECT_PROGRESS.md`, `backend/Dockerfile`, `backend/Dockerfile.ai-base`, `md_roadmap/ETERNAL_WORLD_AVATAR_QUALITY_PLAN.md`; untracked `backend/celerybeat-schedule`, `backend/requirements-torch-cpu.txt`, `backend/tests_infra/test_task_65_9_1f_torch_dependency_integrity.py`. Nothing staged.
+
+### Runtime verification (Part B), before any change
+
+`docker compose ps`: all eight services `Up` (backend, celery_worker, embedding_worker, maintenance_worker, db, redis, qdrant, frontend, prometheus, grafana). `GET http://localhost:8033/health` -> `{"status":"ok"}`. `GET http://localhost:8033/health/runtime` -> `{"status":"ok","database":"ok","redis":"ok","qdrant":"ok","outbox_pending_backlog":0,"oldest_active_embedding_job_age_seconds":null}`. Live `celery -A app.worker.celery_app.celery_app inspect active_queues` (broker-broadcast, "3 nodes online") confirmed: `celery_worker` -> exactly `document_processing`, `ai_generation`, `media`, `notifications`; `embedding_worker` -> exactly `embedding`; `maintenance_worker` -> exactly `maintenance`. Nothing was restarted, recreated, or rebuilt to obtain this.
+
+### Diff review (Part C)
+
+Reviewed Task 65.9.1F's complete diffs. Confirmed: both `backend/Dockerfile` and `backend/Dockerfile.ai-base` install `-r requirements-torch-cpu.txt` (no more independent ad-hoc `pip install ... torch` lines); `backend/requirements-torch-cpu.txt` pins exactly `torch==2.13.0+cpu` against the official `--index-url https://download.pytorch.org/whl/cpu`, with no CUDA marker and no loose constraint; no application/runtime/schema/queue-routing behavior changed beyond activating the already-committed Compose topology; and Task 65.9.1F's own `PROJECT_PROGRESS.md`/roadmap prose was already honest about NOT claiming a complete SHA256 supply-chain lock (that remains explicitly deferred, per Task 65.9.1F's Part D provenance finding of a reproducible cross-download hash mismatch on the official PyTorch CDN).
+
+### Celery Beat runtime-artifact hygiene (Part D)
+
+`backend/celerybeat-schedule` was confirmed (via `file`) to be a GNU dbm/ndbm database - Celery Beat's own runtime schedule bookkeeping, written by the `maintenance_worker`'s `celery beat` process, not application source. Added narrow, exact ignore rules (no broad pattern):
+
+- Repo-root `.gitignore`: `backend/celerybeat-schedule` and `backend/celerybeat-schedule.*`.
+- `backend/.dockerignore` (context-relative): `celerybeat-schedule` and `celerybeat-schedule.*`.
+
+Verified: `git check-ignore -v backend/celerybeat-schedule` -> matched via the new `.gitignore:28:backend/celerybeat-schedule` rule; `git status --short` no longer lists the file; `git ls-files backend/celerybeat-schedule` returns nothing (never tracked). The generated file remains on disk untouched - `maintenance_worker` was never stopped or restarted.
+
+### Torch pin re-verification (Part E)
+
+`backend/requirements-torch-cpu.txt` re-confirmed unchanged from Task 65.9.1F: exact `torch==2.13.0+cpu`, official CPU index, no CUDA wheel, no loose constraint (`torch`/`torch>=`/`torch~=`). Both Dockerfiles consume the same file; `backend/Dockerfile.prod` still inherits from the prebuilt `python-ai-base` image and never declares its own `torch` line. No hash was added and no wheel was downloaded in this task.
+
+### Structural test scope correction (Part F)
+
+`backend/tests_infra/test_task_65_9_1f_torch_dependency_integrity.py` was already scoped honestly (it explicitly documents why no hash exists yet and does not claim one is enforced) - no incorrect hash-lock assertion needed correcting. Extended it with five new tests covering this task's own hygiene work: `.gitignore` and `backend/.dockerignore` both declare the exact `celerybeat-schedule`/`celerybeat-schedule.*` rules (and explicitly reject the broad patterns `backend/*`, `*schedule*`, `*.db`), `git ls-files` confirms `backend/celerybeat-schedule` is never tracked, and (skipped gracefully if the runtime file is absent on a given machine) `git check-ignore` positively matches it. Total: 17 tests in this file (12 original Task 65.9.1F tests + 5 new).
+
+### Non-build verification (Part G)
+
+- `python -m pytest backend/tests_infra -q` (host Python) -> **41 passed** (15 Compose-topology + 9 Docker-context-hygiene + 17 Torch/Celery-Beat-hygiene tests).
+- `docker compose exec -T -e HF_HUB_OFFLINE=1 -e TRANSFORMERS_OFFLINE=1 backend python -m pytest tests/test_task_65_9_async_job_platform.py tests/test_task_65_9_1_queue_isolation_and_scale.py tests/test_task_65_9_1_multi_replica_harness.py tests/test_authenticated_workspace_reliability.py -q` -> **90 passed, 1 warning in 587.45s** (only the pre-existing `passlib`/`crypt` `DeprecationWarning` - zero failures, no new flakes). No real embedding inference was triggered.
+- `python -m compileall -q app` (inside `eternal_world_backend`) -> clean, exit 0.
+- OpenAPI: `from app.main import app; len(app.openapi()['paths'])` -> **97** (unchanged baseline).
+- Alembic: `alembic heads` / `alembic current` -> `20260724_0027 (head)` (unchanged).
+- Live worker subscriptions re-checked after the test runs: identical to Part B (`celery_worker`: `document_processing`/`ai_generation`/`media`/`notifications`; `embedding_worker`: `embedding`; `maintenance_worker`: `maintenance`). `docker inspect` restart counts: `backend`=0, `celery_worker`=0, `embedding_worker`=0, `maintenance_worker`=0 throughout.
+
+No `docker compose build`/`docker build`/`docker buildx build`, no `pip download`/`pip install`, no `npm install`, and no model download occurred anywhere in this task.
+
+### Commit and push (Parts I-L)
+
+Two commits were created, in order:
+
+1. **Implementation/runtime-hygiene commit** `f1b70c6` - `fix: pin CPU Torch and ignore Celery Beat runtime state` - contains exactly: `.gitignore`, `backend/.dockerignore`, `backend/Dockerfile`, `backend/Dockerfile.ai-base`, `backend/requirements-torch-cpu.txt`, `backend/tests_infra/test_task_65_9_1f_torch_dependency_integrity.py`. Verified via `git show --name-only --format="" HEAD` immediately after committing - no documentation file and no runtime schedule file present.
+2. **Documentation commit** (this entry plus the corresponding roadmap section) - staged as exactly `PROJECT_PROGRESS.md` and `md_roadmap/ETERNAL_WORLD_AVATAR_QUALITY_PLAN.md`.
+
+`git add .` / `git add -A` / `git add --all` was never used - every `git add` call in both commits named an explicit path. `backend/celerybeat-schedule` was never staged and never committed. After both commits were verified, the branch was pushed to `origin staging/eternalworld-lukiora-20260715`.
+
+### Known limitations (carried forward, unchanged)
+
+- **No project-owned SHA256 lock exists yet.** This remains exactly as honestly documented by Task 65.9.1F: a reproducible, cross-download hash mismatch was observed on the official PyTorch CDN during that task's own provenance check, so inserting any hash today would be an unverified guess, not a real lock. This task did not attempt to fix that - it is explicitly deferred.
+- A full clean, non-cached rebuild reproducibility proof is likewise **not** claimed by this task.
+- Strict SHA256 enforcement and the clean non-cached rebuild remain deferred until stable `download.pytorch.org`/PyPI CDN conditions (or a trusted internal artifact mirror) can be confirmed via two consecutive, byte-identical independent downloads.
+- This task performed no application-code, migration, embedding, retrieval, or Qdrant-collection change of any kind.
+
+### Next recommended task
+
+**Task 65.9.1G - Docker Volume Ownership and Qdrant Collection Audit.**
+
+**Deferred later task (unchanged, not this task's scope):** Strict Torch SHA256 Supply-Chain Lock and Clean Reproducibility Verification - re-run the two-independent-download provenance check until two consecutive downloads produce a byte-identical SHA256, then add that confirmed hash with `--require-hashes` and perform a genuinely clean, non-cached `docker build`/`docker compose build` to prove full reproducibility.
+
+---
