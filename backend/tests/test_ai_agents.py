@@ -8,6 +8,7 @@ from app.main import app
 from app.modules.ai_agents.brain.context import (
     CORRECTED_MEMORY_EVIDENCE_CAP,
     MAX_MEMORY_EVIDENCE_ITEMS,
+    is_verified_evidence_result,
     prioritize_corrected_memory_evidence,
 )
 from app.modules.ai_agents.brain.output_guard import (
@@ -526,35 +527,44 @@ def _rag_result(
     score: float,
     source_type: str = "document_text",
     memory_status: str | None = None,
+    text_hash: str | None = None,
+    candidate_id: int | None = None,
+    promotion_id: int | None = None,
+    text: str = "text",
 ) -> RagRetrievalResultRead:
-    payload_metadata = {"memory_status": memory_status} if memory_status else {}
+    payload_metadata: dict = {}
+    if memory_status:
+        payload_metadata["memory_status"] = memory_status
+    if candidate_id is not None:
+        payload_metadata["candidate_id"] = candidate_id
+    if promotion_id is not None:
+        payload_metadata["promotion_id"] = promotion_id
     return RagRetrievalResultRead(
         chunk_id=chunk_id,
         source_id=chunk_id,
         embedding_id=chunk_id,
         score=score,
-        text="text",
+        text=text,
         chunk_index=0,
         language="ru",
         source_type=source_type,
         validation_status="valid",
-        text_hash=f"hash-{chunk_id}",
+        text_hash=text_hash or f"hash-{chunk_id}",
         qdrant_collection="eternal_world_rag_chunks__bge_m3_dense_sparse",
         payload_metadata=payload_metadata,
     )
 
 
-def test_prioritize_corrected_memory_evidence_floats_verified_item_to_front():
-    results = [
-        _rag_result(chunk_id=1, score=1.0, source_type="manual_text"),
-        _rag_result(chunk_id=2, score=0.9, source_type="manual_text"),
-        _rag_result(chunk_id=3, score=0.5, source_type="conversation_candidate", memory_status="verified"),
-        _rag_result(chunk_id=4, score=0.4, source_type="manual_text"),
-    ]
-
-    prioritized = prioritize_corrected_memory_evidence(results, limit=3)
-
-    assert [item.chunk_id for item in prioritized] == [3, 1, 2]
+# --- Task 65.10: cross-pipeline verified evidence prioritization ------------
+#
+# Replaces the old "conversation_candidate always floats to front"
+# unconditional-partition tests below with a bounded, pipeline-neutral
+# contract: verification (recognized from ANY of VERIFIED_EVIDENCE_SOURCE_
+# TYPES - conversation_candidate, manual_text, biography) adds a small,
+# bounded relevance boost (VERIFIED_EVIDENCE_RELEVANCE_BOOST); it never
+# unconditionally overrides a significantly higher-relevance item from any
+# pipeline. See `app.modules.ai_agents.brain.context.
+# prioritize_corrected_memory_evidence` for the full rationale.
 
 
 def test_prioritize_corrected_memory_evidence_caps_at_configured_limit():
@@ -576,6 +586,229 @@ def test_prioritize_corrected_memory_evidence_is_a_noop_without_verified_items()
     prioritized = prioritize_corrected_memory_evidence(results, limit=5)
 
     assert [item.chunk_id for item in prioritized] == [1, 2]
+
+
+def test_prioritize_corrected_memory_evidence_gives_verified_item_bounded_boost():
+    """A verified item gets a small boost that can break a close relevance
+    gap (Part E #4: "may receive a bounded verification benefit") without
+    ever becoming an unconditional front-of-queue rule."""
+    results = [
+        _rag_result(chunk_id=1, score=0.50, source_type="document_text"),
+        _rag_result(chunk_id=2, score=0.40, source_type="conversation_candidate", memory_status="verified"),
+    ]
+
+    prioritized = prioritize_corrected_memory_evidence(results, limit=2)
+
+    # 0.40 + 0.15 boost = 0.55 > 0.50: the close gap is broken in favor of
+    # the verified item.
+    assert [item.chunk_id for item in prioritized] == [2, 1]
+
+
+def test_prioritize_corrected_memory_evidence_does_not_let_low_relevance_verified_item_override_much_higher_relevance():
+    """Task 65.10 Part G #4 / rule 9: source type (verification) alone must
+    never override a significantly higher semantic relevance score from any
+    pipeline. Directly covers required Part J test #4 ("stronger relevance
+    beats weaker relevance across pipelines") and #17 ("no pipeline receives
+    unconditional priority")."""
+    results = [
+        _rag_result(chunk_id=1, score=0.90, source_type="document_text"),
+        _rag_result(chunk_id=2, score=0.30, source_type="conversation_candidate", memory_status="verified"),
+    ]
+
+    prioritized = prioritize_corrected_memory_evidence(results, limit=2)
+
+    # 0.30 + 0.15 boost = 0.45, still far below 0.90 - relevance wins.
+    assert [item.chunk_id for item in prioritized] == [1, 2]
+
+
+def test_prioritize_corrected_memory_evidence_corrected_memory_intent_mode_still_floats_verified_group():
+    """Task 65.10: `corrected_memory_intent=True` (the mode the caller must
+    only request after classifying the turn as CORRECTED_MEMORY_FACT /
+    CORRECTION_HISTORY via `classify_memory_query_intent`) preserves the
+    empirically-tuned Task 64.4.2 behavior - a verified item still leads
+    even against a much higher-scoring unrelated archival item - for this
+    narrow, explicitly-detected question shape. This is intent-gated, not a
+    pipeline special case: it is not the default behavior for ordinary
+    questions (see the bounded-boost tests above)."""
+    results = [
+        _rag_result(chunk_id=1, score=0.97, source_type="document_text"),
+        _rag_result(chunk_id=2, score=0.42, source_type="conversation_candidate", memory_status="verified"),
+    ]
+
+    prioritized = prioritize_corrected_memory_evidence(results, limit=2, corrected_memory_intent=True)
+
+    assert [item.chunk_id for item in prioritized] == [2, 1]
+
+
+def test_prioritize_corrected_memory_evidence_recognizes_all_audited_verified_pipelines():
+    """Part J test #1/#2/#18: approved memorial contribution (manual_text),
+    approved chat-learned memory (conversation_candidate), and approved
+    biography evidence must all be recognized as verified and compete on
+    relevance, none privileged over another merely by pipeline identity."""
+    manual_text_item = _rag_result(chunk_id=1, score=0.60, source_type="manual_text", memory_status="verified")
+    conversation_item = _rag_result(
+        chunk_id=2, score=0.62, source_type="conversation_candidate", memory_status="verified"
+    )
+    biography_item = _rag_result(chunk_id=3, score=0.58, source_type="biography", memory_status="verified")
+
+    assert is_verified_evidence_result(manual_text_item)
+    assert is_verified_evidence_result(conversation_item)
+    assert is_verified_evidence_result(biography_item)
+
+    prioritized = prioritize_corrected_memory_evidence(
+        [manual_text_item, conversation_item, biography_item], limit=3
+    )
+
+    # All three are equally verified (same boost) - plain relevance order
+    # decides among them, exactly matching pipeline neutrality (Part E #5).
+    assert [item.chunk_id for item in prioritized] == [2, 1, 3]
+
+
+def test_prioritize_corrected_memory_evidence_birthday_regression():
+    """Task 65.10 primary regression test (Part J).
+
+    Reproduces the reported defect with synthetic evidence (not the user's
+    real production memory, per Part J): a highly relevant approved
+    memorial-contribution memory (~0.829, the reported "18. narozeniny
+    brestek" birthday memory's real observed score) must survive the
+    final context cap of 3 ahead of two less-relevant verified
+    conversation-candidate items, and source pipeline alone must not decide
+    the outcome.
+    """
+    less_relevant_verified_chat_a = _rag_result(
+        chunk_id=101, score=0.42, source_type="conversation_candidate", memory_status="verified", candidate_id=195
+    )
+    less_relevant_verified_chat_b = _rag_result(
+        chunk_id=102, score=0.36, source_type="conversation_candidate", memory_status="verified", candidate_id=192
+    )
+    another_relevant_eligible_memory = _rag_result(chunk_id=103, score=0.50, source_type="biography", memory_status="verified")
+    another_eligible_memory = _rag_result(chunk_id=104, score=0.41, source_type="biography", memory_status="verified")
+    birthday_memory = _rag_result(
+        chunk_id=105,
+        score=0.829,
+        source_type="manual_text",
+        memory_status="verified",
+        promotion_id=2,
+    )
+
+    candidates = [
+        less_relevant_verified_chat_a,
+        less_relevant_verified_chat_b,
+        another_relevant_eligible_memory,
+        another_eligible_memory,
+        birthday_memory,
+    ]
+
+    prioritized = prioritize_corrected_memory_evidence(candidates, limit=CORRECTED_MEMORY_EVIDENCE_CAP)
+    selected_chunk_ids = [item.chunk_id for item in prioritized]
+
+    assert len(prioritized) == 3
+    assert 105 in selected_chunk_ids, "the highly relevant birthday memory must be included"
+    assert selected_chunk_ids[0] == 105, "the highest-relevance item must rank first"
+    # The least relevant items are dropped - pipeline identity alone does
+    # not save them, and does not exclude the manual_text item either.
+    assert 102 not in selected_chunk_ids
+
+
+def test_prioritize_corrected_memory_evidence_deduplicates_same_canonical_memory():
+    """Part E #6 / Part G #6 / Part J #14: near-duplicate evidence (the same
+    canonical candidate/promotion surfacing as more than one chunk) must not
+    consume more than one context slot."""
+    duplicate_low = _rag_result(
+        chunk_id=1, score=0.40, source_type="conversation_candidate", memory_status="verified", candidate_id=50
+    )
+    duplicate_high = _rag_result(
+        chunk_id=2, score=0.55, source_type="conversation_candidate", memory_status="verified", candidate_id=50
+    )
+    distinct_item = _rag_result(chunk_id=3, score=0.45, source_type="manual_text", memory_status="verified")
+
+    prioritized = prioritize_corrected_memory_evidence(
+        [duplicate_low, duplicate_high, distinct_item], limit=3
+    )
+
+    selected_chunk_ids = [item.chunk_id for item in prioritized]
+    assert 1 not in selected_chunk_ids, "the lower-scoring duplicate must be dropped"
+    assert selected_chunk_ids.count(2) == 1
+    assert 3 in selected_chunk_ids
+    assert len(prioritized) == 2, "the duplicate pair must only consume one context slot"
+
+
+def test_prioritize_corrected_memory_evidence_deduplicates_same_text_hash():
+    duplicate_a = _rag_result(chunk_id=1, score=0.30, source_type="document_text", text_hash="shared-hash")
+    duplicate_b = _rag_result(chunk_id=2, score=0.60, source_type="document_text", text_hash="shared-hash")
+
+    prioritized = prioritize_corrected_memory_evidence([duplicate_a, duplicate_b], limit=5)
+
+    assert [item.chunk_id for item in prioritized] == [2]
+
+
+def test_prioritize_corrected_memory_evidence_is_deterministic_for_equal_scores():
+    """Part J test #3/#7 in Part G: ordering must be stable for identical
+    inputs - equal combined scores keep original relative order."""
+    results = [
+        _rag_result(chunk_id=1, score=0.5, source_type="document_text"),
+        _rag_result(chunk_id=2, score=0.5, source_type="document_text"),
+        _rag_result(chunk_id=3, score=0.5, source_type="document_text"),
+    ]
+
+    first_run = prioritize_corrected_memory_evidence(results, limit=3)
+    second_run = prioritize_corrected_memory_evidence(results, limit=3)
+
+    assert [item.chunk_id for item in first_run] == [1, 2, 3]
+    assert [item.chunk_id for item in first_run] == [item.chunk_id for item in second_run]
+
+
+def test_prioritize_corrected_memory_evidence_missing_metadata_fails_safely():
+    """Part G #8: missing optional metadata must fail safely and must never
+    make an item appear more trusted than it is."""
+    no_payload_metadata = RagRetrievalResultRead(
+        chunk_id=1,
+        source_id=1,
+        embedding_id=1,
+        score=0.9,
+        text="text",
+        chunk_index=0,
+        language=None,
+        source_type="conversation_candidate",
+        validation_status="valid",
+        text_hash="hash-1",
+        qdrant_collection="eternal_world_rag_chunks__bge_m3_dense_sparse",
+        payload_metadata={},
+    )
+    unrecognized_source_type_but_marked_verified = _rag_result(
+        chunk_id=2, score=0.1, source_type="other", memory_status="verified"
+    )
+
+    assert is_verified_evidence_result(no_payload_metadata) is False
+    assert is_verified_evidence_result(unrecognized_source_type_but_marked_verified) is False
+
+    prioritized = prioritize_corrected_memory_evidence(
+        [no_payload_metadata, unrecognized_source_type_but_marked_verified], limit=2
+    )
+    # Neither item gets a verification boost - plain relevance order holds.
+    assert [item.chunk_id for item in prioritized] == [1, 2]
+
+
+def test_build_rag_evidence_items_populates_provenance_for_memorial_contribution():
+    """Part C/D fix: an approved memorial contribution (manual_text) must
+    get its memory_status/provenance/promotion_id populated into
+    BrainRagEvidence exactly like a conversation-candidate item, not only
+    conversation_candidate (this was the second half of the reported prompt-
+    labeling defect, in `build_rag_evidence_items`)."""
+    from app.modules.ai_agents.brain.context import build_rag_evidence_items
+
+    manual_text_item = _rag_result(
+        chunk_id=42,
+        score=0.83,
+        source_type="manual_text",
+        memory_status="verified",
+        promotion_id=2,
+    )
+
+    evidence_items = build_rag_evidence_items([manual_text_item])
+
+    assert evidence_items[0].memory_status == "verified"
+    assert evidence_items[0].promotion_id == 2
 
 
 def test_verified_learned_memory_is_tagged_with_equal_authority_in_prompt(client, monkeypatch):
@@ -613,7 +846,14 @@ def test_verified_learned_memory_is_tagged_with_equal_authority_in_prompt(client
                     chunk_id=202,
                     source_id=102,
                     embedding_id=302,
-                    score=0.97,
+                    # Task 65.10: a moderate gap (not the old 0.97), so the
+                    # bounded verification boost (0.15) genuinely breaks the
+                    # tie in the verified item's favor (0.42+0.15=0.57>0.50)
+                    # instead of relying on an unconditional priority rule.
+                    # See test_prioritize_corrected_memory_evidence_does_not_
+                    # let_low_relevance_verified_item_override_much_higher_
+                    # relevance for the case where the gap is too large.
+                    score=0.50,
                     text="Archival note about an unrelated household topic.",
                     chunk_index=0,
                     language="ru",
@@ -640,8 +880,10 @@ def test_verified_learned_memory_is_tagged_with_equal_authority_in_prompt(client
     assert "[rag:201] VERIFIED LEARNED MEMORY (owner-approved, first-person, equal authority to B1)" in prompt
     assert "promotion_id=5, candidate_id=14" in prompt
     assert "[rag:202] ARCHIVAL DOCUMENT" in prompt
-    # A higher retrieval score on the unrelated archival item must not be the
-    # only signal in the prompt distinguishing the two evidence kinds.
+    # A moderately higher retrieval score on the unrelated archival item must
+    # not be the only signal in the prompt distinguishing the two evidence
+    # kinds - the bounded verification boost still lets the verified item
+    # lead when the gap is close.
     assert "VERIFIED LEARNED MEMORY" in prompt.split("[rag:202]")[0]
 
 
@@ -686,6 +928,104 @@ def test_archival_evidence_is_not_tagged_as_learned_memory(client, monkeypatch):
     assert "[rag:301] ARCHIVAL DOCUMENT" in prompt
     assert "[rag:301] VERIFIED LEARNED MEMORY" not in prompt
     assert "Provenance: promotion_id=" not in prompt
+
+
+def test_approved_memorial_contribution_survives_end_to_end_chat_prompt(client, monkeypatch):
+    """Task 65.10 end-to-end regression (Part J test #20 / Part C #6):
+    reproduces the reported defect shape through the real chat evidence path
+    (`app.modules.chat.service._retrieve_rag_evidence_safely`, the same
+    filter -> prioritize -> build_rag_evidence_items chain used in
+    production) with synthetic evidence modeled on the real observed
+    scores, and asserts the highly relevant approved memorial-contribution
+    memory is both selected AND correctly tagged VERIFIED LEARNED MEMORY in
+    the final prompt sent toward the provider - not silently dropped by the
+    cap, and not mislabeled as an ordinary archival document."""
+    captured = _capture_prompt(monkeypatch)
+    token = _register_and_login(client, "ai-memorial-contribution-survives@example.com")
+    profile_id = _create_profile(client, token, name="Memorial Contribution Profile")
+
+    def fake_retrieval_response(db, *, current_user, profile_id, payload):
+        return RagRetrievalResponseRead(
+            profile_id=profile_id,
+            query=payload.query,
+            model_code="bge_m3_dense_sparse",
+            results=[
+                RagRetrievalResultRead(
+                    chunk_id=401,
+                    source_id=201,
+                    embedding_id=501,
+                    score=0.829,
+                    text="Oslavil jsem 18. narozeniny s rodinou u breste ku.",
+                    chunk_index=0,
+                    language="cs",
+                    source_type="manual_text",
+                    validation_status="valid",
+                    text_hash="hash-401",
+                    qdrant_collection="eternal_world_rag_chunks__bge_m3_dense_sparse",
+                    payload_metadata={
+                        "memory_status": "verified",
+                        "provenance": "review_approved_memorial_contribution",
+                        "promotion_id": 2,
+                        "indexed_at": "2026-07-23T20:02:06.661536+00:00",
+                    },
+                ),
+                RagRetrievalResultRead(
+                    chunk_id=402,
+                    source_id=202,
+                    embedding_id=502,
+                    score=0.42,
+                    text="По словам внука, бабушка вспоминала о своём детстве.",
+                    chunk_index=0,
+                    language="ru",
+                    source_type="conversation_candidate",
+                    validation_status="valid",
+                    text_hash="hash-402",
+                    qdrant_collection="eternal_world_rag_chunks__bge_m3_dense_sparse",
+                    payload_metadata={
+                        "memory_status": "verified",
+                        "provenance": "review_approved_conversation_candidate",
+                        "promotion_id": 15,
+                        "candidate_id": 195,
+                        "indexed_at": "2026-07-24T15:12:19.920244+00:00",
+                    },
+                ),
+                RagRetrievalResultRead(
+                    chunk_id=403,
+                    source_id=203,
+                    embedding_id=503,
+                    score=0.36,
+                    text="По словам внука, бабушка вспоминала о бабушке.",
+                    chunk_index=0,
+                    language="ru",
+                    source_type="conversation_candidate",
+                    validation_status="valid",
+                    text_hash="hash-403",
+                    qdrant_collection="eternal_world_rag_chunks__bge_m3_dense_sparse",
+                    payload_metadata={
+                        "memory_status": "verified",
+                        "provenance": "review_approved_conversation_candidate",
+                        "promotion_id": 13,
+                        "candidate_id": 192,
+                        "indexed_at": "2026-07-23T15:39:32.713568+00:00",
+                    },
+                ),
+            ],
+        )
+
+    monkeypatch.setattr("app.modules.chat.service.retrieve_profile_rag", fake_retrieval_response)
+
+    response = client.post(
+        f"/api/chat/{profile_id}/messages",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"message": "jak jsi slavil 18. narozeniny?"},
+    )
+
+    assert response.status_code == 200
+    prompt = captured["prompt"]
+    assert "[rag:401] VERIFIED LEARNED MEMORY (owner-approved, first-person, equal authority to B1)" in prompt
+    assert "promotion_id=2" in prompt
+    # It must lead the evidence block, not merely be present anywhere in it.
+    assert prompt.index("[rag:401]") < prompt.index("[rag:402]")
 
 
 def test_only_selected_profiles_memories_are_included(client, monkeypatch):

@@ -13,6 +13,10 @@ from app.modules.ai_agents.brain.context import (
     filter_learned_memory_results_by_question_intent,
     prioritize_corrected_memory_evidence,
 )
+from app.modules.avatar_persona.memory_query_intent import (
+    MemoryQueryIntent,
+    classify_memory_query_intent,
+)
 from app.db.models import ChatMessage, MemoryProfile, User
 from app.modules.ai_agents import get_agent_orchestrator
 from app.modules.ai_agents.schemas import (
@@ -161,7 +165,41 @@ def _retrieve_rag_evidence_safely(
         retrieval_response.results,
         user_message=user_message,
     )
-    prioritized_results = prioritize_corrected_memory_evidence(filtered_results)
+    # Task 65.10: the authenticated chat path previously applied the
+    # corrected-memory-intent evidence ordering (verified items floated
+    # unconditionally to the front, as a group) to EVERY turn, regardless of
+    # question shape - unlike the demo path, which only ever applies it
+    # behind an explicit intent classification. That mismatch is why a
+    # highly relevant, approved memorial-contribution memory could be
+    # displaced by less-relevant conversation-candidate items on an
+    # ordinary factual question (the reported "18. narozeniny" defect).
+    # Classifying intent here and only requesting the stronger
+    # verified-first mode for turns actually classified as a corrected-
+    # memory question restores relevance-driven ranking for ordinary
+    # questions while preserving the empirically-tuned Task 64.4.2 behavior
+    # for the question shape it was built for.
+    memory_query_intent = classify_memory_query_intent(user_message)
+    corrected_memory_intent = memory_query_intent in (
+        MemoryQueryIntent.CORRECTED_MEMORY_FACT,
+        MemoryQueryIntent.CORRECTION_HISTORY,
+    )
+    prioritized_results = prioritize_corrected_memory_evidence(
+        filtered_results,
+        corrected_memory_intent=corrected_memory_intent,
+    )
+    log_event(
+        _logger,
+        logging.DEBUG,
+        "chat_rag_evidence_prioritized",
+        trace_id=get_request_id(),
+        profile_id=profile_id,
+        memory_query_intent=memory_query_intent.value,
+        corrected_memory_intent=corrected_memory_intent,
+        retrieved_count=len(retrieval_response.results),
+        filtered_count=len(filtered_results),
+        selected_count=len(prioritized_results),
+        selected_chunk_ids=[result.chunk_id for result in prioritized_results],
+    )
     return build_rag_evidence_items(prioritized_results)
 
 

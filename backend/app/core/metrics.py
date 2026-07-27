@@ -279,6 +279,36 @@ AVATAR_CORRECTED_MEMORY_RESOLUTION_TOTAL = Counter(
     labelnames=("result",),
 )
 
+# --- Task 65.10: cross-pipeline evidence prioritization --------------------
+# Every label below is a small closed set (a bounded RAG source_type enum,
+# true/false, or a fixed drop-reason enum) - never a chunk/candidate/
+# promotion/profile/user id and never memory or question text.
+EVIDENCE_PRIORITIZATION_CANDIDATE_COUNT = Histogram(
+    "evidence_prioritization_candidate_count",
+    "Number of already-eligible evidence candidates entering cross-pipeline prioritization.",
+    buckets=(0, 1, 2, 3, 5, 10, 20, 50),
+)
+EVIDENCE_PRIORITIZATION_SELECTED_COUNT = Histogram(
+    "evidence_prioritization_selected_count",
+    "Number of evidence items selected by cross-pipeline prioritization after the context cap.",
+    buckets=(0, 1, 2, 3, 5, 10),
+)
+EVIDENCE_PRIORITIZATION_DROPPED_TOTAL = Counter(
+    "evidence_prioritization_dropped_total",
+    "Total evidence items dropped during cross-pipeline prioritization, by safe drop-reason category.",
+    labelnames=("reason",),
+)
+EVIDENCE_PRIORITIZATION_VERIFIED_SELECTED_TOTAL = Counter(
+    "evidence_prioritization_verified_selected_total",
+    "Total selected evidence items by whether they were recognized as verified (any pipeline).",
+    labelnames=("verified",),
+)
+EVIDENCE_PRIORITIZATION_SOURCE_TYPE_SELECTED_TOTAL = Counter(
+    "evidence_prioritization_source_type_selected_total",
+    "Total selected evidence items by source_type (bounded RagSource source_type enum).",
+    labelnames=("source_type",),
+)
+
 # --- Task 65.6: context-aware AI Biographer -------------------------------
 # Every label below is a small closed set (topic/coverage-state/result/
 # generation-mode/reason/locale) - never a profile/user/question/candidate
@@ -1248,6 +1278,56 @@ def observe_avatar_memory_query_intent(*, intent: str) -> None:
 def observe_avatar_corrected_memory_resolution(*, resolved: bool) -> None:
     result = "resolved" if resolved else "unresolved"
     AVATAR_CORRECTED_MEMORY_RESOLUTION_TOTAL.labels(result).inc()
+
+
+# Task 65.10: bounded label sets for cross-pipeline evidence prioritization.
+# Mirrors the RagSource.source_type check constraint (never a free-form
+# string) so the Prometheus label stays low-cardinality even if a new
+# archival source_type is added later - an unrecognized value safely buckets
+# to "other" instead of creating a new label series.
+_EVIDENCE_SOURCE_TYPES = frozenset(
+    {
+        "manual_text",
+        "biography",
+        "timeline_memory",
+        "document_text",
+        "chat_export",
+        "audio_transcript",
+        "video_transcript",
+        "letter",
+        "diary",
+        "conversation_candidate",
+        "other",
+    }
+)
+_EVIDENCE_DROP_REASONS = frozenset(
+    {
+        "ineligible",
+        "superseded",
+        "duplicate",
+        "context_budget",
+        "lower_relevance",
+        "privacy_denied",
+    }
+)
+
+
+def observe_evidence_prioritization_pool(*, candidate_count: int, selected_count: int) -> None:
+    EVIDENCE_PRIORITIZATION_CANDIDATE_COUNT.observe(max(0, candidate_count))
+    EVIDENCE_PRIORITIZATION_SELECTED_COUNT.observe(max(0, selected_count))
+
+
+def observe_evidence_prioritization_dropped(*, reason: str) -> None:
+    EVIDENCE_PRIORITIZATION_DROPPED_TOTAL.labels(
+        _normalize_choice(reason, allowed=_EVIDENCE_DROP_REASONS, fallback="lower_relevance")
+    ).inc()
+
+
+def observe_evidence_prioritization_selected_item(*, verified: bool, source_type: str) -> None:
+    EVIDENCE_PRIORITIZATION_VERIFIED_SELECTED_TOTAL.labels("true" if verified else "false").inc()
+    EVIDENCE_PRIORITIZATION_SOURCE_TYPE_SELECTED_TOTAL.labels(
+        _normalize_choice(source_type, allowed=_EVIDENCE_SOURCE_TYPES)
+    ).inc()
 
 
 # --- Task 66.1: Provider Usage and Cost Foundation ---------------------------

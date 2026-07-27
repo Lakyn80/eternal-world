@@ -28,6 +28,7 @@ from app.modules.ai_agents.brain.context import (
     build_rag_evidence_items,
     build_vector_retrieval_grounded_context,
     filter_learned_memory_results_by_question_intent,
+    is_verified_evidence_result,
     prioritize_corrected_memory_evidence,
 )
 from app.modules.ai_agents.schemas import MemoryProfileContext, OrchestratorChatRequest
@@ -1582,18 +1583,26 @@ def run_demo_fa_chat_message(
             # and cap the evidence count for this intent path — reduces
             # dilution by unrelated archival items instead of relying only
             # on prompt wording to hold the Brain's attention (see
-            # prioritize_corrected_memory_evidence docstring).
+            # prioritize_corrected_memory_evidence docstring). This branch is
+            # only reached when `classify_memory_query_intent` already
+            # classified the turn as CORRECTED_MEMORY_FACT/CORRECTION_HISTORY
+            # (see `expanded_retrieval_query is not None` above), so
+            # `corrected_memory_intent=True` is correct here — Task 65.10
+            # keeps this narrow, already-tuned mode for this specific
+            # question shape while introducing a separate bounded,
+            # relevance-driven mode for ordinary questions elsewhere.
             prioritized_results = prioritize_corrected_memory_evidence(
                 filtered_pool,
                 limit=min(resolved_runtime.top_k, CORRECTED_MEMORY_EVIDENCE_CAP),
+                corrected_memory_intent=True,
             )
             retrieval_response = retrieval_response.model_copy(update={"results": prioritized_results})
             observe_avatar_corrected_memory_resolution(
-                resolved=any(
-                    result.source_type == "conversation_candidate"
-                    and (result.payload_metadata or {}).get("memory_status") == "verified"
-                    for result in prioritized_results
-                )
+                # Task 65.10: pipeline-neutral - any recognized verified
+                # evidence (conversation_candidate, memorial contribution, or
+                # biography) counts as a resolved corrected-memory turn, not
+                # only conversation_candidate.
+                resolved=any(is_verified_evidence_result(result) for result in prioritized_results)
             )
         else:
             retrieval_response = retrieve_profile_rag(

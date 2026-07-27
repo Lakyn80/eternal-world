@@ -3,7 +3,11 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import date
 
-from app.modules.ai_agents.brain.context import BrainMemoryEvidence, BrainRagEvidence
+from app.modules.ai_agents.brain.context import (
+    VERIFIED_EVIDENCE_SOURCE_TYPES,
+    BrainMemoryEvidence,
+    BrainRagEvidence,
+)
 from app.modules.ai_agents.schemas import OrchestratorChatRequest
 from app.modules.avatar_persona.prompt_composer import compose_avatar_persona_prompt
 
@@ -275,8 +279,15 @@ _VERIFIED_LEARNED_MEMORY_STATUS = "verified"
 
 
 def _is_verified_learned_memory(evidence_item: BrainRagEvidence) -> bool:
+    """Task 65.10: recognizes verified evidence from ANY approved pipeline
+    (conversation_candidate, manual_text/memorial contribution, biography -
+    see `VERIFIED_EVIDENCE_SOURCE_TYPES`), not only conversation_candidate.
+    Without this, an approved memorial contribution or biography fact would
+    be labeled a plain ARCHIVAL DOCUMENT below and lose the "equal authority,
+    do not discount for a lower retrieval score" prompt guidance that a
+    conversation-derived verified memory gets."""
     return (
-        evidence_item.source_document_type == "conversation_candidate"
+        evidence_item.source_document_type in VERIFIED_EVIDENCE_SOURCE_TYPES
         and evidence_item.memory_status == _VERIFIED_LEARNED_MEMORY_STATUS
     )
 
