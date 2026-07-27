@@ -12,9 +12,13 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /opt/python-ai-base
 
-COPY requirements.ai-base.txt ./
+COPY requirements-torch-cpu.txt requirements.ai-base.txt ./
 
-RUN pip install --no-cache-dir --retries 10 --timeout 300 --index-url https://download.pytorch.org/whl/cpu torch \
+# Task 65.9.1F - single, version-pinned source of truth for the CPU-only
+# Torch dependency (see backend/requirements-torch-cpu.txt for the full
+# root-cause/provenance investigation of the previously unpinned,
+# duplicated `pip install ... torch` command this replaces).
+RUN pip install --no-cache-dir --retries 10 --timeout 300 -r requirements-torch-cpu.txt \
     && pip install --no-cache-dir --retries 10 --timeout 300 -r requirements.ai-base.txt \
     && python -c "import torch, sentence_transformers, FlagEmbedding"
 

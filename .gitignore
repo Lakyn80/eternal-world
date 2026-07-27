@@ -18,3 +18,12 @@ playwright-report/
 test-results/
 *.tsbuildinfo
 .DS_Store
+
+# --- Task 65.9.1F.2: Celery Beat runtime-generated schedule database
+#     (created by the maintenance_worker's `celery beat` process at
+#     backend/celerybeat-schedule; a GNU dbm/ndbm runtime state file, not
+#     application source). Narrow, exact paths only - never a broad
+#     `*schedule*`/`backend/*` pattern that could shadow real source under
+#     backend/.
+backend/celerybeat-schedule
+backend/celerybeat-schedule.*

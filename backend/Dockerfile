@@ -8,7 +8,11 @@ ENV PYTHONPATH=/app
 
 COPY requirements*.txt ./
 
-RUN pip install --no-cache-dir --retries 10 --timeout 300 --index-url https://download.pytorch.org/whl/cpu torch
+# Task 65.9.1F - single, version-pinned source of truth for the CPU-only
+# Torch dependency (see backend/requirements-torch-cpu.txt for the full
+# root-cause/provenance investigation of the previously unpinned,
+# duplicated `pip install ... torch` command this replaces).
+RUN pip install --no-cache-dir --retries 10 --timeout 300 -r requirements-torch-cpu.txt
 RUN pip install --no-cache-dir --retries 10 --timeout 300 -r requirements.txt
 
 COPY . .

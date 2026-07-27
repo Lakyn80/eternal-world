@@ -74,6 +74,14 @@ artifacts/
 #     not ship a ~6MB test tree it will never execute.
 tests/
 
+# --- Task 65.9.1F.2: Celery Beat runtime-generated schedule database
+#     (backend/celerybeat-schedule, created at runtime by the
+#     maintenance_worker's `celery beat` process - a GNU dbm/ndbm state
+#     file, never read by the build or by application startup). Bare,
+#     context-relative, exact paths only - never a broad pattern.
+celerybeat-schedule
+celerybeat-schedule.*
+
 # --- OS temporary files ---
 .DS_Store
 Thumbs.db
