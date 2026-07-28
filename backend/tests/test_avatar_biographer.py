@@ -466,7 +466,7 @@ def test_postpone_question_marks_status_and_never_creates_a_candidate(client):
     assert conflict.status_code == 409
 
 
-def test_topics_are_never_repeated_across_multiple_next_question_calls(client):
+def test_topics_are_never_repeated_across_the_first_pass_through_the_catalog(client):
     token, profile_id = _create_memorial_with_indexed_biography(client, "biographer-owner8@example.com")
     seen_topics: set[str] = set()
     for _ in range(8):
@@ -482,13 +482,20 @@ def test_topics_are_never_repeated_across_multiple_next_question_calls(client):
             headers=_auth_headers(token),
         )
 
-    exhausted = client.get(
+    # Business rule: the Biographer must never present a permanent
+    # "nothing left to ask" dead end - once every catalog topic has been
+    # covered once, it keeps offering questions by revisiting the topic
+    # asked longest ago instead of returning `None` (see
+    # `avatar_biographer.coverage.select_next_topic`'s revisit tier).
+    revisited = client.get(
         f"/api/memorials/{profile_id}/biographer/next-question",
         params={"locale": "ru"},
         headers=_auth_headers(token),
     )
-    assert exhausted.status_code == 200
-    assert exhausted.json() is None
+    assert revisited.status_code == 200
+    revisited_body = revisited.json()
+    assert revisited_body is not None
+    assert revisited_body["topic"] in seen_topics
 
 
 def test_foreign_user_cannot_reach_biographer_endpoints(client):

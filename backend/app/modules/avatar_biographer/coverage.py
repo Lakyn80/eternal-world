@@ -40,8 +40,11 @@ POSTPONE_COOLDOWN_QUESTIONS = 2
 RICH_EVIDENCE_CHUNK_THRESHOLD = 4
 BASIC_EVIDENCE_CHUNK_THRESHOLD = 1
 
-#: Once a topic has been asked this many times, stop asking about it again
-#: even if evidence is still thin - prevents an unbounded loop on one topic.
+#: Once a topic has been asked this many times, deprioritize it below every
+#: not-yet-covered topic (see `_REVISIT_STATES_PRIORITY`) - prevents an
+#: unbounded loop repeatedly asking about the same topic before every other
+#: topic has had a turn, without ever making the topic permanently
+#: unselectable.
 MAX_QUESTIONS_PER_TOPIC = 3
 
 _ACTIVE_CANDIDATE_STATUSES = frozenset({"needs_review"})
@@ -165,6 +168,22 @@ _SELECTABLE_STATES_PRIORITY = (
     TopicCoverageState.POSTPONED,
 )
 
+#: Business rule: the Biographer conversation must never present a
+#: permanent "nothing left to ask" dead end - once every catalog topic has
+#: reached one of these states, they become a last-resort tier instead of
+#: making the topic forever unselectable. Without this, a biography whose
+#: text already reads as covering most topics well (`rich` evidence found
+#: on the very first evaluation, before the owner was ever asked about that
+#: topic directly) reaches an all-topics-covered dead end after only one or
+#: two real questions - the frontend then has no way to offer another
+#: question at all. The same postpone cool-down (`_postpone_cooldown_elapsed`)
+#: still applies, so a just-covered topic is not immediately re-asked.
+_REVISIT_STATES_PRIORITY = (
+    TopicCoverageState.RICH,
+    TopicCoverageState.SKIPPED,
+    TopicCoverageState.EXHAUSTED,
+)
+
 
 def select_next_topic(
     coverages: list[TopicCoverage],
@@ -174,12 +193,21 @@ def select_next_topic(
     """Deterministic priority selection (Part D.15 of the task spec).
 
     1. never-started topics, 2. weak, 3. basic (a useful gap remains),
-    4. postponed topics whose cool-down has elapsed. `rich`/`exhausted`/
-    `skipped` topics and topics currently `blocked_from_selection` are never
-    offered. Order within a priority band follows the fixed catalog order -
-    "childhood-first" no longer holds structurally, since any topic (not
-    only `childhood`) can occupy the highest-priority band depending on
-    what has actually been covered so far.
+    4. postponed topics whose cool-down has elapsed. Order within a
+    priority band follows the fixed catalog order - "childhood-first" no
+    longer holds structurally, since any topic (not only `childhood`) can
+    occupy the highest-priority band depending on what has actually been
+    covered so far.
+
+    If none of the above are selectable, every topic has been richly
+    covered, skipped, or exhausted - fall back to revisiting the one that
+    has gone longest without a question (never-asked-directly topics, i.e.
+    `last_question_sequence is None`, come first) once its cool-down has
+    elapsed, rather than returning `None`. Topics currently
+    `blocked_from_selection` are never offered by either tier. `None` is
+    only ever returned when literally every topic is blocked - the caller
+    (`avatar_biographer.service.get_next_question`) turns that into an
+    explicit `candidate_waiting_for_review` block, never a bare "done".
     """
 
     for state in _SELECTABLE_STATES_PRIORITY:
@@ -191,4 +219,23 @@ def select_next_topic(
             ):
                 continue
             return coverage
-    return None
+
+    revisit_candidates = [
+        coverage
+        for coverage in coverages
+        if not coverage.blocked_from_selection and coverage.state in _REVISIT_STATES_PRIORITY
+    ]
+    if not revisit_candidates:
+        return None
+    ready = [
+        coverage
+        for coverage in revisit_candidates
+        if _postpone_cooldown_elapsed(coverage, total_questions_asked=total_questions_asked)
+    ]
+    pool = ready or revisit_candidates
+    return min(
+        pool,
+        key=lambda coverage: (
+            -1 if coverage.last_question_sequence is None else coverage.last_question_sequence
+        ),
+    )

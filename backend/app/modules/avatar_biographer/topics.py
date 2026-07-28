@@ -25,8 +25,10 @@ class BiographerTopic:
     questions: dict[str, str]
 
 
-#: Order matters: topics are offered in this fixed sequence, once per
-#: memorial (see `avatar_biographer.service.get_next_question`).
+#: Order matters: topics are offered in this fixed sequence and, once every
+#: topic has been covered, can be revisited in the same order (see
+#: `avatar_biographer.coverage.select_next_topic`) - the Biographer never
+#: permanently runs out of topics to ask about.
 BIOGRAPHER_TOPICS: tuple[BiographerTopic, ...] = (
     BiographerTopic(
         key="childhood",
