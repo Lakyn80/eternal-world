@@ -344,6 +344,46 @@ describe('BiographyPanel', () => {
     await waitFor(() => expect(api.startBiographyIngestion).toHaveBeenCalledTimes(1));
   });
 
+  it(
+    'keeps polling after starting indexing until the job actually settles (regression: the panel used to freeze forever after a single bonus check, even while the job was still running)',
+    async () => {
+      vi.mocked(api.getBiographyStatus)
+        .mockResolvedValueOnce(baseBiographyStatus({ status: 'ready_for_ingestion' })) // mount
+        .mockResolvedValueOnce(baseBiographyStatus({ status: 'ingesting', background_job_status: 'queued' })) // post-start refresh
+        .mockResolvedValueOnce(baseBiographyStatus({ status: 'ingesting', background_job_status: 'running' })) // loop's own immediate tick
+        .mockResolvedValueOnce(baseBiographyStatus({ status: 'ingesting', background_job_status: 'running' })) // never reached under the old bug
+        .mockResolvedValue(
+          baseBiographyStatus({ status: 'indexed', background_job_status: 'succeeded', indexed_at: '2026-07-28T11:12:40Z' })
+        );
+      vi.mocked(api.startBiographyIngestion).mockResolvedValue({
+        profile_id: 7,
+        status: 'ingesting',
+        background_job_id: 1,
+        background_job_status: 'queued'
+      });
+      const user = userEvent.setup();
+
+      render(<BiographyPanel initialBiography="Text." lang="en" profileId={7} t={t} token="tok" />);
+      const startButton = await screen.findByRole('button', { name: t.biographyStartIngestion });
+      await user.click(startButton);
+      await user.click(screen.getByRole('button', { name: t.biographyConfirmStartYes }));
+
+      // Call #2 (the immediate post-start refresh) and call #3 (the poll
+      // loop's own immediate tick) both land within the first 3s poll
+      // interval - this is exactly as far as the old one-shot-bonus-timer
+      // code ever got, and it never called again after this regardless of
+      // whether the job was still running.
+      await waitFor(() => expect(api.getBiographyStatus).toHaveBeenCalledTimes(3));
+
+      // The real poll interval is 3s; waiting past two more real intervals
+      // must still keep polling while the job remains active, proving the
+      // loop survived past the point the old code died at.
+      await waitFor(() => expect(api.getBiographyStatus).toHaveBeenCalledTimes(5), { timeout: 9000, interval: 200 });
+      expect(await screen.findByText(t.biographyUpToDate)).toBeInTheDocument();
+    },
+    12000
+  );
+
   it('shows the failure reason and a retry action when indexing failed', async () => {
     vi.mocked(api.getBiographyStatus).mockResolvedValue(
       baseBiographyStatus({ status: 'failed', failure_reason: 'Worker unavailable', attempt_count: 2 })

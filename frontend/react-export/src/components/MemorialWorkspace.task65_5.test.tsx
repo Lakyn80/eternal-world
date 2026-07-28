@@ -352,7 +352,7 @@ describe('BiographyPanel - save() does not contradict an already-indexed state',
     expect(screen.getByText(t.biographyUpToDate)).toBeInTheDocument();
   });
 
-  it('editing an already-indexed biography (now stale) still shows the not-indexed notice', async () => {
+  it('editing an already-indexed biography (now stale) shows a distinct "saved, needs re-indexing" notice', async () => {
     vi.mocked(api.getBiographyStatus).mockResolvedValue(
       baseBiographyStatus({ status: 'indexed', indexed_at: '2026-07-22T07:39:41Z' })
     );
@@ -364,7 +364,13 @@ describe('BiographyPanel - save() does not contradict an already-indexed state',
     await user.type(textarea, ' Edited.');
     await user.click(screen.getByRole('button', { name: t.biographySave }));
 
-    expect(await screen.findByText(t.biographySavedNotIndexed)).toBeInTheDocument();
+    // Distinct from the never-indexed-yet notice (Task 65.4 bug report):
+    // this correction WAS previously indexed, so "not indexed yet" would
+    // wrongly read as "never indexed" - the new-version-saved wording makes
+    // clear the save itself succeeded and is visible, while flagging that
+    // re-indexing is still required to make it the active version.
+    expect(await screen.findByText(t.biographySavedNowStale)).toBeInTheDocument();
+    expect(screen.queryByText(t.biographySavedNotIndexed)).not.toBeInTheDocument();
   });
 });
 

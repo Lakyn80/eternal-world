@@ -111,6 +111,7 @@ export type Copy = {
   biographyRetry: string;
   biographyTextLabel: string;
   biographySavedNotIndexed: string;
+  biographySavedNowStale: string;
   biographyLastIndexed: string;
   biographyFailureReason: string;
   biographyAttempts: string;
@@ -364,6 +365,7 @@ export const COPY: Record<Lang, Copy> = {
     biographyRetry: 'Retry indexing',
     biographyTextLabel: 'Biography text',
     biographySavedNotIndexed: 'Biography saved. It has not been indexed yet.',
+    biographySavedNowStale: 'New version saved. Re-index it to update the avatar memory - the previously indexed version is still active until then.',
     biographyLastIndexed: 'Last indexed',
     biographyFailureReason: 'Reason',
     biographyAttempts: 'Attempts',
@@ -616,6 +618,7 @@ export const COPY: Record<Lang, Copy> = {
     biographyRetry: 'Zkusit indexaci znovu',
     biographyTextLabel: 'Text životopisu',
     biographySavedNotIndexed: 'Životopis uložen. Zatím nebyl zaindexován.',
+    biographySavedNowStale: 'Nová verze uložena. Spusťte znovu indexaci, aby se aktualizovala paměť avatara - do té doby zůstává aktivní předchozí zaindexovaná verze.',
     biographyLastIndexed: 'Naposledy zaindexováno',
     biographyFailureReason: 'Důvod',
     biographyAttempts: 'Počet pokusů',
@@ -868,6 +871,7 @@ export const COPY: Record<Lang, Copy> = {
     biographyRetry: 'Повторить индексацию',
     biographyTextLabel: 'Текст биографии',
     biographySavedNotIndexed: 'Биография сохранена. Она ещё не проиндексирована.',
+    biographySavedNowStale: 'Новая версия сохранена. Запустите индексацию заново, чтобы обновить память аватара - до этого момента остаётся активной предыдущая проиндексированная версия.',
     biographyLastIndexed: 'Последняя индексация',
     biographyFailureReason: 'Причина',
     biographyAttempts: 'Количество попыток',
@@ -2633,32 +2637,55 @@ export function BiographyPanel({
     };
   }, [token, profileId]);
 
-  useEffect(() => {
-    let cancelled = false;
-    let timer: ReturnType<typeof setTimeout> | null = null;
+  const pollCancelledRef = useRef(false);
+  const pollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-    async function poll() {
+  // Bug fix: this used to be a plain effect-local `poll()` that stopped
+  // scheduling itself the moment a fetch found no active job (true at
+  // mount, before the owner ever starts indexing) and never restarted -
+  // `startIngestion` below then only ran one extra one-off status check 3s
+  // later "because the loop above would keep going", but that loop had
+  // already exited for good. Net effect: the panel froze showing
+  // "ingesting" forever once a job actually started, even after the
+  // backend finished successfully, because nothing was left polling.
+  // Promoting this to a component-scoped, restartable loop (shared by the
+  // mount effect and by every action that puts a job in flight) fixes
+  // that - restarting it just resumes the same continuous poll instead of
+  // firing a second, competing one-shot check.
+  function pollWhileActive() {
+    pollCancelledRef.current = false;
+    if (pollTimerRef.current) {
+      clearTimeout(pollTimerRef.current);
+      pollTimerRef.current = null;
+    }
+
+    async function tick() {
       try {
         const next = await getBiographyStatus(token, profileId);
-        if (cancelled) return;
+        if (pollCancelledRef.current) return;
         setStatus(next);
         setLoading(false);
         if (isBiographyJobActive(next)) {
-          timer = setTimeout(poll, BIOGRAPHY_POLL_INTERVAL_MS);
+          pollTimerRef.current = setTimeout(tick, BIOGRAPHY_POLL_INTERVAL_MS);
         }
       } catch (loadError) {
-        if (!cancelled) {
+        if (!pollCancelledRef.current) {
           setError(safeError(loadError));
           setLoading(false);
         }
       }
     }
 
-    void poll();
+    void tick();
+  }
+
+  useEffect(() => {
+    pollWhileActive();
     return () => {
-      cancelled = true;
-      if (timer) clearTimeout(timer);
+      pollCancelledRef.current = true;
+      if (pollTimerRef.current) clearTimeout(pollTimerRef.current);
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token, profileId]);
 
   async function save() {
@@ -2673,8 +2700,13 @@ export function BiographyPanel({
       // the biography was already `indexed`, showing "saved, not indexed
       // yet" here would contradict the still-correct "Indexed / up to
       // date" state shown above - only claim "not indexed" when saving
-      // actually left it in a not-yet-indexed state.
-      if (next.status !== 'indexed') {
+      // actually left it in a not-yet-indexed state. A correction to an
+      // already-indexed biography (`stale`) gets its own message - it *was*
+      // indexed and the new text is now saved, just not the version the
+      // avatar currently uses yet - distinct from "saved, never indexed".
+      if (next.status === 'stale') {
+        setNotice(t.biographySavedNowStale);
+      } else if (next.status !== 'indexed') {
         setNotice(t.biographySavedNotIndexed);
       }
     } catch (saveError) {
@@ -2697,13 +2729,10 @@ export function BiographyPanel({
       const refreshed = await getBiographyStatus(token, profileId);
       setStatus(refreshed);
       if (isBiographyJobActive(refreshed)) {
-        setTimeout(async () => {
-          try {
-            setStatus(await getBiographyStatus(token, profileId));
-          } catch {
-            // The regular poll loop above will recover on its next tick.
-          }
-        }, BIOGRAPHY_POLL_INTERVAL_MS);
+        // Restart the shared continuous poll loop rather than firing one
+        // extra one-off check - see `pollWhileActive` above for why a
+        // single bonus check silently let the UI freeze mid-job.
+        pollWhileActive();
       }
     } catch (startError) {
       if (startError instanceof MemorialApiError && startError.status === 409) {
