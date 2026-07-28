@@ -315,8 +315,16 @@ export async function listBiographyMemoryEntries(
   );
 }
 
-export async function getBiographerResume(accessToken: string, profileId: number): Promise<BiographerResumeRead> {
-  return requestJson<BiographerResumeRead>(`/api/memorials/${profileId}/biographer/resume`, undefined, accessToken);
+export async function getBiographerResume(
+  accessToken: string,
+  profileId: number,
+  locale: 'cs' | 'ru'
+): Promise<BiographerResumeRead> {
+  return requestJson<BiographerResumeRead>(
+    `/api/memorials/${profileId}/biographer/resume?locale=${locale}`,
+    undefined,
+    accessToken
+  );
 }
 
 export async function getBiographerEligibility(accessToken: string, profileId: number): Promise<BiographerEligibilityRead> {

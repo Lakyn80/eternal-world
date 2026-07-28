@@ -87,6 +87,12 @@ def get_biographer_eligibility_endpoint(
 )
 def get_biographer_resume_endpoint(
     profile_id: ProfileIdPath,
+    # Task 65.10.1: defaults to "cs" for the same backward-compatibility
+    # reason `CandidateLocaleQuery` does in `memorial_candidates.router` -
+    # this endpoint shipped without a locale param and the resume state
+    # previously never returned any viewer-facing clarification text of its
+    # own to localize.
+    locale: str = Query(default="cs", pattern="^(cs|ru)$"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> BiographerResumeRead:
@@ -99,7 +105,7 @@ def get_biographer_resume_endpoint(
         )
     except (MemorialNotFoundError, MemorialForbiddenError) as exc:
         _raise_access_error(exc)
-    state = get_resume_state(db, profile=profile)
+    state = get_resume_state(db, profile=profile, locale=locale)
     return BiographerResumeRead(
         profile_id=state.profile_id,
         biography_status=state.biography_status,
@@ -112,6 +118,7 @@ def get_biographer_resume_endpoint(
         unresolved_clarification_count=state.unresolved_clarification_count,
         promotion_status=state.promotion_status,
         next_action=state.next_action,
+        next_clarification_question=state.next_clarification_question,
     )
 
 

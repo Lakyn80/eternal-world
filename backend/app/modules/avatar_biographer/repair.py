@@ -29,7 +29,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.core.logging import get_logger, log_event
-from app.db.models import ConversationMemoryCandidate, MemoryClarificationQuestion
+from app.db.models import BiographerQuestion, ConversationMemoryCandidate, MemoryClarificationQuestion
 from app.modules.family_memory_enrichment.service import bypass_mandatory_clarifications_and_finalize
 
 _logger = get_logger("avatar_biographer")
@@ -42,6 +42,13 @@ class RepairedCandidate:
     previous_enrichment_status: str
     new_enrichment_status: str
     cancelled_clarification_count: int
+
+
+@dataclass(frozen=True)
+class RepairedStaleClarificationBlock:
+    candidate_id: int
+    profile_id: int
+    previous_unresolved_clarification_count: int
 
 
 def find_stuck_biographer_candidates(
@@ -126,6 +133,98 @@ def repair_stuck_biographer_candidates(
                 previous_enrichment_status=previous_status,
                 new_enrichment_status=candidate.enrichment_status,
                 cancelled_clarification_count=cancelled_count,
+            )
+        )
+    return repaired
+
+
+def find_stale_active_clarification_blocks(
+    db: Session, *, profile_id: int
+) -> list[ConversationMemoryCandidate]:
+    """Read-only: Biographer-sourced candidates whose stored
+    `unresolved_clarification_count` claims a clarification is still
+    pending (> 0 - the exact signal `service._get_open_biographer_candidate`
+    uses to block the Biographer tab with `active_clarification_exists`)
+    but for which no `MemoryClarificationQuestion` row with
+    `status="pending"` actually exists (Task 65.10.1).
+
+    Unlike `find_stuck_biographer_candidates` above - which targets a real,
+    still-answerable clarification that has simply sat unanswered too long
+    (age-gated, never touching a candidate the owner is normally still in
+    the middle of answering) - this targets a stored counter that disagrees
+    with reality regardless of age: there is no real question behind the
+    block for the owner to "wait out" or answer, so age can never make it
+    correct. Left uncorrected, this is exactly the reported bug: the
+    Biographer tab shows "please answer the current clarification question
+    below" with no question rendered below it and no way to proceed."""
+
+    statement = (
+        select(ConversationMemoryCandidate)
+        .join(BiographerQuestion, BiographerQuestion.resulting_candidate_id == ConversationMemoryCandidate.id)
+        .where(
+            BiographerQuestion.profile_id == profile_id,
+            ConversationMemoryCandidate.status == "needs_review",
+            ConversationMemoryCandidate.unresolved_clarification_count > 0,
+        )
+        .distinct()
+    )
+    candidates = list(db.scalars(statement))
+    stale: list[ConversationMemoryCandidate] = []
+    for candidate in candidates:
+        has_real_pending_clarification = db.scalar(
+            select(MemoryClarificationQuestion.id)
+            .where(
+                MemoryClarificationQuestion.candidate_id == candidate.id,
+                MemoryClarificationQuestion.status == "pending",
+            )
+            .limit(1)
+        )
+        if has_real_pending_clarification is None:
+            stale.append(candidate)
+    return stale
+
+
+def repair_stale_active_clarification_blocks(
+    db: Session, *, profile_id: int, trace_id: str | None = None
+) -> list[RepairedStaleClarificationBlock]:
+    """Idempotent read-time reconciliation (Task 65.10.1): corrects
+    `unresolved_clarification_count` back to 0 for any candidate matched by
+    `find_stale_active_clarification_blocks` - a denormalized counter proven
+    to disagree with the real, canonical clarification rows for that
+    candidate, never a finalize/approval/index action (does not touch
+    `enrichment_status`, `finalized_memory_text`, or any promotion/index
+    state). Re-running this after a repair finds nothing left to do for
+    that candidate, since the query itself no longer matches
+    `unresolved_clarification_count > 0`.
+
+    Called from `avatar_biographer/resume.py` before eligibility is
+    evaluated, so a resumed session (one left mid-clarification whose
+    underlying clarification row was independently removed/corrected, e.g.
+    by a data fix or an unrelated bug elsewhere) self-heals on the very next
+    read instead of surfacing an impossible, permanently-blocking state to
+    the owner."""
+
+    candidates = find_stale_active_clarification_blocks(db, profile_id=profile_id)
+    repaired: list[RepairedStaleClarificationBlock] = []
+    for candidate in candidates:
+        previous_count = candidate.unresolved_clarification_count
+        candidate.unresolved_clarification_count = 0
+        db.commit()
+        db.refresh(candidate)
+        log_event(
+            _logger,
+            logging.INFO,
+            "biographer_stale_clarification_block_repaired",
+            trace_id=trace_id,
+            candidate_id=candidate.id,
+            profile_id=candidate.profile_id,
+            previous_unresolved_clarification_count=previous_count,
+        )
+        repaired.append(
+            RepairedStaleClarificationBlock(
+                candidate_id=candidate.id,
+                profile_id=candidate.profile_id,
+                previous_unresolved_clarification_count=previous_count,
             )
         )
     return repaired

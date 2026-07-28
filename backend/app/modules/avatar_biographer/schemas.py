@@ -5,6 +5,7 @@ from typing import Literal
 
 from pydantic import BaseModel, Field, field_validator
 
+from app.modules.family_memory_enrichment.schemas import ClarificationQuestionRead
 
 SUPPORTED_LOCALES = ("cs", "ru")
 
@@ -86,3 +87,9 @@ class BiographerResumeRead(BaseModel):
     unresolved_clarification_count: int | None
     promotion_status: str | None
     next_action: str
+    #: Task 65.10.1 - the actual currently-answerable clarification question
+    #: behind an `active_clarification_exists` block (always present when
+    #: that is the blocked reason; `None` otherwise). Without this, the
+    #: frontend had no way to render anything below the "please answer the
+    #: current clarification question" notice.
+    next_clarification_question: ClarificationQuestionRead | None = None

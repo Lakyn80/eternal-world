@@ -196,6 +196,12 @@ export type BiographerResumeRead = {
   unresolved_clarification_count: number | null;
   promotion_status: string | null;
   next_action: BiographerResumeNextAction;
+  /** Task 65.10.1 - the actual currently-answerable clarification question
+   * behind an `active_clarification_exists` block (always present when
+   * that is the blocked reason; `null` otherwise). Without this the
+   * BiographerPanel had no data to render below the "please answer the
+   * current clarification question" blocking notice. */
+  next_clarification_question: ClarificationQuestionRead | null;
 };
 
 export type ClarificationStatus = 'pending' | 'answered' | 'skipped';

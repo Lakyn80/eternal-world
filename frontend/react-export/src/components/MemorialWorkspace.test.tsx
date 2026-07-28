@@ -18,6 +18,7 @@ import type {
   BiographerResumeRead,
   BiographyMemoryEntryRead,
   BiographyStatusRead,
+  ClarificationQuestionRead,
   ContributionRead,
   MemoryCandidateEnrichmentRead
 } from '../types/memorial';
@@ -88,6 +89,24 @@ function baseResume(overrides: Partial<BiographerResumeRead> = {}): BiographerRe
     unresolved_clarification_count: null,
     promotion_status: null,
     next_action: 'question_ready',
+    next_clarification_question: null,
+    ...overrides
+  };
+}
+
+function baseClarificationQuestion(overrides: Partial<ClarificationQuestionRead> = {}): ClarificationQuestionRead {
+  return {
+    clarification_id: 21,
+    candidate_id: 5,
+    question_key: 'place',
+    question_text: 'Kde se to obvykle odehrávalo?',
+    language: 'ru',
+    status: 'pending',
+    required: true,
+    asked_at: '2026-01-01T00:00:00Z',
+    answered_at: null,
+    answered_by: null,
+    answer_contribution_id: null,
     ...overrides
   };
 }
@@ -484,6 +503,112 @@ describe('BiographerPanel', () => {
     renderPanel();
 
     expect(await screen.findByText(t.biographerBlockedWaitingReview)).toBeInTheDocument();
+  });
+
+  // --- Task 65.10.1: the missing clarification question -------------------
+
+  it('shows the blocking notice with the actual clarification question rendered below it, and lets the owner answer it', async () => {
+    vi.mocked(api.getBiographerResume).mockResolvedValue(
+      baseResume({
+        eligible: false,
+        blocked_reason: 'active_clarification_exists',
+        active_question: null,
+        candidate_id: 5,
+        next_action: 'clarification_pending',
+        next_clarification_question: baseClarificationQuestion()
+      })
+    );
+    vi.mocked(api.answerCandidateClarification).mockResolvedValue({
+      candidate_id: 5,
+      avatar_id: 'avatar-1',
+      profile_id: 7,
+      memory_type: 'childhood_memory',
+      enrichment_status: 'collecting_details',
+      review_status: 'needs_review',
+      dispute_status: 'none',
+      privacy_scope: 'all_family',
+      unresolved_clarification_count: 0,
+      finalized_memory_text: null,
+      finalized_at: null,
+      finalized_by: null,
+      owner_reviewed_at: null,
+      owner_reviewed_by: null,
+      contribution_count: 2,
+      next_clarification_question: null,
+      promotion_id: null,
+      promotion_status: null,
+      searchable_as_fact: false,
+      explicit_indexing_required: false
+    });
+
+    const user = userEvent.setup();
+    renderPanel();
+
+    // Both the blocking notice AND the real question text must be visible
+    // together - the reported bug was the notice with nothing underneath.
+    expect(await screen.findByText(t.biographerBlockedActive)).toBeInTheDocument();
+    expect(screen.getByText('Kde se to obvykle odehrávalo?')).toBeInTheDocument();
+
+    await user.type(screen.getByLabelText(t.candidateClarificationPlaceholder), 'Na vesnici.');
+    await user.click(screen.getByRole('button', { name: t.candidateClarificationSubmit }));
+
+    await waitFor(() => expect(api.answerCandidateClarification).toHaveBeenCalledWith('tok', 7, 5, 'Na vesnici.'));
+  });
+
+  it('a session left mid-clarification and resumed later (fresh mount, no prior client state) still renders the real question, not just the notice', async () => {
+    // `renderPanel()` always starts from a completely fresh component mount
+    // (no `activeCandidateId`/`activeClarificationQuestion` carried over
+    // from a previous session) - exactly like reloading the page or
+    // navigating back to the workspace tab.
+    vi.mocked(api.getBiographerResume).mockResolvedValue(
+      baseResume({
+        eligible: false,
+        blocked_reason: 'active_clarification_exists',
+        active_question: null,
+        candidate_id: 9,
+        next_action: 'clarification_pending',
+        next_clarification_question: baseClarificationQuestion({ clarification_id: 30, candidate_id: 9, question_key: 'approximate_period', question_text: 'Kdy to bylo — přibližně v jakém věku, roce nebo období?' })
+      })
+    );
+
+    renderPanel();
+
+    expect(await screen.findByText(t.biographerBlockedActive)).toBeInTheDocument();
+    expect(screen.getByText('Kdy to bylo — přibližně v jakém věku, roce nebo období?')).toBeInTheDocument();
+    expect(screen.getByLabelText(t.candidateClarificationPlaceholder)).toBeInTheDocument();
+  });
+
+  it('never shows the active-clarification blocking notice when there is no real question behind it (repaired/inconsistent state)', async () => {
+    // The backend repairs a stale `active_clarification_exists` block
+    // before resume ever returns it (Task 65.10.1), but the frontend must
+    // also never show the notice on its own if it somehow ever received
+    // this shape - the notice must only ever accompany the actual question.
+    vi.mocked(api.getBiographerResume).mockResolvedValue(
+      baseResume({
+        eligible: false,
+        blocked_reason: 'active_clarification_exists',
+        active_question: null,
+        candidate_id: 5,
+        next_action: 'clarification_pending',
+        next_clarification_question: null
+      })
+    );
+
+    renderPanel();
+
+    await waitFor(() => expect(api.getBiographerResume).toHaveBeenCalled());
+    expect(screen.queryByText(t.biographerBlockedActive)).not.toBeInTheDocument();
+  });
+
+  it('does not show the active-clarification notice for an unrelated blocked reason', async () => {
+    vi.mocked(api.getBiographerResume).mockResolvedValue(
+      baseResume({ eligible: false, blocked_reason: 'biography_not_indexed', active_question: null, next_action: 'biography_not_indexed' })
+    );
+
+    renderPanel();
+
+    await screen.findByText(t.biographerBlockedNotIndexed);
+    expect(screen.queryByText(t.biographerBlockedActive)).not.toBeInTheDocument();
   });
 
   it('resume restores the ready-for-review state without generating a new question after navigating back', async () => {

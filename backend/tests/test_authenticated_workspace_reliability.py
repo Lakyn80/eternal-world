@@ -331,6 +331,166 @@ def test_resume_reflects_candidate_ready_for_review_after_clarifications_resolve
     assert resume["active_question"] is None
 
 
+# --- Task 65.10.1: the missing clarification question the resume "blocking
+# notice" tells the owner to answer ---------------------------------------
+
+
+def test_resume_returns_the_actual_clarification_question_text_when_blocked(client):
+    """Task 65.10.1 regression: whenever `blocked_reason ==
+    active_clarification_exists`, the Biographer UI shows a notice telling
+    the owner to "answer the current clarification question below" - the
+    resume endpoint must actually return that question (localized for the
+    viewer, same as `memorial_candidates`' equivalent history text, Task
+    65.7), not leave the frontend with nothing to render below the notice."""
+
+    token, profile_id = _create_memorial_with_indexed_biography(client, "biographer-reliability-10@example.com")
+    question = client.get(
+        f"/api/memorials/{profile_id}/biographer/next-question", params={"locale": "cs"}, headers=_auth_headers(token)
+    ).json()
+    answer = client.post(
+        f"/api/memorials/{profile_id}/biographer/questions/{question['id']}/answer",
+        headers=_auth_headers(token),
+        json={"locale": "cs", "answer_text": "Dědeček"},
+    ).json()
+    candidate_id = answer["candidate_id"]
+
+    resume = client.get(
+        f"/api/memorials/{profile_id}/biographer/resume", params={"locale": "cs"}, headers=_auth_headers(token)
+    ).json()
+    assert resume["blocked_reason"] == "active_clarification_exists"
+    next_question = resume["next_clarification_question"]
+    assert next_question is not None
+    assert next_question["candidate_id"] == candidate_id
+    assert next_question["status"] == "pending"
+    assert next_question["question_key"] == "place"
+    # Czech-localized display text (Task 64.5.1's viewer-locale-aware
+    # projection), not the canonical Russian source text stored on the row.
+    assert next_question["question_text"] == "Kde se to obvykle odehrávalo?"
+
+    resume_ru = client.get(
+        f"/api/memorials/{profile_id}/biographer/resume", params={"locale": "ru"}, headers=_auth_headers(token)
+    ).json()
+    assert resume_ru["next_clarification_question"]["question_text"] == "Где именно это происходило?"
+
+
+def test_resume_of_a_session_left_mid_clarification_reflects_the_same_question_when_resumed_later(client):
+    """Task 65.10.1 regression - a session left mid-clarification (the owner
+    answered a topic question, got a candidate that still needs a
+    clarification, and navigated away) must resume with the exact same
+    actionable question later - a brand-new request with no client-side
+    state carried over, exactly like reloading the page or navigating back
+    to the workspace - not lose it, blank it out, or swap in a different
+    one."""
+
+    token, profile_id = _create_memorial_with_indexed_biography(client, "biographer-reliability-11@example.com")
+    question = client.get(
+        f"/api/memorials/{profile_id}/biographer/next-question", params={"locale": "cs"}, headers=_auth_headers(token)
+    ).json()
+    client.post(
+        f"/api/memorials/{profile_id}/biographer/questions/{question['id']}/answer",
+        headers=_auth_headers(token),
+        json={"locale": "cs", "answer_text": "Dědeček"},
+    )
+
+    first_resume = client.get(f"/api/memorials/{profile_id}/biographer/resume", headers=_auth_headers(token)).json()
+    later_resume = client.get(f"/api/memorials/{profile_id}/biographer/resume", headers=_auth_headers(token)).json()
+
+    assert first_resume["blocked_reason"] == "active_clarification_exists"
+    assert later_resume["blocked_reason"] == "active_clarification_exists"
+    assert first_resume["candidate_id"] == later_resume["candidate_id"]
+    assert first_resume["next_clarification_question"] is not None
+    assert (
+        first_resume["next_clarification_question"]["clarification_id"]
+        == later_resume["next_clarification_question"]["clarification_id"]
+    )
+    assert (
+        later_resume["next_clarification_question"]["question_text"]
+        == first_resume["next_clarification_question"]["question_text"]
+    )
+
+
+def test_resume_repairs_inconsistent_active_clarification_block_with_no_underlying_question(client):
+    """Task 65.10.1 regression - the original reported bug: the Biographer
+    tab showed "please answer the current clarification question below"
+    with no question rendered underneath and no way to proceed. Root cause:
+    `unresolved_clarification_count` can disagree with the real
+    `memory_clarification_questions` rows (e.g. a data correction, a
+    partially-applied migration, or an unrelated bug elsewhere touches one
+    but not the other). The resume endpoint must repair (reconcile) this
+    stale counter on read - never keep surfacing an impossible blocking
+    state with nothing behind it - without finalizing, approving, or
+    indexing anything."""
+
+    token, profile_id = _create_memorial_with_indexed_biography(client, "biographer-reliability-12@example.com")
+    question = client.get(
+        f"/api/memorials/{profile_id}/biographer/next-question", params={"locale": "cs"}, headers=_auth_headers(token)
+    ).json()
+    answer = client.post(
+        f"/api/memorials/{profile_id}/biographer/questions/{question['id']}/answer",
+        headers=_auth_headers(token),
+        json={"locale": "cs", "answer_text": "Dědeček"},
+    ).json()
+    candidate_id = answer["candidate_id"]
+    assert answer["unresolved_clarification_count"] == 2
+
+    # Manufacture the inconsistency directly at the data layer, independent
+    # of any normal API flow: the real pending clarification row is gone
+    # (e.g. cancelled by an unrelated process) but the candidate's own
+    # counter still claims clarifications are outstanding - exactly the
+    # impossible state the bug report described.
+    db = _db()
+    try:
+        pending_rows = (
+            db.query(MemoryClarificationQuestion)
+            .filter(MemoryClarificationQuestion.candidate_id == candidate_id, MemoryClarificationQuestion.status == "pending")
+            .all()
+        )
+        assert len(pending_rows) == 1
+        for row in pending_rows:
+            row.status = "cancelled"
+        db.commit()
+        # Snapshot the pre-repair finalize-related fields (`initialize_candidate`
+        # already populates these from the first, non-Biographer-specific
+        # enrichment pass before the Biographer's own required-clarification
+        # bank re-opens the candidate - unrelated to this repair) so the
+        # repair can be checked against "unchanged", not against an assumed
+        # `None` this codebase never actually guarantees at this point.
+        candidate_before = db.get(ConversationMemoryCandidate, candidate_id)
+        finalized_at_before = candidate_before.finalized_at
+        finalized_memory_text_before = candidate_before.finalized_memory_text
+    finally:
+        db.close()
+
+    resume = client.get(f"/api/memorials/{profile_id}/biographer/resume", headers=_auth_headers(token)).json()
+    assert resume["blocked_reason"] != "active_clarification_exists"
+    assert resume["next_action"] != "clarification_pending"
+    assert resume["next_clarification_question"] is None
+    # The repair surfaces an honest, actionable state (Task 65.7's existing
+    # "legacy stuck state" fallback) rather than silently guessing - never
+    # `eligible=True` with no clarification and no other explanation.
+    assert resume["eligible"] is True
+    assert resume["next_action"] == "candidate_needs_owner_action"
+
+    db = _db()
+    try:
+        candidate = db.get(ConversationMemoryCandidate, candidate_id)
+        assert candidate.unresolved_clarification_count == 0
+        # Never a finalize/approval/index side effect of this repair: the
+        # repair touches `unresolved_clarification_count` only - every other
+        # finalize-related field is byte-for-byte unchanged from its
+        # pre-repair snapshot above.
+        assert candidate.enrichment_status == "collecting_details"
+        assert candidate.finalized_at == finalized_at_before
+        assert candidate.finalized_memory_text == finalized_memory_text_before
+    finally:
+        db.close()
+
+    # Idempotent: re-running resume finds nothing left to repair.
+    resume_again = client.get(f"/api/memorials/{profile_id}/biographer/resume", headers=_auth_headers(token)).json()
+    assert resume_again["blocked_reason"] != "active_clarification_exists"
+    assert resume_again["next_action"] == "candidate_needs_owner_action"
+
+
 def test_resume_blocked_when_biography_not_indexed(client):
     token = _register_and_login(client, "biographer-reliability-6@example.com")
     profile_id = _create_memorial(client, token)

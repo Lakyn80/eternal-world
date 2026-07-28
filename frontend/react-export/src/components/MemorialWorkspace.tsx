@@ -57,6 +57,7 @@ import type {
   BiographyStatusRead,
   CandidateHistoryRead,
   ChatMessageRead,
+  ClarificationQuestionRead,
   ContributionRead,
   InvitationCreateResponse,
   InvitableMemorialRole,
@@ -2960,6 +2961,14 @@ export function BiographerPanel({
   const [eligibility, setEligibility] = useState<BiographerEligibilityRead | null>(null);
   const [question, setQuestion] = useState<BiographerQuestionRead | null>(null);
   const [activeCandidateId, setActiveCandidateId] = useState<number | null>(null);
+  // Task 65.10.1: the real clarification question behind an
+  // `active_clarification_exists` block, restored from the resume
+  // endpoint's `next_clarification_question` - without this, resuming a
+  // session left mid-clarification (fresh mount/page reload) showed the
+  // "please answer the current clarification question below" notice with
+  // nothing rendered below it, since `activeCandidateId` used to only ever
+  // get set transiently right after `submitAnswer`, never on resume.
+  const [activeClarificationQuestion, setActiveClarificationQuestion] = useState<ClarificationQuestionRead | null>(null);
   const [answerText, setAnswerText] = useState('');
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -3021,11 +3030,25 @@ export function BiographerPanel({
       // already indexed) without triggering a new question generation.
       // `next-question` is only ever called when resume itself says a new
       // question should be fetched/generated.
-      const resume = await getBiographerResume(token, profileId);
+      const resume = await getBiographerResume(token, profileId, locale);
       setEligibility({ eligible: resume.eligible, blocked_reason: resume.blocked_reason });
       setReadyForReview(resume.next_action === 'candidate_ready_for_review');
       setPendingIndex(resume.next_action === 'candidate_pending_index');
       setIndexed(resume.next_action === 'candidate_indexed');
+      // Task 65.10.1: restore the pending-candidate-clarification state
+      // (the `activeCandidateId` form below) from the resume response on
+      // every load - not just transiently after `submitAnswer` - so a
+      // session resumed mid-clarification (fresh mount, page reload,
+      // navigating back to the tab) renders the real question instead of
+      // just the blocking notice with nothing answerable underneath it.
+      if (resume.next_action === 'clarification_pending' && resume.candidate_id) {
+        setActiveCandidateId(resume.candidate_id);
+        setActiveClarificationQuestion(resume.next_clarification_question);
+        setQuestion(null);
+        return;
+      }
+      setActiveCandidateId(null);
+      setActiveClarificationQuestion(null);
       if (!resume.eligible) {
         setQuestion(null);
         return;
@@ -3075,19 +3098,17 @@ export function BiographerPanel({
     setError(null);
     setReadyForReview(false);
     try {
-      const response = await answerBiographerQuestion(token, profileId, question.id, locale, answerText.trim());
+      await answerBiographerQuestion(token, profileId, question.id, locale, answerText.trim());
       clearDraft(question.id);
       setAnswerText('');
-      if (response.unresolved_clarification_count && response.unresolved_clarification_count > 0 && response.candidate_id) {
-        setActiveCandidateId(response.candidate_id);
-        setQuestion(null);
-      } else {
-        setActiveCandidateId(null);
-        if (response.enrichment_status === 'ready_for_owner_review') {
-          setReadyForReview(true);
-        }
-        await load();
-      }
+      // Task 65.10.1: always re-fetch through `load()` (the resume
+      // endpoint) instead of deciding the post-answer state from this
+      // response alone - `load()` already recomputes `readyForReview` from
+      // fresh resume data, and it is the only path that also restores the
+      // real clarification question text (`activeClarificationQuestion`)
+      // when the answer created a candidate that still needs one, so a
+      // subsequent remount/reload sees exactly the same state.
+      await load();
     } catch (answerError) {
       setError(safeError(answerError));
     } finally {
@@ -3105,10 +3126,17 @@ export function BiographerPanel({
       setAnswerText('');
       if (enrichment.unresolved_clarification_count === 0) {
         setActiveCandidateId(null);
+        setActiveClarificationQuestion(null);
         if (enrichment.enrichment_status === 'ready_for_owner_review') {
           setReadyForReview(true);
         }
         await load();
+      } else {
+        // Task 65.10.1: childhood/bedtime-song topics can require more than
+        // one clarification - advance to the actual next question the
+        // backend already returned instead of leaving the just-answered one
+        // displayed (or, worse, nothing at all).
+        setActiveClarificationQuestion(enrichment.next_clarification_question);
       }
     } catch (clarificationError) {
       setError(safeError(clarificationError));
@@ -3177,7 +3205,9 @@ export function BiographerPanel({
             {eligibility.blocked_reason === 'biography_not_indexed' && t.biographerBlockedNotIndexed}
             {eligibility.blocked_reason === 'indexing_in_progress' && t.biographerBlockedIndexing}
             {eligibility.blocked_reason === 'biography_stale' && t.biographerBlockedStale}
-            {eligibility.blocked_reason === 'active_clarification_exists' && t.biographerBlockedActive}
+            {eligibility.blocked_reason === 'active_clarification_exists' &&
+              activeClarificationQuestion &&
+              t.biographerBlockedActive}
             {eligibility.blocked_reason === 'candidate_waiting_for_review' && t.biographerBlockedWaitingReview}
             {eligibility.blocked_reason === 'permission_denied' && t.biographerBlockedPermission}
           </p>
@@ -3221,6 +3251,13 @@ export function BiographerPanel({
         <form className="grid gap-4 rounded-3xl border border-cyan/20 bg-cyan/10 p-4" onSubmit={(event) => void submitClarification(event)}>
           <p className="text-xs uppercase tracking-[.18em] text-cyan/60">{t.biographerMoreDetailsNeeded}</p>
           <p className="text-sm leading-6 text-fg/75">{t.candidateClarificationPending}</p>
+          {/* Task 65.10.1: the actual clarification question text - this is
+              the piece that was missing entirely (both on resume and via
+              submitAnswer's immediate response), leaving only the generic
+              lead-in sentence above with no real question rendered. */}
+          {activeClarificationQuestion && (
+            <p className="text-lg font-semibold text-fg">{activeClarificationQuestion.question_text}</p>
+          )}
           <Textarea label={t.candidateClarificationPlaceholder} value={answerText} onChange={setAnswerText} required maxLength={1000} />
           <button className="rounded-full bg-gradient-to-r from-cyan to-violet px-6 py-3 text-sm font-semibold text-ink disabled:opacity-55" disabled={busy || !answerText.trim()} type="submit">
             {busy ? t.working : t.candidateClarificationSubmit}
