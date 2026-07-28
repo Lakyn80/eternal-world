@@ -10267,3 +10267,62 @@ No deterministic regression, unexplained file, unrelated hunk, privacy leak, or 
 **Task 65.10C is considered complete.** Task 65.9.1G (Docker Volume Ownership and Qdrant Collection Audit) remains the next recommended task, deferred and unchanged by this task.
 
 ---
+
+## Task 65.10.1 — AI Biographer Clarification Resume Fix (2026-07-28)
+
+Fixes a reported bug: the AI Biographer tab showed a Czech blocking notice ("please answer the current clarification question below") with no actual question rendered beneath it, leaving the owner stuck with no way to proceed. Two independent, compounding defects, one backend and one frontend.
+
+### Backend root cause and fix
+
+`avatar_biographer/resume.py`'s `get_resume_state` correctly detected `blocked_reason == "active_clarification_exists"` but never returned the actual pending question text alongside it — only the generic blocked reason, leaving the frontend with nothing to render below the notice. Separately, the candidate's denormalized `unresolved_clarification_count` counter could disagree with the real, canonical `MemoryClarificationQuestion` rows behind it (e.g. a data correction, a partially-applied migration, or an unrelated bug touching one but not the other), producing an impossible, permanently-blocking state with no real question behind it at all — the literal shape of the reported bug.
+
+**API contract change.** `BiographerResumeRead` (`backend/app/modules/avatar_biographer/schemas.py`) gained a new field, `next_clarification_question: ClarificationQuestionRead | None` (reusing the existing `family_memory_enrichment` schema, not duplicated). `get_resume_state` (`resume.py`) now populates it whenever `blocked_reason == BLOCKED_ACTIVE_CLARIFICATION_EXISTS` and a candidate is present, via a new `_next_clarification_question_read` helper that fetches the real pending `MemoryClarificationQuestion` row and re-localizes its text for the current viewer with the existing `localize_question_text` helper (same pattern `memorial_candidates.router._localize_enrichment` already uses, Task 65.7) — so the canonical Russian source text is never leaked into a Czech UI. The `GET /api/memorials/{profile_id}/biographer/resume` endpoint (`router.py`) gained a `locale: str = Query(default="cs", pattern="^(cs|ru)$")` query parameter (defaults to `"cs"` for backward compatibility, matching the existing `CandidateLocaleQuery` convention) and threads it through to `get_resume_state`.
+
+**Locale propagation.** The new `locale` parameter flows: router query param → `get_resume_state(locale=...)` → `_next_clarification_question_read(locale=...)` → `localize_question_text(question_key=..., source_text=..., locale=...)`. Verified with a dedicated test asserting the `cs` and `ru` resume calls for the same pending clarification return the correctly-localized text for each locale (`"Kde se to obvykle odehrávalo?"` vs. `"Где именно это происходило?"`).
+
+**Stale-counter self-healing (`repair.py`).** Two new functions, `find_stale_active_clarification_blocks` (read-only) and `repair_stale_active_clarification_blocks` (idempotent write), target exactly the counter-vs-reality mismatch: a `needs_review` candidate with `unresolved_clarification_count > 0` but no `MemoryClarificationQuestion` row with `status == "pending"` for it. `get_resume_state` calls the repair *before* evaluating eligibility, so a resumed session whose stored count is stale self-heals on the very next read instead of surfacing the impossible blocking state. The repair is a pure reconciliation of `unresolved_clarification_count` back to `0` — re-running it after a repair finds nothing left to do, since the query itself no longer matches `unresolved_clarification_count > 0`. **Invariants the repair never touches**, verified explicitly by test (`test_resume_repairs_inconsistent_active_clarification_block_with_no_underlying_question`, byte-for-byte snapshot comparison before/after): `enrichment_status`, `finalized_at`, `finalized_memory_text`, owner approval, promotion, and indexing state. A real pending clarification is never bypassed — the repair's own query explicitly excludes any candidate that still has a genuine pending `MemoryClarificationQuestion` row.
+
+**Privacy.** The two new `log_event` calls in `repair.py` log only `candidate_id`, `profile_id`, and `previous_unresolved_clarification_count` — never question text, answer text, or biography text. Confirmed by direct inspection of both call sites.
+
+### Frontend root cause and fix
+
+`MemorialWorkspace.tsx`'s `BiographerPanel` only ever set `activeCandidateId` (the state driving the clarification form) transiently, immediately after `submitAnswer` returned a response with `unresolved_clarification_count > 0` — never on `load()` (the resume-endpoint call run on mount and on every page load/reload/tab-return). So a session left mid-clarification and then resumed (fresh mount, page reload, navigating back to the tab) hit the resume endpoint, correctly received `blocked_reason == "active_clarification_exists"`, rendered the blocking notice — and then rendered nothing beneath it, because `activeCandidateId`/the question text were never restored from that response.
+
+**Fix.** A new `activeClarificationQuestion` state (`ClarificationQuestionRead | null`) is now populated directly from the resume endpoint's `next_clarification_question` field inside `load()`, whenever `resume.next_action === 'clarification_pending'` — on every call to `load()`, not only after answering. The blocking notice (`t.biographerBlockedActive`) now renders conditionally on `activeClarificationQuestion` being present (never on `blocked_reason` alone), so the frontend can never show the notice with nothing answerable beneath it even if a future backend response shape omits the question. `submitAnswer` was simplified to always re-fetch via `load()` afterward instead of branching on its own response, so the post-answer state and the resume-restored state are computed by exactly one code path and can never drift apart. `submitClarification` (for follow-up clarifications on the same candidate, e.g. multi-question topics like childhood/bedtime-song memories) now advances `activeClarificationQuestion` to the next question the backend already returned instead of leaving the just-answered one displayed.
+
+**Types/API client.** `frontend/react-export/src/types/memorial.ts`'s `BiographerResumeRead` gained the matching `next_clarification_question: ClarificationQuestionRead | null` field. `frontend/react-export/src/lib/memorialApi.ts`'s `getBiographerResume` gained a required `locale: 'cs' | 'ru'` parameter, appended as a `?locale=` query string.
+
+### Reload/resume behavior confirmed
+
+A dedicated backend test (`test_resume_of_a_session_left_mid_clarification_reflects_the_same_question_when_resumed_later`) issues two independent resume requests with no client-side state carried over (the same shape as reloading the page) and asserts both return the identical `candidate_id` and identical `clarification_id`/question text. A matching frontend test mounts `BiographerPanel` fresh (no prior component state) with a mocked resume response already in the `active_clarification_exists` shape and asserts the real question text renders immediately, not just the blocking notice.
+
+### Tests
+
+- `backend/tests/test_authenticated_workspace_reliability.py`: **25 passed** (3 new Task 65.10.1 tests: resume returns the real localized question when blocked, a session resumed later reflects the identical question, and the stale-counter repair reconciles an inconsistent block while leaving `enrichment_status`/`finalized_at`/`finalized_memory_text` byte-for-byte unchanged and remains idempotent on a second resume call).
+- `frontend/react-export/src/components/MemorialWorkspace.test.tsx`: **48 passed** (4 new Task 65.10.1 tests: blocking notice renders together with the real question and lets the owner answer it; a fresh-mount resume with no prior client state still renders the real question; the notice never renders when `next_clarification_question` is `null` even if `blocked_reason` says otherwise; an unrelated blocked reason never shows the active-clarification notice).
+- `python -m compileall` on the four changed backend modules: clean, exit 0.
+- OpenAPI: `len(app.openapi()['paths'])` → **97** (unchanged — a new field/query-param, not a new route).
+- Alembic: `alembic heads` / `alembic current` → **`20260724_0027 (head)`** (unchanged — no schema migration; `unresolved_clarification_count` is an existing column, no new column added).
+- TypeScript: `npx tsc --noEmit` on the frontend project → clean, exit 0.
+
+### Live activation
+
+The fix was already live-verified end-to-end against the running system in the prior task (65.10.1B) via a frontend-only container restart (`docker compose restart frontend`) — no rebuild, because the frontend's source directory is bind-mounted into the Vite dev-server container (`docker-compose.yml`, `frontend` service). This closure task (65.10.1C) did **not** restart or rebuild any container; `docker compose ps` showed all ten containers with unchanged uptimes throughout (`eternal_world_frontend` continuously "Up" since that prior restart), and `GET /health`, `GET /health/runtime`, and `GET /` (frontend, HTTP 200) were all re-confirmed read-only.
+
+### Accidental synthetic-debug-data incident and cleanup (Task 65.10.1A)
+
+During the investigation that produced this fix, synthetic debug data was accidentally written to the real running Postgres/Qdrant instances. This was identified and cleanly cleaned up in a prior, separate task (**Task 65.10.1A**): **9 exact PostgreSQL rows** and **1 exact Qdrant point** were removed, both independently identified and verified, with no unrelated data affected. This closure task re-confirms no synthetic debug data remains outstanding from that incident and did not itself touch PostgreSQL, Redis, Qdrant, or any Docker volume — all verification in this task was read-only against live data plus the pytest suites above.
+
+### Confirmations
+
+No new functionality beyond the described fix was implemented. No git commit/push/add/reset/restore/checkout/clean/stash was run before the commits described below. No Docker build/rebuild/recreate/restart. No Qdrant, PostgreSQL, or Redis data was modified by this closure task. No real DeepSeek/provider call was made. No new embedding was created. No Docker volume was touched. No deployment, no GitHub Actions trigger.
+
+### Commits
+
+Commit 1 (implementation/tests) `870ef33` — `fix: restore pending AI biographer clarifications` — contains exactly: `backend/app/modules/avatar_biographer/repair.py`, `backend/app/modules/avatar_biographer/resume.py`, `backend/app/modules/avatar_biographer/router.py`, `backend/app/modules/avatar_biographer/schemas.py`, `backend/tests/test_authenticated_workspace_reliability.py`, `frontend/react-export/src/components/MemorialWorkspace.test.tsx`, `frontend/react-export/src/components/MemorialWorkspace.tsx`, `frontend/react-export/src/lib/memorialApi.ts`, `frontend/react-export/src/types/memorial.ts`. Commit 2 (this documentation update) contains exactly `PROJECT_PROGRESS.md` and `md_roadmap/ETERNAL_WORLD_AVATAR_QUALITY_PLAN.md`. All `git add` calls used explicit paths — `git add .`/`-A`/`--all` was never used.
+
+### Next recommended task
+
+**Task 65.9.1G — Docker Volume Ownership and Qdrant Collection Audit** (deferred, unchanged by this task).
+
+---
