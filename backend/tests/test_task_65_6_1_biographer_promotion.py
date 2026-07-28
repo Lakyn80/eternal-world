@@ -721,12 +721,23 @@ def test_retrieval_visibility_predicate_hides_private_owner_evidence_from_non_ow
 
 
 def test_chat_evidence_prioritizes_verified_promoted_memory_over_generic_evidence(client, monkeypatch):
-    """Task 65.6.1 (Part F/I): the authenticated chat path must float an
-    approved, verified (`memory_status=verified`,
-    `source_type=conversation_candidate`) memory to the front of the
-    evidence sent to the Brain, ahead of older/generic archival evidence -
-    without changing retrieval, ranking, or top_k (see
-    `chat.service._retrieve_rag_evidence_safely`)."""
+    """Task 65.6.1 (Part F/I) + Task 65.10 (Part E/G): the authenticated chat
+    path must correctly thread the same bounded, relevance-driven
+    verified-evidence boost (`VERIFIED_EVIDENCE_RELEVANCE_BOOST = 0.15`,
+    see `app.modules.ai_agents.brain.context.
+    prioritize_corrected_memory_evidence`) through
+    `chat.service._retrieve_rag_evidence_safely` that the unit tests in
+    `test_ai_agents.py` cover directly on `prioritize_corrected_memory_
+    evidence`. An approved, verified (`memory_status=verified`,
+    `source_type=conversation_candidate`) memory whose relevance gap to a
+    generic archival item is within the bounded boost must be floated ahead
+    of it - but (per Task 65.10) verification is never an unconditional
+    override of a *substantially* more relevant generic item on an ordinary
+    factual question (this scenario's Czech question classifies as
+    `DIRECT_FACTUAL_MEMORY`, not `CORRECTED_MEMORY_FACT`/
+    `CORRECTION_HISTORY`, so only the bounded-boost mode applies here, not
+    the group-level verified-first mode). Does not change retrieval,
+    ranking, or top_k itself."""
 
     from app.modules.chat import service as chat_service
     from app.modules.rag_retrieval.schemas import RagRetrievalResponseRead, RagRetrievalResultRead
@@ -736,7 +747,7 @@ def test_chat_evidence_prioritizes_verified_promoted_memory_over_generic_evidenc
         source_id=1,
         source_title="Generic biography",
         embedding_id=1,
-        score=0.95,
+        score=0.50,
         text="Generic older statement about the same subject.",
         chunk_index=0,
         language="cs",
@@ -788,6 +799,12 @@ def test_chat_evidence_prioritizes_verified_promoted_memory_over_generic_evidenc
     finally:
         db.close()
 
+    # Bounded-boost math (Task 65.10): verified score 0.40 + boost 0.15 =
+    # 0.55, which beats the generic item's 0.50 - a close relevance gap the
+    # boost is meant to break - without the generic item being anywhere
+    # near as relevant as the birthday-regression scenario in
+    # `test_ai_agents.py` (where a 0.90+ generic item correctly keeps
+    # ranking first despite a verified competitor).
     assert len(evidence_items) == 2
     assert evidence_items[0].candidate_id == 9
     assert evidence_items[0].memory_status == "verified"
