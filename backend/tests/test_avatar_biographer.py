@@ -36,6 +36,7 @@ from app.modules.avatar_biographer.provider import (
     BiographerProviderResponse,
 )
 from app.modules.avatar_biographer.schemas import ProviderQuestionResult
+from app.modules.avatar_memory_indexing.service import AvatarMemoryIndexingExecutionError, index_promotion
 from app.modules.biography_ingestion.service import index_biography
 from app.modules.embeddings.providers.base import EmbeddingVector
 from app.modules.provider_usage.enums import AiFeature
@@ -882,3 +883,211 @@ def test_normalize_question_text_ignores_whitespace_and_punctuation():
     a = duplicate_prevention.normalize_question_text("Kde jste  prožil dětství?!")
     b = duplicate_prevention.normalize_question_text("kde jste prožil dětství")
     assert a == b
+
+
+# --- Task 65.10.5: continue the AI Biographer immediately after an indexed
+# answer, instead of the resume endpoint reporting the completed candidate as
+# `candidate_indexed` forever (even across a fresh page reload, since the
+# "latest ever" Biographer-sourced candidate never stops being the latest
+# once indexed). Covers the exact backend half of the bug: a terminal
+# `indexed`/`failed` promotion outcome must never be reported as an ongoing
+# block on new question generation. -----------------------------------------
+
+
+def _answer_childhood_and_approve_for_indexing(client, token: str, profile_id: int) -> dict:
+    """Drives the real HTTP flow up to (and including) owner approval, the
+    same path a real Biographer interview takes: answer the first (always
+    `childhood`) question, resolve its two mandatory clarifications, approve
+    the resulting candidate. Returns everything a caller needs to then
+    simulate the indexing job succeeding or failing directly via
+    `index_promotion` (Task 65.6.1's own precedent for testing the indexing
+    outcome without a real Qdrant/embedding call)."""
+
+    childhood_question = client.get(
+        f"/api/memorials/{profile_id}/biographer/next-question",
+        params={"locale": "cs"},
+        headers=_auth_headers(token),
+    ).json()
+    assert childhood_question["topic"] == "childhood"
+
+    answer = client.post(
+        f"/api/memorials/{profile_id}/biographer/questions/{childhood_question['id']}/answer",
+        headers=_auth_headers(token),
+        json={"locale": "cs", "answer_text": "Vyrostl jsem ve meste."},
+    ).json()
+    candidate_id = answer["candidate_id"]
+
+    for answer_text in ["V malém bytě ve městě.", "Bylo mi asi šest let."]:
+        resolve = client.post(
+            f"/api/memorials/{profile_id}/candidates/{candidate_id}/clarifications/answer",
+            headers=_auth_headers(token),
+            json={"answer_text": answer_text},
+        )
+        assert resolve.status_code == 200
+    assert resolve.json()["enrichment_status"] == "ready_for_owner_review"
+
+    # Backend correctness requirement: a genuine owner-review-pending
+    # candidate must still block exactly as before - the fix must not
+    # weaken this real gate.
+    resume_before_review = client.get(
+        f"/api/memorials/{profile_id}/biographer/resume", headers=_auth_headers(token)
+    ).json()
+    assert resume_before_review["next_action"] == "candidate_ready_for_review"
+    assert resume_before_review["active_question"] is None
+
+    review = client.post(
+        f"/api/memorials/{profile_id}/candidates/{candidate_id}/owner-review",
+        headers=_auth_headers(token),
+        json={"action": "confirm"},
+    )
+    assert review.status_code == 200
+    body = review.json()
+    assert body["promotion_status"] == "pending_index"
+
+    # Backend correctness requirement: a real, not-yet-run indexing job must
+    # still block exactly as before too.
+    resume_pending_index = client.get(
+        f"/api/memorials/{profile_id}/biographer/resume", headers=_auth_headers(token)
+    ).json()
+    assert resume_pending_index["next_action"] == "candidate_pending_index"
+
+    db = _db()
+    try:
+        candidate = db.get(ConversationMemoryCandidate, candidate_id)
+        owner_user_id = candidate.owner_user_id
+    finally:
+        db.close()
+
+    return {
+        "candidate_id": candidate_id,
+        "promotion_id": body["promotion_id"],
+        "owner_user_id": owner_user_id,
+        "childhood_question_text": childhood_question["question_text"],
+    }
+
+
+def test_successfully_indexed_answer_is_no_longer_active_and_resume_advances_to_the_next_real_question(client):
+    token, profile_id = _create_memorial_with_indexed_biography(client, "biog-index-flow1@example.com")
+    state = _answer_childhood_and_approve_for_indexing(client, token, profile_id)
+
+    db = _db()
+    try:
+        result = index_promotion(
+            db,
+            owner_user_id=state["owner_user_id"],
+            promotion_id=state["promotion_id"],
+            writer=FakeWriter(),
+            encoder=FakeEncoder(),
+            validate_runtime=False,
+        )
+        assert result.result == "indexed"
+    finally:
+        db.close()
+
+    # (1) The successfully indexed candidate is no longer returned as an
+    # unresolved/active candidate blocking the interview, and (2) resume
+    # returns `question_ready` immediately - not `candidate_indexed` forever,
+    # and not a page-reload-proof dead end.
+    resume_after_index = client.get(
+        f"/api/memorials/{profile_id}/biographer/resume", headers=_auth_headers(token)
+    ).json()
+    assert resume_after_index["eligible"] is True
+    assert resume_after_index["next_action"] == "question_ready"
+    assert resume_after_index["promotion_status"] == "indexed"
+    assert resume_after_index["candidate_id"] == state["candidate_id"]
+    # No pending question exists yet - resume never generates one itself
+    # (Task 65.7 D.25's own "never a side effect" contract), it only signals
+    # that a fresh one may now be fetched.
+    assert resume_after_index["active_question"] is None
+
+    # (3) The completed (childhood) question is never selected again as the
+    # "next" question - a real, different topic is offered.
+    next_question = client.get(
+        f"/api/memorials/{profile_id}/biographer/next-question",
+        params={"locale": "cs"},
+        headers=_auth_headers(token),
+    ).json()
+    assert next_question is not None
+    assert next_question["status"] == "pending"
+    assert next_question["question_text"] != state["childhood_question_text"]
+
+    # (4) Repeated resume calls are idempotent - the same pending question is
+    # returned, never a second one created.
+    resume_again = client.get(
+        f"/api/memorials/{profile_id}/biographer/resume", headers=_auth_headers(token)
+    ).json()
+    assert resume_again["next_action"] == "question_ready"
+    assert resume_again["active_question"]["id"] == next_question["id"]
+
+    db = _db()
+    try:
+        pending_count = (
+            db.query(BiographerQuestion)
+            .filter(BiographerQuestion.profile_id == profile_id, BiographerQuestion.status == "pending")
+            .count()
+        )
+        assert pending_count == 1
+    finally:
+        db.close()
+
+
+def test_failed_indexing_surfaces_as_candidate_indexing_failed_and_never_silently_advances(client):
+    token, profile_id = _create_memorial_with_indexed_biography(client, "biog-index-flow2@example.com")
+    state = _answer_childhood_and_approve_for_indexing(client, token, profile_id)
+
+    class _FailingWriter:
+        def collection_vector_size(self, *, collection_name: str) -> int | None:
+            return 1024
+
+        def get_point(self, *, collection_name: str, point_id: str) -> dict[str, object] | None:
+            return None
+
+        def upsert_point(self, *, collection_name: str, point_id: str, vector, payload) -> None:
+            raise RuntimeError("qdrant temporarily unavailable")
+
+        def delete_point(self, *, collection_name: str, point_id: str) -> None:
+            pass
+
+    db = _db()
+    try:
+        with pytest.raises(AvatarMemoryIndexingExecutionError):
+            index_promotion(
+                db,
+                owner_user_id=state["owner_user_id"],
+                promotion_id=state["promotion_id"],
+                writer=_FailingWriter(),
+                encoder=FakeEncoder(),
+                validate_runtime=False,
+            )
+    finally:
+        db.close()
+
+    # (5) The pre-fix code fell straight through to `question_ready` here
+    # (nothing in the resume decision tree recognized `failed`) - silently
+    # treating a failed indexing job as though it had succeeded. It must now
+    # be a distinct, explicit, blocking state instead.
+    resume_after_failure = client.get(
+        f"/api/memorials/{profile_id}/biographer/resume", headers=_auth_headers(token)
+    ).json()
+    assert resume_after_failure["eligible"] is True
+    assert resume_after_failure["next_action"] == "candidate_indexing_failed"
+    assert resume_after_failure["promotion_status"] == "failed"
+    assert resume_after_failure["active_question"] is None
+
+    # Idempotent: calling resume again keeps reporting the same blocked
+    # state - it never "gives up" and advances to a new question on its own.
+    resume_again = client.get(
+        f"/api/memorials/{profile_id}/biographer/resume", headers=_auth_headers(token)
+    ).json()
+    assert resume_again["next_action"] == "candidate_indexing_failed"
+
+    db = _db()
+    try:
+        pending_count = (
+            db.query(BiographerQuestion)
+            .filter(BiographerQuestion.profile_id == profile_id, BiographerQuestion.status == "pending")
+            .count()
+        )
+        assert pending_count == 0
+    finally:
+        db.close()

@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
@@ -711,6 +711,201 @@ describe('BiographerPanel', () => {
     renderPanel();
     await screen.findByText('A different question?');
     expect(screen.getByLabelText(t.biographerAnswerPlaceholder)).toHaveValue('');
+  });
+
+  // --- Task 65.10.5: continue the AI Biographer immediately after an
+  // indexed answer, instead of freezing on "Tato vzpomínka byla
+  // zaindexována." forever (the panel used to have no way to notice the
+  // per-candidate indexing job finishing on its own, and even a fresh
+  // resume call kept reporting the same terminal state - fixed on both the
+  // backend, `avatar_biographer.resume`, and here). --------------------
+
+  describe('continues the interview automatically after an answer is indexed (Task 65.10.5)', () => {
+    it(
+      'keeps polling while indexing is pending across multiple intervals, then renders the next real question automatically once the job succeeds - with an empty answer and no duplicate requests',
+      async () => {
+        const newQuestion = baseBiographerQuestion({
+          id: 55,
+          topic: 'family',
+          question_text: 'Tell me more about your family traditions.'
+        });
+        vi.mocked(api.getBiographerResume)
+          .mockResolvedValueOnce(baseResume({ active_question: null, candidate_id: 42, next_action: 'candidate_pending_index' })) // mount
+          .mockResolvedValueOnce(baseResume({ active_question: null, candidate_id: 42, next_action: 'candidate_pending_index' })) // poll tick 1 - job still running
+          .mockResolvedValueOnce(
+            baseResume({ active_question: newQuestion, candidate_id: null, promotion_status: 'indexed', next_action: 'question_ready' })
+          ); // poll tick 2 - job succeeded, backend already selected the next question
+
+        renderPanel();
+
+        expect(await screen.findByText(t.biographerCandidatePendingIndex)).toBeInTheDocument();
+        expect(screen.queryByLabelText(t.biographerAnswerPlaceholder)).not.toBeInTheDocument();
+
+        // The real poll interval is 3s; two intervals must elapse for the
+        // 3rd (terminal-success) resume call to happen on its own, with no
+        // page reload, tab switch, or manual action.
+        await waitFor(() => expect(api.getBiographerResume).toHaveBeenCalledTimes(3), { timeout: 9000, interval: 200 });
+
+        expect(await screen.findByText('Tell me more about your family traditions.')).toBeInTheDocument();
+        expect(screen.queryByText(t.biographerCandidatePendingIndex)).not.toBeInTheDocument();
+        expect(screen.queryByText(t.biographerCandidateIndexed)).not.toBeInTheDocument();
+        const textarea = screen.getByLabelText(t.biographerAnswerPlaceholder);
+        expect(textarea).toHaveValue('');
+        expect(screen.getByRole('button', { name: t.biographerSubmit })).toBeDisabled();
+
+        // The resume response already carried the new question - no extra
+        // round trip, and (Required behavior #11) no duplicate resume call
+        // sneaks in once the state has settled on `question_ready`.
+        expect(api.getNextBiographerQuestion).not.toHaveBeenCalled();
+        expect(api.getBiographerResume).toHaveBeenCalledTimes(3);
+      },
+      12000
+    );
+
+    it(
+      'fetches a freshly generated next question via next-question when resume says question_ready without already including one',
+      async () => {
+        const generated = baseBiographerQuestion({ id: 61, topic: 'work', question_text: 'What was your first job like?' });
+        vi.mocked(api.getBiographerResume)
+          .mockResolvedValueOnce(baseResume({ active_question: null, candidate_id: 42, next_action: 'candidate_pending_index' }))
+          .mockResolvedValueOnce(baseResume({ active_question: null, candidate_id: null, promotion_status: 'indexed', next_action: 'question_ready' }));
+        vi.mocked(api.getNextBiographerQuestion).mockResolvedValue(generated);
+
+        renderPanel();
+        expect(await screen.findByText(t.biographerCandidatePendingIndex)).toBeInTheDocument();
+
+        await waitFor(() => expect(api.getBiographerResume).toHaveBeenCalledTimes(2), { timeout: 9000, interval: 200 });
+        expect(await screen.findByText('What was your first job like?')).toBeInTheDocument();
+        expect(api.getNextBiographerQuestion).toHaveBeenCalledTimes(1);
+      },
+      12000
+    );
+
+    it(
+      'terminal indexing failure stops polling and shows the failure state without ever advancing to another question',
+      async () => {
+        vi.mocked(api.getBiographerResume)
+          .mockResolvedValueOnce(baseResume({ active_question: null, candidate_id: 42, next_action: 'candidate_pending_index' }))
+          .mockResolvedValueOnce(
+            baseResume({ active_question: null, candidate_id: 42, promotion_status: 'failed', next_action: 'candidate_indexing_failed' })
+          );
+
+        const { onNavigateToReview } = renderPanel();
+        expect(await screen.findByText(t.biographerCandidatePendingIndex)).toBeInTheDocument();
+
+        await waitFor(() => expect(api.getBiographerResume).toHaveBeenCalledTimes(2), { timeout: 9000, interval: 200 });
+        expect(await screen.findByText(t.biographerCandidateIndexingFailed)).toBeInTheDocument();
+        expect(screen.queryByLabelText(t.biographerAnswerPlaceholder)).not.toBeInTheDocument();
+        expect(api.getNextBiographerQuestion).not.toHaveBeenCalled();
+
+        // Manual recovery stays possible via the same Review CTA used for
+        // the pending-index state.
+        const user = userEvent.setup();
+        await user.click(screen.getByRole('button', { name: t.biographerGoToReview }));
+        expect(onNavigateToReview).toHaveBeenCalledTimes(1);
+
+        // Polling must have stopped - no further resume calls arrive on
+        // their own past the terminal failure.
+        expect(api.getBiographerResume).toHaveBeenCalledTimes(2);
+      },
+      12000
+    );
+
+    it('a pending-index poll that resolves into a genuine clarification requirement renders the clarification, never a fabricated question', async () => {
+      vi.mocked(api.getBiographerResume)
+        .mockResolvedValueOnce(baseResume({ active_question: null, candidate_id: 42, next_action: 'candidate_pending_index' }))
+        .mockResolvedValueOnce(
+          baseResume({
+            eligible: false,
+            blocked_reason: 'active_clarification_exists',
+            active_question: null,
+            candidate_id: 42,
+            next_action: 'clarification_pending',
+            next_clarification_question: baseClarificationQuestion({ candidate_id: 42 })
+          })
+        );
+
+      renderPanel();
+      expect(await screen.findByText(t.biographerCandidatePendingIndex)).toBeInTheDocument();
+
+      await waitFor(() => expect(api.getBiographerResume).toHaveBeenCalledTimes(2), { timeout: 9000, interval: 200 });
+      expect(await screen.findByText(t.biographerBlockedActive)).toBeInTheDocument();
+      expect(screen.getByText('Kde se to obvykle odehrávalo?')).toBeInTheDocument();
+      expect(api.getNextBiographerQuestion).not.toHaveBeenCalled();
+    });
+
+    it('a pending-index poll that resolves into a genuine owner-review requirement (a different candidate) renders that state, never a fabricated question', async () => {
+      vi.mocked(api.getBiographerResume)
+        .mockResolvedValueOnce(baseResume({ active_question: null, candidate_id: 42, next_action: 'candidate_pending_index' }))
+        .mockResolvedValueOnce(baseResume({ active_question: null, candidate_id: 43, next_action: 'candidate_ready_for_review' }));
+
+      renderPanel();
+      expect(await screen.findByText(t.biographerCandidatePendingIndex)).toBeInTheDocument();
+
+      await waitFor(() => expect(api.getBiographerResume).toHaveBeenCalledTimes(2), { timeout: 9000, interval: 200 });
+      expect(await screen.findByText(t.biographerReadyForReview)).toBeInTheDocument();
+      expect(api.getNextBiographerQuestion).not.toHaveBeenCalled();
+    });
+
+    it('a late-resolving stale resume response (e.g. from a memorial the owner already switched away from) never clobbers a newer question already loaded, or text the owner is mid-typing', async () => {
+      let resolveStale: (value: BiographerResumeRead) => void = () => {};
+      const stalePromise = new Promise<BiographerResumeRead>((resolve) => {
+        resolveStale = resolve;
+      });
+      let callCount = 0;
+      vi.mocked(api.getBiographerResume).mockImplementation(() => {
+        callCount += 1;
+        if (callCount === 1) return stalePromise;
+        return Promise.resolve(
+          baseResume({
+            active_question: baseBiographerQuestion({ id: 20, question_text: 'New question after switch?' })
+          })
+        );
+      });
+
+      const { rerender } = render(
+        <BiographerPanel
+          email="panel-test@example.com"
+          lang="cs"
+          onNavigateToBiography={vi.fn()}
+          onNavigateToReview={vi.fn()}
+          profileId={7}
+          t={t}
+          token="tok"
+        />
+      );
+
+      // The owner switches to a different memorial before the first
+      // request ever resolves - a real second `load()` call starts
+      // (a new `token`/`profileId`/`locale` mount effect), while the first
+      // one is still in flight.
+      rerender(
+        <BiographerPanel
+          email="panel-test@example.com"
+          lang="cs"
+          onNavigateToBiography={vi.fn()}
+          onNavigateToReview={vi.fn()}
+          profileId={8}
+          t={t}
+          token="tok"
+        />
+      );
+
+      expect(await screen.findByText('New question after switch?')).toBeInTheDocument();
+
+      const user = userEvent.setup();
+      await user.type(screen.getByLabelText(t.biographerAnswerPlaceholder), 'typed answer');
+
+      await act(async () => {
+        resolveStale(baseResume({ active_question: baseBiographerQuestion({ id: 10, question_text: 'Old question?' }) }));
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+
+      expect(screen.getByText('New question after switch?')).toBeInTheDocument();
+      expect(screen.queryByText('Old question?')).not.toBeInTheDocument();
+      expect(screen.getByLabelText(t.biographerAnswerPlaceholder)).toHaveValue('typed answer');
+    });
   });
 });
 

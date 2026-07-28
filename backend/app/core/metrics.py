@@ -516,6 +516,10 @@ _BIOGRAPHER_RESUME_STATES = frozenset(
         "candidate_needs_owner_action",
         "candidate_pending_index",
         "candidate_indexed",
+        # Task 65.10.5 - a permanently failed per-candidate indexing job,
+        # tracked distinctly rather than falling into the generic "other"
+        # bucket `_normalize_choice` uses for anything unrecognized.
+        "candidate_indexing_failed",
         "clarification_pending",
         "generation_failed",
         "blocked",

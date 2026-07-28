@@ -181,6 +181,10 @@ export type BiographerResumeNextAction =
   | 'candidate_needs_owner_action'
   | 'candidate_pending_index'
   | 'candidate_indexed'
+  // Task 65.10.5: a permanently failed per-candidate indexing job - a
+  // distinct, actionable resume state, never silently advanced past as
+  // though the answer had been indexed successfully.
+  | 'candidate_indexing_failed'
   | 'clarification_pending'
   | 'blocked';
 

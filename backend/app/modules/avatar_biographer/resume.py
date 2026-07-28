@@ -15,6 +15,20 @@ disagree with the real clarification rows behind it (see
 same "reconcile canonical state instead of inferring it" precedent used
 elsewhere in this codebase (e.g. Task 65.9.1's self-healing embedding
 workers) - never a finalize/approval/index side effect.
+
+Task 65.10.5: once the historically-latest Biographer-sourced candidate has
+actually reached a terminal indexing outcome (`promotion_status in
+{"indexed", "failed"}`), that outcome must never be reported as an ongoing
+block on new question generation - unlike `pending_index` (a real job that
+has not finished yet, still correctly blocking), "indexed"/"failed" never
+change again for that candidate, so treating either as a persistent block
+made every post-indexing resume call (including a fresh page reload) report
+the same stale state forever, with no way for the interview to continue. An
+"indexed" candidate now falls straight through to `question_ready` (the
+existing "nothing else applies" branch, unchanged); a `failed` promotion
+surfaces as the new, explicit `candidate_indexing_failed` next_action so the
+owner can retry indexing instead of the failure being silently treated as
+success.
 """
 
 from __future__ import annotations
@@ -138,10 +152,15 @@ def get_resume_state(db: Session, *, profile: MemoryProfile, locale: str = "cs")
             next_action = "blocked"
     elif active_question is not None:
         next_action = "question_ready"
-    elif promotion_status == "indexed":
-        next_action = "candidate_indexed"
     elif promotion_status == "pending_index":
         next_action = "candidate_pending_index"
+    elif promotion_status == "failed":
+        # Task 65.10.5: a permanently failed indexing job is a distinct,
+        # actionable state - never silently treated as success by falling
+        # through to `question_ready` (the pre-fix behavior), which would
+        # let the interview continue past an answer that was never actually
+        # indexed, with no owner-visible signal that a retry is needed.
+        next_action = "candidate_indexing_failed"
     elif review_status == "needs_review" and enrichment_status == "ready_for_owner_review":
         next_action = "candidate_ready_for_review"
     elif review_status == "needs_review":

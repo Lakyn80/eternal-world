@@ -149,6 +149,10 @@ export type Copy = {
   biographerReadyForReview: string;
   biographerCandidatePendingIndex: string;
   biographerCandidateIndexed: string;
+  // Task 65.10.5: shown when the approved memory's indexing job reached a
+  // permanent failure - distinct from the pending/indexed states, with a
+  // way back to Review to retry, never silently skipped past.
+  biographerCandidateIndexingFailed: string;
   biographerGoToReview: string;
   biographerTopicChildhood: string;
   biographerTopicFamily: string;
@@ -403,6 +407,7 @@ export const COPY: Record<Lang, Copy> = {
     biographerReadyForReview: 'Ready for owner review.',
     biographerCandidatePendingIndex: 'Approved and waiting to be indexed.',
     biographerCandidateIndexed: 'This memory has been indexed.',
+    biographerCandidateIndexingFailed: 'Indexing this memory failed. Go to Review to retry it.',
     biographerGoToReview: 'Go to Review',
     biographerTopicChildhood: 'Childhood',
     biographerTopicFamily: 'Family',
@@ -664,6 +669,7 @@ export const COPY: Record<Lang, Copy> = {
     biographerReadyForReview: 'Připraveno ke kontrole vlastníkem.',
     biographerCandidatePendingIndex: 'Schváleno, čeká na zaindexování.',
     biographerCandidateIndexed: 'Tato vzpomínka byla zaindexována.',
+    biographerCandidateIndexingFailed: 'Zaindexování této vzpomínky se nezdařilo. Zkuste to znovu v sekci Kontrola.',
     biographerGoToReview: 'Přejít na Kontrolu',
     candidatesTitle: 'Vzpomínky od biografa',
     candidatesSubtitle: 'Vzpomínkoví kandidáti čekající na kontrolu vlastníkem nebo již zkontrolovaní - odděleno od vzpomínek/příspěvků rodiny výše.',
@@ -917,6 +923,7 @@ export const COPY: Record<Lang, Copy> = {
     biographerReadyForReview: 'Готово к проверке владельцем.',
     biographerCandidatePendingIndex: 'Одобрено, ожидает индексации.',
     biographerCandidateIndexed: 'Это воспоминание проиндексировано.',
+    biographerCandidateIndexingFailed: 'Не удалось проиндексировать это воспоминание. Повторите попытку в разделе "Проверка".',
     biographerGoToReview: 'Перейти к проверке',
     candidatesTitle: 'Воспоминания от биографа',
     candidatesSubtitle: 'Кандидаты в воспоминания, ожидающие или прошедшие проверку владельцем - отдельно от вкладов/воспоминаний семьи выше.',
@@ -3006,9 +3013,46 @@ export function BiographerPanel({
   const [readyForReview, setReadyForReview] = useState(false);
   const [pendingIndex, setPendingIndex] = useState(false);
   const [indexed, setIndexed] = useState(false);
+  // Task 65.10.5: a permanently failed per-candidate indexing job - distinct
+  // from `indexed`/`pendingIndex`, and must never be silently treated as
+  // "done" (see `load()` below, and `avatar_biographer.resume`'s new
+  // `candidate_indexing_failed` next_action).
+  const [indexingFailed, setIndexingFailed] = useState(false);
   const [generationFailed, setGenerationFailed] = useState(false);
 
   const locale = biographerLocale(lang);
+
+  // Task 65.10.5: guards against the exact bug this task fixes - after the
+  // owner answers a question, approves the resulting memory, and starts
+  // indexing it, the panel used to have no way to notice the indexing job
+  // finishing on its own; the terminal "Tato vzpomínka byla zaindexována."
+  // state was a dead end (see `pendingIndex` poll effect below) and, even
+  // where the backend was asked again, a resume call could resolve *after*
+  // a newer one already updated state (component unmount, a manual action
+  // racing a poll tick, React StrictMode's double effect invocation) and
+  // clobber it with stale data. `loadSeqRef` makes every `load()` call
+  // aware of whether it is still the most recent one before applying any
+  // state update; `mountedRef` additionally suppresses updates entirely
+  // after unmount.
+  const loadSeqRef = useRef(0);
+  const mountedRef = useRef(true);
+  const questionIdRef = useRef<number | null>(null);
+  const candidateIdRef = useRef<number | null>(null);
+
+  useEffect(
+    () => () => {
+      mountedRef.current = false;
+    },
+    []
+  );
+
+  useEffect(() => {
+    questionIdRef.current = question?.id ?? null;
+  }, [question]);
+
+  useEffect(() => {
+    candidateIdRef.current = activeCandidateId;
+  }, [activeCandidateId]);
 
   // Task 65.7 (Part 26/28): restores an unsubmitted draft answer for the
   // SAME question after navigating away and back - never restored onto a
@@ -3048,6 +3092,12 @@ export function BiographerPanel({
   }
 
   async function load() {
+    // Task 65.10.5: capture this call's sequence number before doing
+    // anything async - every state update below is guarded by "is this
+    // still the latest `load()` call", so a slow/delayed response (a poll
+    // tick racing a manual action, an unmount racing an in-flight fetch)
+    // can never overwrite state a newer call already applied.
+    const seq = ++loadSeqRef.current;
     setLoading(true);
     setError(null);
     setDone(false);
@@ -3060,10 +3110,18 @@ export function BiographerPanel({
       // `next-question` is only ever called when resume itself says a new
       // question should be fetched/generated.
       const resume = await getBiographerResume(token, profileId, locale);
+      if (!mountedRef.current || seq !== loadSeqRef.current) return;
       setEligibility({ eligible: resume.eligible, blocked_reason: resume.blocked_reason });
       setReadyForReview(resume.next_action === 'candidate_ready_for_review');
       setPendingIndex(resume.next_action === 'candidate_pending_index');
+      // Task 65.10.5: `candidate_indexed` is preserved for API/render
+      // backward-compatibility (a resume response is never required to
+      // route through `candidate_pending_index` first), but the backend
+      // fix means a terminal "indexed" promotion now resolves straight to
+      // `question_ready` on the very next resume call - this transient
+      // banner is no longer a dead end even if it is ever observed.
       setIndexed(resume.next_action === 'candidate_indexed');
+      setIndexingFailed(resume.next_action === 'candidate_indexing_failed');
       // Task 65.10.1: restore the pending-candidate-clarification state
       // (the `activeCandidateId` form below) from the resume response on
       // every load - not just transiently after `submitAnswer` - so a
@@ -3071,6 +3129,12 @@ export function BiographerPanel({
       // navigating back to the tab) renders the real question instead of
       // just the blocking notice with nothing answerable underneath it.
       if (resume.next_action === 'clarification_pending' && resume.candidate_id) {
+        // Task 65.10.5 (Required behavior #9): never leave a previous
+        // answer sitting in the textarea once we're answering something
+        // different - only clear it when the thing being answered actually
+        // changed, so a poll re-confirming the *same* clarification never
+        // wipes text the owner is mid-typing.
+        if (candidateIdRef.current !== resume.candidate_id) setAnswerText('');
         setActiveCandidateId(resume.candidate_id);
         setActiveClarificationQuestion(resume.next_clarification_question);
         setQuestion(null);
@@ -3083,24 +3147,28 @@ export function BiographerPanel({
         return;
       }
       if (resume.active_question) {
+        if (questionIdRef.current !== resume.active_question.id) setAnswerText('');
         setQuestion(resume.active_question);
         return;
       }
       if (resume.next_action === 'question_ready') {
         const nextQuestion = await getNextBiographerQuestion(token, profileId, locale);
+        if (!mountedRef.current || seq !== loadSeqRef.current) return;
+        if (questionIdRef.current !== (nextQuestion?.id ?? null)) setAnswerText('');
         setQuestion(nextQuestion);
         setDone(nextQuestion === null);
       } else {
         setQuestion(null);
       }
     } catch (loadError) {
+      if (!mountedRef.current || seq !== loadSeqRef.current) return;
       if (loadError instanceof MemorialApiError && loadError.status === 503) {
         setGenerationFailed(true);
       } else {
         setError(safeError(loadError));
       }
     } finally {
-      setLoading(false);
+      if (mountedRef.current && seq === loadSeqRef.current) setLoading(false);
     }
   }
 
@@ -3119,6 +3187,39 @@ export function BiographerPanel({
     return () => clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [eligibility, token, profileId, locale]);
+
+  // Task 65.10.5 (the fix for this task): the owner answering a question,
+  // approving the resulting memory, and starting its indexing job all
+  // happen while this panel is mounted - the terminal state must be picked
+  // up on its own, without the owner needing to reload the page, leave and
+  // reopen this tab, or click a manual refresh button. `candidate_pending_
+  // index` is the one resume state that reflects a real background job
+  // still in flight (unlike `candidate_ready_for_review`/`clarification_
+  // pending`/`candidate_needs_owner_action`, which all need a genuine owner
+  // action first and would never resolve on their own) - the same "only
+  // poll a state that can change by itself" rule the effect above already
+  // applies to whole-biography indexing. The moment the job reaches a
+  // terminal outcome, the next `load()` call's resume response reflects it
+  // directly (`question_ready` with the next real question on success,
+  // `candidate_indexing_failed` on failure - see `load()` above) and this
+  // effect stops rescheduling itself because `pendingIndex` flips to
+  // `false`, so no further polling and no risk of resetting a user already
+  // typing into the next question.
+  //
+  // `eligibility` is included in the dependency array (even though its
+  // value is not read here) purely so this effect re-evaluates after every
+  // single `load()` call, not just the first one: `setEligibility` always
+  // creates a brand-new object, so its reference changes on every call even
+  // when `pendingIndex` itself stays `true` between two consecutive "still
+  // indexing" polls - a plain boolean alone would not change by
+  // `Object.is`, and the effect would silently stop rescheduling after its
+  // very first tick.
+  useEffect(() => {
+    if (!pendingIndex) return;
+    const timer = setTimeout(() => void load(), BIOGRAPHY_POLL_INTERVAL_MS);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingIndex, eligibility, token, profileId, locale]);
 
   async function submitAnswer(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -3276,6 +3377,18 @@ export function BiographerPanel({
         </div>
       )}
       {indexed && <p className="rounded-2xl border border-white/10 bg-black/20 p-4 text-sm text-fg/60">{t.biographerCandidateIndexed}</p>}
+      {indexingFailed && (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-red-400/30 bg-red-500/10 p-4">
+          <p className="text-sm text-red-100">{t.biographerCandidateIndexingFailed}</p>
+          <button
+            className="shrink-0 rounded-full bg-gradient-to-r from-cyan to-violet px-5 py-2.5 text-sm font-semibold text-ink"
+            onClick={onNavigateToReview}
+            type="button"
+          >
+            {t.biographerGoToReview}
+          </button>
+        </div>
+      )}
       {!loading && activeCandidateId && (
         <form className="grid gap-4 rounded-3xl border border-cyan/20 bg-cyan/10 p-4" onSubmit={(event) => void submitClarification(event)}>
           <p className="text-xs uppercase tracking-[.18em] text-cyan/60">{t.biographerMoreDetailsNeeded}</p>
