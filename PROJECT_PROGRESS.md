@@ -10326,3 +10326,108 @@ Commit 1 (implementation/tests) `870ef33` — `fix: restore pending AI biographe
 **Task 65.9.1G — Docker Volume Ownership and Qdrant Collection Audit** (deferred, unchanged by this task).
 
 ---
+
+## Task 65.10.2 — Verified Evidence Ranking Test Alignment (2026-07-28)
+
+Investigated one failing backend test, reported alongside the two live-bug fixes below: `backend/tests/test_task_65_6_1_biographer_promotion.py::test_chat_evidence_prioritizes_verified_promoted_memory_over_generic_evidence`.
+
+### Reproduction
+
+The test mocked two `retrieve_profile_rag` results for `chat_service._retrieve_rag_evidence_safely` — a generic biography chunk scored `0.95` (unverified) and a `conversation_candidate` chunk scored `0.40` (`memory_status="verified"`, `candidate_id=9`) — for the message `"Kde jsi strávil dětství?"` ("Where did you spend your childhood?"), and asserted the verified item ranked first (`evidence_items[0].candidate_id == 9`). It failed: `AssertionError: assert None == 9` — the generic `0.95` item ranked first, the verified `0.40` item second.
+
+### Root-cause classification: outdated test, not a regression
+
+`classify_memory_query_intent` correctly classifies this ordinary factual question as `DIRECT_FACTUAL_MEMORY`, not `CORRECTED_MEMORY_FACT`/`CORRECTION_HISTORY` — so Task 65.10's bounded-relevance mode applies (`combined_score = raw_relevance + (0.15 if verified else 0)`), not the intent-gated group-level verified-first mode. Under that contract, `0.40 + 0.15 = 0.55` correctly does not overtake `0.95` — a 0.55-relevance-point gap is exactly the kind of "substantially more relevant generic evidence" Task 65.10 deliberately stopped letting verification unconditionally override. The test predates Task 65.10 (commit `4a9cb4d`) and still encoded the old unconditional verified-first partition it replaced; three other tests in the same pre-65.10 vintage were already updated when 65.10 landed, but this one was missed.
+
+Confirmed pre-existing on clean `ae95b9b` (this repository's current `HEAD` at the time, i.e. not something introduced by the still-uncommitted 65.10.3/65.10.4 work below): reproduced via an isolated `git worktree add <path-outside-the-repo> ae95b9b`, a throwaway one-off container built from the already-built `eternal-world-backend` image bind-mounting the worktree's `backend/` over `/app` and attached to the existing `eternal-world_default` Docker network (reusing the running `eternal_world_db`/`redis`/`qdrant` containers read-only, no restart), running the exact failing test — identical `AssertionError`. No real LLM/embedding/Qdrant call occurred (`retrieve_profile_rag` is fully monkeypatched by the test itself). Worktree and throwaway container removed afterward; the main working tree's uncommitted files were never touched (`git status --short` before/after matched).
+
+### Fix
+
+Test-only change to `backend/tests/test_task_65_6_1_biographer_promotion.py`: lowered the mocked generic-evidence score from `0.95` to `0.50`, so the scenario now sits inside the actual bounded-boost range (`0.40 + 0.15 = 0.55 > 0.50`) — the verified item legitimately winning is now the correct, intended outcome for this close-relevance-gap case, and the assertion continues to check that outcome unmodified. No production code was changed.
+
+### Tests
+
+- Target test: **1 passed**.
+- `backend/tests/test_task_65_6_1_biographer_promotion.py` (full file): **15 passed**.
+- `backend/tests/test_ai_agents.py` (full file, includes the birthday-memory regression and cross-pipeline verification tests from Task 65.10 — left untouched and unweakened): **58 passed**.
+- `backend/tests/test_avatar_memory_query_intent.py`: **10 passed**.
+- `backend/tests/test_bilingual_retrieval_evaluation.py`: **11 passed**.
+
+### Confirmations
+
+No production code was modified. No DeepSeek/paid-provider call was made. No embedding was created. No Qdrant collection was modified. No long-lived Docker container (`eternal_world_backend`/`db`/`redis`/`qdrant`/celery workers) was restarted, stopped, or rebuilt — only a throwaway one-off container against a temporary worktree, both removed on completion. No git commit/push occurred during the investigation itself. The six files with uncommitted Task 65.10.3/65.10.4 changes (below) were confirmed untouched throughout.
+
+### Commit
+
+Commit 3 (this test fix) `c2fb78c` — `test: align verified evidence ranking with bounded boost` — contains exactly `backend/tests/test_task_65_6_1_biographer_promotion.py`.
+
+### Next recommended task
+
+**Task 65.9.1G — Docker Volume Ownership and Qdrant Collection Audit** (deferred, unchanged by this task).
+
+---
+
+## Task 65.10.3 — Biography Indexing Status Polling Fix (2026-07-28)
+
+Fixes a reported bug: after starting biography indexing from the Biography tab, the panel froze showing "indexing in progress" forever, even once the backend job had actually finished successfully.
+
+### Root cause
+
+`BiographyPanel` (`frontend/react-export/src/components/MemorialWorkspace.tsx`) polled `GET /api/memorials/{id}/biography/status` via a self-scheduling `poll()` function started once, on mount, inside a `useEffect`. If the job was not yet active at mount (the normal case — indexing has not started yet), `poll()` ran once, found nothing active, and never scheduled itself again; the effect's closure was then permanently spent. `startIngestion()` (called when the owner confirms "Start indexing") did not restart this loop — it only issued the immediate post-start status refresh plus exactly one extra one-off `setTimeout` check 3 seconds later, on the (incorrect) assumption that "the regular poll loop above will recover on its next tick." That loop had already exited for good, so after that single bonus check the UI never queried the status endpoint again, regardless of whether the job was still `ingesting`. Confirmed live in this session: backend logs showed the biography-indexing Celery task completing successfully (`biography_indexing_completed`, `background_jobs.status = 'succeeded'`, `memory_profiles.biography_status = 'indexed'`) roughly ten minutes before the frontend had made its last status request.
+
+### Fix
+
+Replaced the effect-local, one-shot `poll()` with a component-scoped, restartable `pollWhileActive()` function (backed by `useRef` cancellation/timer guards) that both the mount `useEffect` and `startIngestion()` call — restarting it after starting a job resumes the *same* continuous 3-second poll loop instead of firing a second, independent one-off check. The loop now keeps polling for as long as `isBiographyJobActive()` reports true, regardless of how many times it has already ticked.
+
+Also improved the post-save notice: editing and saving an already-`indexed` biography correctly flips its status to `stale` on the backend (`biography_ingestion.service.update_biography`, unchanged, already correct), but the frontend showed the same generic "Biography saved. It has not been indexed yet." wording used for a biography that was *never* indexed — misleading for a correction to a previously-indexed one. Added a distinct `biographySavedNowStale` copy string ("New version saved. Re-index it to update the avatar memory - the previously indexed version is still active until then.", cs/en/ru) shown specifically for this case.
+
+### Tests
+
+- `frontend/react-export/src/components/MemorialWorkspace.test.tsx`: **49 passed**, including one new regression test (`keeps polling after starting indexing until the job actually settles`) that mocks five sequential status responses and asserts a 4th and 5th poll occur — past the point the old one-shot-bonus-timer code would have stopped forever — before the panel shows the indexed/up-to-date state.
+- `frontend/react-export/src/components/MemorialWorkspace.task65_5.test.tsx`: **21 passed**, including an updated test for the new stale-save notice wording (previously asserted the old, now-inapplicable generic wording for this specific already-indexed-then-edited case).
+- `npx tsc -b --noEmit`: clean, no errors.
+
+### Confirmations
+
+No production Python/backend code was touched — frontend-only fix. No Qdrant/PostgreSQL/Redis modification. No Docker container rebuild/restart required (Vite dev server hot-reloads the bind-mounted source). No real DeepSeek/provider call. No embedding created.
+
+### Commit
+
+Commit 1 (implementation/tests) `23e92d5` — `fix: keep biography indexing status polling active` — contains exactly: `frontend/react-export/src/components/MemorialWorkspace.tsx`, `frontend/react-export/src/components/MemorialWorkspace.test.tsx`, `frontend/react-export/src/components/MemorialWorkspace.task65_5.test.tsx`.
+
+### Next recommended task
+
+**Task 65.9.1G — Docker Volume Ownership and Qdrant Collection Audit** (deferred, unchanged by this task).
+
+---
+
+## Task 65.10.4 — AI Biographer Topic Rotation Fix (2026-07-28)
+
+Fixes a reported bug: the AI Biographer tab showed "Všechna témata AI biografa pro tento memorial už byla probrána" ("All AI Biographer topics for this memorial have already been discussed") after only one or two answered/skipped questions, with no way to get another question — even for a memorial whose biography was freshly and richly indexed.
+
+### Root cause
+
+`avatar_biographer/coverage.py`'s `select_next_topic` chose from the fixed 8-topic catalog (`childhood`, `family`, `education`, `work`, `relationships`, `places`, `traditions`, `values`) by priority tier (`not_started` → `weak` → `basic` → `postponed`) and returned `None` — surfaced by the frontend as the permanent "all topics discussed" message — the moment every topic had reached `rich` (≥4 verified retrieved chunks), `exhausted` (asked `MAX_QUESTIONS_PER_TOPIC = 3` times), or `skipped`. Critically, a topic could reach `rich` purely from passive retrieval evidence — a topic the indexed biography already discusses at length — **without the owner ever being asked about it directly**: `evaluate_topic_coverage` assigns `rich` based only on `verified_chunk_count`, independent of `questions_asked`. Live evidence for memorial 35 in this session: only one `biographer_questions` row existed (`topic="values"`, still `pending`), meaning the other 7 topics were almost certainly marked `rich` from evidence alone and silently skipped from ever being offered, leaving essentially one real question before the coverage map had nothing selectable left and returned `None`.
+
+### Fix
+
+Added a last-resort "revisit" tier to `select_next_topic` (`RICH`, `SKIPPED`, `EXHAUSTED`, in that priority order) that only activates once the four primary tiers have nothing selectable. It excludes any topic currently `blocked_from_selection` (a real pending question or unresolved candidate) and reuses the existing postpone cool-down (`POSTPONE_COOLDOWN_QUESTIONS`) so a just-covered topic is not immediately re-asked; within the tier, the topic that has gone longest without a question — or was never asked about directly at all — is picked first. `avatar_biographer/service.get_next_question` was not changed: with every `TopicCoverageState` now covered by either the primary or the revisit tier, `select_next_topic` returning `None` is now only reachable when literally every topic is simultaneously `blocked_from_selection` — a case the existing code already turns into an explicit `candidate_waiting_for_review` block, never a bare "done." The Biographer's own duplicate-prevention (`duplicate_prevention.find_duplicate_against_history`, unchanged) still guards against a revisited topic producing an exact repeat question.
+
+### Tests
+
+- `backend/tests/test_avatar_biographer.py`: **28 passed**, including the updated `test_topics_are_never_repeated_across_the_first_pass_through_the_catalog` (formerly `..._across_multiple_next_question_calls`) — now asserts that after all 8 topics are asked once and skipped, the 9th call revisits a topic (any of the 8) instead of asserting `None`.
+- `backend/tests/test_biography_ingestion.py` + `test_avatar_biographer.py` combined: **38 passed** (confirms no unrelated biography-ingestion regression).
+
+### Confirmations
+
+No API/schema change (no new route, no new column). The revisit tier is deterministic and unit-testable, matching the module's existing "no LLM call, plain arithmetic" design principle (`coverage.py`'s own docstring). No Qdrant/PostgreSQL/Redis modification. `uvicorn --reload` picked up the change live (bind-mounted source) — no container restart required. No real DeepSeek/provider call. No embedding created.
+
+### Commit
+
+Commit 2 (implementation/tests) `73e56a0` — `fix: continue AI biographer topic rotation` — contains exactly: `backend/app/modules/avatar_biographer/coverage.py`, `backend/app/modules/avatar_biographer/topics.py`, `backend/tests/test_avatar_biographer.py`.
+
+### Next recommended task
+
+**Task 65.9.1G — Docker Volume Ownership and Qdrant Collection Audit** (deferred, unchanged by this task).
+
+---

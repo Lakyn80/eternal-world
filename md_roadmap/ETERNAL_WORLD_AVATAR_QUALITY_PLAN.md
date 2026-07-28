@@ -2264,3 +2264,43 @@ Commit 1 (implementation/tests) `870ef33` — `fix: restore pending AI biographe
 Task 65.10.1C se **považuje za dokončený**. Žádná existující sekce této roadmapy nebyla přepsána; toto je jediná nová sekce, kterou tento task přidal.
 
 Další doporučený task: **Task 65.9.1G — Docker Volume Ownership and Qdrant Collection Audit** (beze změny, odložen touto úlohou).
+
+## 35. Task 65.10.2 status (2026-07-28) — verified evidence ranking test alignment, completed
+
+Task 65.10.2 — Verified Evidence Ranking Test Alignment — byl proveden a **dokončen**. Čistě testovací oprava, žádná změna produkčního kódu. Plný popis viz `PROJECT_PROGRESS.md`, sekce "Task 65.10.2 — Verified Evidence Ranking Test Alignment".
+
+Test `test_chat_evidence_prioritizes_verified_promoted_memory_over_generic_evidence` očekával bezpodmínečné řazení "verified first" i pro obyčejnou faktickou otázku (intent `DIRECT_FACTUAL_MEMORY`) s mezerou relevance 0,55 bodu (generic 0,95 vs. verified 0,40) — přesně scénář, který Task 65.10's ohraničený boost (+0,15, plné "verified first" jen pro `CORRECTED_MEMORY_FACT`/`CORRECTION_HISTORY`) záměrně nepřebíjí. Selhání potvrzeno i na čistém `ae95b9b` přes izolovaný `git worktree` mimo repozitář a jednorázový kontejner napojený na existující `eternal-world_default` síť (bez restartu běžících kontejnerů, bez reálného volání DeepSeek/embeddingů/Qdrant — retrieval je v testu plně mockovaný). Oprava: pouze snížení mockovaného generic skóre z 0,95 na 0,50 v `backend/tests/test_task_65_6_1_biographer_promotion.py`, takže scénář teď spadá do reálného pásma boostu a "verified first" je pro něj správný očekávaný výsledek. Birthday-regresní test a cross-pipeline verifikační testy v `test_ai_agents.py` (58 prošlo) zůstaly nedotčené a neoslabené.
+
+Commit `c2fb78c` — `test: align verified evidence ranking with bounded boost` — obsahuje přesně `backend/tests/test_task_65_6_1_biographer_promotion.py`.
+
+Task 65.10.2 se **považuje za dokončený**. Žádná existující sekce této roadmapy nebyla přepsána; toto je jediná nová sekce, kterou tento task přidal.
+
+Další doporučený task: **Task 65.9.1G — Docker Volume Ownership and Qdrant Collection Audit** (beze změny, odložen touto úlohou).
+
+## 36. Task 65.10.3 status (2026-07-28) — biography indexing status polling fix, completed
+
+Task 65.10.3 — Biography Indexing Status Polling Fix — byl proveden a **dokončen**. Plný popis viz `PROJECT_PROGRESS.md`, sekce "Task 65.10.3 — Biography Indexing Status Polling Fix".
+
+Nahlášený bug: po spuštění indexace životopisu zůstal panel Biography navždy zaseklý na "probíhá indexace", i když backend job dávno úspěšně doběhl. Kořenová příčina: `BiographyPanel`'s poll smyčka byla efekt-lokální a jednorázová — pokud job při mountu ještě neběžel (běžný případ), smyčka se sama znovu nenaplánovala a `startIngestion()` po spuštění jobu provedl jen JEDEN bonusový status-check o 3s později, ne restart průběžného pollování. Živě potvrzeno v této relaci: backend log ukazoval `biography_indexing_completed` a `biography_status = 'indexed'` cca deset minut předtím, než frontend naposledy zavolal status endpoint. Oprava: sdílená, restartovatelná `pollWhileActive()` funkce (component-scope `useRef` guardy), volaná jak z mount efektu, tak z `startIngestion()` — restart znovu nastartuje TENTÝŽ průběžný 3s poll, ne druhý konkurenční jednorázový check. Přidána i odlišná "uloženo, čeká na reindexaci" hláška pro úpravu již zaindexovaného životopisu (dřív matoucí "zatím nikdy nezaindexováno").
+
+Testy: `MemorialWorkspace.test.tsx` 49 prošlo (1 nový regresní test), `MemorialWorkspace.task65_5.test.tsx` 21 prošlo (aktualizovaná hláška), `tsc --noEmit` čisté. Žádná změna backend kódu, žádný restart kontejneru (Vite dev server má hot-reload).
+
+Commit `23e92d5` — `fix: keep biography indexing status polling active` — obsahuje přesně: `frontend/react-export/src/components/MemorialWorkspace.tsx`, `frontend/react-export/src/components/MemorialWorkspace.test.tsx`, `frontend/react-export/src/components/MemorialWorkspace.task65_5.test.tsx`.
+
+Task 65.10.3 se **považuje za dokončený**. Žádná existující sekce této roadmapy nebyla přepsána; toto je jediná nová sekce, kterou tento task přidal.
+
+Další doporučený task: **Task 65.9.1G — Docker Volume Ownership and Qdrant Collection Audit** (beze změny, odložen touto úlohou).
+
+## 37. Task 65.10.4 status (2026-07-28) — AI biographer topic rotation fix, completed
+
+Task 65.10.4 — AI Biographer Topic Rotation Fix — byl proveden a **dokončen**. Plný popis viz `PROJECT_PROGRESS.md`, sekce "Task 65.10.4 — AI Biographer Topic Rotation Fix".
+
+Nahlášený bug: panel AI Biografa hlásil "Všechna témata AI biografa pro tento memorial už byla probrána" už po jedné až dvou zodpovězených/přeskočených otázkách, bez jakékoliv možnosti dostat další otázku. Kořenová příčina: `avatar_biographer/coverage.py`'s `select_next_topic` vracelo `None`, jakmile každé z 8 katalogových témat dosáhlo stavu `rich`/`exhausted`/`skipped` — a téma mohlo dosáhnout `rich` čistě z pasivní retrieval evidence (bohatě popsané v zaindexovaném životopisu), aniž by se na něj kdy majitel přímo zeptal. Živě potvrzeno pro memorial 35: existoval jediný řádek v `biographer_questions` (téma "values"), ostatních 7 témat bylo zjevně tiše označeno jako `rich` a nikdy nenabídnuto. Oprava: přidána poslední záchranná "revisit" vrstva (`RICH`, `SKIPPED`, `EXHAUSTED`, se stejným postpone cooldownem jako u `POSTPONED`), která se aktivuje až ve chvíli, kdy primární priority nemají nic k výběru — vybírá téma, na které se ptal nejdéle (nebo nikdy přímo). `None`/"hotovo" je teď dosažitelné jen když jsou VŠECHNA témata blokovaná čekající odpovědí — což už existující kód správně převádí na `candidate_waiting_for_review`, ne na trvalé "hotovo".
+
+Testy: `test_avatar_biographer.py` 28 prošlo (aktualizovaný kontrakt-test), kombinovaně s `test_biography_ingestion.py` 38 prošlo. Žádná API/schema změna, žádný restart kontejneru (`uvicorn --reload`).
+
+Commit `73e56a0` — `fix: continue AI biographer topic rotation` — obsahuje přesně: `backend/app/modules/avatar_biographer/coverage.py`, `backend/app/modules/avatar_biographer/topics.py`, `backend/tests/test_avatar_biographer.py`.
+
+Task 65.10.4 se **považuje za dokončený**. Žádná existující sekce této roadmapy nebyla přepsána; toto je jediná nová sekce, kterou tento task přidal.
+
+Další doporučený task: **Task 65.9.1G — Docker Volume Ownership and Qdrant Collection Audit** (beze změny, odložen touto úlohou).
