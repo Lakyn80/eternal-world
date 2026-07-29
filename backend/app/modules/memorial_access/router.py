@@ -539,14 +539,16 @@ def retry_contribution_indexing_endpoint(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> ContributionRead:
-    """Task 65.8/65.9 (Part I) - safe, authorized retry of a failed
-    indexing attempt. Only reachable for an approved+current contribution
-    whose promotion is currently `failed`; idempotent and reuses the same
-    canonical memory/promotion/Qdrant point (see
-    `memorial_access.service.retry_contribution_indexing`). Returns 202:
-    the response reflects the promotion's newly-`pending` state, never a
-    synchronously-confirmed `indexed` result - the actual embed/Qdrant
-    write now happens only inside the Celery embedding-worker task."""
+    """Task 65.8/65.9 (Part I) + contribution Index CTA - safe, authorized
+    start/retry of contribution indexing. Reachable for an approved+current
+    contribution that is still awaiting indexing: missing promotion, failed
+    promotion, or pending_index without an active job. Idempotent when an
+    active job already exists; reuses the same canonical memory/promotion/
+    Qdrant point (see `memorial_access.service.retry_contribution_indexing`).
+    Returns 202: the response reflects the promotion's `pending` state,
+    never a synchronously-confirmed `indexed` result - the actual
+    embed/Qdrant write happens only inside the Celery embedding-worker
+    task."""
 
     try:
         contribution = retry_contribution_indexing(

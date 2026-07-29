@@ -296,6 +296,7 @@ export type Copy = {
   indexingIndexed: string;
   indexingFailed: string;
   indexingRetired: string;
+  startIndexing: string;
   retryIndexing: string;
   retryIndexingSuccess: string;
   // Task 65.9.1 (Part F/G): localized labels for every BackgroundJob
@@ -554,6 +555,7 @@ export const COPY: Record<Lang, Copy> = {
     indexingIndexed: 'Indexed and searchable',
     indexingFailed: 'Indexing failed',
     indexingRetired: 'No longer active evidence',
+    startIndexing: 'Index memory',
     retryIndexing: 'Retry indexing',
     retryIndexingSuccess: 'Indexing retried.',
     jobStatusPending: 'Waiting to start',
@@ -811,6 +813,7 @@ export const COPY: Record<Lang, Copy> = {
     indexingIndexed: 'Indexováno a vyhledatelné',
     indexingFailed: 'Indexace selhala',
     indexingRetired: 'Již není aktivní znalost',
+    startIndexing: 'Zaindexovat vzpomínku',
     retryIndexing: 'Zkusit indexaci znovu',
     retryIndexingSuccess: 'Indexace byla zopakována.',
     jobStatusPending: 'Čeká na zahájení',
@@ -1068,6 +1071,7 @@ export const COPY: Record<Lang, Copy> = {
     indexingIndexed: 'Проиндексировано и доступно для поиска',
     indexingFailed: 'Индексация не удалась',
     indexingRetired: 'Больше не активное знание',
+    startIndexing: 'Проиндексировать воспоминание',
     retryIndexing: 'Повторить индексацию',
     retryIndexingSuccess: 'Индексация повторена.',
     jobStatusPending: 'Ожидает начала',
@@ -1470,6 +1474,17 @@ export default function MemorialWorkspace({ lang }: { lang: Lang }) {
   }, [activeTab]);
 
   useEffect(() => {
+    // Reconcile contribution indexing status when the owner opens the
+    // Contributions tab (same pattern as the Review queue refresh below).
+    // Covers the case where a job finished while this tab was unmounted and
+    // parent state still shows a stale `pending` badge.
+    if (activeTab === 'contributions' && selected && session) {
+      void refreshContributions();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab]);
+
+  useEffect(() => {
     // The family-contribution review queue (unlike CandidatesReviewSection,
     // which fetches fresh on its own mount) is plain state handed down as a
     // prop, so it goes stale if a contribution reaches needs_review after
@@ -1683,6 +1698,34 @@ export default function MemorialWorkspace({ lang }: { lang: Lang }) {
                 </aside>
 
                 <div className="min-w-0 rounded-[28px] border border-white/10 bg-white/[.045] p-4 sm:p-6">
+                  {/* While the Contributions tab is unmounted (e.g. after approve
+                      on Review), keep polling any in-flight contribution
+                      indexing jobs so `contributions` state flips to
+                      `indexed`/`failed` without a full page reload. When the
+                      Contributions tab is active, ContributionList owns the
+                      visible JobStatusBadge poller instead (one poller per
+                      job). */}
+                  {activeTab !== 'contributions' &&
+                    contributions.map((contribution) => {
+                      const jobId = contribution.indexing_status.job_id;
+                      if (contribution.indexing_status.state !== 'pending' || typeof jobId !== 'number') {
+                        return null;
+                      }
+                      return (
+                        <JobStatusBadge
+                          accountKey={session.email}
+                          jobId={jobId}
+                          key={`contrib-index-watch-${contribution.id}-${jobId}`}
+                          onTerminal={() => {
+                            void refreshContributions();
+                          }}
+                          profileId={selected.id}
+                          silent
+                          t={t}
+                          token={session.accessToken}
+                        />
+                      );
+                    })}
                   {activeTab === 'overview' && (
                     <Overview
                       biographerEligible={biographerEligible}
@@ -3565,7 +3608,8 @@ function JobStatusBadge({
   profileId,
   jobId,
   t,
-  onTerminal
+  onTerminal,
+  silent = false
 }: {
   token: string;
   accountKey: string;
@@ -3573,6 +3617,10 @@ function JobStatusBadge({
   jobId: number;
   t: Copy;
   onTerminal: (job: BackgroundJobRead) => void;
+  /** When true, still polls and fires `onTerminal`, but renders no badge
+   * (workspace-level reconcile watchers after approve, while the user may
+   * still be on the Review tab). */
+  silent?: boolean;
 }) {
   const { job, fatalError, isTerminal } = useJobStatusPoller(token, {
     accountKey,
@@ -3592,6 +3640,9 @@ function JobStatusBadge({
     }
   }, [isTerminal, job, onTerminal]);
 
+  if (silent) {
+    return null;
+  }
   if (fatalError === 'unauthorized') {
     return <Badge tone="danger">{t.jobStatusUnauthorized}</Badge>;
   }
@@ -4239,7 +4290,12 @@ export function ContributionList({
   return (
     <div className="grid min-w-0 gap-3">
       {contributions.map((contribution) => {
-        const showRetry = canOfferRetry && contribution.indexing_status.state === 'failed';
+        const indexingState = contribution.indexing_status.state;
+        const hasActiveJob = activeJobIdByContribution[contribution.id] !== undefined;
+        const showStartIndexing =
+          canOfferRetry && indexingState === 'pending' && !hasActiveJob;
+        const showRetry = canOfferRetry && indexingState === 'failed';
+        const showIndexingAction = showStartIndexing || showRetry;
         const retryError = retryErrorById[contribution.id];
         return (
           <article className="min-w-0 rounded-3xl border border-white/10 bg-black/20 p-4" key={contribution.id}>
@@ -4257,14 +4313,14 @@ export function ContributionList({
                 <Badge tone={isActiveMemoryEligible(contribution) ? 'cyan' : 'muted'}>
                   {isActiveMemoryEligible(contribution) ? t.activeMemory : t.notActiveMemory}
                 </Badge>
-                {indexingStatusLabel(t, contribution.indexing_status.state) && (
-                  <Badge tone={indexingStatusTone(contribution.indexing_status.state)}>
-                    {indexingStatusLabel(t, contribution.indexing_status.state)}
+                {indexingStatusLabel(t, indexingState) && (
+                  <Badge tone={indexingStatusTone(indexingState)}>
+                    {indexingStatusLabel(t, indexingState)}
                   </Badge>
                 )}
                 {typeof token === 'string' &&
                   typeof profileId === 'number' &&
-                  activeJobIdByContribution[contribution.id] !== undefined && (
+                  hasActiveJob && (
                     <JobStatusBadge
                       accountKey={token}
                       jobId={activeJobIdByContribution[contribution.id]}
@@ -4276,11 +4332,11 @@ export function ContributionList({
                   )}
               </div>
             </div>
-            {showRetry && (
+            {showIndexingAction && (
               <div className="mt-3 flex flex-col items-start gap-2">
                 <ActionButton
                   disabled={retryingId === contribution.id}
-                  label={t.retryIndexing}
+                  label={showRetry ? t.retryIndexing : t.startIndexing}
                   onClick={() => void retryIndexing(contribution)}
                   tone="secondary"
                 />

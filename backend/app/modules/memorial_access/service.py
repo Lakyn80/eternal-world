@@ -413,7 +413,7 @@ def retry_contribution_indexing(
     profile_id: int,
     contribution_id: int,
 ) -> MemorialContribution:
-    """Explicit, reviewer-triggered retry of a *failed* indexing attempt -
+    """Explicit, reviewer-triggered start/retry of contribution indexing —
     the memory-contribution equivalent of the AI biography workflow's
     explicit `POST .../candidates/{id}/index` button.
 
@@ -423,13 +423,21 @@ def retry_contribution_indexing(
     the FastAPI process itself. That is exactly the invariant Task 65.9
     exists to close ("retry still performs embedding synchronously" /
     "FastAPI can initialize BGE-M3"). This now only authorizes, validates
-    retry-eligibility, reactivates the same promotion, and creates/reuses
-    the persistent job + transactional outbox record - the encoder and
-    Qdrant only run inside the Celery embedding-worker task. Restricted to
-    `REVIEW_ROLES` (owner, trusted_reviewer); only reachable once the
-    promotion has already recorded a `failed` attempt - never for a
-    contribution that is only `pending`/still queued (that has an active,
-    not-yet-run job already) or already `indexed`/`retired`.
+    eligibility, ensures a promotion exists, reactivates a failed
+    promotion when needed, and creates/reuses the persistent job +
+    transactional outbox record - the encoder and Qdrant only run inside
+    the Celery embedding-worker task.
+
+    Restricted to `REVIEW_ROLES` (owner, trusted_reviewer). Eligible when
+    the contribution is approved+current and indexing is not yet complete:
+
+    * no promotion yet (approve bridge failed to promote) → promote + enqueue
+    * promotion `failed` → reactivate to `pending_index` + enqueue
+    * promotion `pending_index` with no active job → enqueue (stuck pending)
+    * promotion `pending_index` with an active job → idempotent no-op (return as-is)
+
+    Refused for `indexed` / `retired` and for contributions that are not
+    approved+current.
     """
 
     _require_role(db, profile_id=profile_id, user=current_user, allowed_roles=REVIEW_ROLES)
@@ -438,31 +446,58 @@ def retry_contribution_indexing(
         raise ContributionNotFoundError("Contribution not found")
     if contribution.status != "approved" or not contribution.is_current:
         raise ContributionInvalidTransitionError(
-            "Indexing can only be retried for an approved, current contribution"
+            "Indexing can only be started or retried for an approved, current contribution"
         )
+
+    profile = db.get(MemoryProfile, profile_id)
+    if profile is None:
+        raise ContributionNotFoundError("Memorial profile not found")
 
     promotion = contribution_indexing_repository.get_promotion_by_contribution_id(
         db,
         contribution_id=contribution.id,
     )
-    if promotion is None or promotion.promotion_status != "failed":
+
+    if promotion is None:
+        outcome = contribution_indexing_service.promote_contribution(db, contribution=contribution)
+        promotion = outcome.promotion
+        contribution_indexing_service.enqueue_indexing_job(db, profile=profile, promotion=promotion)
+        refreshed = repository.get_contribution(db, profile_id=profile_id, contribution_id=contribution_id)
+        return refreshed if refreshed is not None else contribution
+
+    if promotion.promotion_status in {"indexed", "retired"}:
         raise ContributionInvalidTransitionError(
-            "Indexing can only be retried after a failed indexing attempt"
+            "Indexing can only be started or retried when the contribution is still awaiting indexing"
         )
 
-    #: Reactivate the same promotion to `pending_index` so its own
-    #: indexing-status projection reads "pending" (not stale "failed")
-    #: while the new job is queued/running - never claims "indexed" until
-    #: the worker actually confirms it. The promotion row (and therefore
-    #: the deterministic Qdrant point id it derives) is unchanged; only
-    #: its status moves, which `index_contribution_promotion` already
-    #: treats as an eligible starting state.
-    promotion.promotion_status = "pending_index"
-    db.commit()
+    if promotion.promotion_status == "failed":
+        #: Reactivate the same promotion to `pending_index` so its own
+        #: indexing-status projection reads "pending" (not stale "failed")
+        #: while the new job is queued/running - never claims "indexed" until
+        #: the worker actually confirms it. The promotion row (and therefore
+        #: the deterministic Qdrant point id it derives) is unchanged; only
+        #: its status moves, which `index_contribution_promotion` already
+        #: treats as an eligible starting state.
+        promotion.promotion_status = "pending_index"
+        db.commit()
+        contribution_indexing_service.enqueue_indexing_job(db, profile=profile, promotion=promotion)
+        refreshed = repository.get_contribution(db, profile_id=profile_id, contribution_id=contribution_id)
+        return refreshed if refreshed is not None else contribution
 
-    profile = db.get(MemoryProfile, profile_id)
-    if profile is None:
-        raise ContributionNotFoundError("Memorial profile not found")
+    if promotion.promotion_status != "pending_index":
+        raise ContributionInvalidTransitionError(
+            "Indexing can only be started or retried when the contribution is still awaiting indexing"
+        )
+
+    active_job_id = contribution_indexing_service.get_active_indexing_job_id_for_promotion(
+        db,
+        promotion_id=promotion.id,
+    )
+    if active_job_id is not None:
+        # Already queued/running — return current state; do not create a
+        # second job. The frontend polls the existing job_id.
+        refreshed = repository.get_contribution(db, profile_id=profile_id, contribution_id=contribution_id)
+        return refreshed if refreshed is not None else contribution
 
     contribution_indexing_service.enqueue_indexing_job(db, profile=profile, promotion=promotion)
 

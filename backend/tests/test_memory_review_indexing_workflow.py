@@ -7,10 +7,11 @@ The core approve -> promote -> enqueue -> embed -> index pipeline for
 specific gaps identified while auditing that existing implementation against
 the AI biography workflow's own review/indexing lifecycle:
 
-  * an explicit, authorized "retry indexing" action (the AI biography
-    workflow's `POST .../candidates/{id}/index` equivalent) - previously
-    missing for contributions entirely (see
-    `memorial_access.service.retry_contribution_indexing`);
+  * an explicit, authorized start/retry indexing action (the AI biography
+    workflow's `POST .../candidates/{id}/index` equivalent) for failed
+    promotions and for stuck `pending` (missing promotion or pending_index
+    without an active job) - see
+    `memorial_access.service.retry_contribution_indexing`;
   * HTTP-level authorization-matrix coverage for approve/retry that the
     existing test suite did not yet assert explicitly (self-review, viewer,
     non-member);
@@ -166,6 +167,56 @@ def _force_promotion_failed(profile_id: int, contribution_id: int) -> None:
         db.close()
 
 
+def _approve_without_indexing_bridge(profile_id: int, contribution_id: int, reviewer_user_id: int) -> None:
+    """Simulate approval that never reached promote/enqueue (safe-bridge
+    swallow or older path): approved+current, no promotion, no job."""
+
+    from app.modules.memorial_access import repository as memorial_repository
+
+    db = _db()
+    try:
+        contribution = memorial_repository.get_contribution(
+            db, profile_id=profile_id, contribution_id=contribution_id
+        )
+        assert contribution is not None
+        contribution.status = "approved"
+        contribution.is_current = True
+        contribution.reviewed_at = contribution.updated_at
+        contribution.reviewed_by_user_id = reviewer_user_id
+        db.commit()
+    finally:
+        db.close()
+
+
+def _mark_active_indexing_jobs_terminal(contribution_id: int) -> None:
+    """Leave promotion as `pending_index` but terminate its job so the
+    contribution is stuck pending with no pollable active job."""
+
+    db = _db()
+    try:
+        promotion = get_promotion_by_contribution_id(db, contribution_id=contribution_id)
+        assert promotion is not None
+        assert promotion.promotion_status == "pending_index"
+        jobs = (
+            db.query(BackgroundJob)
+            .filter(BackgroundJob.job_type == "qdrant_indexing")
+            .all()
+        )
+        matching = [
+            job
+            for job in jobs
+            if isinstance(job.input_payload, dict)
+            and job.input_payload.get("contribution_id") == contribution_id
+        ]
+        assert matching, "expected an auto-enqueued indexing job after approve"
+        for job in matching:
+            job.status = "failed"
+            job.error_message = "simulated worker loss"
+        db.commit()
+    finally:
+        db.close()
+
+
 # --- Submission: review-required, never indexed, never active memory ------
 
 
@@ -302,17 +353,102 @@ def test_repeated_approval_request_is_rejected_and_does_not_duplicate_state(clie
 # --- Retry indexing: authorization + eligibility ---------------------------
 
 
-def test_retry_requires_a_previously_failed_indexing_attempt(client):
-    owner_token = _register_and_login(client, "wf-retry-notfailed-owner@example.com")
+def test_retry_with_active_job_is_idempotent(client):
+    """After approve, an active indexing job already exists. A second
+    trigger must return 202 with the same pending state and must not
+    create a duplicate BackgroundJob."""
+
+    owner_token = _register_and_login(client, "wf-retry-idempotent-owner@example.com")
+    profile_id = _create_memorial(client, owner_token)
+    submitted = _submit(client, owner_token, profile_id)
+    approved = _approve(client, owner_token, profile_id, submitted["id"])
+    assert approved.status_code == 200
+    assert approved.json()["indexing_status"]["state"] == "pending"
+    first_job_id = approved.json()["indexing_status"]["job_id"]
+    assert isinstance(first_job_id, int)
+
+    db = _db()
+    try:
+        job_count_before = db.query(BackgroundJob).filter(BackgroundJob.job_type == "qdrant_indexing").count()
+    finally:
+        db.close()
+
+    retry_attempt = _retry(client, owner_token, profile_id, submitted["id"])
+
+    assert retry_attempt.status_code == 202
+    assert retry_attempt.json()["indexing_status"]["state"] == "pending"
+    assert retry_attempt.json()["indexing_status"]["job_id"] == first_job_id
+
+    db = _db()
+    try:
+        assert db.query(BackgroundJob).filter(BackgroundJob.job_type == "qdrant_indexing").count() == job_count_before
+    finally:
+        db.close()
+
+
+def test_retry_heals_missing_promotion_after_approve_bridge_failure(client):
+    """Approved+current with no promotion (safe-bridge swallow) still
+    projects UI `pending`; explicit Index must promote + enqueue."""
+
+    owner_token = _register_and_login(client, "wf-retry-heal-promo-owner@example.com")
+    profile_id = _create_memorial(client, owner_token)
+    submitted = _submit(client, owner_token, profile_id)
+    _approve_without_indexing_bridge(
+        profile_id, submitted["id"], reviewer_user_id=submitted["author_user_id"]
+    )
+
+    listed = client.get(f"/api/memorials/{profile_id}/contributions", headers=_auth_headers(owner_token))
+    matching = next(item for item in listed.json() if item["id"] == submitted["id"])
+    assert matching["indexing_status"]["state"] == "pending"
+    assert matching["indexing_status"]["job_id"] is None
+
+    retry_attempt = _retry(client, owner_token, profile_id, submitted["id"])
+
+    assert retry_attempt.status_code == 202
+    body = retry_attempt.json()
+    assert body["indexing_status"]["state"] == "pending"
+    assert isinstance(body["indexing_status"]["job_id"], int)
+
+    db = _db()
+    try:
+        promotion = get_promotion_by_contribution_id(db, contribution_id=submitted["id"])
+        assert promotion is not None
+        assert promotion.promotion_status == "pending_index"
+        assert db.query(BackgroundJob).filter(BackgroundJob.job_type == "qdrant_indexing").count() == 1
+    finally:
+        db.close()
+
+
+def test_retry_reenqueues_stuck_pending_without_active_job(client):
+    """pending_index with a terminal (lost) job must accept Index and
+    create a new BackgroundJob."""
+
+    owner_token = _register_and_login(client, "wf-retry-stuck-pending-owner@example.com")
     profile_id = _create_memorial(client, owner_token)
     submitted = _submit(client, owner_token, profile_id)
     _approve(client, owner_token, profile_id, submitted["id"])
+    _mark_active_indexing_jobs_terminal(submitted["id"])
 
-    # The promotion is `pending_index` (auto-enqueued, not yet failed) -
-    # retry must refuse rather than race the already-queued Celery job.
     retry_attempt = _retry(client, owner_token, profile_id, submitted["id"])
 
-    assert retry_attempt.status_code == 400
+    assert retry_attempt.status_code == 202
+    assert retry_attempt.json()["indexing_status"]["state"] == "pending"
+    assert isinstance(retry_attempt.json()["indexing_status"]["job_id"], int)
+
+    db = _db()
+    try:
+        active_statuses = {"pending", "queued", "running", "retry_scheduled", "recovery_pending"}
+        active = (
+            db.query(BackgroundJob)
+            .filter(
+                BackgroundJob.job_type == "qdrant_indexing",
+                BackgroundJob.status.in_(active_statuses),
+            )
+            .count()
+        )
+        assert active == 1
+    finally:
+        db.close()
 
 
 def test_retry_is_refused_for_a_needs_review_contribution(client):

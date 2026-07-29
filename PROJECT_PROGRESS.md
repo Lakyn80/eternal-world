@@ -10839,3 +10839,64 @@ Passive-resume contract recorded accurately: generation-free and retrieval-free;
 Continue from the authoritative roadmap after this closure (no further 65.11.4 work remaining).
 
 ---
+
+## Task 65.11.5 — Contribution Index CTA after approve (2026-07-29)
+
+### Defect
+
+Approved family contributions showed badges **Schváleno** / **Vhodné pro aktivní paměť** / **Schváleno, čeká na indexaci** in `ContributionList`, but there was **no Index button**. Retry existed only for `indexing_status.state === 'failed'`. Approve auto-enqueues via `_promote_and_enqueue_indexing_safely` (errors swallowed), and status projection returns `pending` even when `promotion is None`, so stuck-pending contributions had no recovery CTA. AI Biographer candidates already had **Zaindexovat vzpomínku**.
+
+### What changed
+
+- Backend `retry_contribution_indexing` now starts/retries indexing for approved+current contributions when: promotion missing (promote+enqueue), `failed` (reactivate+enqueue), or `pending_index` without an active job (enqueue). Idempotent 202 when an active job already exists. Still refused for `indexed`/`retired`/not approved+current. Same `POST .../retry-indexing` path; no sync embedding in FastAPI.
+- Frontend `ContributionList`: shows **Zaindexovat vzpomínku** (`startIndexing`) for `pending` without an active job; keeps **Zkusit indexaci znovu** for `failed`; hides CTA while `JobStatusBadge` is polling.
+- Tests: workflow coverage for heal-missing-promotion, stuck-pending re-enqueue, idempotent active-job; FE visibility/click tests for Index CTA.
+
+### Files
+
+- `backend/app/modules/memorial_access/service.py`
+- `backend/app/modules/memorial_access/router.py`
+- `backend/tests/test_memory_review_indexing_workflow.py`
+- `frontend/react-export/src/components/MemorialWorkspace.tsx`
+- `frontend/react-export/src/components/MemorialWorkspace.test.tsx`
+- `PROJECT_PROGRESS.md`
+
+### Verification
+
+- `docker compose exec -T backend python -m pytest tests/test_memory_review_indexing_workflow.py -q` → **16 passed**
+- `cd frontend/react-export && npm test -- src/components/MemorialWorkspace.test.tsx src/components/localization.test.tsx` → **63 passed** (2 files)
+
+### Scope notes
+
+- Auto-enqueue on approve preserved.
+- No Celery/Qdrant/embedding-provider changes; no new HTTP path.
+- No commit/push in this task unless separately requested.
+
+---
+
+## Task 65.11.5B — Live contribution indexing status without page reload (2026-07-29)
+
+### Defect
+
+After approve, the Contributions list showed **Schváleno, čeká na indexaci** while Celery indexed in the background, but the badge stayed pending until a full page reload. Root cause: `useJobStatusPoller` treated cookie-session `accessToken === ''` as falsy (`!token`) and never polled `GET /api/jobs/{id}`. Secondary gaps: no contribution refresh when opening the Contributions tab, and no job watcher while the Contributions tab was unmounted after approve on Review.
+
+### What changed
+
+- `useJobStatusPoller`: empty-string token still polls (cookie resume); only `token === null` disables.
+- `JobStatusBadge`: optional `silent` mode for headless reconcile.
+- `MemorialWorkspace`: silent job watchers while Contributions tab is inactive; refresh contributions when entering that tab; ContributionList still owns the visible badge poller when active.
+- Tests: empty-token poll, null-token skip, ContributionList terminal → `onIndexingSettled`.
+
+### Files
+
+- `frontend/react-export/src/hooks/useJobStatusPoller.ts`
+- `frontend/react-export/src/hooks/useJobStatusPoller.test.ts`
+- `frontend/react-export/src/components/MemorialWorkspace.tsx`
+- `frontend/react-export/src/components/MemorialWorkspace.test.tsx`
+- `PROJECT_PROGRESS.md`
+
+### Verification
+
+- Targeted vitest for poller + MemorialWorkspace (run locally / in agent).
+
+---

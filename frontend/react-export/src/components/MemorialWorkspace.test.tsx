@@ -1177,7 +1177,7 @@ describe('CandidatesReviewSection', () => {
   });
 });
 
-describe('ContributionList - Task 65.8 retry indexing', () => {
+describe('ContributionList - Task 65.8 retry / start indexing', () => {
   afterEach(() => {
     vi.mocked(api.retryContributionIndexing).mockReset();
   });
@@ -1199,7 +1199,161 @@ describe('ContributionList - Task 65.8 retry indexing', () => {
     expect(screen.getByRole('button', { name: t.retryIndexing })).toBeInTheDocument();
   });
 
-  it('never offers retry to a contributor/viewer even for failed indexing', () => {
+  it('shows Index memory for pending indexing without an active job', () => {
+    render(
+      <ContributionList
+        contributions={[
+          baseContribution({
+            indexing_status: {
+              state: 'pending',
+              indexed_at: null,
+              attempt_count: 0,
+              failure_reason: null,
+              job_id: null
+            }
+          })
+        ]}
+        lang="en"
+        t={t}
+        canRetryIndexing
+        onIndexingRetried={vi.fn()}
+        profileId={7}
+        token="tok"
+      />
+    );
+
+    expect(screen.getByText(t.indexingPending)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: t.startIndexing })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: t.retryIndexing })).not.toBeInTheDocument();
+  });
+
+  it('hides Index memory while a pending contribution already has an active job', () => {
+    render(
+      <ContributionList
+        contributions={[
+          baseContribution({
+            indexing_status: {
+              state: 'pending',
+              indexed_at: null,
+              attempt_count: 0,
+              failure_reason: null,
+              job_id: 42
+            }
+          })
+        ]}
+        lang="en"
+        t={t}
+        canRetryIndexing
+        onIndexingRetried={vi.fn()}
+        profileId={7}
+        token="tok"
+      />
+    );
+
+    expect(screen.getByText(t.indexingPending)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: t.startIndexing })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: t.retryIndexing })).not.toBeInTheDocument();
+  });
+
+  it('polls a pending contribution job to succeeded and reconciles via onIndexingSettled', async () => {
+    const onIndexingSettled = vi.fn();
+    vi.mocked(api.getBackgroundJob).mockResolvedValue({
+      id: 42,
+      owner_user_id: 1,
+      profile_id: 7,
+      job_type: 'qdrant_indexing',
+      status: 'succeeded',
+      progress_current: 1,
+      progress_total: 1,
+      celery_task_id: null,
+      result_payload: null,
+      error_payload: null,
+      error_message: null,
+      queue: 'embedding',
+      attempt_count: 0,
+      max_attempts: 3,
+      safe_error_category: null,
+      created_at: '2026-01-01T00:00:00Z',
+      updated_at: '2026-01-01T00:00:00Z'
+    });
+
+    render(
+      <ContributionList
+        contributions={[
+          baseContribution({
+            indexing_status: {
+              state: 'pending',
+              indexed_at: null,
+              attempt_count: 0,
+              failure_reason: null,
+              job_id: 42
+            }
+          })
+        ]}
+        lang="en"
+        t={t}
+        canRetryIndexing
+        onIndexingRetried={vi.fn()}
+        onIndexingSettled={onIndexingSettled}
+        profileId={7}
+        token="tok"
+      />
+    );
+
+    await waitFor(() => expect(api.getBackgroundJob).toHaveBeenCalledWith('tok', 42));
+    await waitFor(() => expect(onIndexingSettled).toHaveBeenCalledTimes(1));
+  });
+
+  it('polls pending contribution indexing with an empty cookie-session token', async () => {
+    const onIndexingSettled = vi.fn();
+    vi.mocked(api.getBackgroundJob).mockResolvedValue({
+      id: 42,
+      owner_user_id: 1,
+      profile_id: 7,
+      job_type: 'qdrant_indexing',
+      status: 'succeeded',
+      progress_current: 1,
+      progress_total: 1,
+      celery_task_id: null,
+      result_payload: null,
+      error_payload: null,
+      error_message: null,
+      queue: 'embedding',
+      attempt_count: 0,
+      max_attempts: 3,
+      safe_error_category: null,
+      created_at: '2026-01-01T00:00:00Z',
+      updated_at: '2026-01-01T00:00:00Z'
+    });
+
+    render(
+      <ContributionList
+        contributions={[
+          baseContribution({
+            indexing_status: {
+              state: 'pending',
+              indexed_at: null,
+              attempt_count: 0,
+              failure_reason: null,
+              job_id: 42
+            }
+          })
+        ]}
+        lang="en"
+        t={t}
+        canRetryIndexing
+        onIndexingRetried={vi.fn()}
+        onIndexingSettled={onIndexingSettled}
+        profileId={7}
+        token=""
+      />
+    );
+
+    await waitFor(() => expect(api.getBackgroundJob).toHaveBeenCalledWith('', 42));
+    await waitFor(() => expect(onIndexingSettled).toHaveBeenCalledTimes(1));
+  });
+
+  it('never offers indexing actions to a contributor/viewer even for failed indexing', () => {
     render(
       <ContributionList
         contributions={[baseContribution()]}
@@ -1213,9 +1367,10 @@ describe('ContributionList - Task 65.8 retry indexing', () => {
     );
 
     expect(screen.queryByRole('button', { name: t.retryIndexing })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: t.startIndexing })).not.toBeInTheDocument();
   });
 
-  it('never offers retry for a contribution that is not currently failed', () => {
+  it('never offers indexing actions for an already-indexed contribution', () => {
     render(
       <ContributionList
         contributions={[baseContribution({ indexing_status: { state: 'indexed', indexed_at: '2026-07-23T00:00:00Z', attempt_count: 1, failure_reason: null } })]}
@@ -1229,7 +1384,53 @@ describe('ContributionList - Task 65.8 retry indexing', () => {
     );
 
     expect(screen.queryByRole('button', { name: t.retryIndexing })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: t.startIndexing })).not.toBeInTheDocument();
     expect(screen.getByText(t.indexingIndexed)).toBeInTheDocument();
+  });
+
+  it('Index memory calls the same retry-indexing API and reports the updated state upward', async () => {
+    const onIndexingRetried = vi.fn();
+    vi.mocked(api.retryContributionIndexing).mockResolvedValue(
+      baseContribution({
+        indexing_status: {
+          state: 'pending',
+          indexed_at: null,
+          attempt_count: 0,
+          failure_reason: null,
+          job_id: 99
+        }
+      })
+    );
+    const user = userEvent.setup();
+
+    render(
+      <ContributionList
+        contributions={[
+          baseContribution({
+            indexing_status: {
+              state: 'pending',
+              indexed_at: null,
+              attempt_count: 0,
+              failure_reason: null,
+              job_id: null
+            }
+          })
+        ]}
+        lang="en"
+        t={t}
+        canRetryIndexing
+        onIndexingRetried={onIndexingRetried}
+        profileId={7}
+        token="tok"
+      />
+    );
+
+    await user.click(screen.getByRole('button', { name: t.startIndexing }));
+
+    expect(api.retryContributionIndexing).toHaveBeenCalledTimes(1);
+    expect(api.retryContributionIndexing).toHaveBeenCalledWith('tok', 7, 11);
+    await waitFor(() => expect(onIndexingRetried).toHaveBeenCalledTimes(1));
+    expect(onIndexingRetried.mock.calls[0][0].indexing_status.job_id).toBe(99);
   });
 
   it('retrying calls the API exactly once, disables the button meanwhile, and reports the updated state upward', async () => {

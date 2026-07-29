@@ -109,7 +109,12 @@ export function useJobStatusPoller(
     setJob(null);
     setFatalError(null);
 
-    if (!scope || !enabled || !token) {
+    // Task 65.7 / cookie-session resume: `accessToken` may be `''` after a
+    // page reload (HttpOnly session cookie is the auth channel). An empty
+    // string must still poll - only an explicit `null` token disables the
+    // hook. `getBackgroundJob` already omits the Bearer header when the
+    // token is empty and relies on `credentials: 'include'`.
+    if (!scope || !enabled || token === null) {
       setLoading(false);
       return;
     }

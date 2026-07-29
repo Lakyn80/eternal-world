@@ -117,6 +117,30 @@ describe('useJobStatusPoller', () => {
     expect(result.current.isTerminal).toBe(false);
   });
 
+  it('polls with an empty-string token (cookie-session resume after page reload)', async () => {
+    // Task 65.7: after getSession() restore, MemorialWorkspace keeps
+    // accessToken as '' and relies on the HttpOnly cookie. The poller must
+    // still call getBackgroundJob - previously `!token` aborted the effect
+    // and left contribution badges stuck on "indexing pending" until reload.
+    getBackgroundJob.mockResolvedValueOnce(job('succeeded'));
+    const { result } = renderHook(() =>
+      useJobStatusPoller('', { accountKey: 'owner@example.com', profileKey: 7, jobId: 1 })
+    );
+
+    await flush();
+    expect(getBackgroundJob).toHaveBeenCalledWith('', 1);
+    expect(result.current.job?.status).toBe('succeeded');
+    expect(result.current.isTerminal).toBe(true);
+  });
+
+  it('does not poll when token is explicitly null', async () => {
+    const { result } = renderHook(() => useJobStatusPoller(null, scope));
+    await flush();
+    expect(getBackgroundJob).not.toHaveBeenCalled();
+    expect(result.current.job).toBeNull();
+    expect(result.current.loading).toBe(false);
+  });
+
   it('shows retry_scheduled and recovery_pending as non-terminal', async () => {
     getBackgroundJob.mockResolvedValueOnce(job('retry_scheduled'));
     const { result } = renderHook(() => useJobStatusPoller('tok-a', scope));
