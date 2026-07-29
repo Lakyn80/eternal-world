@@ -6,17 +6,27 @@ Reuses the fake-safe writer/encoder pattern to get a profile's biography
 into `indexed` state (a precondition for Biographer eligibility) without any
 real Qdrant/model calls, then exercises the authenticated HTTP surface.
 
-Every test in this module stubs `avatar_biographer.service.build_topic_context_package`
+Every test in this module stubs `avatar_biographer.service.build_topic_context_batch`
 (see `_stub_context_retrieval` below) instead of relying on the real
 `rag_retrieval`/Qdrant path: the `FakeWriter`/`FakeEncoder` bypass used to
 put a biography into `indexed` state never actually writes to the real
 Qdrant instance the RAG retrieval path would query, and that Qdrant
 instance is a long-lived shared server (not reset per test run) - hitting
-it for real here would be both slow (16 network round trips per
-`next-question` call) and non-hermetic (behavior would depend on whatever
-unrelated data the shared server happens to hold). Tests that specifically
-exercise context-aware behavior override the stub per-topic via
+it for real here would be both slow and non-hermetic (behavior would depend
+on whatever unrelated data the shared server happens to hold). Tests that
+specifically exercise context-aware behavior override the stub per-topic via
 `_patch_context_by_topic`.
+
+Task 65.11.1 note: the stub seam moved from the old per-topic
+`build_topic_context_package` to the batched `build_topic_context_batch`
+(one query-embedding model invocation and one Qdrant request for the whole
+8-topic catalog instead of 8 x 2 = 16 serial `retrieve_profile_rag()`
+calls). The per-topic fixtures below are unchanged and are simply shaped
+into that batch via `context_batch_from_packages`, so every coverage/
+selection expectation in this file still asserts exactly the same contract
+against exactly the same inputs. The structural call-count contract itself
+is covered separately in
+`test_task_65_11_1_biographer_query_batch.py`.
 """
 
 from __future__ import annotations
@@ -30,7 +40,12 @@ from app.main import app
 from app.modules.avatar_biographer import coverage, duplicate_prevention, repository
 from app.modules.avatar_biographer import service as biographer_service
 from app.modules.avatar_biographer import topics as topic_catalog
-from app.modules.avatar_biographer.context_package import TopicContextPackage, empty_context_package
+from app.modules.avatar_biographer.context_package import (
+    TopicContextPackage,
+    context_batch_from_packages,
+    empty_context_batch,
+    empty_context_package,
+)
 from app.modules.avatar_biographer.provider import (
     BiographerProviderRequestError,
     BiographerProviderResponse,
@@ -144,20 +159,31 @@ def _no_evidence_context(topic) -> TopicContextPackage:
     )
 
 
-def _empty_context(db, *, current_user, profile_id, topic, locale):
-    return _no_evidence_context(topic)
+def _empty_context(db, *, current_user, profile_id, topics, locale):
+    return context_batch_from_packages(
+        {topic.key: _no_evidence_context(topic) for topic in topics},
+        topics=topics,
+        locale=locale,
+    )
 
 
 @pytest.fixture(autouse=True)
 def _stub_context_retrieval(monkeypatch):
-    monkeypatch.setattr(biographer_service, "build_topic_context_package", _empty_context)
+    monkeypatch.setattr(biographer_service, "build_topic_context_batch", _empty_context)
 
 
 def _patch_context_by_topic(monkeypatch, overrides: dict[str, TopicContextPackage]) -> None:
-    def _fake(db, *, current_user, profile_id, topic, locale):
-        return overrides.get(topic.key, empty_context_package(topic))
+    def _fake(db, *, current_user, profile_id, topics, locale):
+        return context_batch_from_packages(
+            {
+                topic.key: overrides.get(topic.key, empty_context_package(topic))
+                for topic in topics
+            },
+            topics=topics,
+            locale=locale,
+        )
 
-    monkeypatch.setattr(biographer_service, "build_topic_context_package", _fake)
+    monkeypatch.setattr(biographer_service, "build_topic_context_batch", _fake)
 
 
 def _rich_context(topic_key: str, excerpts: list[str]) -> TopicContextPackage:
@@ -753,10 +779,10 @@ def test_retrieval_unavailable_falls_back_without_any_provider_call(client, monk
 
     token, profile_id = _create_memorial_with_indexed_biography(client, "biographer-retrievaldown@example.com")
 
-    def _unavailable(db, *, current_user, profile_id, topic, locale):
-        return empty_context_package(topic)
+    def _unavailable(db, *, current_user, profile_id, topics, locale):
+        return empty_context_batch(topics, locale=locale)
 
-    monkeypatch.setattr(biographer_service, "build_topic_context_package", _unavailable)
+    monkeypatch.setattr(biographer_service, "build_topic_context_batch", _unavailable)
 
     import app.modules.avatar_biographer.question_generation as question_generation_module
 

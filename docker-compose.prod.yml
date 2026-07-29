@@ -50,6 +50,15 @@ services:
       HUGGINGFACE_HUB_CACHE: /models/huggingface
       TRANSFORMERS_CACHE: /models/huggingface
       SENTENCE_TRANSFORMERS_HOME: /models/huggingface
+      # Task 65.11.1 - Redis embedding cache activation (see the matching,
+      # fully-commented block in docker-compose.yml). Enabled for every
+      # service that can legitimately execute real embedding work; never for
+      # `maintenance_worker`, which is pinned to `EMBEDDING_PROVIDER: mock`.
+      # Finite TTL is mandatory - TTL 0 would create non-expiring entries.
+      EMBEDDING_CACHE_ENABLED: "true"
+      EMBEDDING_CACHE_PROVIDER: redis
+      EMBEDDING_CACHE_TTL_SECONDS: "604800"
+      EMBEDDING_CACHE_KEY_PREFIX: eternal_world
       CUDA_VISIBLE_DEVICES: ""
       NVIDIA_VISIBLE_DEVICES: void
     depends_on:
@@ -97,6 +106,15 @@ services:
       HUGGINGFACE_HUB_CACHE: /models/huggingface
       TRANSFORMERS_CACHE: /models/huggingface
       SENTENCE_TRANSFORMERS_HOME: /models/huggingface
+      # Task 65.11.1 - Redis embedding cache activation (see the matching,
+      # fully-commented block in docker-compose.yml). Enabled for every
+      # service that can legitimately execute real embedding work; never for
+      # `maintenance_worker`, which is pinned to `EMBEDDING_PROVIDER: mock`.
+      # Finite TTL is mandatory - TTL 0 would create non-expiring entries.
+      EMBEDDING_CACHE_ENABLED: "true"
+      EMBEDDING_CACHE_PROVIDER: redis
+      EMBEDDING_CACHE_TTL_SECONDS: "604800"
+      EMBEDDING_CACHE_KEY_PREFIX: eternal_world
       CUDA_VISIBLE_DEVICES: ""
       NVIDIA_VISIBLE_DEVICES: void
     depends_on:
@@ -139,6 +157,15 @@ services:
       HUGGINGFACE_HUB_CACHE: /models/huggingface
       TRANSFORMERS_CACHE: /models/huggingface
       SENTENCE_TRANSFORMERS_HOME: /models/huggingface
+      # Task 65.11.1 - Redis embedding cache activation (see the matching,
+      # fully-commented block in docker-compose.yml). Enabled for every
+      # service that can legitimately execute real embedding work; never for
+      # `maintenance_worker`, which is pinned to `EMBEDDING_PROVIDER: mock`.
+      # Finite TTL is mandatory - TTL 0 would create non-expiring entries.
+      EMBEDDING_CACHE_ENABLED: "true"
+      EMBEDDING_CACHE_PROVIDER: redis
+      EMBEDDING_CACHE_TTL_SECONDS: "604800"
+      EMBEDDING_CACHE_KEY_PREFIX: eternal_world
       CUDA_VISIBLE_DEVICES: ""
       NVIDIA_VISIBLE_DEVICES: void
       #: Safe here only - see the matching comment in docker-compose.yml.

@@ -100,6 +100,26 @@ _shared_model_cache_enabled: ContextVar[bool] = ContextVar(
 _shared_models: dict[tuple[object, ...], Any] = {}
 _shared_models_lock = Lock()
 
+#: Task 65.11: a per-shared-model encode lock, created alongside each entry
+#: in `_shared_models`. This is *not* about protecting model loading (the
+#: double-checked-locking around `_shared_models_lock` already handles
+#: that) - it exists because `FlagEmbedding`'s
+#: `AbsEmbedder.encode_single_device()` unconditionally calls
+#: `self.model.to(device)` and `self.model.float()` on *every single*
+#: `.encode()` call, not just once at load time (verified by reading the
+#: installed `FlagEmbedding` package source, not assumed). Those two calls
+#: mutate the shared `nn.Module`'s `_parameters`/`_buffers` trees in place
+#: (`nn.Module._apply()` reassigns fresh `Parameter` wrappers even when the
+#: device/dtype already match). Once a single model instance is shared
+#: across concurrent requests (the fix below), two requests' encode calls
+#: could otherwise race on that mutation while a third request's forward
+#: pass is mid-read of the same parameter tree. Serializing `.encode()`
+#: calls on a *shared* model instance is the smallest guard that removes
+#: this hazard; unshared (per-request-private) model instances never take
+#: this lock, since there is nothing else operating on their model
+#: concurrently.
+_shared_model_encode_locks: dict[tuple[object, ...], Lock] = {}
+
 
 def _emit_bge_m3_hybrid_log(message: str) -> None:
     print(f"[bge_m3_hybrid] {message}", flush=True)
@@ -144,6 +164,7 @@ def enable_bge_m3_hybrid_shared_model_cache(*, clear_on_exit: bool = False):
 def clear_bge_m3_hybrid_shared_model_cache() -> None:
     with _shared_models_lock:
         _shared_models.clear()
+        _shared_model_encode_locks.clear()
 
 
 class BgeM3HybridEmbeddingProvider:
@@ -156,6 +177,7 @@ class BgeM3HybridEmbeddingProvider:
         self.device = device
         self.cache_dir = str(cache_dir) if cache_dir is not None else None
         self._models: dict[str, Any] = {}
+        self._model_encode_locks: dict[str, Lock | None] = {}
         self._cache_contexts: dict[str, _BgeM3CacheContext] = {}
         self._embedding_cache = build_embedding_cache()
         self._last_cache_summary: BgeM3HybridCacheSummary | None = None
@@ -167,6 +189,19 @@ class BgeM3HybridEmbeddingProvider:
 
     def encode_query(self, text: str, provider_code: str) -> BgeM3HybridEmbeddings:
         return self.encode_texts([text], provider_code=provider_code, input_type="query")
+
+    def encode_queries(self, texts: list[str], provider_code: str) -> BgeM3HybridEmbeddings:
+        """Task 65.11.1 - N query texts, ONE model invocation.
+
+        Query semantics (`input_type="query"`), never the passage-oriented
+        `encode_passages()`: the embedding cache key, the cached payload's
+        `input_type` guard and the (future) provider-side query/passage
+        prefixing all depend on this distinction, so a cached passage
+        embedding can never satisfy a query request and vice versa.
+        Output order matches input order exactly.
+        """
+
+        return self.encode_texts(texts, provider_code=provider_code, input_type="query")
 
     def encode_passages(self, texts: list[str], provider_code: str) -> BgeM3HybridEmbeddings:
         return self.encode_texts(texts, provider_code=provider_code, input_type="passage")
@@ -234,6 +269,7 @@ class BgeM3HybridEmbeddingProvider:
                 input_type=input_type,
                 texts=[item.text for item in missing_items],
                 return_colbert_vecs=return_colbert_vecs,
+                encode_lock=self._model_encode_locks.get(normalized_provider_code),
             )
             for offset, item in enumerate(missing_items):
                 payload = build_cached_embedding_payload(
@@ -347,6 +383,7 @@ class BgeM3HybridEmbeddingProvider:
         input_type: str,
         texts: list[str],
         return_colbert_vecs: bool,
+        encode_lock: Lock | None = None,
     ) -> BgeM3HybridEmbeddings:
         model_definition = get_embedding_model(provider_code)
         batch_size = max(1, min(8, len(texts)))
@@ -367,14 +404,31 @@ class BgeM3HybridEmbeddingProvider:
 
         started_at = perf_counter()
         try:
-            raw_output = model.encode(
-                texts,
-                batch_size=batch_size,
-                max_length=model_definition.max_input_tokens,
-                return_dense=True,
-                return_sparse=True,
-                return_colbert_vecs=return_colbert_vecs,
-            )
+            if encode_lock is not None:
+                # Serialize `.encode()` calls against a model instance that
+                # is shared across concurrent requests (Task 65.11) - see
+                # the module-level `_shared_model_encode_locks` docstring
+                # for why this is required (FlagEmbedding mutates the
+                # shared nn.Module's parameter tree on every encode call,
+                # not just once at load time).
+                with encode_lock:
+                    raw_output = model.encode(
+                        texts,
+                        batch_size=batch_size,
+                        max_length=model_definition.max_input_tokens,
+                        return_dense=True,
+                        return_sparse=True,
+                        return_colbert_vecs=return_colbert_vecs,
+                    )
+            else:
+                raw_output = model.encode(
+                    texts,
+                    batch_size=batch_size,
+                    max_length=model_definition.max_input_tokens,
+                    return_dense=True,
+                    return_sparse=True,
+                    return_colbert_vecs=return_colbert_vecs,
+                )
         except Exception as exc:  # pragma: no cover - exercised through higher-level failure tests
             _emit_bge_m3_hybrid_log(
                 "encode failed "
@@ -452,6 +506,7 @@ class BgeM3HybridEmbeddingProvider:
                     shared_model = _shared_models.get(cache_key)
                     if shared_model is not None:
                         self._models[provider_code] = shared_model
+                        self._model_encode_locks[provider_code] = _shared_model_encode_locks[cache_key]
                         _emit_bge_m3_hybrid_log(
                             "cache hit scope=shared "
                             f"provider_code={provider_code} model_name={model_name} device={self.device}"
@@ -465,6 +520,8 @@ class BgeM3HybridEmbeddingProvider:
                         model_init_kwargs=model_init_kwargs,
                     )
                     _shared_models[cache_key] = model
+                    _shared_model_encode_locks[cache_key] = Lock()
+                    self._model_encode_locks[provider_code] = _shared_model_encode_locks[cache_key]
             else:
                 model = self._load_model_instance(
                     flag_model_class=flag_model_class,
@@ -472,6 +529,7 @@ class BgeM3HybridEmbeddingProvider:
                     model_name=model_name,
                     model_init_kwargs=model_init_kwargs,
                 )
+                self._model_encode_locks[provider_code] = None
 
             self._models[provider_code] = model
             return model
@@ -693,6 +751,25 @@ class BgeM3HybridEmbeddingAdapter(BaseEmbeddingProvider):
 
     def embed_batch(self, texts: list[str], model_code: str) -> list[EmbeddingVector]:
         encoded = self._hybrid_provider.encode_passages(texts, model_code)
+        return self._split_encoded_batch(encoded=encoded, texts=texts, model_code=model_code)
+
+    def embed_query_batch(self, texts: list[str], model_code: str) -> list[EmbeddingVector]:
+        """Task 65.11.1 - query-semantics counterpart of `embed_batch()`.
+
+        One model invocation for all `texts`; never routes through
+        `encode_passages()`.
+        """
+
+        encoded = self._hybrid_provider.encode_queries(texts, model_code)
+        return self._split_encoded_batch(encoded=encoded, texts=texts, model_code=model_code)
+
+    def _split_encoded_batch(
+        self,
+        *,
+        encoded: BgeM3HybridEmbeddings,
+        texts: list[str],
+        model_code: str,
+    ) -> list[EmbeddingVector]:
         vectors: list[EmbeddingVector] = []
         for index, _text in enumerate(texts):
             vectors.append(

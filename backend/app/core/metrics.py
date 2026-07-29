@@ -351,6 +351,36 @@ BIOGRAPHER_FALLBACK_TOTAL = Counter(
     labelnames=("reason", "locale"),
 )
 
+# --- Task 65.11.1: batched Biographer topic query embeddings --------------
+# Structural performance observability for the "one batch model invocation,
+# one Qdrant request per new-question request" contract. All of these are
+# label-free or bounded-label numeric series: they carry counts and durations
+# only, and must NEVER carry topic query text, biography excerpts, generated
+# question text, answer/candidate text, names or email addresses.
+BIOGRAPHER_TOPIC_QUERY_BATCH_SIZE = Histogram(
+    "biographer_topic_query_batch_size",
+    "Number of Biographer topic query texts encoded together in one batch model invocation.",
+    buckets=(0, 1, 2, 4, 8, 16),
+)
+BIOGRAPHER_QUERY_MODEL_INVOCATIONS = Histogram(
+    "biographer_query_model_invocations",
+    "Query-embedding model invocations performed per Biographer new-question request.",
+    buckets=(0, 1, 2, 4, 8, 16),
+)
+BIOGRAPHER_QDRANT_REQUESTS = Histogram(
+    "biographer_qdrant_requests",
+    "Qdrant round trips performed per Biographer new-question request.",
+    buckets=(0, 1, 2, 4, 8, 16),
+)
+BIOGRAPHER_COVERAGE_RETRIEVAL_DURATION_SECONDS = Histogram(
+    "biographer_coverage_retrieval_duration_seconds",
+    "Duration of the single batched Biographer coverage retrieval, in seconds.",
+)
+BIOGRAPHER_SELECTED_TOPIC_HYDRATION_DURATION_SECONDS = Histogram(
+    "biographer_selected_topic_hydration_duration_seconds",
+    "Duration of materializing the selected Biographer topic's prompt context, in seconds.",
+)
+
 _BIOGRAPHER_TOPIC_KEYS = frozenset(
     {"childhood", "family", "education", "work", "relationships", "places", "traditions", "values"}
 )
@@ -452,6 +482,25 @@ def observe_biographer_fallback(*, reason: str, locale: str | None) -> None:
         reason=normalize_biographer_fallback_reason_label(reason),
         locale=normalize_ai_locale_label(locale),
     ).inc()
+
+
+def observe_biographer_topic_query_batch(
+    *,
+    topic_query_batch_size: int,
+    model_invocation_count: int,
+    qdrant_request_count: int,
+    coverage_retrieval_duration_seconds: float,
+) -> None:
+    """Task 65.11.1 - numeric-only. No query text, no excerpt, no identifier."""
+
+    BIOGRAPHER_TOPIC_QUERY_BATCH_SIZE.observe(max(0, int(topic_query_batch_size)))
+    BIOGRAPHER_QUERY_MODEL_INVOCATIONS.observe(max(0, int(model_invocation_count)))
+    BIOGRAPHER_QDRANT_REQUESTS.observe(max(0, int(qdrant_request_count)))
+    BIOGRAPHER_COVERAGE_RETRIEVAL_DURATION_SECONDS.observe(max(0.0, float(coverage_retrieval_duration_seconds)))
+
+
+def observe_biographer_selected_topic_hydration(*, duration_seconds: float) -> None:
+    BIOGRAPHER_SELECTED_TOPIC_HYDRATION_DURATION_SECONDS.observe(max(0.0, float(duration_seconds)))
 
 
 # --- Task 65.7: authenticated workspace reliability -----------------------

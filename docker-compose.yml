@@ -55,6 +55,24 @@ services:
       EMBEDDING_PROVIDER: sentence_transformers
       SENTENCE_TRANSFORMERS_DEVICE: cpu
       SENTENCE_TRANSFORMERS_CACHE_DIR: /models/huggingface
+      # Task 65.11.1 - Redis embedding cache activation. Complementary to,
+      # never a replacement for, the batched Biographer topic query
+      # (`avatar_biographer/context_package.py`): batching fixes the COLD
+      # request (one model invocation instead of 16), the cache fixes the
+      # REPEATED request (zero model invocations for already-seen query
+      # texts). The AI Biographer's next-question retrieval and the avatar
+      # chat retrieval both run real query embeddings in this process, so
+      # this is a service that can legitimately execute real embedding work.
+      # The cache key (see `embeddings/embedding_cache.py::build_cache_key`)
+      # already isolates by provider code, provider model name, model
+      # snapshot revision, dense/sparse mode, input type (query vs passage),
+      # vector dimension and a normalized SHA-256 text hash - raw query or
+      # biography text is never part of a Redis key and never logged.
+      # A finite TTL is mandatory: TTL 0 would create non-expiring entries.
+      EMBEDDING_CACHE_ENABLED: "true"
+      EMBEDDING_CACHE_PROVIDER: redis
+      EMBEDDING_CACHE_TTL_SECONDS: "604800"
+      EMBEDDING_CACHE_KEY_PREFIX: eternal_world
       CUDA_VISIBLE_DEVICES: ""
       NVIDIA_VISIBLE_DEVICES: void
       MEDIA_STORAGE_PROVIDER: local
@@ -114,6 +132,20 @@ services:
       EMBEDDING_PROVIDER: sentence_transformers
       SENTENCE_TRANSFORMERS_DEVICE: cpu
       SENTENCE_TRANSFORMERS_CACHE_DIR: /models/huggingface
+      # Task 65.11.1 - no embedding-queue task is routed to this worker
+      # today (see `celery_app.task_routes`: every embedding-heavy task goes
+      # to `embedding`, consumed only by `embedding_worker`), but this
+      # container is nevertheless configured with the REAL
+      # `sentence_transformers` embedding provider, so any future task
+      # routed to one of its queues would perform real embedding work. The
+      # cache is therefore enabled here too, for the same reasons and with
+      # the same isolation guarantees as `backend` above. This is
+      # deliberately NOT done for `maintenance_worker`, which is pinned to
+      # `EMBEDDING_PROVIDER: mock` and must never load a real provider.
+      EMBEDDING_CACHE_ENABLED: "true"
+      EMBEDDING_CACHE_PROVIDER: redis
+      EMBEDDING_CACHE_TTL_SECONDS: "604800"
+      EMBEDDING_CACHE_KEY_PREFIX: eternal_world
       CUDA_VISIBLE_DEVICES: ""
       NVIDIA_VISIBLE_DEVICES: void
       MEDIA_STORAGE_PROVIDER: local
@@ -171,6 +203,15 @@ services:
       EMBEDDING_PROVIDER: sentence_transformers
       SENTENCE_TRANSFORMERS_DEVICE: cpu
       SENTENCE_TRANSFORMERS_CACHE_DIR: /models/huggingface
+      # Task 65.11.1 - this is the one container that always performs real
+      # BGE-M3 ingestion embeddings, so the Redis cache matters most here:
+      # re-indexing an unchanged chunk becomes a cache hit instead of a
+      # repeated CPU model invocation. Same isolation guarantees and same
+      # finite TTL as `backend`.
+      EMBEDDING_CACHE_ENABLED: "true"
+      EMBEDDING_CACHE_PROVIDER: redis
+      EMBEDDING_CACHE_TTL_SECONDS: "604800"
+      EMBEDDING_CACHE_KEY_PREFIX: eternal_world
       CUDA_VISIBLE_DEVICES: ""
       NVIDIA_VISIBLE_DEVICES: void
       MEDIA_STORAGE_PROVIDER: local

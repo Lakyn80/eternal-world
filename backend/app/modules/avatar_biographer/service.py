@@ -36,14 +36,18 @@ from app.core.metrics import (
     observe_biographer_fallback,
     observe_biographer_generation_duration,
     observe_biographer_question,
+    observe_biographer_selected_topic_hydration,
+    observe_biographer_topic_query_batch,
     observe_biographer_topic_selection,
 )
 from app.db.models import BiographerQuestion, ConversationMemoryCandidate, MemoryProfile, User
 from app.modules.avatar_biographer import coverage, repository
 from app.modules.avatar_biographer import topics as topic_catalog
 from app.modules.avatar_biographer.context_package import (
+    BiographerTopicContextBatch,
     TopicContextPackage,
-    build_topic_context_package,
+    build_topic_context_batch,
+    empty_context_batch,
     empty_context_package,
 )
 from app.modules.avatar_biographer.question_generation import generate_question_for_topic
@@ -149,21 +153,32 @@ def get_eligibility(db: Session, *, profile: MemoryProfile) -> BiographerEligibi
     return BiographerEligibilityRead(eligible=True, blocked_reason=None)
 
 
-def _safe_context_package(
+def _safe_context_batch(
     db: Session,
     *,
     current_user: User,
     profile_id: int,
-    topic: topic_catalog.BiographerTopic,
     locale: str,
-) -> TopicContextPackage:
+) -> BiographerTopicContextBatch:
     """Retrieval must degrade safely (Part 11 of the task spec) - a Qdrant/
     embedding outage falls back to the deterministic question path rather
-    than a 500."""
+    than a 500.
+
+    Task 65.11.1: one call now covers the whole catalog (one batched query
+    encode + one Qdrant batch request), so a failure degrades the *whole*
+    coverage evaluation at once, exactly as a per-topic failure previously
+    degraded that topic - `empty_context_batch` keeps `retrieval_used=False`
+    for every topic, which `question_generation` already treats as
+    "retrieval unavailable, use the deterministic fallback question".
+    """
 
     try:
-        return build_topic_context_package(
-            db, current_user=current_user, profile_id=profile_id, topic=topic, locale=locale
+        return build_topic_context_batch(
+            db,
+            current_user=current_user,
+            profile_id=profile_id,
+            topics=topic_catalog.BIOGRAPHER_TOPICS,
+            locale=locale,
         )
     except Exception:
         log_event(
@@ -171,9 +186,40 @@ def _safe_context_package(
             logging.WARNING,
             "biographer_context_retrieval_failed",
             profile_id=profile_id,
+            topic_count=len(topic_catalog.BIOGRAPHER_TOPICS),
+        )
+        return empty_context_batch(topic_catalog.BIOGRAPHER_TOPICS, locale=locale)
+
+
+def _safe_selected_topic_context(
+    context_batch: BiographerTopicContextBatch,
+    *,
+    profile_id: int,
+    topic: topic_catalog.BiographerTopic,
+) -> TopicContextPackage:
+    """Materialize prompt excerpts for the SELECTED topic only (Task 65.11.1
+    Phase 4).
+
+    Pure local shaping of text the single batch query already returned - no
+    second embedding of the selected topic's query, no second per-source-type
+    retrieval, no extra Qdrant request. Still guarded, so a malformed batch
+    payload degrades to the deterministic fallback instead of a 500.
+    """
+
+    started_at = perf_counter()
+    try:
+        package = context_batch.hydrate_context_package(topic)
+    except Exception:
+        log_event(
+            _logger,
+            logging.WARNING,
+            "biographer_selected_context_hydration_failed",
+            profile_id=profile_id,
             topic=topic.key,
         )
-        return empty_context_package(topic)
+        package = empty_context_package(topic)
+    observe_biographer_selected_topic_hydration(duration_seconds=perf_counter() - started_at)
+    return package
 
 
 def get_next_question(
@@ -215,18 +261,34 @@ def get_next_question(
     all_questions = repository.list_questions_for_profile(db, profile_id=profile.id)
     unresolved_candidate_topics = repository.get_unresolved_candidate_topic_keys(db, profile_id=profile.id)
 
-    context_by_topic: dict[str, TopicContextPackage] = {
-        topic.key: _safe_context_package(
-            db, current_user=current_user, profile_id=profile.id, topic=topic, locale=locale
+    # Task 65.11.1: ONE batched query encode (all 8 catalog topics, query
+    # semantics) + ONE Qdrant batch request for the whole catalog, replacing
+    # the previous 8 topics x 2 source types = 16 serial
+    # `retrieve_profile_rag()` calls. Coverage semantics below are unchanged:
+    # `build_topic_coverage_map` still receives one verified chunk count per
+    # topic, computed from the same bounded, verified, owner/profile-scoped
+    # evidence it received before.
+    context_batch = _safe_context_batch(
+        db, current_user=current_user, profile_id=profile.id, locale=locale
+    )
+    observe_biographer_topic_query_batch(
+        topic_query_batch_size=context_batch.topic_query_batch_size,
+        model_invocation_count=context_batch.model_invocation_count,
+        qdrant_request_count=context_batch.qdrant_request_count,
+        coverage_retrieval_duration_seconds=context_batch.coverage_retrieval_duration_ms / 1000.0,
+    )
+    for topic in topic_catalog.BIOGRAPHER_TOPICS:
+        observe_biographer_context_sources(
+            topic=topic.key,
+            source_count=context_batch.evidence_for(topic.key).selected_source_count,
         )
-        for topic in topic_catalog.BIOGRAPHER_TOPICS
-    }
-    for topic_key, package in context_by_topic.items():
-        observe_biographer_context_sources(topic=topic_key, source_count=package.selected_source_count)
 
     coverages = coverage.build_topic_coverage_map(
         all_questions=all_questions,
-        verified_chunk_counts_by_topic={key: pkg.selected_chunk_count for key, pkg in context_by_topic.items()},
+        verified_chunk_counts_by_topic={
+            topic.key: context_batch.evidence_for(topic.key).selected_chunk_count
+            for topic in topic_catalog.BIOGRAPHER_TOPICS
+        },
         unresolved_candidate_topic_keys=unresolved_candidate_topics,
     )
     log_event(
@@ -255,7 +317,7 @@ def get_next_question(
         coverage_state=selected.state.value,
     )
 
-    context_package = context_by_topic[topic.key]
+    context_package = _safe_selected_topic_context(context_batch, profile_id=profile.id, topic=topic)
     log_event(
         _logger,
         logging.INFO,

@@ -9,6 +9,7 @@ from app.core.config import settings
 from app.db.base import Base
 from app.db.session import get_db
 from app.main import app
+from app.modules.embeddings.providers.bge_m3_hybrid import clear_bge_m3_hybrid_shared_model_cache
 
 
 #: Task 65.7 (Part L) - this dev container's real environment sets
@@ -53,6 +54,29 @@ def _guard_against_real_provider_calls(monkeypatch):
         return real_send(self, request, *args, **kwargs)
 
     monkeypatch.setattr(httpx.Client, "send", guarded_send)
+
+
+@pytest.fixture(autouse=True)
+def _reset_bge_m3_hybrid_shared_model_cache():
+    """Task 65.11: importing `app.main` above (required for the `client`
+    fixture and for every test module that imports FastAPI dependencies
+    from it) now enables the process-wide BGE-M3 hybrid shared model cache
+    ContextVar as a deliberate side effect of module import - it must stay
+    on for real request-serving processes. Left unguarded, that would leak
+    a shared `_shared_models`/`_shared_model_encode_locks` state across
+    every test in this process: a test's `monkeypatch.setattr` on
+    `_import_bge_m3_flag_model_class`/`resolve_bge_m3_model_load_path`
+    would be silently skipped whenever an earlier test already populated
+    the shared cache for the same cache key. Clearing the shared dicts
+    (not the ContextVar itself, which stays True - that mirrors production)
+    before and after every test restores full per-test isolation: each
+    test that constructs a `BgeM3HybridEmbeddingProvider` still gets a
+    guaranteed cache miss on its first `_get_or_load_model()` call, so its
+    own monkeypatches are always honored."""
+
+    clear_bge_m3_hybrid_shared_model_cache()
+    yield
+    clear_bge_m3_hybrid_shared_model_cache()
 
 
 @pytest.fixture

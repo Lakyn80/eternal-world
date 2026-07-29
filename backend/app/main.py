@@ -8,6 +8,7 @@ from app.core.errors import install_error_handlers
 from app.core.logging import configure_logging
 from app.core.middleware import install_middleware
 from app.db.session import engine
+from app.modules.embeddings.providers.bge_m3_hybrid import enable_bge_m3_hybrid_shared_model_cache
 from app.modules.embeddings.router import router as embeddings_router
 from app.modules.embedding_models.router import router as embedding_models_router
 from app.modules.active_retrieval_config.router import router as active_retrieval_config_router
@@ -35,6 +36,61 @@ from app.modules.rag_pipeline.router import router as rag_pipeline_router
 
 
 configure_logging()
+
+#: Task 65.11: enable the process-wide BGE-M3 hybrid shared model cache
+#: (`app/modules/embeddings/providers/bge_m3_hybrid.py`) for the lifetime
+#: of this FastAPI/uvicorn process. Without this, every request that needs
+#: a query embedding (chat RAG retrieval, AI biographer next-question,
+#: etc.) constructed a brand-new ~2GB BGE-M3 model from disk from scratch
+#: (`rag_retrieval/hybrid.py:default_encode_hybrid_query_vectors` and
+#: `rag_retrieval/service.py` both call `build_embedding_provider`/
+#: `BgeM3HybridEmbeddingProvider()` fresh per call, with no caching at that
+#: layer) - multi-minute request latency, and concurrent overlapping loads
+#: reliably reproduced `NotImplementedError: Cannot copy out of meta
+#: tensor` failures from `transformers`/`accelerate`'s meta-device model
+#: construction, which is not safe to run concurrently across threads in
+#: one process. `_retrieve_rag_evidence_safely` in `chat/service.py`
+#: swallows that exception and silently returns zero evidence, so the
+#: avatar would claim "no memory" of things that were, in fact, correctly
+#: indexed.
+#:
+#: This call is intentionally plain, synchronous, top-level module code -
+#: NOT inside an `async def lifespan(...)` handler. `ContextVar` mutations
+#: made inside one asyncio Task (e.g. the dedicated Task uvicorn/Starlette
+#: runs the ASGI `lifespan` protocol in) do not propagate to *sibling*
+#: Tasks created later by a different coroutine (e.g. the independent Task
+#: uvicorn spawns per incoming connection) - each Task only inherits the
+#: context that was ambient at its own `create_task()` call site, not
+#: mutations made inside a sibling Task's own private context (verified
+#: empirically in this repository's Task 65.11 investigation notes; this
+#: is also documented Starlette/asyncio behavior). Executing this at true
+#: module-import time, before uvicorn's event loop or any asyncio Task
+#: exists, guarantees every later Task copies an ambient context in which
+#: the flag is already `True`. The context manager is deliberately entered
+#: and never exited - the shared cache must stay enabled for the entire
+#: process lifetime, not just a scoped block.
+#:
+#: Never call `app.modules.embeddings.provider_lifecycle.get_or_initialize`
+#: here or anywhere else in this module - see that module's docstring:
+#: FastAPI's HTTP process must never use that heavier lifecycle/health-probe
+#: singleton, only the lighter shared-model-cache mechanism used here.
+#:
+#: This context manager object MUST be kept alive in a module-level name
+#: for the rest of the process's life. `enable_bge_m3_hybrid_shared_model_cache`
+#: is implemented as a `@contextmanager`-wrapped generator: calling
+#: `.set(True)` happens, then it suspends at `yield`. If the returned
+#: `_GeneratorContextManager` is not referenced by anything, CPython's
+#: refcounting GC finalizes it essentially immediately after this
+#: statement runs, which calls `.close()` on the still-suspended
+#: generator - triggering `GeneratorExit` at the `yield` point, which runs
+#: the generator's `finally: _shared_model_cache_enabled.reset(token)`
+#: block right away and silently undoes the `.set(True)` within the same
+#: statement (confirmed empirically while building this fix - an earlier,
+#: unreferenced `enable_bge_m3_hybrid_shared_model_cache().__enter__()`
+#: one-liner here appeared to work but actually left the flag `False`).
+_bge_m3_hybrid_shared_model_cache_context = enable_bge_m3_hybrid_shared_model_cache()
+_bge_m3_hybrid_shared_model_cache_context.__enter__()
+
 app = FastAPI(title=settings.app_name)
 install_error_handlers(app)
 install_middleware(app)

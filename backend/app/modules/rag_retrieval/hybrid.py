@@ -223,3 +223,89 @@ def encode_hybrid_query_vectors(
 ) -> HybridQueryVectors:
     encoder = query_encoder or default_encode_hybrid_query_vectors
     return encoder(query, model_code)
+
+
+#: Task 65.11.1 - the only `input_type` this batch API may ever be called
+#: with. Kept as a named constant (rather than a bare literal at the call
+#: site) so a future caller cannot silently slip passage semantics into a
+#: query path: `encode_hybrid_query_vectors_batch` rejects anything else.
+HYBRID_QUERY_INPUT_TYPE = "query"
+
+
+def default_encode_hybrid_query_vectors_batch(
+    queries: list[str],
+    model_code: str,
+    *,
+    input_type: str = HYBRID_QUERY_INPUT_TYPE,
+) -> list[HybridQueryVectors]:
+    """Encode N query texts in ONE model invocation (Task 65.11.1).
+
+    Batched counterpart of `default_encode_hybrid_query_vectors`, with
+    identical vector semantics per element - the only difference is that all
+    `queries` are handed to the model together instead of one scalar call
+    per query. Output order matches input order exactly, so a caller can map
+    `queries[i]` to `result[i]` deterministically.
+
+    Never uses the passage-oriented `embed_batch()`/`encode_passages()`
+    path: BGE-M3 hybrid goes through `encode_queries()`
+    (`input_type="query"`), and the non-FlagEmbedding fallback goes through
+    the provider's dedicated `embed_query_batch()` (see
+    `providers.base.BaseEmbeddingProvider.embed_query_batch`).
+    """
+
+    if input_type != HYBRID_QUERY_INPUT_TYPE:
+        raise ValueError("Hybrid query batch encoding only supports query input semantics")
+
+    query_list = list(queries)
+    if not query_list:
+        return []
+
+    if _can_use_real_bge_m3_hybrid_provider():
+        from app.modules.embeddings.providers.bge_m3_hybrid import BgeM3HybridEmbeddingProvider
+
+        hybrid_provider = BgeM3HybridEmbeddingProvider(
+            device=settings.sentence_transformers_device,
+            cache_dir=settings.sentence_transformers_cache_dir,
+        )
+        encoded = hybrid_provider.encode_queries(query_list, model_code)
+        if (
+            len(encoded.dense_vectors) != len(query_list)
+            or len(encoded.sparse_vectors) != len(query_list)
+        ):
+            raise ValueError("Hybrid query batch encoding returned a mismatched vector count")
+
+        return [
+            HybridQueryVectors(
+                dense_vector=list(encoded.dense_vectors[index]),
+                sparse_vector=dict(encoded.sparse_vectors[index]),
+            )
+            for index in range(len(query_list))
+        ]
+
+    from app.modules.embeddings.providers import build_embedding_provider
+
+    dense_provider = build_embedding_provider(model_code=model_code)
+    dense_embeddings = dense_provider.embed_query_batch(query_list, model_code)
+    if len(dense_embeddings) != len(query_list):
+        raise ValueError("Hybrid query batch encoding returned a mismatched vector count")
+
+    return [
+        HybridQueryVectors(
+            dense_vector=list(dense_embeddings[index].values),
+            sparse_vector=build_deterministic_sparse_vector(
+                text=query_list[index],
+                model_code=model_code,
+            ),
+        )
+        for index in range(len(query_list))
+    ]
+
+
+def encode_hybrid_query_vectors_batch(
+    queries: list[str],
+    model_code: str,
+    *,
+    query_batch_encoder: Callable[..., list[HybridQueryVectors]] | None = None,
+) -> list[HybridQueryVectors]:
+    encoder = query_batch_encoder or default_encode_hybrid_query_vectors_batch
+    return encoder(queries, model_code, input_type=HYBRID_QUERY_INPUT_TYPE)
