@@ -2398,3 +2398,27 @@ Implementacni commit: `c5b6be9` — `perf: optimize BGE-M3 biographer retrieval 
 Task 65.11.3B se **povazuje za dokonceny**. Zadna existujici sekce teto roadmapy nebyla prepsana.
 
 Dalsi doporuceny task: **Task 65.11.4 — separate passive AI Biographer loading from active question generation**.
+
+## 45. Task 65.11.4 status (2026-07-29) — diagnose and fix passive AI Biographer loading, completed
+
+Task 65.11.4 — Diagnose and Fix Passive AI Biographer Loading Without Triggering Active Question Generation — byl proveden a **dokoncen**. Plny popis viz `PROJECT_PROGRESS.md`, sekce "Task 65.11.4 — Diagnose and Fix Passive AI Biographer Loading".
+
+**Prokazana pricina:** frontend `BiographerPanel.load()` pri `question_ready` bez `active_question` automaticky awaitoval `getNextBiographerQuestion` pod globalnim `loading`, takze bezne otevreni panelu spoustelo RAG+DeepSeek a blankovalo UI. Stejne `next-question` volalo i Overview `refreshOverviewSummary` (badge). Backend `resume` je generation-free/retrieval-free (bez DeepSeek/BGE-M3/Qdrant/create question); obycejny healthy path je SELECT-only, s pre-existing bounded stale-clarification self-repair commit jen pri denormalizovanem mismatchi (Task 65.10.1). Oprava byla frontendova.
+
+**Po oprave:** pasivni open/Overview = jen `getBiographerResume` + render persisted/ready stavu; aktivni generovani = oddeleny `requestNextBiographerQuestion` (tlacitko Prepare nebo exactly-once post-index); progress jen v question sekci; StrictMode/poll/stale guards.
+
+Testy: frontend focused **87 passed** (vcetne 11 novych 65.11.4); `tsc -b` ok; backend `test_avatar_biographer.py` **31 passed** (vcetne generation-free resume clean-path); compileall ok; `git diff --check` cisty; health ok. Zadne realne LLM/embedding/Qdrant/live-write, zadny restart kontejneru, zadny commit/push.
+
+Implementacni commit (Task 65.11.4A): `167a2953ec4155e1bf61c3e85cf068a626bcd407` — `fix: separate AI biographer loading from question generation` (4 soubory).
+
+Task 65.11.4 se **povazuje za dokonceny**. Zadna existujici sekce teto roadmapy nebyla prepsana.
+
+Dalsi doporuceny task: **Task 65.11.4A — Final Review, Commit and Push** pro Task 65.11.4.
+
+## 46. Task 65.11.4A status (2026-07-29) — final review, commit and push of passive AI Biographer loading fix, completed
+
+Task 65.11.4A — Final Review, Commit and Push of Passive AI Biographer Loading Fix — byl proveden a **dokoncen**. Plny popis viz `PROJECT_PROGRESS.md`, sekce "Task 65.11.4A — Final Review, Commit and Push of Passive AI Biographer Loading Fix".
+
+Implementacni commit: `167a2953ec4155e1bf61c3e85cf068a626bcd407` — `fix: separate AI biographer loading from question generation` (presne 4 soubory). Dokumentacni commit nasleduje v tomto closure. Pred pushem: frontend **87** / **11** passed; backend **31** passed; tsc/compileall/`git diff --check` ok; health ok. Debug instrumentace odstranena pred committem. Zadne realne LLM/BGE-M3/live-write, zadny restart kontejneru.
+
+Task 65.11.4A se **povazuje za dokonceny**. Zadna existujici sekce teto roadmapy nebyla prepsana.

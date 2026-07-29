@@ -10767,3 +10767,75 @@ Final verification before push: shared-model target file **7 passed** twice; ful
 **Task 65.11.4 — separate passive AI Biographer loading from active question generation.**
 
 ---
+
+## Task 65.11.4 — Diagnose and Fix Passive AI Biographer Loading (2026-07-29)
+
+Diagnosed and fixed the long AI Biographer panel spinner on ordinary panel open. No real DeepSeek, BGE-M3, Qdrant write, live PostgreSQL/Redis mutation, container restart/rebuild, commit, or push.
+
+### Proven root cause
+
+`BiographerPanel.load()` set a whole-panel `loading` flag, awaited `getBiographerResume`, and when `next_action === 'question_ready'` without `active_question` also awaited `getNextBiographerQuestion` under that same flag. Ordinary ready/idle open therefore ran:
+
+`resume → next-question (RAG batch + DeepSeek)` behind `{!loading && ...}`, so the question area stayed blank for minutes.
+
+Backend `GET .../biographer/resume` (`get_resume_state`) is **generation-free and retrieval-free** during passive loading: no next-question provider call, no embedding, no Qdrant, no `BiographerQuestion` creation. Ordinary healthy resume is SELECT-only. A pre-existing Task 65.10.1 bounded self-healing path may still `UPDATE`/`commit` when a denormalized `unresolved_clarification_count` disagrees with real pending clarification rows (`repair_stale_active_clarification_blocks`); it does not run on every healthy open, does not loop after repair, and does not cause the multi-minute panel delay. The generation side effect was frontend-driven (panel `load()` and also Overview `refreshOverviewSummary`, which previously called `next-question` for the tab badge).
+
+### Request sequence before / after
+
+Before (ordinary open, eligible, no pending question):
+`getBiographerResume` → `getNextBiographerQuestion` (awaited by global `loading`).
+Additionally, workspace Overview badge path (`refreshOverviewSummary`) also called `getNextBiographerQuestion` on every memorial open / return to Overview.
+
+After (ordinary open / Overview / remount / tab):
+`getBiographerResume` only → render ready/persisted state → `0` next-question.
+Overview badge now also uses resume only (`active_question` for the badge count).
+
+After (post-index success, proven continuation):
+poll/resume `candidate_pending_index` → `question_ready` → exactly one `getNextBiographerQuestion`; progress only in the question section; panel chrome stays visible.
+
+### Architecture after the fix
+
+- `loadPersistedBiographerState()` — passive resume only
+- `requestNextBiographerQuestion()` — explicit generation (manual Prepare button or at-most-once post-index continuation)
+- `refreshOverviewSummary()` — passive resume only for eligibility + badge question (never next-question)
+- State split: `panelInitialLoading` / `questionGenerationPending` / `generationFailed` / `readyForNextQuestion`
+- Guards: load/generation sequence refs, in-flight ref, post-index continuation key, module-level claim set (StrictMode/poll safe), stale profile protection
+- Passive-resume contract: generation-free and retrieval-free; ordinary healthy path SELECT-only; existing bounded stale-clarification self-repair may commit only when that mismatch is present
+
+### Tests and results
+
+- New `MemorialWorkspace.task65_11_4.test.tsx` — **11 passed** (passive load, ready invariant, remount, post-index once + StrictMode, slow gen, success/failure, stale, blocks, indexing failure)
+- `MemorialWorkspace.test.tsx` + `MemorialWorkspace.task65_5.test.tsx` focused run — **87 passed** total with the new file
+- `npx tsc -b` — exit 0
+- Backend `test_avatar_biographer.py` (Docker, `EMBEDDING_PROVIDER=mock`, `AI_BRAIN_PROVIDER=mock`) — **31 passed**, including new `test_passive_resume_is_read_only_without_generation_rag_or_question_writes`
+- `compileall app/modules/avatar_biographer` — exit 0
+- `git diff --check` — clean
+- Health: `/health` ok, `/health/runtime` ok, frontend `:8017` → 200
+
+Live authenticated resume timing was skipped (no safe credentials without risk of mutation). No real LLM/embedding/Qdrant/DB write occurred during this task.
+
+Implementation/tests commit (Task 65.11.4A): `167a2953ec4155e1bf61c3e85cf068a626bcd407` — `fix: separate AI biographer loading from question generation` (4 files).
+
+### Next recommended task
+
+**Task 65.12 / next roadmap item after 65.11.4A closure** — continue from the authoritative roadmap after this push (see Task 65.11.4A section once recorded).
+
+---
+
+## Task 65.11.4A — Final Review, Commit and Push of Passive AI Biographer Loading Fix (2026-07-29)
+
+Final Git-closure for Task 65.11.4. No new product functionality. Debug instrumentation removed before commit. No real LLM/BGE-M3. No live PostgreSQL/Qdrant/Redis mutation. No container restart/rebuild.
+
+Implementation commit: `167a2953ec4155e1bf61c3e85cf068a626bcd407` — `fix: separate AI biographer loading from question generation` (exactly 4 files).
+
+Documentation commit: recorded in this closure.
+
+Validation before push: frontend focused **87 passed**; Task 65.11.4 file **11 passed**; `tsc -b` exit 0; backend `test_avatar_biographer.py` **31 passed**; compileall exit 0; `git diff --check` clean; `/health` + `/health/runtime` ok; Redis PONG; frontend HTTP 200.
+
+Passive-resume contract recorded accurately: generation-free and retrieval-free; ordinary healthy path SELECT-only; pre-existing Task 65.10.1 bounded stale-clarification self-repair may commit only when that mismatch is present.
+
+### Next recommended task
+
+Continue from the authoritative roadmap after this closure (no further 65.11.4 work remaining).
+
+---
