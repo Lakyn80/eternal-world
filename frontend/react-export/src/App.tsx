@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 import type { Lang } from './i18n';
 import Nav from './components/Nav';
 import Hero from './components/Hero';
@@ -10,6 +10,7 @@ import AvatarStudio from './components/AvatarStudio';
 import Moments from './components/Moments';
 import Footer from './components/Footer';
 import AuthenticatedApp from './components/AuthenticatedApp';
+import { readStoredLang, writeStoredLang } from './lib/langPreference';
 import { isAuthenticatedAppPath, navigate, usePathname } from './lib/router';
 
 const scrollTo = (id: string) => {
@@ -28,7 +29,13 @@ const scrollTo = (id: string) => {
  * memorial workspace (Task 65.1A's root-cause finding).
  */
 export default function App() {
-  const [lang, setLang] = useState<Lang>('en');
+  // Restore the last explicit EN/CS/RU choice across reloads. Default remains
+  // English only when nothing valid is stored yet.
+  const [lang, setLangState] = useState<Lang>(() => readStoredLang());
+  const setLang = useCallback((next: Lang) => {
+    writeStoredLang(next);
+    setLangState(next);
+  }, []);
   const pathname = usePathname();
 
   if (isAuthenticatedAppPath(pathname)) {

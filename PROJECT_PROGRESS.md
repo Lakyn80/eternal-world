@@ -10900,3 +10900,22 @@ After approve, the Contributions list showed **Schváleno, čeká na indexaci** 
 - Targeted vitest for poller + MemorialWorkspace (run locally / in agent).
 
 ---
+
+## Task 65.11.6 — Persist UI language across page reloads (2026-07-29)
+
+### Defect
+
+`App.tsx` initialized `lang` as hard-coded `'en'`, so choosing Czech/Russian was lost on every full page reload.
+
+### What changed
+
+- Added `frontend/react-export/src/lib/langPreference.ts` (validated `localStorage` read/write for `en|cs|ru` only).
+- `App.tsx` restores stored language on mount and writes on every explicit language change (Nav + AuthenticatedApp).
+- Unit tests for round-trip, corrupt value, and default.
+
+### Scope notes
+
+- UI preference only; no auth tokens or memorial data in storage.
+- Default remains English when nothing valid is stored.
+
+---
