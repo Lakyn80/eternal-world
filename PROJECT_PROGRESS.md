@@ -10481,3 +10481,289 @@ Commit 1 (implementation/tests) `9bf86e8` — `fix: continue AI biographer after
 **Task 65.9.1G — Docker Volume Ownership and Qdrant Collection Audit** (deferred, unchanged by this task).
 
 ---
+
+## Task 65.11 — Fix BGE-M3 Embedding Provider Per-Request Reload (Meta-Tensor Race + Latency) (2026-07-28)
+
+Fixes a live incident: a real owner (owner_user_id=14, profile_id=35) asked the avatar chat about a real, correctly-indexed memory (candidate_id=199, promotion_id=18, chunk_id=27702, `promotion_status='indexed'` in Qdrant) and was told the avatar had no memory of it. A direct, read-only call to `_retrieve_rag_evidence_safely(...)` for the same query independently confirmed retrieval logic itself was correct (the memory ranked 2nd of 3 at score 0.913) — the failure was intermittent and environmental, not a ranking bug. Task 65.10's evidence-ranking work (commits `4a9cb4d`/`c2fb78c`) and Task 65.10.5's AI-biographer lifecycle work (commits `9bf86e8`/`7d6c291`) were confirmed uninvolved and were left untouched.
+
+### Root cause
+
+`docker logs eternal_world_backend` showed 81 occurrences in a 90-minute window of `[bge_m3_hybrid] encode failed ... error=NotImplementedError: Cannot copy out of meta tensor; no data! Please use torch.nn.Module.to_empty() instead of torch.nn.Module.to()...`, plus one request that took 412153.69ms (6.8 minutes). `chat/service.py::_retrieve_rag_evidence_safely` swallows all retrieval exceptions and returns `[]`, so every hit silently produced zero evidence — the LLM then correctly (from its own perspective) said "I don't have that in my memories."
+
+Traced to `backend/app/modules/rag_retrieval/hybrid.py::default_encode_hybrid_query_vectors` (the query-time embedding path used by chat RAG retrieval and the AI biographer's next-question flow) and `rag_retrieval/service.py::_build_provider` → `build_embedding_provider`: both construct a **brand-new** `BgeM3HybridEmbeddingProvider`/`BgeM3HybridEmbeddingAdapter` on every single call, with no caching at that layer, so every request that needed a query embedding reloaded the ~2GB `BAAI/bge-m3` model from disk from scratch inside the FastAPI request-serving process. The codebase already had a correct, already-tested process-wide shared model cache for exactly this (`enable_bge_m3_hybrid_shared_model_cache`/`_shared_models`/`_shared_models_lock` in `bge_m3_hybrid.py`, proven by `test_bge_m3_hybrid_shared_cache_reuses_single_model_across_provider_modes` in `test_real_question_eval.py`) — but it was only ever entered by the offline `real_question_eval` evaluation tool, never anywhere in the live request path. `backend/app/main.py` had no `lifespan`/`@app.on_event` at all.
+
+Confirmed via `docker logs` that repeated overlapping `load start` lines (no intervening `load success`) directly preceded `encode failed` lines, and that `load success` also occurred far more often than failures — ruling out a corrupted/incomplete model snapshot and confirming a concurrency race during model construction, not a data problem. Reading the installed `FlagEmbedding` package source (`AbsEmbedder.__init__` → `EncoderOnlyEmbedderM3Runner.get_model` → `AutoModel.from_pretrained(...)`) confirmed this uses `transformers`/`accelerate`'s meta-device model construction (`accelerate.init_empty_weights()`), which is documented to not be safe under concurrent construction across threads in one process — exactly matching the observed `NotImplementedError: Cannot copy out of meta tensor` failures when multiple requests raced to build a fresh model at once.
+
+A second, independent hazard was found while verifying the fix would actually be safe: `FlagEmbedding`'s `AbsEmbedder.encode_single_device()` calls `self.model.to(device)` and `self.model.float()` on **every** `.encode()` call, not just once at load time — a real, mutating operation on the shared `nn.Module`'s parameter tree. Once a single model instance is shared across concurrent requests (the fix below), two requests' encode calls could otherwise race on that mutation.
+
+`app/modules/embeddings/provider_lifecycle.py` (Task 65.9 Part J) was confirmed to be a deliberately separate, heavier mechanism (health-probing, self-healing, `EmbeddingProviderLifecycle`) explicitly documented as "must never be called by FastAPI's HTTP process" — reserved for the Celery embedding worker, which already uses it correctly via `SelfHealingEmbeddingEncoder` for passage/indexing embeddings. This confirms the request-serving fix must use the lighter `enable_bge_m3_hybrid_shared_model_cache` mechanism, not `EmbeddingProviderLifecycle`.
+
+### Fix
+
+**`backend/app/modules/embeddings/providers/bge_m3_hybrid.py`**: added a per-shared-model encode lock (`_shared_model_encode_locks`, keyed the same way as `_shared_models`) so that once a model instance is shared, concurrent `.encode()` calls against it are serialized (unshared, per-request-private model instances never take this lock — confirmed via a dedicated test that the lock is `None` when the shared cache is disabled). `clear_bge_m3_hybrid_shared_model_cache()` now also clears this lock dict.
+
+**`backend/app/main.py`**: enables the shared model cache for the lifetime of the process via `enable_bge_m3_hybrid_shared_model_cache()`, entered as plain synchronous top-level module code (not inside an `async def lifespan`) and kept alive in a module-level name. Two subtle correctness issues were found and fixed while building this, both verified empirically rather than assumed:
+1. `ContextVar` mutations made inside a separate asyncio Task (such as FastAPI's `lifespan`) do not propagate to *sibling* Tasks created later by a different coroutine (e.g. uvicorn's per-connection Task) — only Tasks that copy an *already-mutated ambient* context inherit it. Setting the flag as plain top-level code, before uvicorn's event loop or any Task exists, guarantees every later Task (lifespan task and every per-request task alike) copies a context where it is already `True`.
+2. `enable_bge_m3_hybrid_shared_model_cache()` is a `@contextmanager`-wrapped generator; calling `.__enter__()` on an unreferenced instance left it with a zero refcount immediately afterward, which CPython's GC finalized right away — closing the still-suspended generator and running its `finally: reset(token)` block within the same statement, silently undoing the `.set(True)`. Fixed by keeping the context-manager object referenced in a module-level name for the process's lifetime.
+
+No changes were needed to `rag_retrieval/hybrid.py`, `rag_retrieval/service.py`, or `providers/__init__.py` — the shared cache is a module-level dict inside `bge_m3_hybrid.py` keyed by model config, so every existing call site (`build_embedding_provider`, the direct `BgeM3HybridEmbeddingProvider()` construction in `default_encode_hybrid_query_vectors`) transparently starts reusing the one shared model the moment the ContextVar is enabled, with no call-site changes required. `provider_lifecycle.py`, `self_healing.py`, and the Celery worker embedding path are entirely untouched — `app/main.py` is never imported by the worker entrypoint (`app/worker/celery_app.py`), so this fix is scoped to the FastAPI process only.
+
+**`backend/tests/conftest.py`**: added an autouse fixture (`_reset_bge_m3_hybrid_shared_model_cache`) that clears the shared model/lock dicts before and after every test. Necessary because `app.main` is now imported by `conftest.py` (required for the `client` fixture) and its import enables the shared-cache `ContextVar` process-wide for the whole pytest run — without clearing the dicts between tests, an earlier test's monkeypatched fake model class could be silently reused by a later test via the shared cache, skipping that later test's own `monkeypatch.setattr` calls. The ContextVar itself is deliberately left `True` throughout the test run (mirroring production); only the per-test dicts are reset.
+
+### Tests
+
+New file `backend/tests/test_task_65_11_bge_m3_hybrid_request_path_shared_cache.py` (5 tests, reusing the exact `_FakeBGEM3FlagModel`/monkeypatch pattern already proven in `test_real_question_eval.py` and `test_bge_m3_embedding_cache.py` — no real model load in any test):
+- `test_importing_app_main_enables_the_shared_model_cache_process_wide` — proves the `app.main` import-time fix actually takes effect.
+- `test_build_embedding_provider_reuses_shared_model_across_separate_adapter_instances` — two separate `build_embedding_provider(...)` calls (the real per-request call site) reuse the identical underlying model object; the fake loader is invoked exactly once.
+- `test_concurrent_requests_load_the_shared_model_exactly_once` — 12 threads race to obtain the model at once (reproducing the real concurrency conditions), using a helper that propagates `contextvars.Context` into each thread the same way `anyio.to_thread.run_sync`/Starlette's `run_in_threadpool` does for real sync path operations (confirmed `chat/router.py::send_message` is a sync `def`, so this is the real code path, not a simplification); the existing double-checked-locking loads the model exactly once despite the race.
+- `test_concurrent_encode_calls_on_a_shared_model_are_serialized` — 8 threads calling `.encode()` concurrently on an already-shared model; proves the new per-shared-model lock caps concurrent in-flight encode calls at exactly 1, while all 8 still complete successfully.
+- `test_unshared_provider_instance_never_takes_an_encode_lock` — confirms the guard is scoped precisely to shared instances.
+
+Results: **5 passed** (new file). **`test_real_question_eval.py`: 44 passed** (unweakened — includes the pre-existing `test_bge_m3_hybrid_shared_cache_reuses_single_model_across_provider_modes`). **`test_bge_m3_embedding_cache.py`: 3 passed**, **`test_bge_m3_model_cache.py` + `test_embeddings_sentence_transformers.py` + `test_bge_m3_embedding_cache.py` + new file combined: 50 passed**. Broader coverage: **`test_chat.py` + `test_rag_retrieval.py` + `test_rag_retrieval_hybrid.py` + `test_avatar_biographer.py` combined: 52 passed, 1 failed** — `test_rag_retrieval.py::test_query_embedding_is_generated_but_not_persisted_as_rag_embedding` fails, but this was proven **pre-existing and unrelated**: re-run with every Task 65.11 file (`bge_m3_hybrid.py`, `main.py`, `conftest.py`, the new test file) fully `git stash`-ed away, it fails identically in complete isolation. It appears to be this dev container's real environment configuration leaking `settings.embedding_provider` (same class of pre-existing issue conftest.py's own docstring already documents for `AI_BRAIN_PROVIDER`, just for a different setting, not previously guarded) - out of scope for this task and left untouched.
+
+### Live verification
+
+`uvicorn --reload` picked up every edit live (`WatchFiles detected changes in 'app/modules/embeddings/providers/bge_m3_hybrid.py'`, `'app/main.py'`, `'tests/conftest.py'` — each followed by a clean `Application startup complete`, confirming the new module-level code does not crash the app). No container was restarted or rebuilt.
+
+### Confirmations
+
+No real DeepSeek/LLM call. No real embedding write, no live Qdrant/PostgreSQL/Redis mutation — all new tests use the established fake-model monkeypatch pattern, no real 2GB model load. No synthetic load/stress test was run against the live service (only passive log observation and the isolated automated test suite, per the safety constraints). Task 65.10 (`4a9cb4d`/`c2fb78c`) and Task 65.10.5 (`9bf86e8`/`7d6c291`) code and commits were left completely untouched — this task only touched `bge_m3_hybrid.py`, `main.py`, `conftest.py`, and added one new test file.
+
+### Next recommended task
+
+**Task 65.9.1G — Docker Volume Ownership and Qdrant Collection Audit** (deferred, unchanged by this task).
+
+---
+
+## Task 65.11.1 — Eliminate AI Biographer RAG Fan-Out and Batch Topic Query Embeddings (2026-07-29)
+
+Follow-up to Task 65.11. Task 65.11 stopped the ~2GB `BAAI/bge-m3` model from being *reloaded* on every request (shared process-wide model instance) and closed the meta-tensor construction race with a per-shared-model encode lock. It did **not** reduce how many times that (now correctly shared) model was *invoked* inside one AI-Biographer "next question" HTTP request — and the new encode lock now deliberately serializes those invocations, so "run them in parallel" was explicitly not an available fix.
+
+### Root cause — the exact original call graph
+
+`avatar_biographer/service.py::get_next_question` built a `TopicContextPackage` for **every** one of the 8 topics in `avatar_biographer/topics.py::BIOGRAPHER_TOPICS`, even though only one topic is ever selected:
+
+```
+get_next_question()
+└── for topic in BIOGRAPHER_TOPICS            # 8 topics
+    └── build_topic_context_package()
+        └── for source_type in ("biography", "conversation_candidate")   # 2 source types
+            └── rag_retrieval.service.retrieve_profile_rag()             # PUBLIC entry point
+                ├── encode_hybrid_query_vectors() -> default_encode_hybrid_query_vectors()
+                │   └── BgeM3HybridEmbeddingProvider.encode_query() -> model.encode([one text])
+                └── QdrantRestClient.search_points()                     # one HTTP round trip
+```
+
+= **8 x 2 = 16 scalar BGE-M3 query encodes and 16 Qdrant searches per request**, all sequential, all inside one FastAPI request, on CPU, with `embedding_cache_enabled` defaulting to `False` and not overridden anywhere in the deployment — so every one of the 16 was a real, uncached model invocation. Meanwhile `coverage.py::build_topic_coverage_map` only ever needed an **integer chunk count** per topic (compared against `RICH_EVIDENCE_CHUNK_THRESHOLD`/`BASIC_EVIDENCE_CHUNK_THRESHOLD`); the full excerpt text was used for the single selected topic only.
+
+Measured red-test result against the pre-fix implementation (fake provider + fake Qdrant, zero real model/network work): `scalar_query_encode_calls=16`, `batch_query_encode_calls=0`, `qdrant_search_calls=16`.
+
+### New architecture — one batch encode, one Qdrant request
+
+**Phase 1 — batch query preparation.** `avatar_biographer/context_package.py::build_topic_query_batch` builds one semantic query text per catalog topic, in stable catalog order (`topics[i]` <-> `specs[i]` <-> vector `i`). `rag_retrieval/hybrid.py` gained a dedicated **query-semantics** batch API — `default_encode_hybrid_query_vectors_batch` / `encode_hybrid_query_vectors_batch` — which routes BGE-M3 through the new `BgeM3HybridEmbeddingProvider.encode_queries()` (`input_type="query"`) and the non-FlagEmbedding fallback through the new `BaseEmbeddingProvider.embed_query_batch()`. The passage-oriented `embed_batch()`/`encode_passages()` is never used for queries; `encode_hybrid_query_vectors_batch` raises on any `input_type` other than `"query"` (`HYBRID_QUERY_INPUT_TYPE`). One model invocation returns one dense + one sparse vector per topic, in input order.
+
+**Phase 2 — coverage retrieval.** New internal primitive `rag_retrieval/batch_query.py::retrieve_profile_rag_query_batch` (deliberately not a public API, and deliberately not used by the chat retrieval path, which is byte-for-byte unchanged). It performs exactly one query-batch encode and exactly one Qdrant round trip via the new `QdrantRestClient.search_points_batch` (`POST /collections/{name}/points/search/batch`, order-preserving: `searches[i]` -> `result[i]`). The two verified source types are expressed as **one combined `must` condition** — `{"key": "source_type", "match": {"any": ["biography", "conversation_candidate"]}}` — AND-ed with the mandatory `owner_user_id` + `profile_id` conditions (never a `should`, which would weaken owner/profile isolation). SQL hydration for every topic's candidates happens in one `repository.list_retrieval_evidence_for_embeddings` call — the same function as before, which is what actually enforces owner/profile scoping on every joined table plus the `promotion_status='indexed'` requirement for `conversation_candidate` evidence. Authorization (`resolve_authorized_profile` with `SEARCH_APPROVED_MEMORY`), model/collection resolution (`resolve_runtime_active_retrieval_config`), the owner-only `privacy_scope` visibility check, hybrid dense+sparse fusion (`rank_fused_hybrid_candidates`) and final ordering (`rank_retrieval_results`) are all reused verbatim from `rag_retrieval/service.py`.
+
+**Phase 3 — topic selection (semantics preserved).** `coverage.build_topic_coverage_map` / `coverage.select_next_topic` are **completely untouched**. They still receive one verified chunk count per topic, computed from the same bounded (`_CONTEXT_CHUNK_LIMIT = 5`), verified, owner/profile-scoped evidence. Verified chunk counts, unresolved-candidate blocking, pending-question blocking, skipped/postponed handling, rich/basic/weak/not-started states, topic cooldown, revisit ordering and the Task 65.10.4 topic-rotation contract are all unchanged. A dedicated parity test feeds deterministic per-topic chunk counts (0 / 1 basic / 4 rich) plus answered/skipped/postponed history through both the optimized service path and the untouched `build_topic_coverage_map` + `select_next_topic` contract and asserts the two select the identical topic.
+
+**Phase 4 — selected-topic context.** `BiographerTopicContextBatch.hydrate_context_package(topic)` materializes prompt excerpts for the **selected topic only**, as pure local shaping of text the single batch query already returned: no second embedding of the selected topic's query, no second per-source-type retrieval, no additional Qdrant request. Prompt limits, source counts, chunk counts, character limits, estimated tokens and relevance ordering are unchanged (`_CONTEXT_CHUNK_LIMIT = 5`, `_MAX_CHUNK_CHARS_IN_PROMPT = 320`, `_CHARS_PER_ESTIMATED_TOKEN = 4`). The batch requests a fused top-k of `_BATCH_RETRIEVAL_LIMIT = _CONTEXT_CHUNK_LIMIT * len(_VERIFIED_SOURCE_TYPES) = 10` per topic so the pre-bound candidate list (`available_verified_sources`) keeps exactly the size bound it had when the two source types were queried separately at 5 each.
+
+One intentional, spec-directed behavioural refinement: with a single combined-source-type query, dense/sparse score normalisation now happens over **one** candidate pool instead of two separately-normalised per-source-type pools whose fused scores were then merged. The chunk *count* per topic (all coverage decisions depend on this) and the 5-chunk prompt bound are unchanged; the relative ordering of a biography chunk against a conversation-candidate chunk is now computed on a single comparable scale, which the previous two-pool merge could not do correctly.
+
+### Before / after (deterministic fake-safe call counts, one new-question request, 8-topic catalog)
+
+| | BEFORE | AFTER |
+|---|---|---|
+| topics evaluated | 8 | 8 |
+| source types covered | biography + conversation_candidate | biography + conversation_candidate |
+| scalar query-embedding model calls | **16** | **0** |
+| batch query-embedding model calls | 0 | **1** |
+| query texts encoded | 16 (8 texts x 2, duplicated per source type) | **8** (each topic exactly once) |
+| duplicate query embedding for the two source types | 8 | **0** |
+| passage embedding invocations | 0 | 0 |
+| Qdrant requests | **16** | **1** (batch search) |
+| pending-question resume | 0 embeddings, 0 Qdrant | 0 embeddings, 0 Qdrant (unchanged) |
+
+Cache-independent: the same counts hold with `embedding_cache_enabled=False` (asserted).
+
+### Files changed (backend)
+
+- `app/modules/avatar_biographer/context_package.py` — batch API (`build_topic_query_batch`, `build_topic_context_batch`, `BiographerTopicContextBatch`, `TopicCoverageEvidence`, `empty_context_batch`, `context_batch_from_packages`); removed the per-topic `build_topic_context_package` fan-out entry point.
+- `app/modules/avatar_biographer/service.py` — `_safe_context_batch` (one guarded batched retrieval for the whole catalog) + `_safe_selected_topic_context` (selected-topic-only hydration, guarded); coverage/selection code path unchanged.
+- `app/modules/rag_retrieval/batch_query.py` — **new**, the internal precomputed-vector batch retrieval primitive.
+- `app/modules/rag_retrieval/hybrid.py` — `HYBRID_QUERY_INPUT_TYPE`, `default_encode_hybrid_query_vectors_batch`, `encode_hybrid_query_vectors_batch`.
+- `app/modules/embeddings/providers/base.py` — `embed_query_batch()` (documented as deliberately separate from the passage-oriented `embed_batch()`).
+- `app/modules/embeddings/providers/bge_m3_hybrid.py` — `BgeM3HybridEmbeddingProvider.encode_queries()`, `BgeM3HybridEmbeddingAdapter.embed_query_batch()` (+ `_split_encoded_batch` extracted, no behaviour change). The Task 65.11 shared model cache and per-shared-model encode lock are untouched and still used.
+- `app/modules/qdrant_indexing/client.py` — `QdrantRestClient.search_points_batch()`.
+- `app/core/metrics.py` — bounded, numeric-only Biographer batch metrics (see below).
+- `docker-compose.yml`, `docker-compose.prod.yml` — Redis embedding cache activation (see below).
+
+### Metrics and privacy
+
+New label-free histograms: `biographer_topic_query_batch_size`, `biographer_query_model_invocations`, `biographer_qdrant_requests`, `biographer_coverage_retrieval_duration_seconds`, `biographer_selected_topic_hydration_duration_seconds`, emitted via `observe_biographer_topic_query_batch()` / `observe_biographer_selected_topic_hydration()`. They carry counts and durations only — never topic query text, biography excerpts, generated question text, answer/candidate text, names or email addresses. The degraded-path log events (`biographer_context_retrieval_failed`, `biographer_selected_context_hydration_failed`) carry `profile_id`/`topic` key/`topic_count` only, no text.
+
+### Redis embedding cache activation (mandatory, complementary — not a replacement)
+
+Batching fixes the **cold** request (16 model invocations -> 1). The Redis cache fixes the **repeated** request (1 -> 0). Neither substitutes for the other, and enabling the cache alone would have been unacceptable: the first request would still have paid the full 16x fan-out, every miss would still have been slow, and cache lifetime/config would have determined endpoint viability.
+
+Confirmed current state before the change: `embedding_cache_enabled` defaulted to `False`; `embedding_cache_provider` already supported `redis`; neither compose file overrode `EMBEDDING_CACHE_ENABLED`; a TTL of `0` would have produced non-expiring entries.
+
+Set in **both** `docker-compose.yml` and `docker-compose.prod.yml`, for `backend` (AI Biographer + chat query retrieval), `embedding_worker` (ingestion embeddings) and `celery_worker`:
+
+```
+EMBEDDING_CACHE_ENABLED: "true"
+EMBEDDING_CACHE_PROVIDER: redis
+EMBEDDING_CACHE_TTL_SECONDS: "604800"   # 7 days - never 0/non-expiring
+EMBEDDING_CACHE_KEY_PREFIX: eternal_world
+```
+
+`celery_worker` inspection result: no embedding-queue task is routed to it today (`celery_app.task_routes` sends every embedding-heavy task to the `embedding` queue, consumed only by `embedding_worker`), but it *is* configured with the real `sentence_transformers` provider, so any future task routed to one of its queues would perform real embedding work — the cache is therefore enabled there too, with identical isolation guarantees. **`maintenance_worker` was deliberately left untouched** (`EMBEDDING_PROVIDER: mock`; it must never load a real embedding provider).
+
+Cache-key isolation (already implemented in `embeddings/embedding_cache.py::build_cache_key`, now asserted by test): provider code, provider model name, model snapshot revision, dense/sparse mode, **input type (query vs passage)**, vector dimension, and a normalized SHA-256 text hash. Raw query/biography text is never part of a Redis key and never logged; the cache-error log line carries only an 8-character key-hash prefix.
+
+### Tests
+
+**Red first.** `backend/tests/test_task_65_11_1_biographer_query_batch.py` was written and run against the unmodified implementation: **10 failed**, with the primary assertion reporting `assert 16 == 0` under the message *"AI Biographer must not perform per-topic/per-source scalar query embedding fan-out"*, plus `batch_query_encode_calls=0` and 16 `search_points` calls. No BGE-M3 weights, no real Qdrant, no live database, no DeepSeek request were involved in producing that red result.
+
+`backend/tests/test_task_65_11_1_biographer_query_batch.py` — **22 passed**. Covers: exactly one batch model call with exactly 8 texts in catalog order and 0 scalar calls; query semantics asserted (`input_type == "query"`, 0 passage invocations); one Qdrant batch request and 0 single searches; combined verified-source filter (`match.any` = biography + conversation_candidate, exactly one `source_type` condition) plus mandatory `owner_user_id`/`profile_id` scoping — asserted both end-to-end and as a unit test of `_build_batch_search_filter`; a `manual_text` source is proven never to reach the Biographer prompt even when Qdrant returns its point; a second memorial's seeded evidence handed back by (a deliberately misbehaving) Qdrant is proven never to enter coverage or the prompt; coverage parity against the untouched `build_topic_coverage_map` + `select_next_topic` contract with 0 / 1 basic / 4 rich chunk fixtures plus answered/skipped/postponed history; a non-first topic (`education`) is selected and its prompt contains only education excerpts while childhood/family/work/values excerpts are absent, with `batch_query_encode_calls == 1` proving the selected topic's query is not re-encoded; pending-question fast path (0 embeddings, 0 Qdrant, same row); repeated-request idempotency (one row, no additional retrieval); locale batching for `cs` and `ru` plus unknown-locale fallback to `ru`; degraded batch-embedding failure, degraded Qdrant-batch failure and degraded selected-topic hydration failure all falling back to the deterministic question without leaking internal exception text; the 16-call invariant guard; and cache-independence with `embedding_cache_enabled=False`.
+
+`backend/tests/test_task_65_11_1_embedding_cache_activation.py` — **14 passed, 2 skipped**. Covers: cache disabled -> one batch model call; cold request -> 8 misses, 1 batch model call, 8 writes; warm repeated request -> 8 hits, 0 model calls, identical vectors and topic mapping; partial hit -> only the misses encoded, still exactly one model call; a cached **passage** embedding never satisfying a **query** request; changing `snapshot_revision` producing misses instead of stale hits; cache-key isolation across all seven required dimensions with no raw text in the key; Redis failure degrading to one batch model call with the request still succeeding, `errors > 0`, and no private text in the log output; Redis client construction failure falling back to the null cache; `SET` using `ex=604800`; and a warm end-to-end AI-Biographer request (8 topics, 8 cache hits, **0** model invocations, Qdrant still retrieving on the cached vectors, topic selection unchanged). The 2 skips are the `docker-compose.yml`/`docker-compose.prod.yml` configuration assertions — the backend container mounts only `./backend`, so the repo-root compose files are unreadable from inside it; they were executed as an equivalent host-side script instead, which confirmed cache-enabled services = `[backend, celery_worker, embedding_worker]`, TTL 604800, provider `redis`, prefix `eternal_world`, `maintenance_worker` excluded, for both files.
+
+`backend/tests/test_avatar_biographer.py` — **30 passed**, unweakened. Wider affected-suite run (`test_ai_agents.py`, `test_bilingual_retrieval_evaluation.py`, `test_demo_fa_chat.py`, `test_demo_fa_chat_bilingual.py`, `test_multi_embedding_eval.py`, `test_real_question_eval.py`, `test_chat.py`): **164 passed**. Its stub seam moved from the per-topic `build_topic_context_package` to the batched `build_topic_context_batch`; the per-topic fixtures themselves are unchanged and are shaped into the batch via `context_batch_from_packages`, so every existing coverage/selection/generation/fallback expectation still asserts the same contract against the same inputs.
+
+### Confirmations
+
+Retrieval logic changed: **yes** — for the AI Biographer coverage path only (one batched query + one Qdrant batch request instead of 16 serial `retrieve_profile_rag()` calls); ranking inputs, filters, authorization, verified-evidence rules and the public `retrieve_profile_rag()` chat path are unchanged. Embedding logic changed: **yes** — a new query-semantics batch API was added; no existing scalar/passage path was altered. Redis cache behaviour changed: **yes** — activated with a finite 7-day TTL and asserted key isolation; the cache implementation itself is unchanged. Qdrant modified: **no** (a new read-only batch-search client method was added; no data was written, no collection touched). Model downloaded: **no**. Fallback introduced: **no new** fallback — the existing safe degraded path is reused, now at batch granularity.
+
+No real BGE-M3 inference, no real DeepSeek/LLM call, no live Qdrant write, no live PostgreSQL/Redis mutation, no container restart or rebuild, no Docker volume change, no schema migration, no frontend change, no AI-Biographer wording change, no chunk-size change, no topic-catalog order change.
+
+### Remaining limitations
+
+- The two compose-configuration assertions cannot execute inside the backend container (repo root is not mounted there); they skip with an explicit reason and were verified by an equivalent host-side script. They will run normally from a full-checkout environment.
+- No verification was performed against the live Redis server: the running containers still carry the pre-change environment, and applying the new `EMBEDDING_CACHE_*` variables would require recreating containers, which this task's constraints forbid. The activation therefore takes effect on the next approved container recreation.
+- The single-combined-pool score normalisation described above is a deliberate, spec-directed refinement; it does not change any coverage decision, but a manual real-local A/B of the selected topic's excerpt *ordering* is a reasonable optional follow-up.
+- An optional real-local benchmark command was prepared but deliberately **not executed** (no real BGE-M3 inference in this task):
+  `docker compose exec -T backend python -c "from app.modules.rag_retrieval.hybrid import default_encode_hybrid_query_vectors_batch as b; from app.modules.avatar_biographer.topics import BIOGRAPHER_TOPICS as T; from time import perf_counter; q=[t.questions['cs'] for t in T]; s=perf_counter(); b(q,'bge_m3_dense_sparse'); print('batch_8_queries_seconds', round(perf_counter()-s,3))"` — requires explicit approval, since it performs real BGE-M3 inference.
+
+### Production Compose limitation (documented for this chain)
+
+- `.env.prod` is intentionally absent on this workstation (real production secrets file).
+- `.env.prod.example` exists in the repository.
+- Official `docker compose -f docker-compose.prod.yml config` rendering cannot be completed here without creating `.env.prod`.
+- Direct YAML parsing and environment-block inspection of `docker-compose.prod.yml` passed (backend / celery_worker / embedding_worker cache values; maintenance_worker stays on `EMBEDDING_PROVIDER=mock` with no enabled embedding cache).
+- `.env.prod` must not be created or committed by this work.
+
+### Next recommended task
+
+**Task 65.11.2 — Real Local Cold/Warm Redis Embedding Cache Verification** (runtime verification after approved container recreation with the new `EMBEDDING_CACHE_*` env).
+
+---
+
+## Task 65.11.2 — Real Local Cold/Warm Redis Embedding Cache Verification (2026-07-29)
+
+Runtime verification after the Task 65.11.1 compose activation took effect in the running containers. No production code changed in this task.
+
+Confirmed effective Redis embedding-cache configuration on intended services (`backend`, `embedding_worker`, `celery_worker`):
+
+```
+EMBEDDING_CACHE_ENABLED=true
+EMBEDDING_CACHE_PROVIDER=redis
+EMBEDDING_CACHE_TTL_SECONDS=604800
+EMBEDDING_CACHE_KEY_PREFIX=eternal_world
+```
+
+`maintenance_worker` remained excluded (`EMBEDDING_PROVIDER=mock`).
+
+Real cold/warm results for the eight localized AI-Biographer catalog query texts (one query batch):
+
+| run | hits | misses | writes | model batch calls | wall time |
+|-----|------|--------|--------|-------------------|-----------|
+| cold | 0 | 8 | 8 | 1 | ~14,184 ms |
+| warm | 8 | 0 | 0 | 0 | ~23 ms |
+
+Observed warm-cache improvement: approximately **606×** (14,184 / 23).
+
+Confirmations: no DeepSeek/LLM call, no PostgreSQL write, no Qdrant write during the cold/warm measurement path. Cache keys remained hash-isolated (no raw private text in keys/logs/metrics).
+
+### Next recommended task
+
+**Task 65.11.2A — Repair Legacy Non-Expiring Embedding Cache Keys** (TTL remediation for keys written before finite-TTL enforcement was fully effective).
+
+---
+
+## Task 65.11.2A — Repair Legacy Non-Expiring Embedding Cache Keys (2026-07-29)
+
+Read-only discovery followed by exact-key TTL remediation on the live Redis embedding-cache namespace. No production code changed.
+
+At repair time:
+
+- **108** `eternal_world:embedding_cache:*` keys present;
+- **76** non-expiring keys (`TTL == -1`);
+- **32** already-expiring keys (positive TTL).
+
+Remediation: `EXPIRE <exact-key> 604800 NX` applied only to the 76 non-expiring keys.
+
+Result:
+
+- **76** successful `EXPIRE 604800 NX` operations;
+- **zero** deletions;
+- **zero** keys with `TTL == -1` afterward.
+
+Legitimate already-expiring keys were left untouched. No wildcard `KEYS`/`FLUSHDB`/`FLUSHALL` was used.
+
+### Next recommended task
+
+**Task 65.11.3 — Final Review, Commit and Push** for Tasks 65.11 / 65.11.1 / 65.11.2 / 65.11.2A (later halted and succeeded by Task 65.11.3A + Task 65.11.3B).
+
+---
+
+## Task 65.11.3A — Make BGE-M3 Shared-Model Tests Hermetic and Remove Confirmed Fake Redis Entries (2026-07-29)
+
+A separate final-review task (Task 65.11.3) attempted to commit Tasks 65.11/65.11.1/65.11.2/65.11.2A and correctly **halted before committing** when its mandated test run showed 2 failures instead of the expected 104 passed/2 skipped, both in `backend/tests/test_task_65_11_bge_m3_hybrid_request_path_shared_cache.py`:
+
+- `test_build_embedding_provider_reuses_shared_model_across_separate_adapter_instances` — expected 2 fake-model encode calls, got 0.
+- `test_concurrent_encode_calls_on_a_shared_model_are_serialized` — expected 8 fake-model encode calls, got 0.
+
+### Root cause
+
+That test file was written during Task 65.11, when the embedding cache was disabled everywhere, so it never neutralized the cache. Once Task 65.11.1/65.11.2 genuinely activated the Redis embedding cache in the running backend container (`embedding_cache_enabled=True`, `embedding_cache_provider=redis`), `BgeM3HybridEmbeddingProvider.__init__` started building a *real* Redis-backed cache. Live Redis already held entries for these tests' literal query strings (written by the tests' own earlier runs), so the provider satisfied every `embed_query()` call from Redis without ever reaching the fake/monkeypatched BGE-M3 model — the encode-count assertions (`== 2`, `== 8`) measured Redis contents instead of the shared-model-reuse/encode-lock behavior they were written to test, and every prior miss had written a fake `[1.0] * 1024` dense / `{"stub": 1.0}` sparse vector into the production-identical `eternal_world:embedding_cache:*` namespace. These tests are about shared model reuse, per-model encode locking, and serialization of concurrent calls — not cache-integration tests (that contract already lives separately in `test_task_65_11_1_embedding_cache_activation.py`).
+
+### Fix — hermetic test file
+
+`backend/tests/test_task_65_11_bge_m3_hybrid_request_path_shared_cache.py` gained an autouse `embedding_cache_guard` fixture that closes the actual construction seam the provider uses: it monkeypatches `app.modules.embeddings.providers.bge_m3_hybrid.build_embedding_cache` (the name imported into that module's own namespace) to always return a fresh `NullEmbeddingCache`, before any provider instance is created. Patching `settings.embedding_cache_enabled` alone was deliberately rejected as the primary fix — it would be an indirect, easily-bypassed proxy for the actual construction seam. On top of the injection, the fixture also monkeypatches every real Redis entry point (`app.cache.redis_client.get_redis_client`, `app.cache.redis_client.Redis.from_url`, `app.modules.embeddings.embedding_cache.RedisEmbeddingCache`) to raise `AssertionError("Shared-model lifecycle tests must never access Redis")` immediately if touched, and asserts in its own teardown that every injected cache was a `NullEmbeddingCache` and that no Redis-access attempt was ever recorded — so any future edit that reintroduces a live-Redis dependency in this file fails loudly and immediately rather than silently becoming environment-dependent again. No production code and no other test file were modified; the encode-count assertions themselves (`== 2`, `== 8`) were **not weakened**.
+
+Two new tests were added for the isolation guarantee itself: `test_shared_model_tests_never_depend_on_or_mutate_the_live_embedding_cache` proves — without ever contacting Redis, which the guard forbids outright — that this file's tests receive a `NullEmbeddingCache` even when `settings.embedding_cache_enabled`/`embedding_cache_provider` are explicitly forced to the real runtime values (`True`/`"redis"`), that two identical rounds produce identical fake-model encode counts (a live cache would have made the second round a guaranteed hit), and that a constructed cache key's `.get()`/`.set()` against the injected null cache neither reads existing Redis contents nor creates/refreshes any entry. `test_any_attempt_to_reach_real_redis_from_this_file_fails_immediately` proves the guard is live, not vacuous, by calling the real Redis client factory directly and asserting it raises.
+
+### Fake Redis key cleanup
+
+Every literal query text passed into this test file's fake BGE-M3 encode path was enumerated directly from source (not assumed from the earlier diagnosis hint list): `first request query`, `second request query`, `priming query`, `unshared query`, `concurrent query 0`–`11` (12 strings, one per thread in the 12-thread concurrency test), `concurrent encode query 0`–`7` (8 strings, one per thread in the 8-thread encode-serialization test) — **24 candidate strings total**. The exact Redis key for each was computed with the real `build_cache_key` (schema `v1`, provider `bge_m3_dense_sparse`, model `BAAI/bge-m3`, the running container's actual snapshot revision `5617a9f61b028005a4858fdac845db406aefb181`, mode `dense_sparse`, input type `query`, dimension `1024`) and looked up by exact key only (no pattern scanning for this part). All 24 existed, all had a positive TTL, and all 24 payloads matched the exact fake signature (1024-length dense vector of `1.0`, sparse vector exactly `{"stub": 1.0}`) — confirmed by decoding and inspecting only the signature shape, never printing full vectors. A structural cross-check confirmed none of the 24 candidate key hashes collide with any of the 8 real `BIOGRAPHER_TOPICS` catalog question hashes (cs or ru).
+
+All 24 were deleted with `UNLINK <exact-key>` (never a wildcard, never `KEYS`, never `FLUSHDB`/`FLUSHALL`), each re-verified against the fake signature immediately before deletion. **24 attempted, 24 deleted, 0 missing, 0 rejected.** `eternal_world:embedding_cache:*` key count: 109 → 85 (exactly −24). `DBSIZE`: 5355 → 5331 (exactly −24). Post-cleanup verification: all 85 remaining embedding-cache keys have a positive TTL (0 with `TTL == -1`, 0 with `TTL == -2`, min observed 594,496s / max 602,210s); the unrelated `eternal_world:auth:*` (5,244 keys) and `eternal_world:chat:*` (2 keys) namespaces were untouched; Redis returned `PONG` throughout.
+
+### Tests
+
+Red (cache still enabled, before the fix): the two tests above failed exactly as diagnosed. After the fix, with the runtime cache still genuinely enabled (not disabled via `EMBEDDING_CACHE_ENABLED=false` on the command line — that was explicitly rejected as a workaround): `test_task_65_11_bge_m3_hybrid_request_path_shared_cache.py` — **7 passed** (the original 5 plus the 2 new isolation tests), run twice in a row with an identical result, proving no dependency on cache state. Full previously-blocking suite (`test_task_65_11_1_biographer_query_batch.py`, `test_task_65_11_1_embedding_cache_activation.py`, `test_avatar_biographer.py`, `test_task_65_11_bge_m3_hybrid_request_path_shared_cache.py`, `test_rag_retrieval.py`, `test_rag_retrieval_hybrid.py`, `test_qdrant_indexing.py`): **106 passed, 2 skipped** (104 + the 2 new tests; the 2 skips are the same already-documented compose-file visibility checks, no new skip appeared).
+
+### Confirmations
+
+No real BGE-M3 inference, no real DeepSeek/LLM call, no live Qdrant write, no live PostgreSQL write. The only Redis mutation performed anywhere in this task was the 24 confirmed-fake `UNLINK` deletions described above — no other key was read, written, or had its TTL changed. No container was restarted, recreated, or rebuilt. Files changed: `backend/tests/test_task_65_11_bge_m3_hybrid_request_path_shared_cache.py` (test-only) and this documentation.
+
+### Closure
+
+Implementation/tests commit for this chain (Task 65.11.3B): `c5b6be9` — `perf: optimize BGE-M3 biographer retrieval and caching` (16 files).
+
+## Task 65.11.3B — Final Review, Commit and Push After Hermetic Cache-Test Fix (2026-07-29)
+
+Final Git-closure task for the completed chain Tasks 65.11 / 65.11.1 / 65.11.2 / 65.11.2A / 65.11.3A. No new functionality. No Redis/PostgreSQL/Qdrant mutation during this task. No container restart/rebuild. No real BGE-M3 inference. No DeepSeek call.
+
+Implementation commit: `c5b6be9` — `perf: optimize BGE-M3 biographer retrieval and caching` (exactly 16 code/config/test files).
+
+Documentation commit: recorded in this closure (this file + roadmap).
+
+Final verification before push: shared-model target file **7 passed** twice; full affected suite **106 passed, 2 skipped**; compileall clean; `docker compose config --quiet` exit 0; prod YAML direct parse OK with `.env.prod` intentionally absent; `git diff --check` clean; `/health` + `/health/runtime` ok; Redis PONG; embedding-cache SCAN: 85 keys, all TYPE string, 0 with TTL -1, all 24 removed fake test keys still absent.
+
+### Next recommended task
+
+**Task 65.11.4 — separate passive AI Biographer loading from active question generation.**
+
+---
