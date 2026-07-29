@@ -11,7 +11,8 @@ import {
   biographerTopicLabel,
   biographyStatusLabel,
   isBiographyJobActive,
-  privacyScopeLabel
+  privacyScopeLabel,
+  resetBiographerPanelTestGuards
 } from './MemorialWorkspace';
 import type {
   BiographerQuestionRead,
@@ -398,6 +399,7 @@ describe('BiographyPanel', () => {
 
 describe('BiographerPanel', () => {
   afterEach(() => {
+    resetBiographerPanelTestGuards();
     vi.clearAllMocks();
   });
 

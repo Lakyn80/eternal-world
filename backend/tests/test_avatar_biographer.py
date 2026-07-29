@@ -1117,3 +1117,98 @@ def test_failed_indexing_surfaces_as_candidate_indexing_failed_and_never_silentl
         assert pending_count == 0
     finally:
         db.close()
+
+
+def test_passive_resume_is_read_only_without_generation_rag_or_question_writes(client, monkeypatch):
+    """Task 65.11.4 Part F: ordinary healthy resume is generation/retrieval-free.
+
+    On a clean eligible profile (no stale-clarification repair needed), the
+    resume endpoint must not call question generation, embeddings, Qdrant,
+    create a BiographerQuestion, mutate candidates/jobs, or flush/commit.
+
+    Note: a pre-existing Task 65.10.1 bounded self-repair may still commit
+    when unresolved_clarification_count disagrees with real pending rows;
+    that path is out of scope for this clean-path assertion and is not
+    claimed to be impossible on every resume.
+    """
+
+    from app.modules.avatar_biographer import question_generation as question_generation_module
+    from app.modules.avatar_biographer import resume as resume_module
+    from app.modules.rag_retrieval import service as rag_service
+    from sqlalchemy.orm import Session
+
+    token, profile_id = _create_memorial_with_indexed_biography(
+        client, "biographer-resume-readonly-65-11-4@example.com"
+    )
+
+    def _explode_provider():
+        raise AssertionError("resume must never construct the question provider")
+
+    def _explode_batch(*_args, **_kwargs):
+        raise AssertionError("resume must never call topic-context / RAG batch retrieval")
+
+    def _explode_create_question(*_args, **_kwargs):
+        raise AssertionError("resume must never create a BiographerQuestion")
+
+    def _explode_qdrant(*_args, **_kwargs):
+        raise AssertionError("resume must never build a Qdrant client")
+
+    monkeypatch.setattr(question_generation_module, "build_biographer_question_provider", _explode_provider)
+    monkeypatch.setattr(biographer_service, "build_topic_context_batch", _explode_batch)
+    monkeypatch.setattr(repository, "create_question", _explode_create_question)
+    monkeypatch.setattr(rag_service, "build_qdrant_client", _explode_qdrant)
+
+    commit_calls = {"count": 0}
+    flush_calls = {"count": 0}
+    original_commit = Session.commit
+    original_flush = Session.flush
+
+    def _counting_commit(self, *args, **kwargs):
+        commit_calls["count"] += 1
+        return original_commit(self, *args, **kwargs)
+
+    def _counting_flush(self, *args, **kwargs):
+        flush_calls["count"] += 1
+        return original_flush(self, *args, **kwargs)
+
+    monkeypatch.setattr(Session, "commit", _counting_commit)
+    monkeypatch.setattr(Session, "flush", _counting_flush)
+
+    db = _db()
+    try:
+        before_questions = db.query(BiographerQuestion).filter(BiographerQuestion.profile_id == profile_id).count()
+        before_candidates = (
+            db.query(ConversationMemoryCandidate).filter(ConversationMemoryCandidate.profile_id == profile_id).count()
+        )
+        before_actions = db.query(AiAction).filter(AiAction.memorial_id == profile_id).count()
+    finally:
+        db.close()
+
+    # Reset counters after setup queries (which may flush/commit via fixtures).
+    commit_calls["count"] = 0
+    flush_calls["count"] = 0
+
+    response = client.get(f"/api/memorials/{profile_id}/biographer/resume", headers=_auth_headers(token))
+    assert response.status_code == 200
+    body = response.json()
+    assert body["eligible"] is True
+    assert body["next_action"] == "question_ready"
+    assert body["active_question"] is None
+
+    db = _db()
+    try:
+        after_questions = db.query(BiographerQuestion).filter(BiographerQuestion.profile_id == profile_id).count()
+        after_candidates = (
+            db.query(ConversationMemoryCandidate).filter(ConversationMemoryCandidate.profile_id == profile_id).count()
+        )
+        after_actions = db.query(AiAction).filter(AiAction.memorial_id == profile_id).count()
+    finally:
+        db.close()
+
+    assert after_questions == before_questions == 0
+    assert after_candidates == before_candidates == 0
+    assert after_actions == before_actions
+    assert commit_calls["count"] == 0, "clean passive resume must not session.commit()"
+    assert flush_calls["count"] == 0, "clean passive resume must not session.flush()"
+    # Keep the public resume helper importable for static review of this contract.
+    assert callable(resume_module.get_resume_state)

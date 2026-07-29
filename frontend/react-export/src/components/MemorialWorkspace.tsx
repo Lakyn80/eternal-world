@@ -138,6 +138,9 @@ export type Copy = {
   biographerBlockedPermission: string;
   biographerGoToBiography: string;
   biographerGenerationFailed: string;
+  biographerReadyForNextQuestion: string;
+  biographerPrepareNextQuestion: string;
+  biographerPreparingQuestion: string;
   biographerDone: string;
   biographerAnswerPlaceholder: string;
   biographerSubmit: string;
@@ -396,6 +399,9 @@ export const COPY: Record<Lang, Copy> = {
     biographerBlockedPermission: 'You do not have permission to use the Biographer for this memorial.',
     biographerGoToBiography: 'Start biography indexing',
     biographerGenerationFailed: 'The Biographer could not prepare a question right now. Please try again.',
+    biographerReadyForNextQuestion: 'Ready to prepare the next Biographer question.',
+    biographerPrepareNextQuestion: 'Prepare next question',
+    biographerPreparingQuestion: 'Preparing the next question…',
     biographerDone: 'All Biographer topics for this memorial have been covered.',
     biographerAnswerPlaceholder: 'Write your answer...',
     biographerSubmit: 'Submit answer',
@@ -650,6 +656,9 @@ export const COPY: Record<Lang, Copy> = {
     biographerBlockedPermission: 'Nemáte oprávnění používat AI biografa u tohoto memorialu.',
     biographerGoToBiography: 'Spustit indexaci životopisu',
     biographerGenerationFailed: 'AI biografovi se teď nepodařilo připravit otázku. Zkuste to prosím znovu.',
+    biographerReadyForNextQuestion: 'Připraveno připravit další otázku AI biografa.',
+    biographerPrepareNextQuestion: 'Připravit další otázku',
+    biographerPreparingQuestion: 'Připravuji další otázku…',
     biographerDone: 'Všechna témata AI biografa pro tento memorial už byla probrána.',
     biographerAnswerPlaceholder: 'Napište svou odpověď...',
     biographerSubmit: 'Odeslat odpověď',
@@ -904,6 +913,9 @@ export const COPY: Record<Lang, Copy> = {
     biographerBlockedPermission: 'У вас нет прав на использование ИИ-биографа для этого мемориала.',
     biographerGoToBiography: 'Запустить индексацию биографии',
     biographerGenerationFailed: 'ИИ-биографу не удалось подготовить вопрос. Попробуйте ещё раз.',
+    biographerReadyForNextQuestion: 'Можно подготовить следующий вопрос ИИ-биографа.',
+    biographerPrepareNextQuestion: 'Подготовить следующий вопрос',
+    biographerPreparingQuestion: 'Подготавливаю следующий вопрос…',
     biographerDone: 'Все темы ИИ-биографа для этого мемориала уже пройдены.',
     biographerAnswerPlaceholder: 'Напишите свой ответ...',
     biographerSubmit: 'Отправить ответ',
@@ -1367,15 +1379,14 @@ export default function MemorialWorkspace({ lang }: { lang: Lang }) {
       .then(setBiographyStatus)
       .catch(() => setBiographyStatus(null));
     if (canSubmitContribution(role)) {
-      void getBiographerEligibility(accessToken, profileId)
-        .then(async (eligibility) => {
-          setBiographerEligible(eligibility.eligible);
-          if (eligibility.eligible) {
-            const nextQuestion = await getNextBiographerQuestion(accessToken, profileId, biographerLocale(lang));
-            setBiographerQuestion(nextQuestion);
-          } else {
-            setBiographerQuestion(null);
-          }
+      // Task 65.11.4: badge/overview must NEVER call next-question. That
+      // endpoint can run RAG+DeepSeek for minutes and made the workspace
+      // feel like AI Biographer "never loads". Resume is read-only and
+      // returns any already-persisted pending question for the badge.
+      void getBiographerResume(accessToken, profileId, biographerLocale(lang))
+        .then((resume) => {
+          setBiographerEligible(resume.eligible);
+          setBiographerQuestion(resume.active_question);
         })
         .catch(() => {
           setBiographerEligible(false);
@@ -2963,6 +2974,15 @@ export function biographerTopicLabel(t: Copy, topic: string): string {
 //: take an action first, so polling would spin forever for no reason.
 const BIOGRAPHER_POLL_BLOCKED_REASONS: ReadonlySet<BiographerBlockedReason> = new Set(['indexing_in_progress']);
 
+// Task 65.11.4: module-level claim so StrictMode remounts / overlapping polls
+// cannot start a second post-index next-question for the same candidate key.
+const claimedBiographerPostIndexKeys = new Set<string>();
+
+/** @internal Test-only: clear post-index generation claims between cases. */
+export function resetBiographerPanelTestGuards(): void {
+  claimedBiographerPostIndexKeys.clear();
+}
+
 const BIOGRAPHER_DRAFT_STORAGE_PREFIX = 'eternal_world:biographer_draft';
 
 function biographerDraftKey({
@@ -3006,7 +3026,13 @@ export function BiographerPanel({
   // get set transiently right after `submitAnswer`, never on resume.
   const [activeClarificationQuestion, setActiveClarificationQuestion] = useState<ClarificationQuestionRead | null>(null);
   const [answerText, setAnswerText] = useState('');
-  const [loading, setLoading] = useState(true);
+  // Task 65.11.4: separate passive panel load from active question generation.
+  // `panelInitialLoading` covers only the read-only resume round-trip.
+  // `questionGenerationPending` covers next-question and must never blank the
+  // whole panel behind the global spinner.
+  const [panelInitialLoading, setPanelInitialLoading] = useState(true);
+  const [questionGenerationPending, setQuestionGenerationPending] = useState(false);
+  const [readyForNextQuestion, setReadyForNextQuestion] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState(false);
@@ -3015,36 +3041,34 @@ export function BiographerPanel({
   const [indexed, setIndexed] = useState(false);
   // Task 65.10.5: a permanently failed per-candidate indexing job - distinct
   // from `indexed`/`pendingIndex`, and must never be silently treated as
-  // "done" (see `load()` below, and `avatar_biographer.resume`'s new
-  // `candidate_indexing_failed` next_action).
+  // "done" (see `loadPersistedBiographerState()` below, and
+  // `avatar_biographer.resume`'s `candidate_indexing_failed` next_action).
   const [indexingFailed, setIndexingFailed] = useState(false);
   const [generationFailed, setGenerationFailed] = useState(false);
 
   const locale = biographerLocale(lang);
 
-  // Task 65.10.5: guards against the exact bug this task fixes - after the
-  // owner answers a question, approves the resulting memory, and starts
-  // indexing it, the panel used to have no way to notice the indexing job
-  // finishing on its own; the terminal "Tato vzpomínka byla zaindexována."
-  // state was a dead end (see `pendingIndex` poll effect below) and, even
-  // where the backend was asked again, a resume call could resolve *after*
-  // a newer one already updated state (component unmount, a manual action
-  // racing a poll tick, React StrictMode's double effect invocation) and
-  // clobber it with stale data. `loadSeqRef` makes every `load()` call
-  // aware of whether it is still the most recent one before applying any
-  // state update; `mountedRef` additionally suppresses updates entirely
-  // after unmount.
+  // Task 65.10.5 / 65.11.4: guards against stale async responses and against
+  // duplicate post-index generation. `loadSeqRef` makes every persisted-state
+  // load aware of whether it is still the most recent one; `mountedRef`
+  // suppresses updates after unmount; `generationInFlightRef` / continuation
+  // key refs ensure at-most-once active generation after indexing success.
   const loadSeqRef = useRef(0);
+  const generationSeqRef = useRef(0);
   const mountedRef = useRef(true);
+  const hasCompletedInitialLoadRef = useRef(false);
   const questionIdRef = useRef<number | null>(null);
   const candidateIdRef = useRef<number | null>(null);
+  const generationInFlightRef = useRef(false);
+  const pendingIndexContinuationKeyRef = useRef<string | null>(null);
+  const postIndexGenerationKeyRef = useRef<string | null>(null);
 
-  useEffect(
-    () => () => {
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
       mountedRef.current = false;
-    },
-    []
-  );
+    };
+  }, []);
 
   useEffect(() => {
     questionIdRef.current = question?.id ?? null;
@@ -3091,89 +3115,149 @@ export function BiographerPanel({
     }
   }
 
-  async function load() {
-    // Task 65.10.5: capture this call's sequence number before doing
-    // anything async - every state update below is guarded by "is this
-    // still the latest `load()` call", so a slow/delayed response (a poll
-    // tick racing a manual action, an unmount racing an in-flight fetch)
-    // can never overwrite state a newer call already applied.
+  async function requestNextBiographerQuestion(postIndexClaimKey?: string) {
+    if (generationInFlightRef.current) return;
+    generationInFlightRef.current = true;
+    const seq = ++generationSeqRef.current;
+    setQuestionGenerationPending(true);
+    setGenerationFailed(false);
+    setError(null);
+    setDone(false);
+    const releaseAbandonedClaim = () => {
+      if (postIndexClaimKey) claimedBiographerPostIndexKeys.delete(postIndexClaimKey);
+    };
+    try {
+      const nextQuestion = await getNextBiographerQuestion(token, profileId, locale);
+      if (!mountedRef.current || seq !== generationSeqRef.current) {
+        releaseAbandonedClaim();
+        return;
+      }
+      if (questionIdRef.current !== (nextQuestion?.id ?? null)) setAnswerText('');
+      setQuestion(nextQuestion);
+      setReadyForNextQuestion(false);
+      setDone(nextQuestion === null);
+    } catch (generationError) {
+      if (!mountedRef.current || seq !== generationSeqRef.current) {
+        releaseAbandonedClaim();
+        return;
+      }
+      if (generationError instanceof MemorialApiError && generationError.status === 503) {
+        setGenerationFailed(true);
+      } else {
+        setError(safeError(generationError));
+      }
+      setReadyForNextQuestion(true);
+    } finally {
+      if (seq === generationSeqRef.current) {
+        generationInFlightRef.current = false;
+        if (mountedRef.current) setQuestionGenerationPending(false);
+      }
+    }
+  }
+
+  async function loadPersistedBiographerState() {
+    // Task 65.11.4: passive panel load — resume/read-only only. Never calls
+    // next-question merely because the panel opened. Active generation is a
+    // separate operation (`requestNextBiographerQuestion`), allowed
+    // automatically only after a proven post-index transition.
     const seq = ++loadSeqRef.current;
-    setLoading(true);
+    // Polls must not blank the whole panel behind the initial spinner.
+    if (!hasCompletedInitialLoadRef.current) setPanelInitialLoading(true);
     setError(null);
     setDone(false);
     setGenerationFailed(false);
     try {
-      // Task 65.7 (Part D.25/27): the resume endpoint is the primary state
-      // source - it reflects exactly what the backend already knows
-      // (a just-answered candidate ready for review, pending index, or
-      // already indexed) without triggering a new question generation.
-      // `next-question` is only ever called when resume itself says a new
-      // question should be fetched/generated.
       const resume = await getBiographerResume(token, profileId, locale);
       if (!mountedRef.current || seq !== loadSeqRef.current) return;
       setEligibility({ eligible: resume.eligible, blocked_reason: resume.blocked_reason });
       setReadyForReview(resume.next_action === 'candidate_ready_for_review');
-      setPendingIndex(resume.next_action === 'candidate_pending_index');
-      // Task 65.10.5: `candidate_indexed` is preserved for API/render
-      // backward-compatibility (a resume response is never required to
-      // route through `candidate_pending_index` first), but the backend
-      // fix means a terminal "indexed" promotion now resolves straight to
-      // `question_ready` on the very next resume call - this transient
-      // banner is no longer a dead end even if it is ever observed.
+      const isPendingIndex = resume.next_action === 'candidate_pending_index';
+      setPendingIndex(isPendingIndex);
       setIndexed(resume.next_action === 'candidate_indexed');
       setIndexingFailed(resume.next_action === 'candidate_indexing_failed');
-      // Task 65.10.1: restore the pending-candidate-clarification state
-      // (the `activeCandidateId` form below) from the resume response on
-      // every load - not just transiently after `submitAnswer` - so a
-      // session resumed mid-clarification (fresh mount, page reload,
-      // navigating back to the tab) renders the real question instead of
-      // just the blocking notice with nothing answerable underneath it.
+
+      if (isPendingIndex && resume.candidate_id != null) {
+        pendingIndexContinuationKeyRef.current = `${profileId}:${resume.candidate_id}`;
+      }
+
       if (resume.next_action === 'clarification_pending' && resume.candidate_id) {
-        // Task 65.10.5 (Required behavior #9): never leave a previous
-        // answer sitting in the textarea once we're answering something
-        // different - only clear it when the thing being answered actually
-        // changed, so a poll re-confirming the *same* clarification never
-        // wipes text the owner is mid-typing.
         if (candidateIdRef.current !== resume.candidate_id) setAnswerText('');
         setActiveCandidateId(resume.candidate_id);
         setActiveClarificationQuestion(resume.next_clarification_question);
         setQuestion(null);
+        setReadyForNextQuestion(false);
         return;
       }
       setActiveCandidateId(null);
       setActiveClarificationQuestion(null);
       if (!resume.eligible) {
         setQuestion(null);
+        setReadyForNextQuestion(false);
         return;
       }
       if (resume.active_question) {
         if (questionIdRef.current !== resume.active_question.id) setAnswerText('');
         setQuestion(resume.active_question);
+        setReadyForNextQuestion(false);
         return;
       }
       if (resume.next_action === 'question_ready') {
-        const nextQuestion = await getNextBiographerQuestion(token, profileId, locale);
-        if (!mountedRef.current || seq !== loadSeqRef.current) return;
-        if (questionIdRef.current !== (nextQuestion?.id ?? null)) setAnswerText('');
-        setQuestion(nextQuestion);
-        setDone(nextQuestion === null);
+        setQuestion(null);
+        setReadyForNextQuestion(true);
+        const continuationKey = pendingIndexContinuationKeyRef.current;
+        if (
+          continuationKey &&
+          postIndexGenerationKeyRef.current !== continuationKey &&
+          !generationInFlightRef.current &&
+          !claimedBiographerPostIndexKeys.has(continuationKey)
+        ) {
+          claimedBiographerPostIndexKeys.add(continuationKey);
+          postIndexGenerationKeyRef.current = continuationKey;
+          pendingIndexContinuationKeyRef.current = null;
+          void requestNextBiographerQuestion(continuationKey);
+        }
       } else {
         setQuestion(null);
+        setReadyForNextQuestion(false);
       }
     } catch (loadError) {
       if (!mountedRef.current || seq !== loadSeqRef.current) return;
-      if (loadError instanceof MemorialApiError && loadError.status === 503) {
-        setGenerationFailed(true);
-      } else {
-        setError(safeError(loadError));
-      }
+      setError(safeError(loadError));
     } finally {
-      if (mountedRef.current && seq === loadSeqRef.current) setLoading(false);
+      if (mountedRef.current && seq === loadSeqRef.current) {
+        hasCompletedInitialLoadRef.current = true;
+        setPanelInitialLoading(false);
+      }
     }
   }
 
   useEffect(() => {
-    void load();
+    // Invalidate in-flight loads/generations when the profile changes and
+    // reset panel loading so the new profile gets a fresh passive resume.
+    // Do not bump loadSeq here before starting the load — that created an
+    // extra invalidate that could race StrictMode double-effects and leave
+    // panelInitialLoading stuck when the surviving response was treated as
+    // stale. loadPersistedBiographerState() owns the sequence counter.
+    generationSeqRef.current += 1;
+    generationInFlightRef.current = false;
+    hasCompletedInitialLoadRef.current = false;
+    pendingIndexContinuationKeyRef.current = null;
+    postIndexGenerationKeyRef.current = null;
+    setPanelInitialLoading(true);
+    setQuestionGenerationPending(false);
+    setReadyForNextQuestion(false);
+    setQuestion(null);
+    setEligibility(null);
+    setActiveCandidateId(null);
+    setActiveClarificationQuestion(null);
+    setDone(false);
+    setReadyForReview(false);
+    setPendingIndex(false);
+    setIndexed(false);
+    setIndexingFailed(false);
+    setGenerationFailed(false);
+    setError(null);
+    void loadPersistedBiographerState();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token, profileId, locale]);
 
@@ -3183,40 +3267,18 @@ export function BiographerPanel({
     // owner action first, so polling would never resolve on its own.
     if (!eligibility || eligibility.eligible) return;
     if (!BIOGRAPHER_POLL_BLOCKED_REASONS.has(eligibility.blocked_reason as BiographerBlockedReason)) return;
-    const timer = setTimeout(() => void load(), BIOGRAPHY_POLL_INTERVAL_MS);
+    const timer = setTimeout(() => void loadPersistedBiographerState(), BIOGRAPHY_POLL_INTERVAL_MS);
     return () => clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [eligibility, token, profileId, locale]);
 
-  // Task 65.10.5 (the fix for this task): the owner answering a question,
-  // approving the resulting memory, and starting its indexing job all
-  // happen while this panel is mounted - the terminal state must be picked
-  // up on its own, without the owner needing to reload the page, leave and
-  // reopen this tab, or click a manual refresh button. `candidate_pending_
-  // index` is the one resume state that reflects a real background job
-  // still in flight (unlike `candidate_ready_for_review`/`clarification_
-  // pending`/`candidate_needs_owner_action`, which all need a genuine owner
-  // action first and would never resolve on their own) - the same "only
-  // poll a state that can change by itself" rule the effect above already
-  // applies to whole-biography indexing. The moment the job reaches a
-  // terminal outcome, the next `load()` call's resume response reflects it
-  // directly (`question_ready` with the next real question on success,
-  // `candidate_indexing_failed` on failure - see `load()` above) and this
-  // effect stops rescheduling itself because `pendingIndex` flips to
-  // `false`, so no further polling and no risk of resetting a user already
-  // typing into the next question.
-  //
-  // `eligibility` is included in the dependency array (even though its
-  // value is not read here) purely so this effect re-evaluates after every
-  // single `load()` call, not just the first one: `setEligibility` always
-  // creates a brand-new object, so its reference changes on every call even
-  // when `pendingIndex` itself stays `true` between two consecutive "still
-  // indexing" polls - a plain boolean alone would not change by
-  // `Object.is`, and the effect would silently stop rescheduling after its
-  // very first tick.
+  // Task 65.10.5 / 65.11.4: poll only while a real per-candidate indexing
+  // job is still running. On terminal success the passive load may start
+  // exactly one post-index generation request; repeated terminal polls must
+  // not start another (continuation key + in-flight guard).
   useEffect(() => {
     if (!pendingIndex) return;
-    const timer = setTimeout(() => void load(), BIOGRAPHY_POLL_INTERVAL_MS);
+    const timer = setTimeout(() => void loadPersistedBiographerState(), BIOGRAPHY_POLL_INTERVAL_MS);
     return () => clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pendingIndex, eligibility, token, profileId, locale]);
@@ -3231,14 +3293,10 @@ export function BiographerPanel({
       await answerBiographerQuestion(token, profileId, question.id, locale, answerText.trim());
       clearDraft(question.id);
       setAnswerText('');
-      // Task 65.10.1: always re-fetch through `load()` (the resume
-      // endpoint) instead of deciding the post-answer state from this
-      // response alone - `load()` already recomputes `readyForReview` from
-      // fresh resume data, and it is the only path that also restores the
-      // real clarification question text (`activeClarificationQuestion`)
-      // when the answer created a candidate that still needs one, so a
-      // subsequent remount/reload sees exactly the same state.
-      await load();
+      // Task 65.10.1 / 65.11.4: always re-fetch through the passive resume
+      // path instead of deciding the post-answer state from this response
+      // alone — and never implicitly start generation here.
+      await loadPersistedBiographerState();
     } catch (answerError) {
       setError(safeError(answerError));
     } finally {
@@ -3260,7 +3318,7 @@ export function BiographerPanel({
         if (enrichment.enrichment_status === 'ready_for_owner_review') {
           setReadyForReview(true);
         }
-        await load();
+        await loadPersistedBiographerState();
       } else {
         // Task 65.10.1: childhood/bedtime-song topics can require more than
         // one clarification - advance to the actual next question the
@@ -3284,7 +3342,7 @@ export function BiographerPanel({
       await skipBiographerQuestion(token, profileId, question.id);
       clearDraft(question.id);
       setAnswerText('');
-      await load();
+      await loadPersistedBiographerState();
     } catch (skipError) {
       setError(safeError(skipError));
     } finally {
@@ -3301,7 +3359,7 @@ export function BiographerPanel({
       await postponeBiographerQuestion(token, profileId, question.id);
       clearDraft(question.id);
       setAnswerText('');
-      await load();
+      await loadPersistedBiographerState();
     } catch (postponeError) {
       setError(safeError(postponeError));
     } finally {
@@ -3321,14 +3379,22 @@ export function BiographerPanel({
         <h3 className="font-serif text-3xl">{t.biographer}</h3>
         <p className="mt-2 text-sm leading-6 text-fg/58">{t.biographerIntro}</p>
       </div>
-      {loading && <p className="text-sm text-fg/55">{t.working}</p>}
+      {panelInitialLoading && <p className="text-sm text-fg/55">{t.working}</p>}
       {error && <p className="rounded-2xl border border-red-400/30 bg-red-500/10 px-4 py-3 text-sm text-red-100">{error}</p>}
       {generationFailed && (
-        <p className="rounded-2xl border border-red-400/30 bg-red-500/10 px-4 py-3 text-sm text-red-100">
-          {t.biographerGenerationFailed}
-        </p>
+        <div className="grid gap-3 rounded-2xl border border-red-400/30 bg-red-500/10 px-4 py-3 text-sm text-red-100">
+          <p>{t.biographerGenerationFailed}</p>
+          <button
+            className="shrink-0 self-start rounded-full bg-gradient-to-r from-cyan to-violet px-5 py-2.5 text-sm font-semibold text-ink"
+            disabled={questionGenerationPending}
+            onClick={() => void requestNextBiographerQuestion()}
+            type="button"
+          >
+            {t.biographerPrepareNextQuestion}
+          </button>
+        </div>
       )}
-      {!loading && eligibility && !eligibility.eligible && (
+      {!panelInitialLoading && eligibility && !eligibility.eligible && (
         <div className="grid gap-3 rounded-2xl border border-white/10 bg-black/20 p-4 text-sm text-fg/60">
           <p>
             {eligibility.blocked_reason === 'biography_missing' && t.biographerBlockedMissing}
@@ -3389,7 +3455,7 @@ export function BiographerPanel({
           </button>
         </div>
       )}
-      {!loading && activeCandidateId && (
+      {!panelInitialLoading && activeCandidateId && (
         <form className="grid gap-4 rounded-3xl border border-cyan/20 bg-cyan/10 p-4" onSubmit={(event) => void submitClarification(event)}>
           <p className="text-xs uppercase tracking-[.18em] text-cyan/60">{t.biographerMoreDetailsNeeded}</p>
           <p className="text-sm leading-6 text-fg/75">{t.candidateClarificationPending}</p>
@@ -3406,7 +3472,7 @@ export function BiographerPanel({
           </button>
         </form>
       )}
-      {!loading && !activeCandidateId && eligibility?.eligible && question && (
+      {!panelInitialLoading && !activeCandidateId && eligibility?.eligible && question && (
         <form className="grid gap-4 rounded-3xl border border-white/10 bg-black/20 p-4" onSubmit={(event) => void submitAnswer(event)}>
           <Badge>{t.biographerTopicLabel}: {biographerTopicLabel(t, question.topic)}</Badge>
           <p className="text-lg font-semibold text-fg">{question.question_text}</p>
@@ -3437,7 +3503,34 @@ export function BiographerPanel({
           </div>
         </form>
       )}
-      {!loading && !activeCandidateId && eligibility?.eligible && done && (
+      {!panelInitialLoading &&
+        !activeCandidateId &&
+        eligibility?.eligible &&
+        !question &&
+        readyForNextQuestion &&
+        !done &&
+        !readyForReview &&
+        !pendingIndex &&
+        !indexed &&
+        !indexingFailed && (
+          <div className="grid gap-3 rounded-2xl border border-white/10 bg-black/20 p-4 text-sm text-fg/70">
+            {questionGenerationPending ? (
+              <p>{t.biographerPreparingQuestion}</p>
+            ) : (
+              <>
+                <p>{t.biographerReadyForNextQuestion}</p>
+                <button
+                  className="shrink-0 self-start rounded-full bg-gradient-to-r from-cyan to-violet px-5 py-2.5 text-sm font-semibold text-ink"
+                  onClick={() => void requestNextBiographerQuestion()}
+                  type="button"
+                >
+                  {t.biographerPrepareNextQuestion}
+                </button>
+              </>
+            )}
+          </div>
+        )}
+      {!panelInitialLoading && !activeCandidateId && eligibility?.eligible && done && (
         <p className="rounded-2xl border border-white/10 bg-black/20 p-4 text-sm text-fg/60">{t.biographerDone}</p>
       )}
     </div>
