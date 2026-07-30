@@ -307,6 +307,11 @@ services:
       - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - eternal_world_prometheus_data:/prometheus
 
+  # Troubleshooting-only. Primary UI is shared NALUS Grafana on host :3002
+  # (nalus-scraper). Do NOT leave this service running day-to-day — it steals
+  # attention onto :3001 and duplicates the EW dashboard with an empty/local
+  # volume. Start only with: docker compose --profile standalone-grafana up -d grafana
+  # Stop with: docker compose stop grafana && docker compose rm -f grafana
   grafana:
     image: grafana/grafana:11.1.5
     container_name: eternal_world_grafana

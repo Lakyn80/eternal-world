@@ -99,8 +99,20 @@ The standalone Eternal World Grafana remains available for troubleshooting only:
 docker compose --profile standalone-grafana up -d grafana
 ```
 
-It uses `http://localhost:3001` and the configured local-development credentials. Stop it
-after troubleshooting with `docker compose stop grafana`. Do not remove its named volume.
+It uses `http://localhost:3001` and the configured local-development credentials. **Do not leave it running** alongside the shared UI — day-to-day use `http://localhost:3002` only. Stop and remove the container after troubleshooting:
+
+```bash
+docker compose stop grafana
+docker compose rm -f grafana
+```
+
+Do not remove its named volume (`eternal_world_grafana_data`).
+
+Direct dashboard URL (shared UI only):
+
+`http://localhost:3002/d/eternal-world-fa-chat`
+
+Empty panels usually mean **No data** for that metric in the selected time range (for example `fa_chat_*` until someone sends a Family Avatar chat), not a broken Grafana. Confirm datasource health and `up{job="eternal_world_backend"}==1` in Explore with datasource **Eternal World Prometheus**.
 
 Provisioned files:
 

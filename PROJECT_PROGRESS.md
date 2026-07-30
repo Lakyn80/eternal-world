@@ -11129,3 +11129,31 @@ Browser sessions are documented as additive to bearer JWT and safe to lose on Re
 ### Next recommended task
 
 Commit + push this hotfix when requested, then re-run GitHub Actions backend tests on the PR/branch.
+
+---
+
+## Marketing homepage — locale-scoped demo personas (2026-07-30)
+
+### Status
+
+**Completed (uncommitted until requested).** Homepage marketing demo (`frontend/react-export`) no longer translates Czech realia into EN/RU.
+
+### Behavior
+
+- `cs` → Josef · Brno (Czech history: Sametový listopad, Škoda, Praha)
+- `en` → James · Manchester (English realia: Cornwall, Margaret, London)
+- `ru` → Иван · Ленинград (Russian realia: Фонтанка, Лада, Москва, 1991)
+- Language switch fully resets chat greet/suggestions/timeline/studio name
+
+### Architecture
+
+Modular registry: `frontend/react-export/src/demo/` (`types`, `registry`, `personas/{cs,en,ru}.ts`). New language = new persona file + one registry line.
+
+### Verification
+
+- `npm test -- src/demo/marketingDemo.test.ts` → **6 passed**
+- `npx tsc -b` → exit 0
+
+### Next recommended task
+
+Commit when requested. Optional follow-up: locale-scoped packs for Next.js v2 / FA-chat Eva demo if product wants the same rule there.
