@@ -11090,3 +11090,42 @@ Final Git-closure for Tasks 65.12 / 65.12A plus follow-up UX (workspace tab **Hl
 ### Next recommended task
 
 Continue from the authoritative roadmap after this push (no further 65.12.x work remaining unless product follow-ups arise).
+
+---
+
+## Hotfix — CI login KeyError `access_token` / HTTP 500 (2026-07-30)
+
+### Status
+
+**Completed (uncommitted until requested).** Root cause of ~403 GitHub Actions backend failures after the 65.12 push.
+
+### Root cause
+
+`POST /api/auth/login` always called `rotate_browser_session` → `create_browser_session`, which **re-raised** `RedisError` when Redis was unreachable. CI had no Redis service and default `REDIS_URL=redis://redis:6379/0` does not resolve on `ubuntu-latest`, so login returned HTTP 500 with no JSON `access_token`. Tests then failed as `KeyError: 'access_token'` or `assert 500 == 200` on the first authenticated call.
+
+Browser sessions are documented as additive to bearer JWT and safe to lose on Redis restart; failing the entire login path contradicted that contract.
+
+### Fix
+
+- `create_browser_session` / `rotate_browser_session` return `None` on Redis failure (no raise).
+- Login still returns `TokenResponse`; sets the session cookie only when Redis create succeeds.
+- `get_redis_client` uses `socket_connect_timeout=2` so misconfigured hosts fail fast.
+- CI `backend-tests` job: Redis 7 service + `REDIS_URL=redis://localhost:6379/0` so cookie-path tests still run against a real Redis.
+- Regression test: `test_login_still_returns_bearer_token_when_redis_unavailable`.
+
+### Verification
+
+- Bad Redis host smoke: login `200` + `access_token` present, no session cookie.
+- Focused pytest (4): cookie login, Redis-down login, RAG source create, persona defaults — **4 passed**.
+
+### Files
+
+- `backend/app/modules/auth/browser_session.py`
+- `backend/app/modules/auth/router.py`
+- `backend/app/cache/redis_client.py`
+- `backend/tests/test_authenticated_workspace_reliability.py`
+- `.github/workflows/ci.yml`
+
+### Next recommended task
+
+Commit + push this hotfix when requested, then re-run GitHub Actions backend tests on the PR/branch.
