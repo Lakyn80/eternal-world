@@ -284,7 +284,7 @@ jobs:
             done
 
             for attempt in \$(seq 1 30); do
-              if curl -fsSI http://127.0.0.1:${{ env.FRONTEND_HOST_PORT }}/ >/dev/null; then
+              if curl -fsS -o /dev/null -w '%{http_code}' http://127.0.0.1:${{ env.FRONTEND_HOST_PORT }}/ | grep -q '^200$'; then
                 break
               fi
               if [ \"\$attempt\" -eq 30 ]; then
@@ -297,7 +297,7 @@ jobs:
             done
 
             for attempt in \$(seq 1 30); do
-              if curl -fsSI https://${{ env.APP_DOMAIN }}/ >/dev/null; then
+              if curl -fsS -o /dev/null -w '%{http_code}' https://${{ env.APP_DOMAIN }}/ | grep -q '^200$'; then
                 break
               fi
               if [ \"\$attempt\" -eq 30 ]; then
