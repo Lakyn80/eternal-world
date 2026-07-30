@@ -350,7 +350,7 @@ def test_memory_review_and_promotion_metrics_increment(client, monkeypatch):
         "app.modules.demo_fa_chat.service.get_agent_orchestrator",
         lambda: SimpleNamespace(
             generate_chat_response=lambda request: SimpleNamespace(
-                text="Я не помню этого по тем воспоминаниям, которые у меня сейчас есть.",
+                text="К сожалению, я этого не помню.",
                 provider_name="mock-brain",
                 metadata={
                     "grounding_status": "no_evidence",

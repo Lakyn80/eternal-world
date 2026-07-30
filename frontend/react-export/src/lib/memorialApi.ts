@@ -1,5 +1,7 @@
 import type {
   AvatarMemoryIndexingRead,
+  AvatarPersonaSettingsRead,
+  AvatarPersonaSettingsUpdate,
   BackgroundJobRead,
   BiographerAnswerResponse,
   BiographerEligibilityRead,
@@ -521,6 +523,26 @@ export async function retryContributionIndexing(
   return requestJson<ContributionRead>(
     `/api/memorials/${profileId}/contributions/${contributionId}/retry-indexing`,
     { method: 'POST' },
+    accessToken
+  );
+}
+
+/** Task 65.12 - canonical avatar persona settings for a memorial. */
+export async function getAvatarPersonaSettings(
+  accessToken: string,
+  profileId: number
+): Promise<AvatarPersonaSettingsRead> {
+  return requestJson(`/api/memorials/${profileId}/avatar-persona`, undefined, accessToken);
+}
+
+export async function updateAvatarPersonaSettings(
+  accessToken: string,
+  profileId: number,
+  payload: AvatarPersonaSettingsUpdate
+): Promise<AvatarPersonaSettingsRead> {
+  return requestJson(
+    `/api/memorials/${profileId}/avatar-persona`,
+    { method: 'PATCH', body: JSON.stringify(payload) },
     accessToken
   );
 }

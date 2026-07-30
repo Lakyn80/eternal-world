@@ -29,6 +29,7 @@ class MemoryProfileContext(BaseModel):
 class BrainAgentRequest(BaseModel):
     profile: MemoryProfileContext
     avatar_persona: AvatarPersonaProfile | None = None
+    avatar_persona_section: str | None = None
     user_message: str
     recent_history: list[ChatHistoryEntry] = Field(default_factory=list)
     grounded_context: BrainGroundedContext | None = None
@@ -52,6 +53,10 @@ class BrainAgentResponse(BaseModel):
 class OrchestratorChatRequest(BaseModel):
     profile: MemoryProfileContext
     avatar_persona: AvatarPersonaProfile | None = None
+    #: Task 65.12 - injection-safe section from ``build_avatar_persona_section``
+    #: for persisted memorial persona settings. Distinct from the demo Eva
+    #: ``avatar_persona`` profile. Resolved once per chat request.
+    avatar_persona_section: str | None = None
     user_message: str
     recent_history: list[ChatHistoryEntry] = Field(default_factory=list)
     grounded_context: BrainGroundedContext | None = None

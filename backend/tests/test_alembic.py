@@ -18,10 +18,10 @@ def test_alembic_configuration_loads_revision_history():
        migrations authored against the same `down_revision` - which a
        hardcoded-head assertion would NOT reliably catch either).
     2. The specific set of revisions this test has always enumerated, plus
-       the two most recent (Task 65.7's `20260723_0026` and Task 65.9's
-       `20260724_0027`), are present and reachable.
-    3. The exact linear edges introduced by this task's own migration work
-       are correct: `20260722_0025 -> 20260723_0026 -> 20260724_0027`.
+       Task 65.7 (`20260723_0026`), Task 65.9 (`20260724_0027`), and
+       Task 65.12 (`20260729_0028`), are present and reachable.
+    3. The exact linear edges introduced by recent migration work are
+       correct: `20260722_0025 -> 20260723_0026 -> 20260724_0027 -> 20260729_0028`.
     """
 
     backend_dir = Path(__file__).resolve().parents[1]
@@ -67,14 +67,16 @@ def test_alembic_configuration_loads_revision_history():
         "20260722_0025",
         "20260723_0026",
         "20260724_0027",
+        "20260729_0028",
     }.issubset(revision_ids)
 
-    # Task 65.7 (chat active sessions) and Task 65.9 (async job platform)
-    # must chain linearly onto each other and onto the pre-existing head,
-    # never as a silent second branch.
+    # Task 65.7 (chat active sessions), Task 65.9 (async job platform), and
+    # Task 65.12 (avatar persona settings) must chain linearly onto each
+    # other and onto the pre-existing head, never as a silent second branch.
     assert revisions_by_id["20260723_0026"].down_revision == "20260722_0025"
     assert revisions_by_id["20260724_0027"].down_revision == "20260723_0026"
-    assert heads[0] == "20260724_0027"
+    assert revisions_by_id["20260729_0028"].down_revision == "20260724_0027"
+    assert heads[0] == "20260729_0028"
 
 
 def test_alembic_revision_module_imports():

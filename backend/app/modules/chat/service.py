@@ -17,6 +17,11 @@ from app.modules.avatar_persona.memory_query_intent import (
     MemoryQueryIntent,
     classify_memory_query_intent,
 )
+from app.modules.avatar_persona.settings_service import (
+    build_avatar_persona_section,
+    resolve_avatar_persona,
+    select_response_language,
+)
 from app.db.models import ChatMessage, MemoryProfile, User
 from app.modules.ai_agents import get_agent_orchestrator
 from app.modules.ai_agents.schemas import (
@@ -259,6 +264,23 @@ def send_chat_message(
     db.flush()
 
     orchestrator = get_agent_orchestrator()
+    # Task 65.12: resolve canonical persona once per chat request and reuse
+    # the typed result for prompt section + language selection (no N+1).
+    resolved_persona = resolve_avatar_persona(db, profile=profile)
+    persona_section = (
+        build_avatar_persona_section(resolved_persona) if resolved_persona.configured else None
+    )
+    # Preserve pre-65.12 language behavior when persona settings were never saved:
+    # ``response_language=None`` keeps "match the user message" instructions.
+    response_language = (
+        select_response_language(
+            resolved_persona,
+            detected_language=None,
+            explicit_supported_language=None,
+        )
+        if resolved_persona.configured
+        else None
+    )
     ai_call_context = AiCallContext(
         feature=AiFeature.BRAIN_CHAT_RESPONSE,
         execution_source=ExecutionSource.FASTAPI,
@@ -276,11 +298,13 @@ def send_chat_message(
         operation=lambda: orchestrator.generate_chat_response(
             OrchestratorChatRequest(
                 profile=_build_profile_context(profile),
+                avatar_persona_section=persona_section,
                 user_message=payload.message,
                 recent_history=[
                     _build_history_entry(message) for message in recent_history
                 ],
                 grounded_context=grounded_context,
+                response_language=response_language,
             )
         ),
         extract_token_usage=_extract_brain_token_usage,

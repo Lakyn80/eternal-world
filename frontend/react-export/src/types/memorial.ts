@@ -70,7 +70,39 @@ export type ContributionRead = {
   updated_at: string;
 };
 
-export type WorkspaceTab = 'overview' | 'biography' | 'biographer' | 'chat' | 'contributions' | 'review' | 'members' | 'invitations';
+export type WorkspaceTab = 'overview' | 'biography' | 'persona' | 'biographer' | 'chat' | 'contributions' | 'review' | 'members' | 'invitations';
+
+/** Task 65.12 - canonical memorial avatar persona settings. */
+export type AvatarVoiceMode = 'original_recording' | 'warm_older' | 'younger_self';
+export type AvatarVoiceStyle = 'warm' | 'calm' | 'older' | 'energetic';
+export type AvatarPersonalityTrait = 'gentle' | 'funny' | 'thoughtful';
+export type AvatarPersonaLanguage = 'cs' | 'en' | 'de';
+
+export type AvatarPersonaSettingsRead = {
+  profile_id: number;
+  voice_mode: AvatarVoiceMode;
+  voice_style: AvatarVoiceStyle;
+  personality_traits: AvatarPersonalityTrait[];
+  primary_language: AvatarPersonaLanguage;
+  supported_languages: AvatarPersonaLanguage[];
+  remembered_age: number | null;
+  communication_profile: string;
+  created_at: string | null;
+  updated_at: string | null;
+  original_recording_available: boolean;
+  voice_provider_supports_style: boolean;
+  voice_provider_supports_age: boolean;
+};
+
+export type AvatarPersonaSettingsUpdate = {
+  voice_mode?: AvatarVoiceMode;
+  voice_style?: AvatarVoiceStyle;
+  personality_traits?: AvatarPersonalityTrait[];
+  primary_language?: AvatarPersonaLanguage;
+  supported_languages?: AvatarPersonaLanguage[];
+  remembered_age?: number | null;
+  communication_profile?: string;
+};
 
 export type ChatMessageRead = {
   id: number;

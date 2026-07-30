@@ -1,12 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   MemorialApiError,
+  getAvatarPersonaSettings,
   getCandidateHistory,
   indexCandidateMemory,
   login,
   ownerReviewCandidate,
   setUnauthorizedHandler,
   startBiographyIngestion,
+  updateAvatarPersonaSettings,
   updateBiography
 } from './memorialApi';
 
@@ -183,6 +185,71 @@ describe('memorialApi', () => {
     await expect(login('owner@example.com', 'pw')).rejects.toMatchObject({
       status: 0,
       detail: 'The server could not be reached.'
+    });
+  });
+
+  it('gets avatar persona settings for a memorial', async () => {
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse(200, {
+        profile_id: 7,
+        voice_mode: 'warm_older',
+        voice_style: 'warm',
+        personality_traits: ['gentle'],
+        primary_language: 'cs',
+        supported_languages: ['cs', 'en'],
+        remembered_age: 62,
+        communication_profile: 'Calm.',
+        created_at: null,
+        updated_at: null,
+        original_recording_available: false,
+        voice_provider_supports_style: false,
+        voice_provider_supports_age: false
+      })
+    );
+
+    const result = await getAvatarPersonaSettings('secret-token', 7);
+
+    expect(result.remembered_age).toBe(62);
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe('http://localhost:8033/api/memorials/7/avatar-persona');
+    expect((init?.headers as Headers).get('Authorization')).toBe('Bearer secret-token');
+  });
+
+  it('patches avatar persona settings', async () => {
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse(200, {
+        profile_id: 7,
+        voice_mode: 'younger_self',
+        voice_style: 'warm',
+        personality_traits: ['funny'],
+        primary_language: 'en',
+        supported_languages: ['en'],
+        remembered_age: null,
+        communication_profile: '',
+        created_at: null,
+        updated_at: null,
+        original_recording_available: false,
+        voice_provider_supports_style: false,
+        voice_provider_supports_age: false
+      })
+    );
+
+    const result = await updateAvatarPersonaSettings('secret-token', 7, {
+      voice_mode: 'younger_self',
+      personality_traits: ['funny'],
+      primary_language: 'en',
+      supported_languages: ['en']
+    });
+
+    expect(result.voice_mode).toBe('younger_self');
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe('http://localhost:8033/api/memorials/7/avatar-persona');
+    expect(init?.method).toBe('PATCH');
+    expect(JSON.parse(init?.body as string)).toEqual({
+      voice_mode: 'younger_self',
+      personality_traits: ['funny'],
+      primary_language: 'en',
+      supported_languages: ['en']
     });
   });
 });

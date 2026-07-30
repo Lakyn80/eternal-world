@@ -11,19 +11,33 @@ LACK_OF_EVIDENCE_MARKERS = (
     "i do not know from the available evidence",
     "i don't remember",
     "i do not remember",
+    "i'm afraid i can't recall",
+    "i am afraid i cannot recall",
     "no memory of that",
     "nemám vzpomínku",
     "nemám na to vzpomínku",
+    "na to si bohužel nevzpomínám",
+    "to si nevybavuju",
+    "to si nevybavuji",
     "to v uložených vzpomínkách nemám",
     "v dostupných vzpomínkách to nemám",
     "v uložených vzpomínkách si nevybavuji",
     "bohužel nemám",
     "na to bohužel nemám",
     "не помню",
+    "я этого не помню",
+    "мне это не вспоминается",
     "в сохранённых воспоминаниях этого нет",
     "в сохраненных воспоминаниях этого нет",
     "к сожалению, не помню",
+    "к сожалению, я этого не помню",
     "не указано",
+    "daran erinnere ich mich",
+    "das kann ich mir nicht",
+    "no recuerdo",
+    "no lo recuerdo",
+    "je ne m'en souviens pas",
+    "je ne me rappelle pas",
 )
 DIRECT_LACK_DENIAL_PREFIXES = (
     "нет",
@@ -50,7 +64,22 @@ INTERNAL_EVIDENCE_CITATION_PATTERN = re.compile(
 
 
 _CYRILLIC_PATTERN = re.compile(r"[А-Яа-яЁё]")
-_CZECH_HINT_PATTERN = re.compile(r"\b(co|kde|kdy|proč|jak|vzpomínk|uložených|dostupných)\b", re.IGNORECASE)
+_CZECH_HINT_PATTERN = re.compile(
+    r"\b(co|kde|kdy|proč|jak|kdo|vzpomín|nevybav|nemám|nevím|uložených|dostupných)\b",
+    re.IGNORECASE,
+)
+_GERMAN_HINT_PATTERN = re.compile(
+    r"(erinnere mich|erinnerst du|weiß ich nicht|weiss ich nicht|leider nicht)",
+    re.IGNORECASE,
+)
+_SPANISH_HINT_PATTERN = re.compile(
+    r"\b(dónde|donde|cuándo|cuando|quién|quien|recuerdas|recuerdo)\b",
+    re.IGNORECASE,
+)
+_FRENCH_HINT_PATTERN = re.compile(
+    r"(je ne me souviens|je ne me rappelle|où est|quand est|pourquoi)",
+    re.IGNORECASE,
+)
 _SENTENCE_SPLIT_PATTERN = re.compile(r"[.!?\n]+")
 _INLINE_DETAIL_MARKERS = (
     " but ",
@@ -183,12 +212,14 @@ def _is_pure_lack_sentence(sentence: str) -> bool:
     stripped_sentence = _strip_citations(sentence)
     if not stripped_sentence:
         return True
-    if _sentence_contains_inline_detail(stripped_sentence):
-        return False
+    # Lack markers win over generic "detail" tokens like "remember", which
+    # appear inside natural first-person lack-of-evidence phrasing itself.
     if _contains_any_marker(stripped_sentence, LACK_OF_EVIDENCE_MARKERS):
         return True
     if _looks_like_direct_lack_denial(stripped_sentence):
         return True
+    if _sentence_contains_inline_detail(stripped_sentence):
+        return False
     return False
 
 
@@ -242,10 +273,16 @@ def _has_extra_detail_in_lack_answer(answer_text: str) -> bool:
 def _resolve_lack_response_template(*, user_message: str, answer_text: str) -> str:
     probe_text = f"{user_message}\n{answer_text}"
     if _CYRILLIC_PATTERN.search(probe_text):
-        return "В сохранённых воспоминаниях этого нет, поэтому не хочу придумывать."
+        return "К сожалению, я этого не помню, поэтому не хочу придумывать."
     if _CZECH_HINT_PATTERN.search(probe_text):
-        return "V dostupných vzpomínkách to nemám, takže si nechci nic vymýšlet."
-    return "That information is not available in the stored memories/context, so I do not want to invent it."
+        return "Na to si bohužel nevzpomínám, tak si nechci nic vymýšlet."
+    if _GERMAN_HINT_PATTERN.search(probe_text):
+        return "Daran erinnere ich mich leider nicht, deshalb möchte ich nichts erfinden."
+    if _SPANISH_HINT_PATTERN.search(probe_text):
+        return "No recuerdo eso, así que no quiero inventarlo."
+    if _FRENCH_HINT_PATTERN.search(probe_text):
+        return "Je ne m'en souviens pas, alors je ne veux rien inventer."
+    return "I don't remember that, so I do not want to invent it."
 
 
 def apply_brain_output_guard(

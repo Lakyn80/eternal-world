@@ -392,7 +392,7 @@ def test_demo_fa_chat_creates_unverified_memory_candidate_for_new_personal_claim
         lambda: SimpleNamespace(
             generate_chat_response=lambda request: SimpleNamespace(
                 text=(
-                    "Я не помню этого по тем воспоминаниям, которые у меня сейчас есть. "
+                    "К сожалению, я этого не помню. "
                     "Если хочешь, расскажи мне больше, и мы сможем сохранить это как новое воспоминание."
                 ),
                 provider_name="mock-brain",
@@ -455,7 +455,7 @@ def test_demo_fa_chat_candidate_persistence_failure_does_not_break_answer(client
         "app.modules.demo_fa_chat.service.get_agent_orchestrator",
         lambda: SimpleNamespace(
             generate_chat_response=lambda request: SimpleNamespace(
-                text="Я не помню этого по тем воспоминаниям, которые у меня сейчас есть.",
+                text="К сожалению, я этого не помню.",
                 provider_name="mock-brain",
                 metadata={
                     "grounding_status": "no_evidence",
@@ -525,7 +525,7 @@ def test_demo_fa_chat_memory_candidate_endpoints_cover_review_workflow(client, m
         "app.modules.demo_fa_chat.service.get_agent_orchestrator",
         lambda: SimpleNamespace(
             generate_chat_response=lambda request: SimpleNamespace(
-                text="Я не помню этого по тем воспоминаниям, которые у меня сейчас есть.",
+                text="К сожалению, я этого не помню.",
                 provider_name="mock-brain",
                 metadata={
                     "grounding_status": "no_evidence",
@@ -618,7 +618,7 @@ def test_demo_fa_chat_memory_candidate_reject_and_archive_endpoints(client, monk
         "app.modules.demo_fa_chat.service.get_agent_orchestrator",
         lambda: SimpleNamespace(
             generate_chat_response=lambda request: SimpleNamespace(
-                text="Я не помню этого по тем воспоминаниям, которые у меня сейчас есть.",
+                text="К сожалению, я этого не помню.",
                 provider_name="mock-brain",
                 metadata={
                     "grounding_status": "no_evidence",
@@ -695,7 +695,7 @@ def test_demo_fa_chat_memory_promotion_endpoints_cover_cancel_workflow(client, m
         "app.modules.demo_fa_chat.service.get_agent_orchestrator",
         lambda: SimpleNamespace(
             generate_chat_response=lambda request: SimpleNamespace(
-                text="Я не помню этого по тем воспоминаниям, которые у меня сейчас есть.",
+                text="К сожалению, я этого не помню.",
                 provider_name="mock-brain",
                 metadata={
                     "grounding_status": "no_evidence",
@@ -787,7 +787,7 @@ def test_pending_index_promotion_is_not_used_as_factual_evidence(client, monkeyp
         lambda: SimpleNamespace(
             generate_chat_response=lambda request: SimpleNamespace(
                 text=(
-                    "Я не помню этого по тем воспоминаниям, которые у меня сейчас есть. "
+                    "К сожалению, я этого не помню. "
                     "Если хочешь, расскажи мне больше, и мы сможем сохранить это как новое воспоминание."
                 ),
                 provider_name="mock-brain",

@@ -408,12 +408,15 @@ def test_factual_grounding_instructions_are_present_in_prompt(client, monkeypatc
     assert "EVIDENCE HIERARCHY (strict)" in prompt
     assert "Answer factual questions ONLY from B1, B2, and explicit profile fields above." in prompt
     assert "Do not guess, fill gaps, or use world knowledge to invent personal history." in prompt
-    assert "the information is not available in the stored memories/context." in prompt
+    assert "do not remember / cannot recall that — as a real person would." in prompt
     assert "correcting the premise with a related denial or substitute fact." in prompt
     assert "\"I never lived in Paris.\", \"I had no sister.\", \"Pavel was never in Vietnam.\"" in prompt
     assert "answer ONLY with lack-of-evidence wording and stop after" in prompt
     assert "Do not add a contrasting true fact, corrective denial, or extra archival detail" in prompt
-    assert "Na to bohužel nemám vzpomínku." in prompt
+    assert "Na to si bohužel nevzpomínám." in prompt
+    assert "I don't remember that." in prompt
+    assert "К сожалению, я этого не помню." in prompt
+    assert "Never tell the user about databases" in prompt
     assert "cite inline: [memory:id] or [rag:chunk_id]" in prompt
     assert "Respond in the same language as the user's current message" in prompt
     assert "B1. Timeline memory evidence:" in prompt
@@ -876,7 +879,7 @@ def test_verified_learned_memory_is_tagged_with_equal_authority_in_prompt(client
 
     assert response.status_code == 200
     prompt = captured["prompt"]
-    assert "LEARNED MEMORY (learned_memory_answer_policy_v3_1)" in prompt
+    assert "LEARNED MEMORY (learned_memory_answer_policy_v3_2)" in prompt
     assert "[rag:201] VERIFIED LEARNED MEMORY (owner-approved, first-person, equal authority to B1)" in prompt
     assert "promotion_id=5, candidate_id=14" in prompt
     assert "[rag:202] ARCHIVAL DOCUMENT" in prompt
@@ -1382,7 +1385,7 @@ def test_no_retrieval_results_return_safe_lack_of_evidence_answer(client, monkey
     assert response.status_code == 200
     assert response.json()["ai_response_text"] == (
         "No Evidence RAG Profile mock reply: "
-        "That information is not available in the stored memories/context."
+        "I don't remember that."
     )
 
 
@@ -1472,7 +1475,7 @@ def test_output_guard_sanitizes_lack_answer_with_substitute_unsupported_detail()
     assert result.guard_applied is True
     assert result.reason == "forbidden_claim_in_lack_case"
     assert result.answer_text == (
-        "В сохранённых воспоминаниях этого нет, поэтому не хочу придумывать."
+        "К сожалению, я этого не помню, поэтому не хочу придумывать."
     )
     assert "луп" in result.detected_unsupported_terms
     assert "держала" not in result.answer_text
@@ -1516,7 +1519,7 @@ def test_output_guard_lack_flag_ignores_trailing_aside_after_real_answer():
 def test_output_guard_lack_flag_still_true_when_answer_opens_with_refusal():
     result = apply_brain_output_guard(
         answer_text=(
-            "Я не помню этого по тем воспоминаниям, которые у меня сейчас есть. "
+            "К сожалению, я этого не помню. "
             "Если хочешь, расскажи мне больше, и мы сможем сохранить это как новое воспоминание."
         ),
         user_message="Какую песню ты пела мне перед сном?",

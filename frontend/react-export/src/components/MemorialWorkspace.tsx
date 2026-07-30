@@ -45,6 +45,7 @@ import {
 import { canInvite, canReview, canSubmitContribution, isActiveMemoryEligible } from '../lib/memorialPermissions';
 import { APP_ROOT_PATH, buildMemorialPath, navigate, parseAppRoute, usePathname } from '../lib/router';
 import { useJobStatusPoller } from '../hooks/useJobStatusPoller';
+import AvatarPersonaPanel from './AvatarPersonaPanel';
 import type {
   AuthSession,
   BackgroundJobRead,
@@ -97,6 +98,7 @@ export type Copy = {
   chatResetConfirmCancel: string;
   chatResetDone: string;
   biography: string;
+  persona: string;
   biographyIntro: string;
   biographyPlaceholder: string;
   biographySave: string;
@@ -222,6 +224,7 @@ export type Copy = {
   overviewNextActionIndexApproved: string;
   overviewNextActionTestChat: string;
   overviewAllCaughtUp: string;
+  overviewOpenPersona: string;
   goAction: string;
   cancelAction: string;
   createMemorial: string;
@@ -319,6 +322,29 @@ export type Copy = {
   editMemorial: string;
   saveChanges: string;
   clearBiography: string;
+  personaTitle: string;
+  personaVoice: string;
+  personaPersonality: string;
+  personaLanguages: string;
+  personaAge: string;
+  personaAgeHint: string;
+  personaCommunicationTitle: string;
+  personaCommunicationLabel: string;
+  personaCommunicationHelp: string;
+  personaCommunicationPlaceholder: string;
+  personaSave: string;
+  personaSaved: string;
+  personaWorking: string;
+  traitGentle: string;
+  traitFunny: string;
+  traitThoughtful: string;
+  voiceOriginal: string;
+  voiceWarmOlder: string;
+  voiceYounger: string;
+  langCs: string;
+  langEn: string;
+  langDe: string;
+  primaryLanguage: string;
   clearBiographyConfirmTitle: string;
   clearBiographyConfirmBody: string;
   clearBiographyConfirmYes: string;
@@ -359,6 +385,7 @@ export const COPY: Record<Lang, Copy> = {
     chatResetConfirmCancel: 'Cancel',
     chatResetDone: 'New chat is ready.',
     biography: 'Biography',
+    persona: 'Voice & personality',
     biographyIntro: 'Write the memorial\'s initial life story. Nothing becomes avatar memory until you explicitly start indexing.',
     biographyPlaceholder: 'Write the biography here...',
     biographySave: 'Save biography',
@@ -481,6 +508,7 @@ export const COPY: Record<Lang, Copy> = {
     overviewNextActionIndexApproved: 'Index an approved memory',
     overviewNextActionTestChat: 'Test the avatar in Chat',
     overviewAllCaughtUp: 'Everything is up to date.',
+    overviewOpenPersona: 'Edit voice, personality and how the avatar speaks',
     goAction: 'Go',
     cancelAction: 'Cancel',
     createMemorial: 'Create memorial',
@@ -577,6 +605,31 @@ export const COPY: Record<Lang, Copy> = {
     editMemorial: 'Edit memorial',
     saveChanges: 'Save changes',
     clearBiography: 'Clear biography',
+    personaTitle: 'Avatar persona',
+    personaVoice: 'Voice',
+    personaPersonality: 'Personality',
+    personaLanguages: 'Speaks',
+    personaAge: 'Remembered age',
+    personaAgeHint: 'The age at which the avatar looks and sounds. Families usually choose the age they remember best.',
+    personaCommunicationTitle: 'Personality and communication style',
+    personaCommunicationLabel: 'How I speak and react',
+    personaCommunicationHelp:
+      'Describe how the person spoke, reacted, used humor, addressed others and expressed emotion. This shapes chat, voice and future avatar responses.',
+    personaCommunicationPlaceholder:
+      'I speak calmly and use shorter sentences. With family I am warm, often use gentle humor, and for serious topics I listen first…',
+    personaSave: 'Save persona',
+    personaSaved: 'Persona settings saved.',
+    personaWorking: 'Working',
+    traitGentle: 'Gentle',
+    traitFunny: 'Funny',
+    traitThoughtful: 'Thoughtful',
+    voiceOriginal: 'Original recording',
+    voiceWarmOlder: 'Warm · older',
+    voiceYounger: 'Younger self',
+    langCs: 'Czech',
+    langEn: 'English',
+    langDe: 'German',
+    primaryLanguage: 'Primary language',
     clearBiographyConfirmTitle: 'Clear this biography?',
     clearBiographyConfirmBody:
       'This removes the saved biography text and any memory created from it. Membership, invitations and other approved memories are not affected.',
@@ -617,6 +670,7 @@ export const COPY: Record<Lang, Copy> = {
     chatResetConfirmCancel: 'Zrušit',
     chatResetDone: 'Nový chat je připraven.',
     biography: 'Životopis',
+    persona: 'Hlas a povaha',
     biographyIntro: 'Napište počáteční životní příběh memorialu. Nic se nestane pamětí avatara, dokud výslovně nespustíte indexaci.',
     biographyPlaceholder: 'Sem napište životopis...',
     biographySave: 'Uložit životopis',
@@ -739,6 +793,7 @@ export const COPY: Record<Lang, Copy> = {
     overviewNextActionIndexApproved: 'Zaindexovat schválenou vzpomínku',
     overviewNextActionTestChat: 'Vyzkoušet avatara v Chatu',
     overviewAllCaughtUp: 'Vše je aktuální.',
+    overviewOpenPersona: 'Upravit hlas, povahu a způsob řeči avataru',
     goAction: 'Přejít',
     cancelAction: 'Zrušit',
     createMemorial: 'Vytvořit memorial',
@@ -835,6 +890,31 @@ export const COPY: Record<Lang, Copy> = {
     editMemorial: 'Upravit memorial',
     saveChanges: 'Uložit změny',
     clearBiography: 'Vymazat životopis',
+    personaTitle: 'Avatar persona',
+    personaVoice: 'Hlas',
+    personaPersonality: 'Povaha',
+    personaLanguages: 'Mluví',
+    personaAge: 'Zapamatovaný věk',
+    personaAgeHint: 'Věk, ve kterém avatar vypadá a zní. Rodiny většinou volí věk, který si pamatují nejlépe.',
+    personaCommunicationTitle: 'Osobnost a způsob komunikace',
+    personaCommunicationLabel: 'Jak mluvím a reaguji',
+    personaCommunicationHelp:
+      'Popište, jak člověk mluvil, reagoval, používal humor, oslovoval ostatní a vyjadřoval emoce. Tyto informace budou použity pro jeho odpovědi v chatu, hlasu a budoucím avataru.',
+    personaCommunicationPlaceholder:
+      'Mluvím klidně a používám kratší věty. K rodině jsem vřelý, často používám jemný humor a při vážných tématech nejdřív naslouchám. Lidi obvykle oslovuji křestním jménem…',
+    personaSave: 'Uložit personu',
+    personaSaved: 'Nastavení persony uloženo.',
+    personaWorking: 'Pracuji',
+    traitGentle: 'Jemný',
+    traitFunny: 'Vtipný',
+    traitThoughtful: 'Přemýšlivý',
+    voiceOriginal: 'Původní nahrávka',
+    voiceWarmOlder: 'Vřelý · starší',
+    voiceYounger: 'Mladší já',
+    langCs: 'Čeština',
+    langEn: 'English',
+    langDe: 'Deutsch',
+    primaryLanguage: 'Hlavní jazyk',
     clearBiographyConfirmTitle: 'Vymazat tento životopis?',
     clearBiographyConfirmBody:
       'Odstraní se uložený text životopisu a veškerá paměť z něj vytvořená. Členství, pozvánky a další schválené vzpomínky zůstanou zachovány.',
@@ -875,6 +955,7 @@ export const COPY: Record<Lang, Copy> = {
     chatResetConfirmCancel: 'Отмена',
     chatResetDone: 'Новый чат готов.',
     biography: 'Биография',
+    persona: 'Голос и характер',
     biographyIntro: 'Напишите начальную историю жизни мемориала. Ничто не станет памятью аватара, пока вы явно не запустите индексацию.',
     biographyPlaceholder: 'Напишите биографию здесь...',
     biographySave: 'Сохранить биографию',
@@ -997,6 +1078,7 @@ export const COPY: Record<Lang, Copy> = {
     overviewNextActionIndexApproved: 'Проиндексировать одобренное воспоминание',
     overviewNextActionTestChat: 'Проверить аватара в чате',
     overviewAllCaughtUp: 'Всё актуально.',
+    overviewOpenPersona: 'Изменить голос, характер и стиль речи аватара',
     goAction: 'Перейти',
     cancelAction: 'Отмена',
     createMemorial: 'Создать мемориал',
@@ -1093,6 +1175,31 @@ export const COPY: Record<Lang, Copy> = {
     editMemorial: 'Редактировать мемориал',
     saveChanges: 'Сохранить изменения',
     clearBiography: 'Очистить биографию',
+    personaTitle: 'Персона аватара',
+    personaVoice: 'Голос',
+    personaPersonality: 'Характер',
+    personaLanguages: 'Говорит',
+    personaAge: 'Возраст в памяти',
+    personaAgeHint: 'Возраст, в котором аватар выглядит и звучит. Семьи обычно выбирают возраст, который помнят лучше всего.',
+    personaCommunicationTitle: 'Личность и стиль общения',
+    personaCommunicationLabel: 'Как я говорю и реагирую',
+    personaCommunicationHelp:
+      'Опишите, как человек говорил, реагировал, использовал юмор, обращался к другим и выражал эмоции. Это влияет на ответы в чате, голосе и будущем аватаре.',
+    personaCommunicationPlaceholder:
+      'Я говорю спокойно и короткими предложениями. С семьёй я тёплый, часто использую мягкий юмор…',
+    personaSave: 'Сохранить персону',
+    personaSaved: 'Настройки персоны сохранены.',
+    personaWorking: 'Выполняю',
+    traitGentle: 'Мягкий',
+    traitFunny: 'С юмором',
+    traitThoughtful: 'Задумчивый',
+    voiceOriginal: 'Оригинальная запись',
+    voiceWarmOlder: 'Тёплый · старше',
+    voiceYounger: 'Младшее я',
+    langCs: 'Чешский',
+    langEn: 'English',
+    langDe: 'Deutsch',
+    primaryLanguage: 'Основной язык',
     clearBiographyConfirmTitle: 'Очистить эту биографию?',
     clearBiographyConfirmBody:
       'Будет удалён сохранённый текст биографии и вся созданная из него память. Участники, приглашения и другие одобренные воспоминания не будут затронуты.',
@@ -1308,12 +1415,23 @@ export default function MemorialWorkspace({ lang }: { lang: Lang }) {
   }, []);
 
   const visibleTabs = useMemo(() => {
-    const tabs: WorkspaceTab[] = ['overview', 'biography', 'biographer', 'chat', 'contributions', 'review', 'members', 'invitations'];
+    const tabs: WorkspaceTab[] = [
+      'overview',
+      'biography',
+      'persona',
+      'biographer',
+      'chat',
+      'contributions',
+      'review',
+      'members',
+      'invitations'
+    ];
     return tabs.filter((tab) => {
       if (tab === 'review') return mayReview;
       if (tab === 'members') return mayReview;
       if (tab === 'invitations') return mayInvite;
       if (tab === 'biography') return role === 'owner';
+      if (tab === 'persona') return role === 'owner';
       // Every Biographer endpoint requires SUBMIT_CONTRIBUTION server-side
       // (confirmed via backend audit) - a viewer's every request there would
       // 403, so the tab is hidden rather than shown broken.
@@ -1761,6 +1879,9 @@ export default function MemorialWorkspace({ lang }: { lang: Lang }) {
                       t={t}
                       token={session.accessToken}
                     />
+                  )}
+                  {activeTab === 'persona' && role === 'owner' && (
+                    <AvatarPersonaPanel lang={lang} profileId={selected.id} t={t} token={session.accessToken} />
                   )}
                   {activeTab === 'biographer' && maySubmit && (
                     <BiographerPanel
@@ -2318,6 +2439,19 @@ export function Overview({
           <p className="text-xs uppercase tracking-[.2em] text-fg/40">{t.overviewBiographyLabel}</p>
           <p className="mt-2 text-sm text-fg/75">{biographyOverviewLabel()}</p>
         </div>
+        {isOwner && (
+          <div className="rounded-2xl border border-cyan/25 bg-cyan/10 p-4">
+            <p className="text-xs uppercase tracking-[.2em] text-cyan/60">{t.persona}</p>
+            <p className="mt-2 text-sm text-fg/75">{t.overviewOpenPersona}</p>
+            <button
+              className="mt-3 rounded-full bg-gradient-to-r from-cyan to-violet px-5 py-2 text-sm font-semibold text-ink"
+              onClick={() => onNavigate('persona')}
+              type="button"
+            >
+              {t.goAction}
+            </button>
+          </div>
+        )}
         {canSubmitHere && (
           <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
             <p className="text-xs uppercase tracking-[.2em] text-fg/40">{t.overviewBiographerLabel}</p>

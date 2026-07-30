@@ -313,7 +313,7 @@ def test_generate_response_returns_deterministic_lack_of_evidence_without_http_c
     )
 
     assert was_called is False
-    assert response.text == "That information is not available in the stored memories/context."
+    assert response.text == "I don't remember that."
     assert response.provider_name == "openai_compatible"
     assert response.metadata["grounding_status"] == "no_evidence"
     assert response.metadata["provider_type"] == "openai_compatible"

@@ -238,6 +238,11 @@ class MemoryProfile(TimestampMixin, Base):
         back_populates="memory_profile",
         cascade="all, delete-orphan",
     )
+    avatar_persona_settings: Mapped[AvatarPersonaSettings | None] = relationship(
+        back_populates="memory_profile",
+        cascade="all, delete-orphan",
+        uselist=False,
+    )
     main_photo_media: Mapped[MediaAsset | None] = relationship(
         foreign_keys=[main_photo_media_id],
         post_update=True,
@@ -251,6 +256,78 @@ class MemoryProfile(TimestampMixin, Base):
         cascade="all, delete-orphan",
         foreign_keys="BiographerQuestion.profile_id",
     )
+
+
+class AvatarPersonaSettings(TimestampMixin, Base):
+    """Task 65.12 - one-to-one canonical persona settings for a memorial profile.
+
+    Owns shared identity values used by chat, voice adapters, and future
+    face/video channels. Distinct from the demo-only in-memory
+    ``AvatarPersonaProfile`` (Eva fixture) used by FA demo chat.
+    """
+
+    __tablename__ = "avatar_persona_settings"
+    __table_args__ = (
+        CheckConstraint(
+            "voice_mode IN ('original_recording', 'warm_older', 'younger_self')",
+            name="avatar_persona_settings_voice_mode",
+        ),
+        CheckConstraint(
+            "voice_style IN ('warm', 'calm', 'older', 'energetic')",
+            name="avatar_persona_settings_voice_style",
+        ),
+        CheckConstraint(
+            "remembered_age IS NULL OR (remembered_age >= 1 AND remembered_age <= 120)",
+            name="avatar_persona_settings_remembered_age",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    profile_id: Mapped[int] = mapped_column(
+        ForeignKey("memory_profiles.id", ondelete="CASCADE"),
+        unique=True,
+        index=True,
+        nullable=False,
+    )
+    voice_mode: Mapped[str] = mapped_column(
+        String(32),
+        nullable=False,
+        default="warm_older",
+        server_default=text("'warm_older'"),
+    )
+    voice_style: Mapped[str] = mapped_column(
+        String(32),
+        nullable=False,
+        default="warm",
+        server_default=text("'warm'"),
+    )
+    personality_traits: Mapped[list[Any]] = mapped_column(
+        JSON,
+        nullable=False,
+        default=list,
+        server_default=text("'[]'"),
+    )
+    primary_language: Mapped[str] = mapped_column(
+        String(8),
+        nullable=False,
+        default="cs",
+        server_default=text("'cs'"),
+    )
+    supported_languages: Mapped[list[Any]] = mapped_column(
+        JSON,
+        nullable=False,
+        default=list,
+        server_default=text("'[\"cs\"]'"),
+    )
+    remembered_age: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    communication_profile: Mapped[str] = mapped_column(
+        Text,
+        nullable=False,
+        default="",
+        server_default=text("''"),
+    )
+
+    memory_profile: Mapped[MemoryProfile] = relationship(back_populates="avatar_persona_settings")
 
 
 class MemorialMembership(TimestampMixin, Base):
