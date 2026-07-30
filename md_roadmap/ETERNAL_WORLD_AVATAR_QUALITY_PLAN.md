@@ -2422,3 +2422,35 @@ Task 65.11.4A — Final Review, Commit and Push of Passive AI Biographer Loading
 Implementacni commit: `167a2953ec4155e1bf61c3e85cf068a626bcd407` — `fix: separate AI biographer loading from question generation` (presne 4 soubory). Dokumentacni commit nasleduje v tomto closure. Pred pushem: frontend **87** / **11** passed; backend **31** passed; tsc/compileall/`git diff --check` ok; health ok. Debug instrumentace odstranena pred committem. Zadne realne LLM/BGE-M3/live-write, zadny restart kontejneru.
 
 Task 65.11.4A se **povazuje za dokonceny**. Zadna existujici sekce teto roadmapy nebyla prepsana.
+
+## 47. Task 65.12 status (2026-07-29) — unified avatar persona for profile, chat, voice and future visual avatar, completed
+
+Task 65.12 — Audit and Implement a Unified Avatar Persona for Profile, Chat, Voice and Future Visual Avatar — byl proveden a **dokoncen**. Plny popis viz `PROJECT_PROGRESS.md`, sekce "Task 65.12 — Unified Avatar Persona…".
+
+**Architekturni rozhodnuti B:** rozsireni `backend/app/modules/avatar_persona` jako jedineho kanonickeho verejneho modulu (demo Eva path zachovan; nova 1:1 tabulka `avatar_persona_settings`; owner GET/PATCH; jeden `resolve_avatar_persona` na chat request; injection-safe `<avatar_persona_description>`; typed `resolve_voice_persona`; FE Overview panel s ceskymi labely).
+
+Migrace `20260729_0028` je single Alembic head; na local development PostgreSQL aplikovana v Task 65.12A. Pre-existing `.cursor/` zustalo lokalni a nezmenene. Zadne realne LLM/BGE-M3/TTS/Qdrant/Redis persona mutation pri implementaci.
+
+Testy: backend persona **8 passed**; alembic **4 passed**; FE persona/API **16 passed**; `tsc -b` ok; compileall ok; health ok.
+
+Task 65.12 se **povazuje za dokonceny**. Zadna existujici sekce teto roadmapy nebyla prepsana.
+
+Dalsi doporuceny task: **Task 65.12A — Safely Apply the Avatar Persona Migration and Verify Local Persistence**.
+
+## 48. Task 65.12A status (2026-07-29) — safely apply avatar persona migration locally, completed
+
+Task 65.12A — Safely Apply the Avatar Persona Migration and Verify Local Persistence — byl proveden a **dokoncen**. Plny popis viz `PROJECT_PROGRESS.md`, sekce "Task 65.12A — Safely Apply Avatar Persona Migration…".
+
+Local development PostgreSQL: zaloha mimo repo → `alembic upgrade head` (`20260724_0027` → `20260729_0028`) → schema OK; `memory_profiles` 27/27; nova tabulka 0 radku (lazy). Backend **12 passed**, FE **16 passed**, tsc/compileall/health OK; kontejnery nezmeneny. Authenticated PATCH smoke **preskocen** (bez bezpecnych credentials). Zadne commit/push; `.cursor/` beze zmeny.
+
+Task 65.12A se **povazuje za dokonceny**. Zadna existujici sekce teto roadmapy nebyla prepsana.
+
+Dalsi doporuceny task: **Task 65.12B — Final Review, Commit and Push**.
+
+## 49. Task 65.12B status (2026-07-30) — final review, commit and push of unified avatar persona, completed
+
+Task 65.12B — Final Review, Commit and Push — byl proveden a **dokoncen**. Plny popis viz `PROJECT_PROGRESS.md`, sekce "Task 65.12B — Final Review, Commit and Push".
+
+Pred pushem: Alembic `20260729_0028`; backend focused **14 passed**; FE **16 passed**; `tsc -b` ok; health ok; `.cursor/` nestaged. Dva commity: implementace + dokumentace. Zahrnuje i FE zalozku **Hlas a povaha** a natural lack-of-evidence phrasing.
+
+Task 65.12B se **povazuje za dokonceny**. Zadna existujici sekce teto roadmapy nebyla prepsana.

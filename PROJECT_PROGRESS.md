@@ -10919,3 +10919,174 @@ After approve, the Contributions list showed **Schváleno, čeká na indexaci** 
 - Default remains English when nothing valid is stored.
 
 ---
+
+## Task 65.12 — Unified Avatar Persona for Profile, Chat, Voice and Future Visual Avatar (2026-07-29)
+
+### Status
+
+**Completed (implementation + verification).** No commit/push (task forbids both). Migration `20260729_0028` created and verified as single Alembic head; **not** applied to the live development PostgreSQL database.
+
+Starting baseline: branch `staging/eternalworld-lukiora-20260715`, HEAD `0a63b9f9050163a798558f2f1ab07c9468c140d7` (= origin). Pre-existing untracked `.cursor/` left untouched.
+
+### Architecture decision
+
+**DECISION B** — Refactor/extend `backend/app/modules/avatar_persona` as the sole canonical public module.
+
+Evidence: module previously owned demo Eva (`AvatarPersonaProfile` + `compose_avatar_persona_prompt`) and memory-query heuristics, but had **no** SQLAlchemy settings model, **no** memorial owner API, and authenticated `/api/chat` did not consume a persisted persona. No competing chat/voice persona modules existed. Replacement (D) was unnecessary; extending inside the module preserves one active implementation while keeping the demo path.
+
+Canonical ownership:
+
+```text
+MemoryProfile
+  → AvatarPersonaSettings (1:1, optional row)
+    → resolve_avatar_persona()
+      → build_avatar_persona_section()   # chat
+      → resolve_voice_persona()          # voice adapter (honest unsupported fields)
+      → future face/video adapters
+      → GET/PATCH /api/memorials/{id}/avatar-persona
+```
+
+### Audit summary (Parts A–E)
+
+| Concept | Before | After |
+|---|---|---|
+| Persisted persona settings | Missing | `avatar_persona_settings` table |
+| Owner API | Missing | GET/PATCH owner-only (`MANAGE_MEMORIAL`) |
+| Chat consumption | Demo Eva only; memorial chat had no persona section | One `resolve_avatar_persona` per send; section when configured |
+| Voice/TTS | No TTS in repo; AvatarStudio visual-only | Typed `resolve_voice_persona`; no private text sent |
+| Remembered age | Absent | Shared `remembered_age` on canonical object |
+| Languages | UI locale ≠ avatar languages | `primary_language` + `supported_languages` (cs/en/de) |
+| Communication text | Absent / forbidden “system prompt” labels | Bounded `communication_profile` as delimited descriptive data |
+| Frontend | Marketing chips only | Owner Overview `AvatarPersonaPanel` with Czech labels |
+
+Legacy `MemoryProfile.personality` / `catchphrases` remain separate Brain identity fields (not duplicated into the new settings table).
+
+### Final schema (`AvatarPersonaSettings`)
+
+- `profile_id` (unique FK → `memory_profiles`, CASCADE)
+- `voice_mode` (`original_recording` \| `warm_older` \| `younger_self`)
+- `voice_style` (`warm` \| `calm` \| `older` \| `energetic`)
+- `personality_traits` (JSON list; gentle/funny/thoughtful; bounded)
+- `primary_language` / `supported_languages` (cs/en/de; primary ⊆ supported)
+- `remembered_age` (nullable int 1–120)
+- `communication_profile` (text ≤ 4000)
+- `created_at` / `updated_at`
+
+### Chat / prompt-injection
+
+- Immutable safety/grounding remain higher priority in the Brain prompt builder.
+- User text is wrapped in `<avatar_persona_description>…</avatar_persona_description>` with explicit “tone only / not instructions” rules.
+- Unconfigured profiles: no persona section; `response_language=None` (prior match-user behavior).
+- Configured profiles: deterministic `select_response_language` (no production detector yet → falls back to `primary_language` until a shared detector exists).
+
+### Voice / future channels
+
+- Same `ResolvedAvatarPersona` object.
+- Adapter reports unsupported fields honestly (`original_recording_available=false`, no style/age provider today).
+- `communication_profile` is never attached as provider text.
+
+### Frontend (Czech required copy)
+
+- Section title: **Osobnost a způsob komunikace**
+- Field: **Jak mluvím a reaguji**
+- Helper and placeholder per task prompt; also EN/RU i18n.
+- HLAS / POVAHA / MLUVÍ / ZAPAMATOVANÝ VĚK controls on Overview for owners.
+
+### Scalability / privacy
+
+- Chat: **1** persona DB lookup per request via `resolve_avatar_persona`; reused for section + language; history loop does not reload persona.
+- No Redis persona cache (not justified).
+- Private communication text absent from logs/metrics/cache keys/voice adapter payload.
+
+### Tests and validation
+
+- `docker compose exec -T backend python -m pytest tests/test_task_65_12_avatar_persona_settings.py -q` → **8 passed**
+- `docker compose exec -T backend python -m pytest tests/test_alembic.py -q` → **4 passed** (head `20260729_0028`)
+- `docker compose exec -T backend python -m alembic heads` → `20260729_0028 (head)`
+- `compileall` on persona/chat/prompt/models/main → OK
+- Frontend: `AvatarPersonaPanel.test.tsx` + `memorialApi.test.ts` → **16 passed**; `npx tsc -b` → exit 0
+- OpenAPI route present: `/api/memorials/{profile_id}/avatar-persona`
+- Health: `/health` ok, `/health/runtime` ok, frontend `:8017` → 200
+- No real LLM / BGE-M3 / TTS / Qdrant write / Redis persona mutation / container restart / live migration apply / commit / push
+
+### Limitations / next
+
+1. ~~Apply migration `20260729_0028` to development DB only with explicit approval.~~ **Done in Task 65.12A** (local dev only).
+2. Wire a shared language detector into chat when one exists (contract already unit-tested).
+3. Connect real TTS capabilities into `resolve_voice_persona` when a provider lands.
+4. Commit + push Task 65.12 / 65.12A when requested (Task 65.12B).
+
+### Next recommended task
+
+**Task 65.12B — Final Review, Commit and Push** of the unified avatar persona work (implementation + migration activation docs).
+
+---
+
+## Task 65.12A — Safely Apply Avatar Persona Migration and Verify Local Persistence (2026-07-29)
+
+### Status
+
+**Completed.** Local development PostgreSQL upgraded `20260724_0027` → `20260729_0028`. No commit/push. No container restart/rebuild. No LLM/BGE-M3/TTS/Qdrant/Redis mutation. Authenticated live PATCH smoke **skipped** (no safe credentials / exact restore guarantee without guessing).
+
+### Backup
+
+- Path: `C:\Users\lukas\Desktop\ETERNAL_WORLD_DB_BACKUPS\eternal_world_dev_20260729_231811.dump`
+- Size: 4181930 bytes (non-empty verified)
+- Source DB: `eternal_world` (local Docker Postgres 16.13)
+- Alembic before backup/migration: `20260724_0027`
+
+### Migration
+
+- Command: `docker compose exec -T backend python -m alembic upgrade head`
+- Exit code: 0
+- Result: `Running upgrade 20260724_0027 -> 20260729_0028`
+- After: `alembic current` = `20260729_0028 (head)`; single head verified
+
+### Schema / row preservation
+
+- Table `avatar_persona_settings` created with FK CASCADE to `memory_profiles`, unique `profile_id`, age CHECK 1–120, voice mode/style CHECKs, defaults.
+- Pre: persona table absent; `memory_profiles` = 27.
+- Post: persona rows = 0 (lazy materialization); `memory_profiles` = 27 unchanged.
+- No existing profile/persona values overwritten.
+
+### Verification
+
+- Backend pytest (mock providers): **12 passed**
+- `compileall app/modules/avatar_persona`: exit 0
+- OpenAPI: GET+PATCH `/api/memorials/{profile_id}/avatar-persona`; schemas `AvatarPersonaSettingsRead` / `Update` only intended fields
+- Frontend vitest: **16 passed**; `tsc -b` exit 0; frontend HTTP 200
+- Health `/health` + `/health/runtime` ok; Redis PONG
+- Container IDs and StartedAt unchanged for backend/db/redis/qdrant/frontend
+- `.cursor/` unchanged (debug-50e431.log, 12675 B)
+
+### Controlled persistence smoke
+
+Skipped — no authenticated owner session available without guessing credentials. Rely on isolated API tests + schema evidence. User can verify in UI: Overview → Avatar persona panel should load defaults (no Internal Error).
+
+### Next recommended task
+
+**Task 65.12B — Final Review, Commit and Push.**
+
+---
+
+## Task 65.12B — Final Review, Commit and Push (2026-07-30)
+
+Final Git-closure for Tasks 65.12 / 65.12A plus follow-up UX (workspace tab **Hlas a povaha**) and natural first-person lack-of-evidence phrasing (cs/en/ru/de/es/fr). No real LLM/BGE-M3/TTS. No container rebuild for this closure. Local Alembic already at `20260729_0028` from Task 65.12A.
+
+### Pre-commit verification
+
+- `alembic current` / `alembic heads` → `20260729_0028 (head)`
+- Backend: persona + alembic + factual grounding/lack-of-evidence focused → **14 passed**
+- Frontend: AvatarPersonaPanel + memorialApi → **16 passed**; `npx tsc -b` exit 0
+- `/health` ok; `/health/runtime` ok; frontend `:8017` → 200
+- `git diff --check` clean (CRLF warnings only)
+- `.cursor/` untracked and not staged
+
+### Commits
+
+1. Implementation/tests: `8bf81a0` — `feat: add unified avatar persona settings` (30 files)
+2. Documentation: `docs: record unified avatar persona implementation`
+
+### Next recommended task
+
+Continue from the authoritative roadmap after this push (no further 65.12.x work remaining unless product follow-ups arise).
