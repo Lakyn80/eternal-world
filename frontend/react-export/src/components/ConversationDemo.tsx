@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
+import { getMarketingDemo } from '../demo';
 import type { Lang } from '../i18n';
 import { T, SUGGESTIONS, matchReply } from '../i18n';
 
@@ -11,15 +12,19 @@ interface Props {
 
 export default function ConversationDemo({ lang, autoplay }: Props) {
   const t = T[lang];
+  const demo = getMarketingDemo(lang);
   const [messages, setMessages] = useState<Message[]>([{ role: 'ai', text: t.greet }]);
   const [input, setInput] = useState('');
   const [typing, setTyping] = useState(false);
   const [speaking, setSpeaking] = useState(false);
-  const started = useRef(false);
 
+  // Full reset on every language change so Czech/Russian/English demos never leak.
   useEffect(() => {
     setMessages([{ role: 'ai', text: t.greet }]);
-  }, [lang]);
+    setInput('');
+    setTyping(false);
+    setSpeaking(false);
+  }, [lang, t.greet]);
 
   const ask = (q: string) => {
     if (!q.trim()) return;
@@ -35,12 +40,18 @@ export default function ConversationDemo({ lang, autoplay }: Props) {
   };
 
   useEffect(() => {
-    if (!autoplay || started.current) return;
-    started.current = true;
-    const timer = setTimeout(() => ask(SUGGESTIONS[lang][0]), 1800);
-    return () => clearTimeout(timer);
+    if (!autoplay) return;
+    let cancelled = false;
+    const timer = setTimeout(() => {
+      if (cancelled) return;
+      ask(SUGGESTIONS[lang][0]);
+    }, 1800);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [lang, autoplay]);
 
   return (
     <section id="demo" className="relative py-24 px-4 sm:px-6 flex flex-col items-center overflow-hidden">
@@ -70,7 +81,9 @@ export default function ConversationDemo({ lang, autoplay }: Props) {
             />
           </div>
           <div className="text-center">
-            <div className="font-medium text-[15px]">Josef · 1948</div>
+            <div className="font-medium text-[15px]">
+              {demo.displayName} · {demo.birthYear}
+            </div>
             <div className="text-[12.5px] text-fg/50 mt-0.5">{t.demoPersona}</div>
           </div>
           <div className="flex items-center gap-[3px] h-10">

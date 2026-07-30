@@ -22,10 +22,10 @@ const scrollTo = (id: string) => {
  * Task 65.1B route boundary: the public marketing page (this component,
  * everything below) and the authenticated application (`AuthenticatedApp`)
  * are two structurally separate trees. The public tree may keep the static
- * `ConversationDemo`/`AvatarStudio` demo sections (including the fictional
- * "Josef" persona they display) - that content is legitimate marketing
- * copy. The authenticated tree never mounts those components at all, so an
- * authenticated user can no longer see "Josef" while inside their own
+ * `ConversationDemo`/`AvatarStudio` demo sections (locale-scoped marketing
+ * personas from `src/demo/`) - that content is legitimate marketing copy.
+ * The authenticated tree never mounts those components at all, so an
+ * authenticated user never sees the homepage demo persona inside their own
  * memorial workspace (Task 65.1A's root-cause finding).
  */
 export default function App() {

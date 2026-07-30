@@ -7,8 +7,9 @@ const LANGS: Lang[] = ['en', 'cs', 'ru'];
 /**
  * The authenticated application shell (Task 65.1B). Deliberately mounts
  * only account/memorial-workspace UI - never the public marketing sections
- * (`ConversationDemo`, `AvatarStudio`, and their static "Josef" demo copy
- * live exclusively in `App.tsx`'s public tree, see that file's comment).
+ * (`ConversationDemo`, `AvatarStudio`, and their locale-scoped marketing
+ * demo personas from `src/demo/` live exclusively in `App.tsx`'s public tree,
+ * see that file's comment).
  */
 export default function AuthenticatedApp({ lang, setLang }: { lang: Lang; setLang: (next: Lang) => void }) {
   const langButtonClassName = (candidate: Lang) =>

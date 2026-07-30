@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { getMarketingDemo } from '../demo';
 import type { Lang } from '../i18n';
 import { T, VOICES, PERSONALITIES, AVATAR_LANGS } from '../i18n';
 
@@ -22,10 +23,17 @@ function ChipRow({ options, value, onPick }: { options: string[]; value: number;
 
 export default function AvatarStudio({ lang }: { lang: Lang }) {
   const t = T[lang];
+  const demo = getMarketingDemo(lang);
   const [voice, setVoice] = useState(0);
   const [pers, setPers] = useState(0);
   const [alang, setAlang] = useState(0);
   const [age, setAge] = useState(62);
+
+  useEffect(() => {
+    setVoice(0);
+    setPers(0);
+    setAlang(0);
+  }, [lang]);
 
   const hue = [0, 45, -50][pers] + (age - 62) * 0.4;
   const summary = `${VOICES[lang][voice]} · ${PERSONALITIES[lang][pers]} · ${AVATAR_LANGS[lang][alang]} · ${age}`;
@@ -62,7 +70,7 @@ export default function AvatarStudio({ lang }: { lang: Lang }) {
             <div className="absolute inset-3 rounded-full border border-white/[0.22]" />
           </div>
           <div className="text-center">
-            <div className="font-medium text-[16px]">Josef</div>
+            <div className="font-medium text-[16px]">{demo.displayName}</div>
             <div className="break-words text-[13px] text-fg/55 mt-1.5">{summary}</div>
           </div>
         </div>
