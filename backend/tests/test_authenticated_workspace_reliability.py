@@ -108,6 +108,40 @@ def test_login_sets_httponly_session_cookie(client):
     assert "expires" not in set_cookie.lower()
 
 
+def test_login_still_returns_bearer_token_when_redis_unavailable(client, monkeypatch):
+    """Bearer JWT login must not depend on Redis (Task 65.7 is additive).
+
+    GitHub Actions historically had no Redis service; ``create_browser_session``
+    used to re-raise ``RedisError`` and turned every authenticated suite into
+    ``KeyError: 'access_token'`` / HTTP 500 on login.
+    """
+
+    from redis.exceptions import ConnectionError as RedisConnectionError
+
+    from app.modules.auth import browser_session as browser_session_module
+
+    def _raise_redis_unavailable():
+        raise RedisConnectionError("simulated redis unavailable")
+
+    monkeypatch.setattr(browser_session_module, "get_redis_client", _raise_redis_unavailable)
+
+    email = "session-cookie-redis-down@example.com"
+    client.post("/api/auth/register", json={"email": email, "password": PASSWORD, "full_name": email})
+    response = client.post("/api/auth/login", json={"email": email, "password": PASSWORD})
+    assert response.status_code == 200
+    body = response.json()
+    assert isinstance(body.get("access_token"), str) and body["access_token"]
+    set_cookie = response.headers.get("set-cookie", "")
+    assert "eternal_world_session=" not in set_cookie
+
+    me = client.get(
+        "/api/auth/me",
+        headers={"Authorization": f"Bearer {body['access_token']}"},
+    )
+    assert me.status_code == 200
+    assert me.json()["email"] == email
+
+
 def test_session_endpoint_resolves_from_cookie_without_bearer_header(client):
     email = "session-cookie-2@example.com"
     client.post("/api/auth/register", json={"email": email, "password": PASSWORD, "full_name": email})

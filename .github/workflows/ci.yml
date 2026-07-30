@@ -12,6 +12,20 @@ jobs:
     if: github.event_name != 'push' || github.ref_name == 'main'
     runs-on: ubuntu-latest
 
+    # Task 65.7 browser-session cookies and chat Redis snapshots need a live
+    # Redis. Login itself must still succeed without Redis (bearer JWT), but
+    # cookie-path and resume tests require this service.
+    services:
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -29,6 +43,7 @@ jobs:
         working-directory: backend
         env:
           PYTHONPATH: .
+          REDIS_URL: redis://localhost:6379/0
         run: python -m pytest
 
   frontend-tests:

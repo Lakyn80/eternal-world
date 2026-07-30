@@ -39,10 +39,15 @@ def _session_key(session_id: str) -> str:
     return f"{_SESSION_KEY_PREFIX}:{session_id}"
 
 
-def create_browser_session(*, user_id: int, trace_id: str | None = None) -> str:
+def create_browser_session(*, user_id: int, trace_id: str | None = None) -> str | None:
     """Creates a brand-new opaque session ID and stores it in Redis with a
     sliding TTL. Returns the raw session ID (the caller sets it as the
-    cookie value - never logged, never returned in a JSON body)."""
+    cookie value - never logged, never returned in a JSON body).
+
+    Returns ``None`` when Redis is unavailable. Browser sessions are additive
+    to bearer JWT auth; Redis failure must not block API login for Swagger,
+    PowerShell, CI, or any client that only needs ``access_token``.
+    """
 
     session_id = secrets.token_urlsafe(32)
     payload = json.dumps({"user_id": user_id, "created_at": datetime.now(timezone.utc).isoformat()})
@@ -51,7 +56,7 @@ def create_browser_session(*, user_id: int, trace_id: str | None = None) -> str:
     except RedisError:
         log_event(_logger, logging.ERROR, "browser_session_invalid", trace_id=trace_id, reason="redis_unavailable")
         observe_browser_session_operation(operation="create", result="error")
-        raise
+        return None
     log_event(_logger, logging.INFO, "browser_session_created", trace_id=trace_id, user_id=user_id)
     observe_browser_session_operation(operation="create", result="success")
     return session_id
@@ -97,10 +102,12 @@ def resolve_browser_session(session_id: str | None, *, trace_id: str | None = No
     return user_id
 
 
-def rotate_browser_session(old_session_id: str | None, *, user_id: int, trace_id: str | None = None) -> str:
+def rotate_browser_session(
+    old_session_id: str | None, *, user_id: int, trace_id: str | None = None
+) -> str | None:
     """Issues a fresh session ID and revokes the old one (if any) - used on
     login to avoid session fixation across repeated logins in the same
-    browser."""
+    browser. Returns ``None`` when Redis cannot store the new session."""
 
     if old_session_id:
         revoke_browser_session(old_session_id, trace_id=trace_id, _event="browser_session_rotated")

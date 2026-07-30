@@ -88,7 +88,9 @@ def login(
 
     old_session_id = request.cookies.get(settings.browser_session_cookie_name)
     session_id = rotate_browser_session(old_session_id, user_id=user.id, trace_id=get_request_id())
-    _set_session_cookie(response, session_id)
+    # Cookie is best-effort: bearer token remains the primary API contract.
+    if session_id is not None:
+        _set_session_cookie(response, session_id)
     return token_response
 
 
