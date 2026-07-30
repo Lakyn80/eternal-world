@@ -10,6 +10,8 @@ export default defineConfig({
   preview: {
     host: '0.0.0.0',
     port: 3000,
+    // Explicit staging domain + lukiora.ru suffix. Must ship inside the
+    // production image (see Dockerfile.prod COPY of vite.config.ts).
     allowedHosts: ['eternalworld.lukiora.ru', '.lukiora.ru'],
   },
 });

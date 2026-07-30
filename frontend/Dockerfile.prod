@@ -28,6 +28,9 @@ ENV NODE_ENV=production \
 COPY --from=build /app/react-export/package.json ./package.json
 COPY --from=build /app/react-export/node_modules ./node_modules
 COPY --from=build /app/react-export/dist ./dist
+# Required: `vite preview` reads allowedHosts from this file. Without it,
+# nginx proxying Host: eternalworld.lukiora.ru gets a plain 403.
+COPY --from=build /app/react-export/vite.config.ts ./vite.config.ts
 
 EXPOSE 3000
 
