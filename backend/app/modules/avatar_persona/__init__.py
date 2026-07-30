@@ -28,6 +28,18 @@ from app.modules.avatar_persona.schemas import (
     AvatarSpeakingStyle,
     AvatarVoiceDirectives,
 )
+from app.modules.avatar_persona.settings_schemas import (
+    AvatarPersonaSettingsRead,
+    AvatarPersonaSettingsUpdate,
+    ResolvedAvatarPersona,
+    VoicePersonaAdapterResult,
+)
+from app.modules.avatar_persona.settings_service import (
+    build_avatar_persona_section,
+    resolve_avatar_persona,
+    resolve_voice_persona,
+    select_response_language,
+)
 
 __all__ = [
     "AvatarEmotion",
@@ -35,6 +47,8 @@ __all__ = [
     "AvatarLackOfEvidenceStyle",
     "AvatarMemoryCandidate",
     "AvatarPersonaProfile",
+    "AvatarPersonaSettingsRead",
+    "AvatarPersonaSettingsUpdate",
     "AvatarResponseDirectives",
     "AvatarSpeakingStyle",
     "AvatarVoiceDirectives",
@@ -42,6 +56,9 @@ __all__ = [
     "EVA_NOVAKOVA_DEMO_AVATAR_ID",
     "FORBIDDEN_CLIENT_PHRASES",
     "MemoryQueryIntent",
+    "ResolvedAvatarPersona",
+    "VoicePersonaAdapterResult",
+    "build_avatar_persona_section",
     "build_expanded_retrieval_query",
     "build_memory_candidate",
     "classify_memory_query_intent",
@@ -49,5 +66,8 @@ __all__ = [
     "derive_avatar_response_directives",
     "evaluate_avatar_response_style",
     "load_demo_avatar_persona",
+    "resolve_avatar_persona",
+    "resolve_voice_persona",
+    "select_response_language",
     "should_create_memory_candidate",
 ]

@@ -24,6 +24,18 @@ class BackgroundJobRead(BaseModel):
     finished_at: datetime | None
     created_at: datetime
     updated_at: datetime
+    #: Task 65.9 - async job platform status fields, safe for direct
+    #: frontend polling. `safe_error_category` is a closed-set label, never
+    #: a raw exception string.
+    queue: str | None = None
+    attempt_count: int = 0
+    max_attempts: int = 3
+    provider_recovery_count: int = 0
+    fresh_process_retry_used: bool = False
+    worker_recycle_requested: bool = False
+    heartbeat_at: datetime | None = None
+    next_attempt_at: datetime | None = None
+    safe_error_category: str | None = None
 
 
 class BackgroundJobSmokeTestCreate(BaseModel):
@@ -55,4 +67,13 @@ def build_background_job_read(background_job) -> BackgroundJobRead:
         finished_at=background_job.finished_at,
         created_at=background_job.created_at,
         updated_at=background_job.updated_at,
+        queue=background_job.queue,
+        attempt_count=background_job.attempt_count,
+        max_attempts=background_job.max_attempts,
+        provider_recovery_count=background_job.provider_recovery_count,
+        fresh_process_retry_used=background_job.fresh_process_retry_used,
+        worker_recycle_requested=background_job.worker_recycle_requested,
+        heartbeat_at=background_job.heartbeat_at,
+        next_attempt_at=background_job.next_attempt_at,
+        safe_error_category=background_job.safe_error_category,
     )

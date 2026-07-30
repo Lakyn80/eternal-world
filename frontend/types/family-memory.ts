@@ -238,7 +238,7 @@ export type MemoryCandidateReviewDetail = {
   can_index: boolean;
   blocked_reasons: string[];
   // Task 64.5.1 bilingual additions.
-  requested_locale: "cs" | "ru";
+  requested_locale: "cs" | "ru" | "en";
   source_language: string | null;
   translations: MemoryContentTranslation[];
   translation_block_reason: string | null;

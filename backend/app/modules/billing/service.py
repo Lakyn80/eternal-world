@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from sqlalchemy.orm import Session
+
 from app.db.models import User
 from app.modules.billing.entitlements import enforce_usage_limit
 from app.modules.billing.limits import build_plan_limits
@@ -9,7 +11,8 @@ from app.modules.billing.schemas import (
     BillingLimitsRead,
     BillingPlanRead,
 )
-from app.modules.billing.usage import build_usage_snapshot
+from app.modules.billing.usage import BillingUsageTotals, build_usage_snapshot
+from app.modules.memory_profiles import repository as memory_profiles_repository
 
 
 def _build_plan_read(plan_code: str) -> BillingPlanRead:
@@ -56,13 +59,23 @@ def get_current_user_plan(current_user: User) -> BillingCurrentPlanRead:
     )
 
 
-def get_current_user_limits(current_user: User) -> BillingLimitsRead:
+def get_current_user_limits(db: Session, current_user: User) -> BillingLimitsRead:
+    # Task 65.5: `build_usage_snapshot()` used to be called with no
+    # arguments, which always reports zero usage regardless of the
+    # account's actual data - this silently broke the frontend's
+    # create-memorial gating, since it always looked like the plan had room
+    # for another profile even when the real limit was already reached.
+    # `current_profiles` is the only field this task's plan-limit UX
+    # depends on, so it is the only one wired to a real query here; the
+    # other usage fields remain the pre-existing placeholder zero until a
+    # billing task actually needs them.
     plan_definition = get_effective_plan_definition_for_user(current_user)
+    current_profiles = memory_profiles_repository.count_memory_profiles_for_user(db, current_user.id)
     return BillingLimitsRead(
         user_id=current_user.id,
         plan_code=plan_definition.code,
         limits=build_plan_limits(plan_definition),
-        current_usage=build_usage_snapshot(),
+        current_usage=build_usage_snapshot(BillingUsageTotals(current_profiles=current_profiles)),
     )
 
 

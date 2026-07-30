@@ -136,7 +136,7 @@ def test_lack_of_evidence_eval_passes_with_mock_brain_provider():
     assert result.passed is True
     assert result.actual_behavior == "lack_of_evidence"
     assert result.provider_name == "mock"
-    assert "not available in the stored memories/context" in result.answer_preview.lower()
+    assert "i don't remember that" in result.answer_preview.lower()
 
 
 def test_lack_of_evidence_eval_fails_when_answer_invents_unsupported_facts():
@@ -293,7 +293,9 @@ def test_foundation_grounded_case_passes_with_mock_brain_using_evidence_citation
     assert result.passed is True
     assert result.actual_behavior == "grounded_answer"
     assert "Brno" in result.answer_preview
-    assert "[rag:501]" in result.answer_preview or "[memory:101]" in result.answer_preview
+    # Internal [memory:]/[rag:] citations are stripped before user-visible text.
+    assert "[rag:501]" not in result.answer_preview
+    assert "[memory:101]" not in result.answer_preview
 
 
 def test_eternal_world_eval_case_count_is_at_least_eight():

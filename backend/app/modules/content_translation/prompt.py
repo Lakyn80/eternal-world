@@ -3,6 +3,7 @@ from __future__ import annotations
 _LANGUAGE_NAMES = {
     "cs": "Czech",
     "ru": "Russian",
+    "en": "English",
 }
 
 

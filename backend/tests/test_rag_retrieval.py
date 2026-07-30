@@ -292,6 +292,9 @@ def test_retrieval_endpoint_requires_authentication(client, monkeypatch):
     token = _register_and_login(client, "retrieval-auth@example.com")
     profile_id, _, _, _ = _create_indexed_embedding(client, token, "Retrieval Auth Profile")
 
+    # Task 65.7C: clear the browser-session cookie set by the login above so
+    # this request genuinely carries no credentials (bearer or cookie).
+    client.cookies.clear()
     response = client.post(
         f"/api/memory-profiles/{profile_id}/rag/retrieve",
         json={"query": "stable retrieval query"},

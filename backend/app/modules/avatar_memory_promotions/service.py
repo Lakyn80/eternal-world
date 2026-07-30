@@ -168,6 +168,42 @@ def list_promotions(
     )
 
 
+def list_biography_memory_entries(
+    db: Session,
+    *,
+    owner_user_id: int,
+    profile_id: int,
+    viewer_is_profile_owner: bool,
+) -> list[AvatarMemoryPromotion]:
+    """Task 65.6.1 (Part E) - the Biography-tab projection of approved
+    candidate memories, backed entirely by the existing promotion table
+    (no new canonical-memory table, no biography-text mutation).
+
+    Deliberately narrower than `list_promotions`:
+      * only promotions whose source candidate is still `approved` are
+        included (a promotion is only ever created for an approved
+        candidate and this codebase has no un-approve transition, so this
+        is a defensive check rather than an expected filter today - it
+        keeps the projection correct if that ever changes);
+      * a `private_owner`-scoped candidate's memory is included only when
+        the viewer is the memorial's own owning account, mirroring the
+        retrieval-time enforcement in `rag_retrieval.service` so the
+        Biography tab and avatar chat never disagree about who may see an
+        owner-only memory.
+    """
+
+    promotions = list_promotions(db, owner_user_id=owner_user_id, profile_id=profile_id)
+    visible: list[AvatarMemoryPromotion] = []
+    for promotion in promotions:
+        candidate = promotion.candidate
+        if candidate is None or candidate.status != "approved":
+            continue
+        if candidate.privacy_scope == "private_owner" and not viewer_is_profile_owner:
+            continue
+        visible.append(promotion)
+    return visible
+
+
 def get_promotion(
     db: Session,
     *,

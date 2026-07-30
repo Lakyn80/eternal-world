@@ -1,0 +1,64 @@
+# Task 65.9.1F - CPU-only PyTorch, single source of truth, exact-version
+# pinned.
+#
+# Historical defect (fixed by this file): `backend/Dockerfile` and
+# `backend/Dockerfile.ai-base` each independently ran a completely
+# unpinned `pip install --index-url https://download.pytorch.org/whl/cpu
+# torch` (no version, no hash), duplicated verbatim in two Dockerfiles.
+# Every build silently re-resolved to whatever version the index happened
+# to be serving that day - no determinism between dev/ai-base builds, no
+# drift detection, and (per the investigation below) no actual hash
+# checking despite superficially looking like a candidate for one.
+#
+# Root cause of the reported "Expected SHA256 .../ Received SHA256 ..."
+# symptom (Task 65.9.1F, Part C): NEITHER Dockerfile, NEITHER requirements
+# file, NOR any pip.conf/PIP_* environment variable anywhere in this
+# repository or in the `python:3.12-slim` base image ever enabled
+# `--require-hashes` or supplied a `--hash` - verified directly via
+# `python -m pip config debug` / `python -m pip config list -v` inside a
+# disposable container from the exact base image (no global/site/user
+# pip.conf present, no PIP_* env vars) and via a full, unmodified
+# reproduction of the prior literal Dockerfile RUN command, which
+# completed successfully with zero hash-related errors. The actual
+# mechanism is pip's OWN automatic, always-on verification of a
+# downloaded distribution against the hash the package index itself
+# publishes in its simple-repository link metadata (present for
+# `download.pytorch.org`, exactly like PyPI) - this fires on every
+# `pip install`/`pip download` regardless of `--require-hashes` or any
+# project-level hash file, and is NOT something this project's build
+# commands ever opted into or could opt out of.
+#
+# Provenance check (Task 65.9.1F, Part D): this project's own two-
+# independent-download rule caught a genuine, live mismatch. Two
+# back-to-back `pip download --no-cache-dir` runs of this exact wheel
+# (same URL, same official index, no third-party mirror) returned
+# DIFFERENT content:
+#   attempt 1: sha256 4ca4a9394b0c771238a4f73590fdbbc4debad85ed0fa63d026ae1b085da7d6e2
+#              (matches the index's own published metadata hash; a
+#              concurrent `docker build` of the unmodified Dockerfile
+#              also converged on this same hash independently)
+#   attempt 2: sha256 96547f1f7772c4b6e12984d3b9769dff129b723b8e2df5ae02d231ac23ecb4d2
+#              (rejected by pip's own automatic check before use - not a
+#              project-side failure, pip protected us here)
+#
+# Per this task's explicit safety rule - "do not insert the newly
+# observed hash into any file without first proving wheel provenance via
+# two independent, cache-disabled downloads that produce byte-identical
+# SHA256; if they don't match, stop and report a supply-chain blocker,
+# don't paper over it" - NO hash is recorded in this file, and neither
+# Dockerfile passes `--require-hashes` for this file. Locking a hash
+# today would either (a) intermittently break every build against a
+# currently-flaky CDN edge for `download.pytorch.org`/
+# `download-r2.pytorch.org`, or (b) require arbitrarily picking one of
+# several observed hashes with no evidence for which is "correct" going
+# forward. See PROJECT_PROGRESS.md, Task 65.9.1F, for the full
+# investigation, exact commands, and the recommended follow-up (a later
+# task) to re-attempt hash-locking once repeated stable downloads confirm
+# the CDN is no longer serving inconsistent content for this file.
+#
+# What THIS file still fixes today, safely: the exact CPU-only Torch
+# version is now pinned (rather than silently floating to "whatever
+# resolves right now"), and both Dockerfiles consume this single shared
+# file instead of duplicating their own ad-hoc install line.
+--index-url https://download.pytorch.org/whl/cpu
+torch==2.13.0+cpu

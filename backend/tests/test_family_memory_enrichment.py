@@ -487,6 +487,15 @@ def test_promotion_and_indexing_revalidate_enrichment_and_privacy(client):
     user, profile = _create_scope()
     db = _db()
     try:
+        # Task 65.6.1: `private_owner` is an owner-only *visibility* scope,
+        # not a "never index" scope - it IS eligible for promotion (the
+        # memorial owner's own avatar chat must be able to recall an
+        # approved owner-only memory). Retrieval-time enforcement (see
+        # `rag_retrieval.service._is_visible_to_viewer`) is what actually
+        # keeps it hidden from a non-owner member, not exclusion from the
+        # promotion/indexing pipeline. `selected_family` below remains
+        # ineligible: no retrieval-time enforcement exists yet for that
+        # scope, so promoting it would be a real privacy regression.
         private_candidate = _create_enrichment_candidate(
             owner_user_id=user.id,
             profile_id=profile.id,
@@ -510,7 +519,9 @@ def test_promotion_and_indexing_revalidate_enrichment_and_privacy(client):
             ),
         )
         assert private_approval.review_status == "approved"
-        assert private_approval.promotion_id is None
+        assert private_approval.promotion_id is not None
+        assert private_approval.promotion_status == "pending_index"
+        assert private_approval.explicit_indexing_required is True
 
         selected = _create_enrichment_candidate(owner_user_id=user.id, profile_id=profile.id)
         initialize_candidate(

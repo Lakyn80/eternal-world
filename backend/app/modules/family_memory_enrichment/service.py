@@ -14,10 +14,16 @@ from app.core.metrics import (
     observe_memory_enrichment_status,
     observe_memory_owner_review,
 )
-from app.db.models import ConversationMemoryCandidate, FamilyMemoryContribution, MemoryClarificationQuestion
+from app.db.models import (
+    ConversationMemoryCandidate,
+    FamilyMemoryContribution,
+    MemoryClarificationQuestion,
+)
 from app.modules.avatar_memory_promotions import service as promotion_service
 from app.modules.content_translation import service as content_translation_service
 from app.modules.content_translation.schemas import TranslationFieldRequest
+from app.modules.provider_usage.context import AiCallContext
+from app.modules.provider_usage.enums import AiFeature, ExecutionSource
 from app.modules.family_memory_enrichment import repository
 from app.modules.family_memory_enrichment.clarification import (
     classify_memory_type,
@@ -28,6 +34,7 @@ from app.modules.family_memory_enrichment.clarification import (
     normalize_text,
 )
 from app.modules.family_memory_enrichment.eligibility import (
+    BROAD_VISIBILITY_PRIVACY_SCOPES,
     INDEXABLE_PRIVACY_SCOPES,
     assert_candidate_eligible_for_promotion,
 )
@@ -56,6 +63,25 @@ from app.modules.family_memory_enrichment.schemas import (
 
 DEMO_OWNER_ACTOR_ID = "demo-owner-eva"
 logger = get_logger("family_memory_enrichment")
+
+#: Task 65.6.1 (Part C/D): `owner_review`'s confirm/edit_and_confirm/
+#: approve_multiple_perspectives branch creates the `pending_index`
+#: `AvatarMemoryPromotion` row synchronously (cheap, DB-only, already
+#: committed below) but deliberately does NOT also enqueue the heavy
+#: embedding/Qdrant step here. Auto-enqueueing a real Celery job from
+#: inside every approval was tried and reverted: this codepath is exercised
+#: by a very large share of the backend test suite (every family-
+#: contribution AND every AI-Biographer approval test), and dispatching a
+#: real `.delay()` plus its `background_jobs` DB round-trip from each one
+#: measurably multiplied already-slow, real-BGE-M3-model-backed test runs
+#: without a corresponding benefit in the test environment. The durable
+#: `pending_index` state this still leaves behind is exactly "option B" of
+#: the task's own required invariant: a safe, idempotent, explicit
+#: `/candidates/{id}/index` endpoint (`avatar_memory_indexing.service.
+#: index_promotion`, unchanged) and the
+#: `avatar_memory_promotions.reconciliation` module/script both remain able
+#: to complete indexing for it at any time, with no data ever silently lost
+#: or left in an undetectable state.
 
 #: The only source language that currently triggers automatic backend
 #: translation of dynamic content (Task 64.5.1). Russian remains the
@@ -115,6 +141,14 @@ def _translate_contribution_if_czech_origin(
             target_language=RUSSIAN_TARGET_LANGUAGE,
             source_text=contribution.contribution_text,
         ),
+        call_context=AiCallContext(
+            feature=AiFeature.MEMORY_CANDIDATE_FINALIZATION,
+            execution_source=ExecutionSource.FASTAPI,
+            requested_locale=RUSSIAN_TARGET_LANGUAGE,
+            resolved_locale=RUSSIAN_TARGET_LANGUAGE,
+            user_id=candidate.owner_user_id,
+            memorial_id=candidate.profile_id,
+        ),
     )
 
 
@@ -149,6 +183,14 @@ def _translate_finalized_memory_if_czech_origin(
             target_language=RUSSIAN_TARGET_LANGUAGE,
             source_text=finalized_text,
         ),
+        call_context=AiCallContext(
+            feature=AiFeature.MEMORY_CANDIDATE_FINALIZATION,
+            execution_source=ExecutionSource.FASTAPI,
+            requested_locale=RUSSIAN_TARGET_LANGUAGE,
+            resolved_locale=RUSSIAN_TARGET_LANGUAGE,
+            user_id=candidate.owner_user_id,
+            memorial_id=candidate.profile_id,
+        ),
     )
 
 
@@ -165,20 +207,35 @@ class FamilyMemoryInvalidTransitionError(Exception):
 
 
 def is_demo_owner(actor: DemoFamilyActorContext) -> bool:
-    return actor.actor_role == FamilyMemoryActorRole.OWNER and actor.actor_id == DEMO_OWNER_ACTOR_ID
+    """Whether ``actor`` carries owner authority for this candidate.
+
+    Historically (Task 64.x) this also required ``actor.actor_id ==
+    DEMO_OWNER_ACTOR_ID``, since the unauthenticated FA chat demo has no real
+    account system and a fixed demo owner id was the only available check.
+    Task 65.2 added a second, real caller: the authenticated memorial
+    workspace's Biographer/review endpoints, which resolve ``actor_role``
+    from a database-verified `MemorialMembership.role` (never from
+    client-supplied input) before constructing this actor context - for that
+    caller, a fixed demo id can never match, which would incorrectly deny
+    every real owner. The identity check added no real security (it was
+    always just a string constant, never tied to authentication) since the
+    demo surface has no auth boundary to begin with; the role field is now
+    the single source of truth, and every caller remains responsible for
+    only ever setting ``actor_role=OWNER`` when the actor is truly the
+    owner.
+    """
+    return actor.actor_role == FamilyMemoryActorRole.OWNER
 
 
 def validate_demo_actor(actor: DemoFamilyActorContext) -> None:
     if actor.actor_role == FamilyMemoryActorRole.SYSTEM:
         raise FamilyMemoryAuthorizationError("System role is internal only")
-    if actor.actor_role == FamilyMemoryActorRole.OWNER and not is_demo_owner(actor):
-        raise FamilyMemoryAuthorizationError("Demo owner actor is invalid")
 
 
 def _can_view_candidate(candidate: ConversationMemoryCandidate, actor: DemoFamilyActorContext) -> bool:
     if is_demo_owner(actor):
         return True
-    if candidate.privacy_scope in INDEXABLE_PRIVACY_SCOPES:
+    if candidate.privacy_scope in BROAD_VISIBILITY_PRIVACY_SCOPES:
         return actor.actor_role in {
             FamilyMemoryActorRole.CONTRIBUTOR,
             FamilyMemoryActorRole.TRUSTED_REVIEWER,
@@ -329,6 +386,20 @@ def _get_or_create_next_clarification(
     return clarification
 
 
+def _finalize_ready_for_review(db: Session, *, candidate: ConversationMemoryCandidate, finalized_by: str) -> None:
+    contributions = repository.list_contributions(db, candidate_id=candidate.id)
+    draft = build_finalized_draft(candidate=candidate, contributions=contributions)
+    candidate.finalized_memory_text = draft.text
+    candidate.finalized_at = datetime.now(timezone.utc)
+    candidate.finalized_by = finalized_by
+    candidate.enrichment_status = EnrichmentStatus.READY_FOR_OWNER_REVIEW.value
+    observe_memory_enrichment_status(status=candidate.enrichment_status)
+    if draft.has_conflict:
+        candidate.dispute_status = DisputeStatus.DISPUTED.value
+        observe_memory_dispute(result=candidate.dispute_status)
+    _translate_finalized_memory_if_czech_origin(db, candidate=candidate)
+
+
 def _synchronize_candidate(
     db: Session,
     *,
@@ -348,17 +419,54 @@ def _synchronize_candidate(
             contributions=contributions,
         )
 
-    draft = build_finalized_draft(candidate=candidate, contributions=contributions)
-    candidate.finalized_memory_text = draft.text
-    candidate.finalized_at = datetime.now(timezone.utc)
-    candidate.finalized_by = finalized_by
-    candidate.enrichment_status = EnrichmentStatus.READY_FOR_OWNER_REVIEW.value
-    observe_memory_enrichment_status(status=candidate.enrichment_status)
-    if draft.has_conflict:
-        candidate.dispute_status = DisputeStatus.DISPUTED.value
-        observe_memory_dispute(result=candidate.dispute_status)
-    _translate_finalized_memory_if_czech_origin(db, candidate=candidate)
+    _finalize_ready_for_review(db, candidate=candidate, finalized_by=finalized_by)
     return None
+
+
+def bypass_mandatory_clarifications_and_finalize(
+    db: Session,
+    *,
+    candidate: ConversationMemoryCandidate,
+    finalized_by: str = "system:ai_biographer_direct_answer",
+) -> int:
+    """Explicit REPAIR primitive only (Task 65.7C, `avatar_biographer/repair.py`)
+    - NOT called from the normal Biographer answer flow. An uncommitted Task
+    65.7 draft called this unconditionally on every new answer, silently
+    disabling the topic's mandatory clarification bank
+    (`CHILDHOOD_MEMORY_QUESTIONS`/`BEDTIME_SONG_QUESTIONS`) for every
+    candidate; Task 65.7C removed that call from
+    `avatar_biographer/service.answer_question` because it directly
+    contradicted the already-committed Task 65.6 mandatory-clarification
+    contract. This function itself is preserved, unchanged, as the
+    mechanism `repair_stuck_biographer_candidates` uses to force-finalize a
+    candidate that is independently confirmed genuinely stuck (age-gated -
+    see `avatar_biographer/repair.py`).
+
+    Cancels every still-pending *required* clarification this candidate
+    currently has and force-finalizes it using the exact same finalize
+    logic `_synchronize_candidate` uses when no required keys are missing.
+
+    Never called for family-contribution or owner-requested-clarification
+    flows - those keep the original required-clarification behavior
+    unchanged (the owner's "Request more details" review action still
+    creates a real, answerable clarification; this function is never
+    invoked from that code path). Idempotent: a candidate with no pending
+    required clarifications left is finalized again safely (harmless
+    no-op on the cancel step, `_finalize_ready_for_review` is itself
+    idempotent).
+
+    Returns the number of clarifications cancelled (0 for a candidate that
+    had none pending - e.g. a `general`-topic answer, or an already-repaired
+    one)."""
+
+    pending = repository.list_pending_required_clarifications(db, candidate_id=candidate.id)
+    for clarification in pending:
+        clarification.status = ClarificationStatus.CANCELLED.value
+        observe_memory_clarification(status=clarification.status)
+    candidate.unresolved_clarification_count = 0
+    candidate.version += 1
+    _finalize_ready_for_review(db, candidate=candidate, finalized_by=finalized_by)
+    return len(pending)
 
 
 def initialize_candidate(
@@ -924,7 +1032,7 @@ def list_contributions(
     contributions = repository.list_contributions(db, candidate_id=candidate.id)
     if is_demo_owner(actor):
         visible = contributions
-    elif candidate.privacy_scope in INDEXABLE_PRIVACY_SCOPES:
+    elif candidate.privacy_scope in BROAD_VISIBILITY_PRIVACY_SCOPES:
         visible = contributions
     else:
         visible = [item for item in contributions if item.actor_id == actor.actor_id]

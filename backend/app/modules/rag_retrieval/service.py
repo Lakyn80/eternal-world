@@ -5,7 +5,7 @@ from typing import Callable
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
-from app.db.models import User
+from app.db.models import MemoryProfile, User
 from app.modules.active_retrieval_config.service import resolve_runtime_active_retrieval_config
 from app.modules.embedding_models.exceptions import EmbeddingModelNotFoundError
 from app.modules.embedding_models.registry import BGE_M3_DENSE_SPARSE_RETRIEVAL_MODE
@@ -15,12 +15,14 @@ from app.modules.embedding_models.service import (
     is_embedding_model_runtime_available,
 )
 from app.modules.embeddings.providers import build_embedding_provider
-from app.modules.memory_profiles.service import MemoryProfileNotFoundError, get_memory_profile
+from app.modules.memorial_access.capabilities import MemorialCapability, resolve_authorized_profile
+from app.modules.memorial_access.service import MemorialForbiddenError, MemorialNotFoundError
 from app.modules.qdrant_indexing.client import build_qdrant_client
 from app.modules.qdrant_indexing.exceptions import QdrantClientError, QdrantCollectionConfigurationError
 from app.modules.rag_retrieval import repository
 from app.modules.rag_retrieval.exceptions import (
     RagRetrievalDisabledError,
+    RagRetrievalForbiddenError,
     RagRetrievalModelUnavailableError,
     RagRetrievalProfileNotFoundError,
 )
@@ -44,6 +46,37 @@ from app.modules.rag_retrieval.schemas import (
 def _ensure_retrieval_enabled() -> None:
     if not settings.qdrant_indexing_enabled:
         raise RagRetrievalDisabledError("Qdrant retrieval is disabled")
+
+
+#: Payload `privacy_scope` values that must never be surfaced to a member
+#: who is not the memorial's own owning account, even though the point is
+#: correctly scoped to the right `profile_id`/`owner_user_id` (Task 65.6.1).
+#: Retrieval is otherwise indexed and filtered per-memorial, not per-member -
+#: any active member (owner/trusted_reviewer/contributor/viewer) with the
+#: `search_approved_memory`/`chat_with_avatar` capability shares the same
+#: Qdrant collection filter. Owner-only evidence therefore needs this one
+#: additional, narrow check so that promoting `private_owner`-scoped
+#: Biographer/family memories into the shared index (see
+#: `family_memory_enrichment.eligibility.INDEXABLE_PRIVACY_SCOPES`) cannot
+#: leak owner-only content to a different member chatting with the same
+#: avatar. Points without a `privacy_scope` payload key (e.g. the initial
+#: free-text biography ingestion) are unaffected - only an explicit
+#: owner-only marking restricts visibility.
+_OWNER_ONLY_PRIVACY_SCOPES = frozenset({"private_owner"})
+
+
+def _is_owner_only_evidence(payload_metadata: dict[str, object]) -> bool:
+    return payload_metadata.get("privacy_scope") in _OWNER_ONLY_PRIVACY_SCOPES
+
+
+def _is_visible_to_viewer(
+    payload_metadata: dict[str, object],
+    *,
+    viewer_is_profile_owner: bool,
+) -> bool:
+    if viewer_is_profile_owner:
+        return True
+    return not _is_owner_only_evidence(payload_metadata)
 
 
 def _resolve_model(model_code: str | None):
@@ -108,20 +141,33 @@ def _build_search_filter(
     return {"must": must_filters}
 
 
-def _get_owned_profile_or_raise(
+def _resolve_authorized_profile(
     db: Session,
     *,
     current_user: User,
     profile_id: int,
-):
+) -> MemoryProfile:
+    """Resolve `profile_id` for `current_user`, requiring search_approved_memory.
+
+    Every active member may search the memorial's approved/current evidence;
+    a non-member gets a safe 404, a member without the capability gets a
+    403. The returned profile's `user_id` (not `current_user.id`) is the
+    identity under which the memorial's evidence was actually indexed and
+    must be used for all downstream Qdrant/SQL scoping below.
+    """
+
     try:
-        return get_memory_profile(
+        profile, _membership = resolve_authorized_profile(
             db,
             current_user=current_user,
             profile_id=profile_id,
+            capability=MemorialCapability.SEARCH_APPROVED_MEMORY,
         )
-    except MemoryProfileNotFoundError as exc:
+    except MemorialNotFoundError as exc:
         raise RagRetrievalProfileNotFoundError("Memory profile not found") from exc
+    except MemorialForbiddenError as exc:
+        raise RagRetrievalForbiddenError("Insufficient memorial permissions") from exc
+    return profile
 
 
 def _coerce_sparse_vector_payload(payload_metadata: dict[str, object]) -> dict[str, float]:
@@ -173,11 +219,12 @@ def _search_dense_candidates(
 def _retrieve_hybrid_dense_sparse(
     db: Session,
     *,
-    current_user: User,
+    owner_user_id: int,
     profile_id: int,
     payload: RagRetrievalRequest,
     model,
     qdrant_collection: str,
+    viewer_is_profile_owner: bool,
     query_encoder: Callable[[str, str], HybridQueryVectors] | None = None,
 ) -> RagRetrievalResponseRead:
     query_vectors = encode_hybrid_query_vectors(
@@ -195,7 +242,7 @@ def _retrieve_hybrid_dense_sparse(
         qdrant_collection=qdrant_collection,
         query_dense_vector=query_vectors.dense_vector,
         limit=candidate_limit,
-        owner_user_id=current_user.id,
+        owner_user_id=owner_user_id,
         profile_id=profile_id,
         language=payload.language,
         source_type=payload.source_type,
@@ -246,7 +293,7 @@ def _retrieve_hybrid_dense_sparse(
     embedding_ids = [result.embedding_id for result in fused_results]
     evidence_records = repository.list_retrieval_evidence_for_embeddings(
         db,
-        owner_user_id=current_user.id,
+        owner_user_id=owner_user_id,
         profile_id=profile_id,
         embedding_ids=embedding_ids,
     )
@@ -262,6 +309,11 @@ def _retrieve_hybrid_dense_sparse(
         if payload.language is not None and evidence_record.language != payload.language:
             continue
         if payload.source_type is not None and evidence_record.source_type != payload.source_type:
+            continue
+        if not _is_visible_to_viewer(
+            fused_result.payload_metadata,
+            viewer_is_profile_owner=viewer_is_profile_owner,
+        ):
             continue
 
         hydrated_results.append(
@@ -351,7 +403,7 @@ def retrieve_profile_rag_for_collection(
     query_encoder: Callable[[str, str], HybridQueryVectors] | None = None,
 ) -> RagRetrievalResponseRead:
     _ensure_retrieval_enabled()
-    _get_owned_profile_or_raise(
+    profile = _resolve_authorized_profile(
         db,
         current_user=current_user,
         profile_id=profile_id,
@@ -362,17 +414,20 @@ def retrieve_profile_rag_for_collection(
         collection_name=collection_name,
     )
 
+    viewer_is_profile_owner = current_user.id == profile.user_id
+
     if _should_use_hybrid_dense_sparse_path(
         model_code=model.code,
         retrieval_mode=retrieval_mode,
     ):
         return _retrieve_hybrid_dense_sparse(
             db,
-            current_user=current_user,
+            owner_user_id=profile.user_id,
             profile_id=profile_id,
             payload=payload,
             model=model,
             qdrant_collection=qdrant_collection,
+            viewer_is_profile_owner=viewer_is_profile_owner,
             query_encoder=query_encoder,
         )
 
@@ -388,7 +443,7 @@ def retrieve_profile_rag_for_collection(
         qdrant_collection=qdrant_collection,
         query_dense_vector=query_embedding.values,
         limit=payload.limit,
-        owner_user_id=current_user.id,
+        owner_user_id=profile.user_id,
         profile_id=profile_id,
         language=payload.language,
         source_type=payload.source_type,
@@ -435,7 +490,7 @@ def retrieve_profile_rag_for_collection(
 
     evidence_records = repository.list_retrieval_evidence_for_embeddings(
         db,
-        owner_user_id=current_user.id,
+        owner_user_id=profile.user_id,
         profile_id=profile_id,
         embedding_ids=embedding_ids,
     )
@@ -452,6 +507,11 @@ def retrieve_profile_rag_for_collection(
         if payload.language is not None and evidence_record.language != payload.language:
             continue
         if payload.source_type is not None and evidence_record.source_type != payload.source_type:
+            continue
+        if not _is_visible_to_viewer(
+            item["payload_metadata"],
+            viewer_is_profile_owner=viewer_is_profile_owner,
+        ):
             continue
 
         hydrated_results.append(

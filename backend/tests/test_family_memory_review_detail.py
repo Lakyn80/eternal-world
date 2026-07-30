@@ -87,6 +87,23 @@ CONTRIBUTOR = {"actor_id": "family-anna", "actor_role": "contributor", "relation
 OWNER = {"actor_id": "demo-owner-eva", "actor_role": "owner"}
 
 
+class PrefixTranslationProvider:
+    provider_name = "prefix"
+
+    def translate(self, *, source_text: str, source_language: str, target_language: str):
+        from app.modules.content_translation.provider import ContentTranslationProviderResponse
+        from app.modules.content_translation.schemas import ProviderTranslationResult
+
+        return ContentTranslationProviderResponse(
+            result=ProviderTranslationResult(
+                translated_text=f"[{target_language}] {source_text}"
+            ),
+            provider_name=self.provider_name,
+            model="prefix-model",
+            latency_ms=1,
+        )
+
+
 def test_review_summary_shows_contributor_and_hides_promotion_before_approval(client):
     user, profile = _create_scope()
     candidate = _create_enrichment_candidate(owner_user_id=user.id, profile_id=profile.id)
@@ -147,6 +164,52 @@ def test_review_summary_hides_private_candidate_from_unrelated_actor(client):
     )
     assert response.status_code == 200
     assert response.json() == {"items": [], "total": 0}
+
+
+def test_review_queue_and_detail_localize_dynamic_content_for_requested_locale(client, monkeypatch):
+    user, profile = _create_scope()
+    candidate = _create_enrichment_candidate(owner_user_id=user.id, profile_id=profile.id)
+
+    monkeypatch.setattr(
+        "app.modules.content_translation.service.build_content_translation_provider",
+        lambda *, provider_name=None, provider_settings=None: PrefixTranslationProvider(),
+    )
+
+    db = _db()
+    try:
+        initialize_candidate(
+            db,
+            owner_user_id=user.id,
+            candidate_id=candidate.id,
+            actor=DemoFamilyActorContext(
+                actor_id=CONTRIBUTOR["actor_id"],
+                actor_role=CONTRIBUTOR["actor_role"],
+                relationship_to_owner=CONTRIBUTOR["relationship_to_owner"],
+            ),
+            initial_text="Бабушка пела мне колыбельную перед сном.",
+        )
+    finally:
+        db.close()
+
+    summary_response = client.get(
+        "/api/demo/fa-chat/memory-candidates/review-summary",
+        params={"profile_id": profile.id, **OWNER, "locale": "cs"},
+    )
+    assert summary_response.status_code == 200
+    summary_item = summary_response.json()["items"][0]
+    assert summary_item["user_message_excerpt"].startswith("[cs] ")
+
+    detail_response = client.get(
+        f"/api/demo/fa-chat/memory-candidates/{candidate.id}/review-detail",
+        params={"profile_id": profile.id, **OWNER, "locale": "en"},
+    )
+    assert detail_response.status_code == 200
+    detail_body = detail_response.json()
+    assert detail_body["requested_locale"] == "en"
+    assert detail_body["candidate"]["user_message_excerpt"].startswith("[en] ")
+    assert detail_body["candidate"]["proposed_memory_text"].startswith("[en] ")
+    assert detail_body["contributions"][0]["contribution_text"].startswith("[en] ")
+    assert detail_body["clarifications"][0]["question_text"].startswith("[en] ")
 
 
 def test_review_detail_blocks_owner_actions_while_collecting_details(client):

@@ -1,11 +1,11 @@
 FROM node:22-alpine
 
-WORKDIR /app
+WORKDIR /app/react-export
 
-COPY package.json package-lock.json* ./
+COPY react-export/package.json react-export/package-lock.json* ./
 
 RUN npm install
 
-COPY . .
+COPY react-export/ ./
 
-CMD ["npm", "run", "dev", "--", "--hostname", "0.0.0.0", "--port", "3000"]
+CMD ["npm", "run", "dev", "--", "--host", "0.0.0.0", "--port", "3000"]

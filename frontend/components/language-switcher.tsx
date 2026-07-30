@@ -9,6 +9,7 @@ import styles from "./language-switcher.module.css";
 const LOCALE_LABELS: Record<AppLocale, string> = {
   cs: "Čeština",
   ru: "Русский",
+  en: "English",
 };
 
 /**
@@ -31,7 +32,7 @@ export function LanguageSwitcher({
 
   function buildHrefForLocale(locale: AppLocale): string {
     const segments = pathname.split("/").filter(Boolean);
-    if (segments.length > 0 && (segments[0] === "cs" || segments[0] === "ru")) {
+    if (segments.length > 0 && (segments[0] === "cs" || segments[0] === "ru" || segments[0] === "en")) {
       segments[0] = locale;
     } else {
       segments.unshift(locale);
@@ -42,7 +43,7 @@ export function LanguageSwitcher({
 
   return (
     <nav
-      aria-label="Language switcher / Přepínač jazyka"
+      aria-label="Language switcher / Přepínač jazyka / Переключение языка"
       className={variant === "dark" ? `${styles.switcher} ${styles.switcherOnDark}` : styles.switcher}
     >
       {SUPPORTED_LOCALES.map((locale, index) => (

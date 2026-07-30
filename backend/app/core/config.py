@@ -21,7 +21,7 @@ class Settings(BaseSettings):
     environment: str = "local"
     database_url: str = "postgresql+psycopg://eternal_user:eternal_password@db:5432/eternal_world"
     redis_url: str = "redis://redis:6379/0"
-    backend_cors_origins: str = "http://localhost:8017"
+    backend_cors_origins: str = "http://localhost:8017,http://127.0.0.1:8017"
     sqlalchemy_echo: bool = False
     jwt_secret_key: SecretStr = SecretStr("unsafe-dev-jwt-secret-change-me")
     jwt_algorithm: str = "HS256"
@@ -62,6 +62,57 @@ class Settings(BaseSettings):
     celery_result_backend: str | None = "redis://redis:6379/1"
     celery_task_always_eager: bool = False
     celery_task_eager_propagates: bool = True
+    #: Task 65.9 (Part O) - bounded task time limits. The soft limit is
+    #: comfortably above real observed CPU BGE-M3 encode latency for a
+    #: single short memory/biography chunk (seconds, not minutes) while
+    #: still being far below "stuck forever"; the hard limit gives a
+    #: grace window after the soft limit for cleanup before Celery kills
+    #: the child process outright.
+    celery_task_soft_time_limit_seconds: int = Field(default=180, gt=0)
+    celery_task_time_limit_seconds: int = Field(default=240, gt=0)
+    #: Task 65.7 - Redis-backed browser session cookie (in addition to, not
+    #: replacing, the existing bearer JWT). Inactivity-based sliding TTL:
+    #: refreshed on every resolved request, so a browser tab left open and
+    #: actively used never hits a hard expiry (the previous 30-minute JWT
+    #: had no refresh mechanism at all).
+    browser_session_cookie_name: str = "eternal_world_session"
+    browser_session_ttl_seconds: int = Field(default=60 * 60 * 24 * 14, gt=0)
+    browser_session_cookie_secure: bool = Field(default=False)
+    browser_session_cookie_domain: str | None = None
+
+    #: Task 65.9 (Part Q) - async job backpressure. Shared/DB-backed (never
+    #: an in-process counter), so it is correct across any number of API
+    #: replicas. Deliberately generous defaults for a small/dev-scale
+    #: deployment - operators must tune these for their own capacity, never
+    #: interpreted as a proven concurrent-user capacity number.
+    max_active_heavy_jobs_per_user: int = Field(default=10, gt=0)
+    max_active_heavy_jobs_per_profile: int = Field(default=5, gt=0)
+    global_heavy_job_saturation_limit: int = Field(default=1000, gt=0)
+    global_saturation_retry_after_seconds: int = Field(default=30, gt=0)
+
+    #: Task 65.9 (Part P) - a `running`/`recovery_pending` job whose
+    #: heartbeat is older than this is considered stale (worker crashed)
+    #: and becomes eligible for maintenance recovery.
+    job_stale_heartbeat_timeout_seconds: int = Field(default=300, gt=0)
+
+    #: Task 65.9 (Part E/G) - outbox dispatcher batch size per sweep.
+    job_outbox_dispatch_batch_size: int = Field(default=50, gt=0)
+
+    #: Task 65.9 (Part N) - real self-recycle (process exit, relying on the
+    #: container's `restart: unless-stopped` policy) is gated behind this
+    #: flag so it can only ever fire inside a container explicitly
+    #: configured as the dedicated embedding worker - never inside
+    #: FastAPI, the general Celery worker, or a test process.
+    embedding_worker_self_recycle_enabled: bool = Field(default=False)
+
+    #: Task 65.7C (Part E) - a Biographer candidate's oldest pending
+    #: *required* clarification must be at least this old before
+    #: `find_stuck_biographer_candidates`/repair will ever consider it
+    #: "stuck". Without this floor, a candidate the owner is simply in the
+    #: middle of answering right now (a normal, healthy, temporary state)
+    #: would be indistinguishable from a genuinely abandoned one - the
+    #: repair tool must never race a real user filling out the review form.
+    biographer_stuck_clarification_min_age_hours: int = Field(default=24, gt=0)
 
     model_config = SettingsConfigDict(
         env_file=ENV_FILE_CANDIDATES,

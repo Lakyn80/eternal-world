@@ -98,6 +98,11 @@ def test_unauthenticated_send_is_rejected(client):
     token = _register_and_login(client, "chat-unauth-send@example.com")
     profile_id = _create_profile(client, token)
 
+    # Task 65.7C: login (above) sets a Redis-backed browser-session cookie
+    # on this shared TestClient - a real unauthenticated request carries
+    # neither a bearer token nor that cookie, so it must be cleared here to
+    # actually exercise the "no credentials at all" path this test targets.
+    client.cookies.clear()
     response = client.post(
         f"/api/chat/{profile_id}/messages",
         json={"message": "Blocked"},
@@ -111,6 +116,7 @@ def test_unauthenticated_history_request_is_rejected(client):
     token = _register_and_login(client, "chat-unauth-history@example.com")
     profile_id = _create_profile(client, token)
 
+    client.cookies.clear()
     response = client.get(f"/api/chat/{profile_id}/messages")
 
     assert response.status_code == 401

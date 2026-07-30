@@ -1,0 +1,87 @@
+# Task 65.9.1D - Docker build-context hygiene for the `./backend` build
+# context. This context is used by `Dockerfile` (dev), `Dockerfile.prod`,
+# and `Dockerfile.ai-base` (see `docker-compose.yml` / `docker-compose.prod.yml`
+# `build.context: ./backend` and `.github/workflows/deploy-staging.yml`).
+# Every pattern below was checked against the actual COPY/ADD instructions
+# in all three Dockerfiles, against Alembic migrations/health checks, and
+# against the dev bind mount (`./backend:/app` in docker-compose.yml) before
+# being added - nothing required by the build, migrations, health checks,
+# `docker compose exec backend pytest ...`, or application startup is
+# excluded here. Patterns use `**/` where the underlying directory/file can
+# legitimately appear at any depth (e.g. `__pycache__`); patterns are kept
+# bare/rooted where the item only ever exists at the context root, so a
+# same-named real source path elsewhere in `app/` is never shadowed (for
+# example `app/cache/` and `app/modules/media/` are real source modules and
+# must never be matched by the `media/` or a hypothetical `cache/` rule
+# below - verified with an isolated `docker build` reproduction before this
+# file was written).
+
+# --- Git and editor metadata ---
+.git
+.gitignore
+.idea/
+.vscode/
+.fleet/
+.history/
+
+# --- Secrets and local configuration ---
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.crt
+*.p12
+
+# --- Python caches and build output ---
+**/__pycache__/
+**/*.pyc
+**/*.pyo
+**/.pytest_cache/
+**/.mypy_cache/
+**/.ruff_cache/
+**/.tox/
+**/.nox/
+**/.coverage
+**/.coverage.*
+**/htmlcov/
+**/*.egg-info/
+.venv/
+venv/
+
+# --- Runtime data and logs ---
+**/*.log
+media/
+*.sqlite
+*.sqlite3
+*.pid
+
+# --- Generated evaluation/benchmark artifacts (Task 65.9.1D: this
+#     directory is ~110MB, git-tracked for historical record-keeping, and
+#     never read by the running application - only by offline eval scripts
+#     under scripts/ that default to writing here, not reading from here at
+#     build/startup time) ---
+artifacts/
+
+# --- Tests: intentionally retained in this shared ignore file, not
+#     excluded. The dev image (Dockerfile) is bind-mounted over by
+#     `./backend:/app` at runtime (docker-compose.yml), so
+#     `docker compose exec backend pytest tests/...` always sees the host
+#     tree regardless of what got baked into the image at build time -
+#     excluding tests/ here does not remove Dockerized test availability.
+#     tests/ IS still listed below because the *production* image built
+#     from the same context (Dockerfile.prod) never runs pytest and should
+#     not ship a ~6MB test tree it will never execute.
+tests/
+
+# --- Task 65.9.1F.2: Celery Beat runtime-generated schedule database
+#     (backend/celerybeat-schedule, created at runtime by the
+#     maintenance_worker's `celery beat` process - a GNU dbm/ndbm state
+#     file, never read by the build or by application startup). Bare,
+#     context-relative, exact paths only - never a broad pattern.
+celerybeat-schedule
+celerybeat-schedule.*
+
+# --- OS temporary files ---
+.DS_Store
+Thumbs.db

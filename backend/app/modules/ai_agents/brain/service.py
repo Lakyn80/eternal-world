@@ -6,7 +6,7 @@ from app.core.config import settings
 from app.core.metrics import observe_brain_answer_error, observe_brain_answer_success
 from app.modules.ai_agents.brain.output_guard import (
     apply_brain_output_guard,
-    strip_internal_evidence_citations,
+    sanitize_user_visible_answer,
 )
 from app.modules.ai_agents.brain.provider import BrainAgentProvider, build_brain_provider
 from app.modules.ai_agents.brain.prompt_builder import build_brain_prompt_messages
@@ -54,14 +54,19 @@ class BrainAgentService:
             guard_context=request.output_guard_context,
         )
         answer_text = guard_result.answer_text
-        avatar_style_guard_applied = False
-        avatar_style_guard_reason = None
-        if request.avatar_persona is not None:
-            sanitized_answer_text = strip_internal_evidence_citations(answer_text)
-            avatar_style_guard_applied = sanitized_answer_text != answer_text
-            if avatar_style_guard_applied:
-                answer_text = sanitized_answer_text
-                avatar_style_guard_reason = "avatar_internal_citation_removed"
+        # Internal evidence-citation markers ([rag:...]/[memory:...]) must
+        # never reach a real user's screen, on ANY route - not just the demo
+        # persona chat. This used to be gated on `avatar_persona is not
+        # None`, which authenticated `/api/chat` never sets, so citations
+        # leaked into every real user's answer whenever grounded evidence
+        # was cited. Sanitization now always runs; `persona_applied` below
+        # remains a separate, unrelated concept (whether persona styling was
+        # used), unaffected by this fix.
+        citation_result = sanitize_user_visible_answer(answer_text)
+        answer_text = citation_result.answer_text
+        citation_guard_reason = (
+            "avatar_internal_citation_removed" if citation_result.guard_applied else None
+        )
         observe_brain_answer_success(
             provider=settings.ai_brain_provider,
             model=settings.ai_brain_model,
@@ -78,10 +83,11 @@ class BrainAgentService:
                     if request.avatar_persona is not None
                     else None
                 ),
-                "output_guard_applied": guard_result.guard_applied or avatar_style_guard_applied,
-                "output_guard_reason": guard_result.reason or avatar_style_guard_reason,
+                "output_guard_applied": guard_result.guard_applied or citation_result.guard_applied,
+                "output_guard_reason": guard_result.reason or citation_guard_reason,
                 "output_guard_detected_unsupported_terms": list(guard_result.detected_unsupported_terms),
                 "output_guard_lack_of_evidence": guard_result.lack_of_evidence,
+                "removed_internal_citation_count": citation_result.removed_internal_citation_count,
             },
         )
 

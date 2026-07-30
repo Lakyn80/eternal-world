@@ -1,0 +1,97 @@
+:root {
+  --ew-color-page: #0f1117;
+  --ew-color-page-soft: #171a22;
+  --ew-color-surface: rgba(255, 255, 255, 0.055);
+  --ew-color-surface-strong: rgba(255, 255, 255, 0.09);
+  --ew-color-surface-subtle: rgba(255, 255, 255, 0.035);
+  --ew-color-text: #f4f0e8;
+  --ew-color-text-secondary: rgba(244, 240, 232, 0.72);
+  --ew-color-text-muted: rgba(244, 240, 232, 0.52);
+  --ew-color-border: rgba(255, 255, 255, 0.12);
+  --ew-color-border-strong: rgba(255, 255, 255, 0.2);
+  --ew-color-accent: #8fd6f5;
+  --ew-color-accent-hover: #bfe9fa;
+  --ew-color-gold: #e8c37a;
+  --ew-color-success: #8bd18b;
+  --ew-color-warning: #f0c36b;
+  --ew-color-error: #ff9a8c;
+  --ew-color-focus: rgba(143, 214, 245, 0.62);
+  --ew-color-overlay: rgba(4, 6, 10, 0.68);
+
+  --ew-font-sans: var(--font-v2-sans), system-ui, sans-serif;
+  --ew-font-serif: var(--font-v2-serif), Georgia, serif;
+
+  --ew-text-display: clamp(2.55rem, 1.7rem + 2.8vw, 5.5rem);
+  --ew-text-h1: clamp(2.15rem, 1.6rem + 1.8vw, 4rem);
+  --ew-text-h2: clamp(1.75rem, 1.35rem + 1.3vw, 3.1rem);
+  --ew-text-h3: clamp(1.2rem, 1.05rem + 0.45vw, 1.65rem);
+  --ew-text-body-lg: clamp(1rem, 0.95rem + 0.18vw, 1.16rem);
+  --ew-text-body: 1rem;
+  --ew-text-small: 0.875rem;
+  --ew-text-caption: 0.75rem;
+  --ew-text-button: 0.92rem;
+  --ew-text-nav: 0.86rem;
+
+  --ew-page-gutter: clamp(0.875rem, 3vw, 2.5rem);
+  --ew-section-space: clamp(3rem, 7vw, 6.25rem);
+  --ew-card-space: clamp(1rem, 2.1vw, 1.65rem);
+  --ew-stack-sm: 0.65rem;
+  --ew-stack-md: 1rem;
+  --ew-stack-lg: 1.5rem;
+  --ew-stack-xl: 2.25rem;
+
+  --ew-content-max: 86rem;
+  --ew-content-wide: 96rem;
+  --ew-reading-max: 56rem;
+  --ew-panel-safe-max: min(100%, 72rem);
+  --ew-header-height: 4.5rem;
+  --ew-modal-safe-width: min(34rem, calc(100vw - (2 * var(--ew-page-gutter))));
+
+  --ew-radius-sm: 0.5rem;
+  --ew-radius-control: 0.85rem;
+  --ew-radius-card: 1rem;
+  --ew-radius-panel: 1.35rem;
+  --ew-radius-pill: 999px;
+
+  --ew-shadow-card: 0 18px 52px rgba(0, 0, 0, 0.26);
+  --ew-shadow-raised: 0 28px 80px rgba(0, 0, 0, 0.34);
+  --ew-glass-blur: blur(16px);
+  --ew-focus-ring: 0 0 0 3px var(--ew-color-focus);
+}
+
+[data-theme="light"] {
+  --ew-color-page: #f4efe7;
+  --ew-color-page-soft: #e9ded0;
+  --ew-color-surface: rgba(255, 255, 255, 0.78);
+  --ew-color-surface-strong: rgba(255, 255, 255, 0.92);
+  --ew-color-surface-subtle: rgba(255, 255, 255, 0.52);
+  --ew-color-text: #27221e;
+  --ew-color-text-secondary: rgba(39, 34, 30, 0.72);
+  --ew-color-text-muted: rgba(39, 34, 30, 0.5);
+  --ew-color-border: rgba(65, 52, 39, 0.14);
+  --ew-color-border-strong: rgba(65, 52, 39, 0.22);
+  --ew-color-accent: #286d8c;
+  --ew-color-accent-hover: #174f68;
+  --ew-color-gold: #94642a;
+  --ew-color-focus: rgba(40, 109, 140, 0.42);
+  --ew-color-overlay: rgba(27, 23, 18, 0.52);
+  --ew-shadow-card: 0 18px 52px rgba(65, 52, 39, 0.12);
+  --ew-shadow-raised: 0 28px 80px rgba(65, 52, 39, 0.18);
+}
+
+@media (max-width: 480px) {
+  :root {
+    --ew-text-display: clamp(2.3rem, 1.9rem + 1.4vw, 2.75rem);
+    --ew-text-h1: clamp(2rem, 1.7rem + 1vw, 2.5rem);
+    --ew-text-h2: clamp(1.55rem, 1.35rem + 0.7vw, 2rem);
+    --ew-card-space: 1rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+  }
+}

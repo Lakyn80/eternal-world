@@ -1,0 +1,64 @@
+# Task 65.9.1D - Docker build-context hygiene for the `./frontend` build
+# context. This context is used by `Dockerfile` (dev) and `Dockerfile.prod`
+# (see `docker-compose.yml` / `docker-compose.prod.yml`
+# `build.context: ./frontend` and `.github/workflows/deploy-staging.yml`).
+# Both Dockerfiles only ever `COPY react-export/...` - the actual Vite/React
+# app that ships - never anything from the rest of this directory (a
+# leftover Next.js scaffold: app/, components/, hooks/, lib/, styles/,
+# types/, middleware.ts, next.config.mjs, tests/, etc. are real
+# git-tracked source files, not touched here, since this task is
+# build-context hygiene only and rule 7 of this task explicitly forbids
+# guessing a blanket app/-style exclusion; that leftover scaffold is a
+# separate cleanup question, not part of this task).
+#
+# Confirmed defect this file fixes (Task 65.9.1D): the previous bare
+# `node_modules/` rule only matched the top-level scaffold's
+# node_modules/, NOT `react-export/node_modules/` (Docker's .dockerignore
+# matches bare/no-slash patterns only at the context root, unlike
+# .gitignore - verified with an isolated `docker build` reproduction). As a
+# result, every frontend image build shipped the *host's* Windows-built
+# `react-export/node_modules/` (113MB, containing win32-x64 native
+# `@esbuild`/`@rollup` binaries) into the final image via the Dockerfile's
+# `COPY react-export/ ./` step, on top of the image's own correctly
+# `npm install`-ed linux-x64 node_modules. `**/node_modules/` below matches
+# at any depth and removes this.
+
+# --- Git and editor metadata ---
+.git
+.idea/
+.vscode/
+.fleet/
+.history/
+
+# --- Secrets and local configuration ---
+.env
+.env.*
+!.env.example
+
+# --- Node caches and build output (recursive: covers both the top-level
+#     scaffold's copies AND react-export/'s copies) ---
+**/node_modules/
+**/.next/
+**/dist/
+**/coverage/
+**/.turbo/
+**/*.tsbuildinfo
+**/playwright-report/
+**/test-results/
+**/.cache/
+
+# --- Runtime data and logs ---
+**/*.log
+*.pid
+
+# --- Tests: intentionally retained, not excluded here as a blanket rule.
+#     `tests/` (bare/rooted) only matches the top-level scaffold's unused
+#     Playwright/E2E directory - react-export's real unit tests are
+#     colocated `*.test.ts(x)` files under `react-export/src/**`, which
+#     this pattern cannot match and which remain fully available to both
+#     the dev bind mount and any future in-container test run. ---
+tests/
+
+# --- OS temporary files ---
+.DS_Store
+Thumbs.db

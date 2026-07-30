@@ -102,6 +102,7 @@ def test_unauthenticated_user_cannot_chunk_source(client):
     source_response = _create_rag_source(client, token, profile_id)
     source_id = source_response.json()["id"]
 
+    client.cookies.clear()
     response = client.post(f"/api/rag-sources/{source_id}/chunk")
 
     assert response.status_code == 401

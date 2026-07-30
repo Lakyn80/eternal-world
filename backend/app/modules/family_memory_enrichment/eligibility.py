@@ -5,9 +5,44 @@ from sqlalchemy.orm import Session
 from app.core.metrics import observe_memory_promotion_blocked
 from app.modules.content_translation import service as content_translation_service
 from app.modules.family_memory_enrichment import repository
+from app.modules.family_memory_enrichment.enums import PrivacyScope
 
 
-INDEXABLE_PRIVACY_SCOPES = frozenset({"all_family", "public_legacy"})
+#: Privacy scopes eligible for promotion into the canonical
+#: avatar-memory/indexing pipeline at all. This gate answers "may this ever
+#: be embedded and written to Qdrant?" - it does NOT answer "who may
+#: retrieve it once indexed?"; that second question is enforced separately,
+#: at retrieval time, by `rag_retrieval.service` filtering
+#: `private_owner`-scoped evidence to the memorial's own owning account
+#: (Task 65.6.1).
+#:
+#: `PRIVATE_OWNER` is included here because an owner-only memory is still a
+#: real, approved, authoritative fact about the memorial that the owner's
+#: own avatar chat must be able to recall - excluding it entirely (as this
+#: set used to do) silently discarded every approved AI-Biographer memory,
+#: which is always created with `privacy_scope=private_owner`
+#: (`avatar_biographer.service`), since Biographer conversations are
+#: inherently 1:1 with the memorial owner. `SELECTED_FAMILY` is
+#: deliberately left out for now - no retrieval-time enforcement exists yet
+#: for the "named subset of family members" scope, and adding it without
+#: that enforcement would be a real privacy regression rather than a fix.
+INDEXABLE_PRIVACY_SCOPES = frozenset(
+    {PrivacyScope.PRIVATE_OWNER.value, "all_family", "public_legacy"}
+)
+
+#: Deliberately UNCHANGED from before Task 65.6.1 and DISTINCT from
+#: `INDEXABLE_PRIVACY_SCOPES` above, even though the two sets used to be
+#: identical. This one answers a different question: "should a non-owner
+#: actor (contributor/trusted_reviewer) be able to view this candidate
+#: record / its full contribution history at all?" -
+#: `family_memory_enrichment.service._can_view_candidate` and
+#: `list_contributions` are the only callers. Broadening
+#: `INDEXABLE_PRIVACY_SCOPES` to include `private_owner` for promotion
+#: eligibility must NOT also broaden who may see a `private_owner`-scoped
+#: candidate's own contribution history - that would be a real visibility
+#: regression, not a fix. Keep these two constants independent even if a
+#: future change makes one of them diverge further.
+BROAD_VISIBILITY_PRIVACY_SCOPES = frozenset({"all_family", "public_legacy"})
 
 #: Only Czech-origin candidates require a current Russian translation before
 #: promotion/indexing - the Russian avatar pipeline remains the canonical

@@ -292,6 +292,7 @@ def test_active_retrieval_config_endpoints_require_authentication(client):
     token = _register_and_login(client, "active-config-auth@example.com")
     profile_id = _create_profile(client, token, "Active Config Auth Profile")
 
+    client.cookies.clear()
     get_response = client.get(
         f"/api/memory-profiles/{profile_id}/active-retrieval-config",
     )

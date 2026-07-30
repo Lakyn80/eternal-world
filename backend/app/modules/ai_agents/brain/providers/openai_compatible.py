@@ -145,6 +145,7 @@ class OpenAICompatibleBrainAgentProvider:
                 "grounding_status": resolve_grounding_status(request),
                 "latency_ms": latency_ms,
                 **self._extract_usage_metadata(data),
+                **self._extract_provider_request_id_metadata(data),
             },
         )
 
@@ -225,16 +226,45 @@ class OpenAICompatibleBrainAgentProvider:
         return self.model
 
     def _extract_usage_metadata(self, data: dict[str, Any]) -> dict[str, Any]:
+        """Task 66.1: retains every numeric usage field DeepSeek actually
+        returns (``prompt_tokens``, ``prompt_cache_hit_tokens``,
+        ``prompt_cache_miss_tokens``, ``completion_tokens``, ``total_tokens``,
+        and the nested ``completion_tokens_details.reasoning_tokens``) rather
+        than only the three OpenAI-shaped fields previously kept - all of
+        these are small non-negative token counts, never prompt/answer text,
+        so retaining the full object here is safe. This is consumed by
+        ``app.modules.provider_usage.usage.normalize_openai_compatible_usage``
+        at the cost-accounting call site."""
+
         usage = data.get("usage")
         if not isinstance(usage, dict):
             return {}
 
-        usage_metadata = {
+        usage_metadata: dict[str, Any] = {
             key: value
-            for key in ("prompt_tokens", "completion_tokens", "total_tokens")
+            for key in (
+                "prompt_tokens",
+                "completion_tokens",
+                "total_tokens",
+                "prompt_cache_hit_tokens",
+                "prompt_cache_miss_tokens",
+            )
             if isinstance((value := usage.get(key)), int)
         }
+        completion_details = usage.get("completion_tokens_details")
+        if isinstance(completion_details, dict) and isinstance(
+            completion_details.get("reasoning_tokens"), int
+        ):
+            usage_metadata["completion_tokens_details"] = {
+                "reasoning_tokens": completion_details["reasoning_tokens"]
+            }
         if not usage_metadata:
             return {}
 
         return {"usage": usage_metadata}
+
+    def _extract_provider_request_id_metadata(self, data: dict[str, Any]) -> dict[str, Any]:
+        provider_request_id = data.get("id")
+        if isinstance(provider_request_id, str) and provider_request_id.strip():
+            return {"provider_request_id": provider_request_id.strip()}
+        return {}

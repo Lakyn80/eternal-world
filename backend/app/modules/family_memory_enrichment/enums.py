@@ -11,6 +11,7 @@ class FamilyMemoryActorRole(str, Enum):
 class MemoryType(str, Enum):
     GENERAL = "general"
     BEDTIME_SONG = "bedtime_song"
+    CHILDHOOD_MEMORY = "childhood_memory"
 
 
 class EnrichmentStatus(str, Enum):

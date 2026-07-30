@@ -438,7 +438,7 @@ def test_grounded_case_refusal_before_any_fact_is_still_over_refusal():
     result = evaluate_avatar_answer(
         case=_case(),
         answer_input=_answer(
-            answer="Деточка, я не помню этого по тем воспоминаниям, которые у меня сейчас есть.",
+            answer="Деточка, К сожалению, я этого не помню.",
         ),
         run_index=1,
     )

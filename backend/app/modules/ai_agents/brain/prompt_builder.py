@@ -3,7 +3,11 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import date
 
-from app.modules.ai_agents.brain.context import BrainMemoryEvidence, BrainRagEvidence
+from app.modules.ai_agents.brain.context import (
+    VERIFIED_EVIDENCE_SOURCE_TYPES,
+    BrainMemoryEvidence,
+    BrainRagEvidence,
+)
 from app.modules.ai_agents.schemas import OrchestratorChatRequest
 from app.modules.avatar_persona.prompt_composer import compose_avatar_persona_prompt
 
@@ -28,7 +32,7 @@ USER_PROMPT_HEADER = "USER — Current turn context"
 # than just the current confirmed fact. v3_1 adds two narrow clarifications
 # for exactly these two observed failure modes; it does not add any new
 # broad prompt content.
-LEARNED_MEMORY_ANSWER_POLICY_VERSION = "learned_memory_answer_policy_v3_1"
+LEARNED_MEMORY_ANSWER_POLICY_VERSION = "learned_memory_answer_policy_v3_2"
 
 
 @dataclass(frozen=True)
@@ -94,7 +98,13 @@ def _build_response_language_directive(response_language: str | None) -> str | N
     )
 
 
-def _build_system_prompt(*, profile, avatar_persona=None, response_language: str | None = None) -> str:
+def _build_system_prompt(
+    *,
+    profile,
+    avatar_persona=None,
+    avatar_persona_section: str | None = None,
+    response_language: str | None = None,
+) -> str:
     profile_name = profile.name
     personality = _format_optional_profile_field(
         profile.personality,
@@ -180,8 +190,10 @@ def _build_system_prompt(*, profile, avatar_persona=None, response_language: str
             "  about the disagreement; otherwise answer with the plain settled fact from other evidence.",
             "",
             "WHEN EVIDENCE IS MISSING",
-            "- If the user asks a factual question and no supporting evidence exists, say clearly that",
-            "  the information is not available in the stored memories/context.",
+            "- If the user asks a factual question and no supporting evidence exists, answer briefly in",
+            "  first person that you do not remember / cannot recall that — as a real person would.",
+            "- Never tell the user about databases, retrieval, RAG, chunks, indexes, system prompts,",
+            '  "stored memories", "uložené vzpomínky", "сохранённые воспоминания", or similar meta language.',
             "- When both B1 and B2 are empty for this turn, do NOT answer factual questions from the",
             "  biography summary or profile fields alone. Use explicit lack-of-evidence wording only.",
             "- Do not substitute alternative biographical facts (birthplace, trips, relationships, dates)",
@@ -204,11 +216,17 @@ def _build_system_prompt(*, profile, avatar_persona=None, response_language: str
             "- Answer in first person, warmly and briefly; use natural lack-of-evidence wording",
             "  in the user's language (Czech, Russian, English, Spanish, French, etc.).",
             "- Czech examples:",
-            '  "Na to bohužel nemám vzpomínku.", "Tam jsem nebyla.", "V uložených vzpomínkách si to nevybavuji."',
+            '  "Na to si bohužel nevzpomínám.", "To si nevybavuju.", "Tam jsem nebyla."',
             "- Russian examples:",
-            '  "К сожалению, я этого не помню.", "В сохранённых воспоминаниях этого нет."',
+            '  "К сожалению, я этого не помню.", "Я этого не помню.", "Мне это не вспоминается."',
             "- English examples:",
-            '  "I don\'t remember that.", "That is not available in the stored memories/context."',
+            '  "I don\'t remember that.", "I\'m afraid I can\'t recall that.", "I wasn\'t there."',
+            "- Spanish examples:",
+            '  "No recuerdo eso.", "Me temo que no lo recuerdo.", "No estuve allí."',
+            "- French examples:",
+            '  "Je ne m\'en souviens pas.", "Je ne me rappelle pas cela.", "Je n\'y étais pas."',
+            "- German examples:",
+            '  "Daran erinnere ich mich leider nicht.", "Das kann ich mir nicht merken.", "Da war ich nicht."',
             "- Do not guess, fill gaps, or use world knowledge to invent personal history.",
             "- You may still respond briefly and kindly to non-factual social messages (greeting, thanks)",
             "  without inventing biographical facts.",
@@ -217,8 +235,8 @@ def _build_system_prompt(*, profile, avatar_persona=None, response_language: str
             "- Respond in the same language as the user's current message when the evidence allows.",
             "- If the user writes in English, answer in English for grounded factual replies as well.",
             "- Keep names and places in their original form from evidence when possible.",
-            '- For Czech users, lack-of-evidence phrasing should be natural Czech, e.g.',
-            '  "To v uložených vzpomínkách nemám." or "V dostupných vzpomínkách to nemám."',
+            "- Lack-of-evidence replies must stay natural first-person speech in that language — never",
+            "  mention stored/indexed memories as a system concept.",
             "",
             "CONVERSATION STYLE",
             "- Be concise unless the user asks for detail.",
@@ -241,6 +259,8 @@ def _build_system_prompt(*, profile, avatar_persona=None, response_language: str
                 compose_avatar_persona_prompt(avatar_persona),
             ]
         )
+    if avatar_persona_section:
+        sections.extend(["", avatar_persona_section])
     return "\n".join(sections)
 
 
@@ -275,8 +295,15 @@ _VERIFIED_LEARNED_MEMORY_STATUS = "verified"
 
 
 def _is_verified_learned_memory(evidence_item: BrainRagEvidence) -> bool:
+    """Task 65.10: recognizes verified evidence from ANY approved pipeline
+    (conversation_candidate, manual_text/memorial contribution, biography -
+    see `VERIFIED_EVIDENCE_SOURCE_TYPES`), not only conversation_candidate.
+    Without this, an approved memorial contribution or biography fact would
+    be labeled a plain ARCHIVAL DOCUMENT below and lose the "equal authority,
+    do not discount for a lower retrieval score" prompt guidance that a
+    conversation-derived verified memory gets."""
     return (
-        evidence_item.source_document_type == "conversation_candidate"
+        evidence_item.source_document_type in VERIFIED_EVIDENCE_SOURCE_TYPES
         and evidence_item.memory_status == _VERIFIED_LEARNED_MEMORY_STATUS
     )
 
@@ -402,6 +429,7 @@ def build_brain_prompt_messages(request: OrchestratorChatRequest) -> BrainPrompt
     system_prompt = _build_system_prompt(
         profile=profile,
         avatar_persona=request.avatar_persona,
+        avatar_persona_section=request.avatar_persona_section,
         response_language=request.response_language,
     )
     user_prompt = _build_user_prompt(

@@ -3,8 +3,8 @@ import { NextResponse, type NextRequest } from "next/server";
 import { DEFAULT_LOCALE, isAppLocale } from "./lib/i18n/locales";
 
 /**
- * Task 64.5.1 locale routing. Keeps the two supported interface locales
- * (cs/ru) at the very top of every path (`/cs/...`, `/ru/...`) and:
+ * Locale routing. Keeps the supported interface locales (cs/ru/en) at the
+ * very top of every path (`/cs/...`, `/ru/...`, `/en/...`) and:
  *  - redirects legacy bare paths (`/fa-chat`, `/family-memory-review`, `/`)
  *    to their Czech (default) equivalent, so existing bookmarks/links
  *    keep working;

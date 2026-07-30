@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, status
+from sqlalchemy.orm import Session
 
 from app.db.models import User
+from app.db.session import get_db
 from app.modules.auth.dependencies import get_current_user
 from app.modules.auth.schemas import ErrorResponse
 from app.modules.billing.schemas import BillingCurrentPlanRead, BillingLimitsRead, BillingPlanRead
@@ -41,6 +43,7 @@ def get_my_plan_endpoint(
     responses={status.HTTP_401_UNAUTHORIZED: {"model": ErrorResponse}},
 )
 def get_my_limits_endpoint(
+    db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> BillingLimitsRead:
-    return get_current_user_limits(current_user)
+    return get_current_user_limits(db, current_user)

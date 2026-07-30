@@ -1,0 +1,26 @@
+ARG PYTHON_AI_BASE_IMAGE=ghcr.io/lakyn80/python-ai-base-py312:py312-v1
+
+FROM ${PYTHON_AI_BASE_IMAGE}
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PYTHONPATH=/app \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    HF_HOME=/models/huggingface \
+    HUGGINGFACE_HUB_CACHE=/models/huggingface \
+    TRANSFORMERS_CACHE=/models/huggingface \
+    SENTENCE_TRANSFORMERS_HOME=/models/huggingface \
+    SENTENCE_TRANSFORMERS_CACHE_DIR=/models/huggingface
+
+WORKDIR /app
+
+COPY requirements.runtime.txt ./
+
+RUN pip install --no-cache-dir --retries 10 --timeout 300 -r requirements.runtime.txt
+
+COPY . .
+
+RUN mkdir -p /app/media /models/huggingface
+
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]

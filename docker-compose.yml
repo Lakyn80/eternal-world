@@ -41,7 +41,7 @@ services:
       REDIS_URL: redis://redis:6379/0
       APP_NAME: Eternal World API
       ENVIRONMENT: local
-      BACKEND_CORS_ORIGINS: http://localhost:8017
+      BACKEND_CORS_ORIGINS: http://localhost:8017,http://127.0.0.1:8017
       AI_BRAIN_PROVIDER: openai_compatible
       AI_BRAIN_MODEL: ${AI_BRAIN_MODEL}
       AI_BRAIN_BASE_URL: ${AI_BRAIN_BASE_URL}
@@ -55,6 +55,24 @@ services:
       EMBEDDING_PROVIDER: sentence_transformers
       SENTENCE_TRANSFORMERS_DEVICE: cpu
       SENTENCE_TRANSFORMERS_CACHE_DIR: /models/huggingface
+      # Task 65.11.1 - Redis embedding cache activation. Complementary to,
+      # never a replacement for, the batched Biographer topic query
+      # (`avatar_biographer/context_package.py`): batching fixes the COLD
+      # request (one model invocation instead of 16), the cache fixes the
+      # REPEATED request (zero model invocations for already-seen query
+      # texts). The AI Biographer's next-question retrieval and the avatar
+      # chat retrieval both run real query embeddings in this process, so
+      # this is a service that can legitimately execute real embedding work.
+      # The cache key (see `embeddings/embedding_cache.py::build_cache_key`)
+      # already isolates by provider code, provider model name, model
+      # snapshot revision, dense/sparse mode, input type (query vs passage),
+      # vector dimension and a normalized SHA-256 text hash - raw query or
+      # biography text is never part of a Redis key and never logged.
+      # A finite TTL is mandatory: TTL 0 would create non-expiring entries.
+      EMBEDDING_CACHE_ENABLED: "true"
+      EMBEDDING_CACHE_PROVIDER: redis
+      EMBEDDING_CACHE_TTL_SECONDS: "604800"
+      EMBEDDING_CACHE_KEY_PREFIX: eternal_world
       CUDA_VISIBLE_DEVICES: ""
       NVIDIA_VISIBLE_DEVICES: void
       MEDIA_STORAGE_PROVIDER: local
@@ -80,22 +98,56 @@ services:
       - ./packages/rag-embedding-benchmark:/packages/rag-embedding-benchmark
       - eternal_world_bge_m3_cache:/models/huggingface
 
+  # Task 65.9.1 (Part D) - the general-purpose worker. Explicitly restricted
+  # to the non-embedding, non-maintenance queues that currently have real
+  # tasks routed to them (see app/worker/celery_app.py task_routes -
+  # document_processing/ai_generation/media/notifications have no real
+  # tasks registered yet, but are declared here ahead of the product
+  # features that will use them, exactly like the queue declarations
+  # themselves). This worker must NEVER consume `embedding` (dedicated to
+  # embedding_worker, Part D.1) or `maintenance` (dedicated to
+  # maintenance_worker, Part D.2) - without an explicit `-Q` flag, Celery
+  # would otherwise subscribe to every queue named in `task_queues`,
+  # including both of those.
   celery_worker:
     build:
       context: ./backend
       dockerfile: Dockerfile
     container_name: eternal_world_celery_worker
     restart: unless-stopped
-    command: celery -A app.worker.celery_app.celery_app worker --loglevel=info
+    command: >
+      celery -A app.worker.celery_app.celery_app worker
+      -Q document_processing,ai_generation,media,notifications
+      --loglevel=info
+      -n celery_worker@%h
     environment:
       DATABASE_URL: postgresql+psycopg://eternal_user:eternal_password@db:5432/eternal_world
       REDIS_URL: redis://redis:6379/0
       APP_NAME: Eternal World API
       ENVIRONMENT: local
-      BACKEND_CORS_ORIGINS: http://localhost:8017
+      BACKEND_CORS_ORIGINS: http://localhost:8017,http://127.0.0.1:8017
       AI_BRAIN_PROVIDER: mock
       AI_BRAIN_TIMEOUT_SECONDS: 30
       CONTENT_TRANSLATION_PROVIDER: mock
+      EMBEDDING_PROVIDER: sentence_transformers
+      SENTENCE_TRANSFORMERS_DEVICE: cpu
+      SENTENCE_TRANSFORMERS_CACHE_DIR: /models/huggingface
+      # Task 65.11.1 - no embedding-queue task is routed to this worker
+      # today (see `celery_app.task_routes`: every embedding-heavy task goes
+      # to `embedding`, consumed only by `embedding_worker`), but this
+      # container is nevertheless configured with the REAL
+      # `sentence_transformers` embedding provider, so any future task
+      # routed to one of its queues would perform real embedding work. The
+      # cache is therefore enabled here too, for the same reasons and with
+      # the same isolation guarantees as `backend` above. This is
+      # deliberately NOT done for `maintenance_worker`, which is pinned to
+      # `EMBEDDING_PROVIDER: mock` and must never load a real provider.
+      EMBEDDING_CACHE_ENABLED: "true"
+      EMBEDDING_CACHE_PROVIDER: redis
+      EMBEDDING_CACHE_TTL_SECONDS: "604800"
+      EMBEDDING_CACHE_KEY_PREFIX: eternal_world
+      CUDA_VISIBLE_DEVICES: ""
+      NVIDIA_VISIBLE_DEVICES: void
       MEDIA_STORAGE_PROVIDER: local
       MEDIA_ROOT: /app/media
       MEDIA_PUBLIC_BASE_URL: /media
@@ -113,6 +165,116 @@ services:
       - redis
     volumes:
       - ./backend:/app
+      - eternal_world_bge_m3_cache:/models/huggingface
+
+  # Task 65.9 (Part H/N/AC) - dedicated embedding worker. The ONLY process
+  # in this stack that should ever load the real BGE-M3 provider for
+  # indexing work (never FastAPI, never the general celery_worker for new
+  # embedding-heavy tasks - see queue routing in app/worker/celery_app.py).
+  # concurrency=1 + prefetch-multiplier=1: exactly one embedding job in
+  # flight per process, so throughput is scaled by adding replicas
+  # (`docker compose up -d --scale embedding_worker=N`), never by
+  # oversubscribing one Python process against one loaded model object.
+  # No published port. `restart: unless-stopped` is the only recovery
+  # mechanism this container relies on if bounded self-healing (Part M/N)
+  # ever exhausts its in-process retries and exits deliberately.
+  embedding_worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: eternal_world_embedding_worker
+    restart: unless-stopped
+    command: >
+      celery -A app.worker.celery_app.celery_app worker
+      -Q embedding
+      --concurrency=1
+      --prefetch-multiplier=1
+      --loglevel=info
+      -n embedding_worker@%h
+    environment:
+      DATABASE_URL: postgresql+psycopg://eternal_user:eternal_password@db:5432/eternal_world
+      REDIS_URL: redis://redis:6379/0
+      APP_NAME: Eternal World API
+      ENVIRONMENT: local
+      BACKEND_CORS_ORIGINS: http://localhost:8017,http://127.0.0.1:8017
+      AI_BRAIN_PROVIDER: mock
+      AI_BRAIN_TIMEOUT_SECONDS: 30
+      CONTENT_TRANSLATION_PROVIDER: mock
+      EMBEDDING_PROVIDER: sentence_transformers
+      SENTENCE_TRANSFORMERS_DEVICE: cpu
+      SENTENCE_TRANSFORMERS_CACHE_DIR: /models/huggingface
+      # Task 65.11.1 - this is the one container that always performs real
+      # BGE-M3 ingestion embeddings, so the Redis cache matters most here:
+      # re-indexing an unchanged chunk becomes a cache hit instead of a
+      # repeated CPU model invocation. Same isolation guarantees and same
+      # finite TTL as `backend`.
+      EMBEDDING_CACHE_ENABLED: "true"
+      EMBEDDING_CACHE_PROVIDER: redis
+      EMBEDDING_CACHE_TTL_SECONDS: "604800"
+      EMBEDDING_CACHE_KEY_PREFIX: eternal_world
+      CUDA_VISIBLE_DEVICES: ""
+      NVIDIA_VISIBLE_DEVICES: void
+      MEDIA_STORAGE_PROVIDER: local
+      MEDIA_ROOT: /app/media
+      MEDIA_PUBLIC_BASE_URL: /media
+      MEDIA_MAX_FILE_SIZE_BYTES: 20971520
+      QDRANT_URL: http://qdrant:6333
+      QDRANT_COLLECTION_NAME: eternal_world_rag_chunks
+      QDRANT_TIMEOUT_SECONDS: 10
+      QDRANT_INDEXING_ENABLED: "true"
+      CELERY_BROKER_URL: redis://redis:6379/1
+      CELERY_RESULT_BACKEND: redis://redis:6379/1
+      CELERY_TASK_ALWAYS_EAGER: "false"
+      CELERY_TASK_EAGER_PROPAGATES: "false"
+      #: Safe here only: this is the one container type allowed to exit
+      #: itself on exhausted provider self-healing (Part M/N), relying on
+      #: `restart: unless-stopped` above to recreate it.
+      EMBEDDING_WORKER_SELF_RECYCLE_ENABLED: "true"
+    depends_on:
+      - db
+      - redis
+    volumes:
+      - ./backend:/app
+      - eternal_world_bge_m3_cache:/models/huggingface
+
+  # Task 65.9 (Part E/P/AC) - lightweight maintenance worker: outbox
+  # dispatch + stale-job recovery only (embedded beat via `-B`). Never
+  # loads an embedding provider, never handles user-facing product work.
+  maintenance_worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: eternal_world_maintenance_worker
+    restart: unless-stopped
+    command: >
+      celery -A app.worker.celery_app.celery_app worker
+      -Q maintenance
+      --concurrency=1
+      --loglevel=info
+      -B
+      -n maintenance_worker@%h
+    environment:
+      DATABASE_URL: postgresql+psycopg://eternal_user:eternal_password@db:5432/eternal_world
+      REDIS_URL: redis://redis:6379/0
+      APP_NAME: Eternal World API
+      ENVIRONMENT: local
+      BACKEND_CORS_ORIGINS: http://localhost:8017,http://127.0.0.1:8017
+      AI_BRAIN_PROVIDER: mock
+      CONTENT_TRANSLATION_PROVIDER: mock
+      EMBEDDING_PROVIDER: mock
+      QDRANT_URL: http://qdrant:6333
+      QDRANT_COLLECTION_NAME: eternal_world_rag_chunks
+      CELERY_BROKER_URL: redis://redis:6379/1
+      CELERY_RESULT_BACKEND: redis://redis:6379/1
+      CELERY_TASK_ALWAYS_EAGER: "false"
+      CELERY_TASK_EAGER_PROPAGATES: "false"
+      JOB_OUTBOX_DISPATCH_BATCH_SIZE: "50"
+      JOB_STALE_HEARTBEAT_TIMEOUT_SECONDS: "300"
+    depends_on:
+      - db
+      - redis
+    volumes:
+      - ./backend:/app
 
   frontend:
     build:
@@ -121,14 +283,14 @@ services:
     container_name: eternal_world_frontend
     restart: unless-stopped
     environment:
-      NEXT_PUBLIC_API_URL: http://localhost:8033
+      VITE_API_URL: http://localhost:8033
     ports:
       - "8017:3000"
     depends_on:
       - backend
     volumes:
       - ./frontend:/app
-      - /app/node_modules
+      - /app/react-export/node_modules
 
   prometheus:
     image: prom/prometheus:v2.54.1

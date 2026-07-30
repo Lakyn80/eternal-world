@@ -87,6 +87,7 @@ def test_unauthenticated_user_cannot_create_rag_source(client):
     token = _register_and_login(client, "rag-unauth@example.com")
     profile_id = _create_profile(client, token, "Protected RAG Profile")
 
+    client.cookies.clear()
     response = client.post(
         f"/api/memory-profiles/{profile_id}/rag-sources",
         json={"title": "Blocked", "raw_text": "Blocked text", "source_type": "manual_text"},

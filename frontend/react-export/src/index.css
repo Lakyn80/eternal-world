@@ -1,0 +1,10 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html { scroll-behavior: smooth; }
+body { -webkit-font-smoothing: antialiased; overflow-x: hidden; }
+::selection { background: rgba(127, 216, 247, 0.3); }
+a { color: #7fd8f7; text-decoration: none; }
+a:hover { color: #b7e8fa; }
+input[type='range'] { accent-color: #7fd8f7; }

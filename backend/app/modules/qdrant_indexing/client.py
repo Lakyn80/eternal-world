@@ -273,6 +273,68 @@ class QdrantRestClient:
 
         return normalized_results
 
+    def search_points_batch(
+        self,
+        *,
+        collection_name: str,
+        searches: list[dict[str, object]],
+    ) -> list[list[dict[str, object]]]:
+        """Task 65.11.1 - one HTTP round trip for N independent vector
+        searches against the same collection (Qdrant's native
+        `POST /collections/{name}/points/search/batch`).
+
+        Deliberately a thin, order-preserving wrapper: `searches[i]` maps to
+        `result[i]`, and each entry uses exactly the same body keys as
+        `search_points` above, so callers cannot accidentally express a
+        different filter/limit semantics in the batch path than in the
+        single-search path. Returns one (possibly empty) result list per
+        requested search - never a flattened list - so a caller can never
+        mis-attribute another query's evidence to its own query.
+        """
+
+        if not searches:
+            return []
+
+        request_body: dict[str, object] = {
+            "searches": [
+                {
+                    key: value
+                    for key, value in search.items()
+                    if value is not None
+                }
+                for search in searches
+            ]
+        }
+
+        response = self._request(
+            "POST",
+            f"/collections/{collection_name}/points/search/batch",
+            json=request_body,
+        )
+
+        if response.status_code == 404:
+            return [[] for _ in searches]
+
+        if response.is_error:
+            raise QdrantClientError("Qdrant batch point search failed")
+
+        response_payload = response.json()
+        result = response_payload.get("result")
+        if not isinstance(result, list):
+            return [[] for _ in searches]
+
+        normalized_batches: list[list[dict[str, object]]] = []
+        for batch_item in result:
+            if not isinstance(batch_item, list):
+                normalized_batches.append([])
+                continue
+            normalized_batches.append([point for point in batch_item if isinstance(point, dict)])
+
+        if len(normalized_batches) != len(searches):
+            raise QdrantClientError("Qdrant batch point search returned a mismatched result count")
+
+        return normalized_batches
+
 
 def build_qdrant_client() -> QdrantRestClient:
     return QdrantRestClient(

@@ -43,14 +43,26 @@ const FALLBACK_MESSAGES: Record<AppLocale, Record<number, string>> = {
     500: "Dočasná chyba služby. Zkuste to prosím za chvíli znovu.",
     503: "Služba indexace je momentálně nedostupná. Zkuste to prosím později.",
   },
+  en: {
+    400: "The request is invalid. Check the entered data and try again.",
+    401: "This action is not available for the current participant.",
+    403: "This action is not available for the current participant.",
+    404: "The record was not found. It may have been removed or not created yet.",
+    409: "The record state changed on the server. The data will be refreshed.",
+    422: "The submitted data did not pass validation.",
+    500: "Temporary service error. Try again in a moment.",
+    503: "The indexing service is temporarily unavailable. Try again later.",
+  },
 };
 const DEFAULT_FALLBACK_MESSAGE: Record<AppLocale, string> = {
   ru: "Не удалось выполнить действие. Попробуйте ещё раз.",
   cs: "Akci se nepodařilo provést. Zkuste to prosím znovu.",
+  en: "The action could not be completed. Try again.",
 };
 const NETWORK_ERROR_MESSAGE: Record<AppLocale, string> = {
   ru: "Не удалось связаться с сервером. Проверьте подключение.",
   cs: "Nepodařilo se spojit se serverem. Zkontrolujte připojení.",
+  en: "The server could not be reached. Check the connection.",
 };
 
 async function parseErrorDetail(response: Response, locale: AppLocale): Promise<string> {
@@ -99,6 +111,7 @@ export async function fetchMemoryCandidateSummaries(
   if (profileId !== null) {
     params.set("profile_id", String(profileId));
   }
+  params.set("locale", locale);
   const query = params.toString();
   return requestJson<MemoryCandidateSummaryListResponse>(
     buildApiUrl(`/api/demo/fa-chat/memory-candidates/review-summary${query ? `?${query}` : ""}`),
@@ -165,7 +178,7 @@ export async function submitIndexMemoryPromotion(
  * approves or indexes the candidate; safe to call repeatedly. */
 export async function retryMemoryCandidateTranslation(
   candidateId: number,
-  targetLanguage: AppLocale,
+  targetLanguage: "cs" | "ru",
   profileId: number | null,
   actor: ActorContext,
   locale: AppLocale = "ru"

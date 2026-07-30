@@ -1,0 +1,11 @@
+.page {
+  min-height: 100dvh;
+  overflow-x: clip;
+  padding: var(--ew-page-gutter);
+  padding-bottom: max(var(--ew-page-gutter), env(safe-area-inset-bottom));
+  background:
+    radial-gradient(circle at 10% 0%, rgba(232, 195, 122, 0.2), transparent 28rem),
+    linear-gradient(180deg, var(--ew-color-page), var(--ew-color-page-soft));
+  color: var(--ew-color-text);
+  font-family: var(--ew-font-sans);
+}

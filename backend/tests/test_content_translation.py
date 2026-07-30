@@ -25,10 +25,15 @@ from app.modules.content_translation.validators import (
     ContentTranslationValidationError,
     validate_translation_result,
 )
+from app.modules.provider_usage.context import development_test_context
 
 
 def _db():
     return app.state.testing_session_local()
+
+
+def _ctx():
+    return development_test_context(trace_id="test-content-translation")
 
 
 class FakeProvider:
@@ -76,7 +81,7 @@ def _request(*, source_text: str = "Babička mi zpívala písničku.", candidate
 def test_source_text_is_preserved_exactly(client):
     db = _db()
     try:
-        row = translate_content_field(db, _request(), provider=FakeProvider())
+        row = translate_content_field(db, _request(), call_context=_ctx(), provider=FakeProvider())
         assert row.source_text == "Babička mi zpívala písničku."
         assert row.translated_text == "translated"
         assert row.source_text != row.translated_text
@@ -88,7 +93,7 @@ def test_russian_translation_stored_separately_from_source(client):
     db = _db()
     try:
         row = translate_content_field(
-            db, _request(), provider=FakeProvider(translated_text="Бабушка пела мне песню.")
+            db, _request(), call_context=_ctx(), provider=FakeProvider(translated_text="Бабушка пела мне песню.")
         )
         assert row.translation_status == "translated"
         assert row.translated_text == "Бабушка пела мне песню."
@@ -127,6 +132,7 @@ def test_provider_request_failure_leaves_source_intact_and_marks_failed(client):
         row = translate_content_field(
             db,
             _request(),
+            call_context=_ctx(),
             provider=FakeProvider(raise_error=ContentTranslationProviderRequestError("network down")),
         )
         assert row.translation_status == "failed"
@@ -139,7 +145,7 @@ def test_retry_is_safe_and_idempotent_in_effect(client):
     db = _db()
     try:
         provider = FakeProvider(translated_text="Бабушка пела мне песню.")
-        first = translate_content_field(db, _request(), provider=provider)
+        first = translate_content_field(db, _request(), call_context=_ctx(), provider=provider)
         second = retry_translation(
             db,
             entity_type="memory_candidate",
@@ -149,6 +155,7 @@ def test_retry_is_safe_and_idempotent_in_effect(client):
             target_language="ru",
             source_text="Babička mi zpívala písničku.",
             candidate_id=1,
+            call_context=_ctx(),
             provider=provider,
         )
         assert first.id == second.id
@@ -162,11 +169,15 @@ def test_source_edit_marks_translation_stale_and_retranslates(client):
     db = _db()
     try:
         provider = FakeProvider(translated_text="Бабушка пела мне песню.")
-        first = translate_content_field(db, _request(source_text="Původní text."), provider=provider)
+        first = translate_content_field(
+            db, _request(source_text="Původní text."), call_context=_ctx(), provider=provider
+        )
         assert first.translation_version == 1
 
         provider_v2 = FakeProvider(translated_text="Бабушка часто пела мне песню.")
-        second = translate_content_field(db, _request(source_text="Upravený text."), provider=provider_v2)
+        second = translate_content_field(
+            db, _request(source_text="Upravený text."), call_context=_ctx(), provider=provider_v2
+        )
         assert second.id == first.id
         assert second.translation_version == 2
         assert second.source_text == "Upravený text."
@@ -181,7 +192,7 @@ def test_no_automatic_approval_or_indexing_side_effects(client):
     it only ever writes to memory_content_translations."""
     db = _db()
     try:
-        translate_content_field(db, _request(), provider=FakeProvider())
+        translate_content_field(db, _request(), call_context=_ctx(), provider=FakeProvider())
         # No candidate row exists at all in this test (translation service
         # does not require one to exist), proving it never reaches into
         # ConversationMemoryCandidate/AvatarMemoryPromotion state.
@@ -195,7 +206,10 @@ def test_is_translation_current_detects_hash_mismatch(client):
     db = _db()
     try:
         row = translate_content_field(
-            db, _request(source_text="Text A."), provider=FakeProvider(translated_text="Text A RU.")
+            db,
+            _request(source_text="Text A."),
+            call_context=_ctx(),
+            provider=FakeProvider(translated_text="Text A RU."),
         )
         assert is_translation_current(row, current_source_text="Text A.") is True
         assert is_translation_current(row, current_source_text="Text B.") is False
@@ -229,6 +243,7 @@ def test_resolve_required_translation_block_reason_paths(client):
                 target_language="ru",
                 source_text="Text.",
             ),
+            call_context=_ctx(),
             provider=FakeProvider(translated_text="Текст."),
         )
         assert (
@@ -267,6 +282,7 @@ def test_resolve_required_translation_block_reason_paths(client):
                 target_language="ru",
                 source_text="Text changed.",
             ),
+            call_context=_ctx(),
             provider=FakeProvider(raise_error=ContentTranslationProviderRequestError("down")),
         )
         assert (
@@ -294,3 +310,28 @@ def test_mock_provider_never_makes_network_calls_and_is_clearly_labeled():
     response = provider.translate(source_text="Ahoj", source_language="cs", target_language="ru")
     assert "mock_provider_not_a_real_translation" in response.result.warnings
     assert response.result.translated_text.startswith("[cs->ru] ")
+
+
+def test_english_language_pair_is_accepted(client):
+    db = _db()
+    try:
+        row = translate_content_field(
+            db,
+            TranslationFieldRequest(
+                candidate_id=7,
+                entity_type="memory_candidate",
+                entity_id="7",
+                field_name="user_message_excerpt",
+                source_language="ru",
+                target_language="en",
+                source_text="Бабушка пела мне песню.",
+            ),
+            call_context=_ctx(),
+            provider=FakeProvider(translated_text="Grandma sang me a song."),
+        )
+        assert row.translation_status == "translated"
+        assert row.source_language == "ru"
+        assert row.target_language == "en"
+        assert row.translated_text == "Grandma sang me a song."
+    finally:
+        db.close()

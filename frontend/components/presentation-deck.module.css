@@ -1,0 +1,333 @@
+.deck {
+  position: relative;
+  display: grid;
+  width: min(calc(100vw - (2 * var(--ew-page-gutter))), var(--ew-content-wide));
+  max-width: 100%;
+  min-width: 0;
+  gap: var(--ew-stack-lg);
+  margin-inline: auto;
+  overflow: clip;
+  border: 1px solid var(--ew-color-border);
+  border-radius: var(--ew-radius-panel);
+  padding: clamp(0.9rem, 2vw, 1.5rem);
+  background:
+    radial-gradient(circle at top left, rgba(232, 195, 122, 0.2), transparent 24rem),
+    linear-gradient(180deg, var(--ew-color-surface-strong), var(--ew-color-surface));
+  color: var(--ew-color-text);
+  box-shadow: var(--ew-shadow-raised);
+}
+
+.deckFullScreen {
+  width: 100%;
+  min-height: 100dvh;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.deckHeader,
+.deckFooter,
+.controls,
+.buttonRow {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--ew-stack-md);
+}
+
+.deckEyebrow,
+.deckBody,
+.slideMeta,
+.slideAccent,
+.usageHint,
+.slideCounter {
+  margin: 0;
+}
+
+.deckEyebrow {
+  color: var(--ew-color-gold);
+  font-size: var(--ew-text-caption);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.deckBody,
+.usageHint,
+.slideAccent,
+.slideCounter {
+  color: var(--ew-color-text-secondary);
+}
+
+.deckBody {
+  max-width: var(--ew-reading-max);
+  line-height: 1.65;
+  overflow-wrap: anywhere;
+}
+
+.deckViewport {
+  position: relative;
+  display: grid;
+  min-width: 0;
+  min-height: min(68dvh, 46rem);
+  align-items: stretch;
+  overflow: clip;
+  border: 1px solid var(--ew-color-border);
+  border-radius: var(--ew-radius-panel);
+  background:
+    radial-gradient(circle at 20% 15%, rgba(255, 234, 186, 0.72), transparent 24%),
+    radial-gradient(circle at 80% 30%, rgba(202, 169, 116, 0.22), transparent 26%),
+    linear-gradient(135deg, rgba(76, 54, 32, 0.98), rgba(46, 31, 19, 0.98));
+  color: #fff6ea;
+  outline: none;
+}
+
+.deckViewport:focus-visible {
+  box-shadow: var(--ew-focus-ring);
+}
+
+.deckBackdrop,
+.deckGlow {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.deckBackdrop {
+  background:
+    linear-gradient(90deg, rgba(255, 255, 255, 0.04) 1px, transparent 1px),
+    linear-gradient(0deg, rgba(255, 255, 255, 0.04) 1px, transparent 1px);
+  background-size: 3rem 3rem;
+  opacity: 0.22;
+}
+
+.deckGlow {
+  background:
+    radial-gradient(circle at 24% 24%, rgba(255, 206, 121, 0.52), transparent 24%),
+    radial-gradient(circle at 76% 72%, rgba(255, 246, 230, 0.12), transparent 22%);
+  animation: pulseGlow 6s ease-in-out infinite;
+}
+
+.slideFrame {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  max-width: min(54rem, 100%);
+  min-width: 0;
+  align-content: center;
+  gap: var(--ew-stack-md);
+  padding: clamp(1.15rem, 5vw, 4rem);
+}
+
+.slideMeta {
+  color: rgba(255, 228, 181, 0.78);
+  font-size: var(--ew-text-caption);
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  overflow-wrap: anywhere;
+}
+
+.slideTitle {
+  margin: 0;
+  color: #fff8ed;
+  font-family: var(--ew-font-serif);
+  font-size: clamp(2rem, 8vw, 4.8rem);
+  font-weight: 500;
+  line-height: 0.98;
+  overflow-wrap: anywhere;
+}
+
+.slideText {
+  max-width: min(42rem, 100%);
+  margin: 0;
+  color: rgba(255, 241, 221, 0.88);
+  font-size: clamp(1rem, 1.7vw, 1.25rem);
+  line-height: 1.75;
+  overflow-wrap: anywhere;
+}
+
+.slideAccent {
+  display: inline-flex;
+  width: fit-content;
+  max-width: 100%;
+  border: 1px solid rgba(255, 219, 151, 0.22);
+  border-radius: var(--ew-radius-pill);
+  padding: 0.62rem 0.9rem;
+  background: rgba(255, 255, 255, 0.06);
+  overflow-wrap: anywhere;
+}
+
+.slideRail {
+  position: absolute;
+  top: 50%;
+  right: clamp(0.7rem, 2vw, 1.4rem);
+  z-index: 2;
+  display: grid;
+  gap: 0.6rem;
+  transform: translateY(-50%);
+}
+
+.railDot {
+  width: 0.85rem;
+  height: 0.85rem;
+  border: 0;
+  border-radius: var(--ew-radius-pill);
+  background: rgba(255, 241, 220, 0.28);
+  cursor: pointer;
+  transition: transform 180ms ease, background 180ms ease;
+}
+
+.railDot:hover,
+.railDot:focus-visible {
+  background: rgba(255, 233, 193, 0.72);
+  transform: scale(1.14);
+}
+
+.railDotActive {
+  background: #ffd38e;
+  box-shadow: 0 0 0 6px rgba(255, 211, 142, 0.12);
+}
+
+.progressTrack {
+  width: 100%;
+  height: 0.45rem;
+  overflow: hidden;
+  border-radius: var(--ew-radius-pill);
+  background: var(--ew-color-surface-subtle);
+}
+
+.progressFill {
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--ew-color-gold), var(--ew-color-accent));
+  transition: width 240ms ease;
+}
+
+.controls {
+  align-items: center;
+}
+
+.usageHint {
+  font-size: var(--ew-text-small);
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.buttonRow {
+  flex-shrink: 0;
+}
+
+.navButton {
+  min-height: 2.75rem;
+  max-width: 100%;
+  border: 1px solid var(--ew-color-border-strong);
+  border-radius: var(--ew-radius-pill);
+  padding: 0.76rem 1.1rem;
+  background: var(--ew-color-surface-strong);
+  color: var(--ew-color-text);
+  cursor: pointer;
+  overflow-wrap: anywhere;
+  text-align: center;
+  transition: transform 180ms ease, border-color 180ms ease, background 180ms ease;
+}
+
+.navButton:hover,
+.navButton:focus-visible {
+  border-color: var(--ew-color-accent);
+  background: var(--ew-color-surface);
+  transform: translateY(-1px);
+}
+
+.visuallyHidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+@keyframes pulseGlow {
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.03);
+    opacity: 0.88;
+  }
+}
+
+@media (max-width: 900px) {
+  .deckHeader,
+  .controls {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .slideRail {
+    position: static;
+    grid-auto-flow: column;
+    justify-content: center;
+    padding: 0 1rem 1rem;
+    transform: none;
+  }
+
+  .deckViewport {
+    min-height: 34rem;
+  }
+}
+
+@media (max-width: 640px) {
+  .deck {
+    width: min(calc(100vw - 1.5rem), var(--ew-content-wide));
+    gap: var(--ew-stack-md);
+    border-radius: var(--ew-radius-card);
+    padding: 0.85rem;
+  }
+
+  .deckFullScreen {
+    width: 100%;
+    border-radius: 0;
+  }
+
+  .deckViewport {
+    min-height: min(72dvh, 32rem);
+    border-radius: var(--ew-radius-card);
+  }
+
+  .slideFrame {
+    padding: 1rem;
+  }
+
+  .buttonRow {
+    display: grid;
+    width: 100%;
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .navButton {
+    width: 100%;
+    padding-inline: 0.75rem;
+  }
+}
+
+@media (max-width: 360px) {
+  .buttonRow {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .deckGlow,
+  .progressFill,
+  .navButton,
+  .railDot {
+    animation: none;
+    transition: none;
+  }
+}

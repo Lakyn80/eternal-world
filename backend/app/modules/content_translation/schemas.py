@@ -88,12 +88,13 @@ class LocalizedTextEntry(BaseModel):
 
 
 class LocalizedContent(BaseModel):
-    """Both language views of a single translatable field."""
+    """Supported-language views of a single translatable field."""
 
     field_name: str
     source_language: str
     cs: LocalizedTextEntry | None = None
     ru: LocalizedTextEntry | None = None
+    en: LocalizedTextEntry | None = None
 
 
 class TranslationRetryResult(BaseModel):

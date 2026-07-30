@@ -34,8 +34,18 @@ class ChatMessageRead(BaseModel):
 class ChatSendResponse(BaseModel):
     message_id: int
     profile_id: int
+    conversation_id: str
     user_message: str
     ai_response_text: str
     audio_url: str | None
     video_url: str | None
     created_at: datetime
+
+
+class ChatActiveRead(BaseModel):
+    """Task 65.7 - the current active conversation's restorable transcript."""
+
+    profile_id: int
+    conversation_id: str
+    messages: list[ChatMessageRead]
+    restored_from: str  # "redis" | "database" | "empty"
