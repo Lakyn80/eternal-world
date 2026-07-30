@@ -17,6 +17,7 @@ from app.modules.avatar_persona.settings_schemas import (
     ALLOWED_VOICE_MODES,
     ALLOWED_VOICE_STYLES,
     DEFAULT_PRIMARY_LANGUAGE,
+    DEFAULT_SUPPORTED_LANGUAGES,
     DEFAULT_VOICE_MODE,
     DEFAULT_VOICE_STYLE,
     MAX_COMMUNICATION_PROFILE_LENGTH,
@@ -64,7 +65,7 @@ def _normalize_languages(raw: object, *, primary: str) -> list[PersonaLanguage]:
     if primary in ALLOWED_PERSONA_LANGUAGES and primary not in seen:
         codes.insert(0, primary)  # type: ignore[arg-type]
     if not codes:
-        codes = [DEFAULT_PRIMARY_LANGUAGE]
+        codes = list(DEFAULT_SUPPORTED_LANGUAGES)
     return codes
 
 
@@ -75,7 +76,7 @@ def default_resolved_persona(*, profile_id: int) -> ResolvedAvatarPersona:
         voice_style=DEFAULT_VOICE_STYLE,
         personality_traits=[],
         primary_language=DEFAULT_PRIMARY_LANGUAGE,
-        supported_languages=[DEFAULT_PRIMARY_LANGUAGE],
+        supported_languages=list(DEFAULT_SUPPORTED_LANGUAGES),
         remembered_age=None,
         communication_profile="",
         configured=False,
@@ -214,8 +215,16 @@ def select_response_language(
     *,
     detected_language: str | None,
     explicit_supported_language: str | None = None,
-) -> str:
-    """Deterministic chat language selection (Part J)."""
+    fallback_to_primary: bool = True,
+) -> str | None:
+    """Deterministic chat language selection (Part J).
+
+    Prefer an explicit supported locale, then a detected language that the
+    persona supports (or any allowlisted chat locale so older rows that only
+    stored ``cs`` do not lock answers into Czech). When nothing matches and
+    ``fallback_to_primary`` is false, return ``None`` so the Brain keeps
+    match-the-user-message behavior instead of forcing primary.
+    """
 
     if (
         explicit_supported_language is not None
@@ -224,7 +233,11 @@ def select_response_language(
         return explicit_supported_language
     if detected_language is not None and detected_language in persona.supported_languages:
         return detected_language
-    return persona.primary_language
+    if detected_language is not None and detected_language in ALLOWED_PERSONA_LANGUAGES:
+        return detected_language
+    if fallback_to_primary:
+        return persona.primary_language
+    return None
 
 
 def settings_to_read(

@@ -65,7 +65,9 @@ def _format_profile_date(value: date | None) -> str:
 
 _RESPONSE_LANGUAGE_NAMES = {
     "cs": "Czech (čeština)",
+    "en": "English",
     "ru": "Russian (русский)",
+    "de": "German (Deutsch)",
 }
 
 

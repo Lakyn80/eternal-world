@@ -51,7 +51,7 @@ def test_owner_gets_safe_defaults_when_persona_unset(client):
     assert body["remembered_age"] is None
     assert body["communication_profile"] == ""
     assert body["primary_language"] == "cs"
-    assert body["supported_languages"] == ["cs"]
+    assert body["supported_languages"] == ["cs", "en", "ru"]
     assert body["original_recording_available"] is False
 
 
@@ -264,7 +264,8 @@ def test_language_selection_and_single_resolve(client):
         second = resolve_avatar_persona(db, profile=profile)
         assert first.model_dump() == second.model_dump()
         assert select_response_language(first, detected_language="en") == "en"
-        assert select_response_language(first, detected_language="de") == "cs"
+        # Allowlisted chat locales answer even when not listed on older personas.
+        assert select_response_language(first, detected_language="de") == "de"
         assert (
             select_response_language(
                 first, detected_language="de", explicit_supported_language="en"

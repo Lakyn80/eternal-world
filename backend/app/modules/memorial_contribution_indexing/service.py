@@ -60,6 +60,7 @@ from app.modules.avatar_memory_indexing.qdrant_writer import (
     DefaultAvatarMemoryQdrantWriter as DefaultMemorialContributionQdrantWriter,
 )
 from app.modules.qdrant_indexing import repository as qdrant_index_repository
+from app.modules.qdrant_indexing.memory_collection import resolve_or_create_collection_dimension
 from app.modules.rag_chunks.validation import estimate_token_count
 
 
@@ -301,7 +302,11 @@ def _build_plan(
         and promotion.target_collection_name != runtime.collection_name
     ):
         raise ContributionIndexingConflictError("Stored target collection does not match active retrieval")
-    collection_dimension = writer.collection_vector_size(collection_name=runtime.collection_name)
+    collection_dimension = resolve_or_create_collection_dimension(
+        writer,
+        collection_name=runtime.collection_name,
+        vector_size=model.dimension,
+    )
     if collection_dimension is None:
         raise ContributionIndexingEligibilityError("Target memory collection does not exist")
     if collection_dimension != model.dimension:

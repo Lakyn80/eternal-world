@@ -458,10 +458,19 @@ export async function listChatMessages(accessToken: string, profileId: number): 
   return requestJson<ChatMessageRead[]>(`/api/chat/${profileId}/messages`, undefined, accessToken);
 }
 
-export async function sendChatMessage(accessToken: string, profileId: number, message: string): Promise<ChatSendResponse> {
+export async function sendChatMessage(
+  accessToken: string,
+  profileId: number,
+  message: string,
+  options?: { locale?: 'cs' | 'en' | 'ru' | 'de' }
+): Promise<ChatSendResponse> {
+  const body: { message: string; locale?: string } = { message };
+  if (options?.locale) {
+    body.locale = options.locale;
+  }
   return requestJson<ChatSendResponse>(
     `/api/chat/${profileId}/messages`,
-    { method: 'POST', body: JSON.stringify({ message }) },
+    { method: 'POST', body: JSON.stringify(body) },
     accessToken
   );
 }

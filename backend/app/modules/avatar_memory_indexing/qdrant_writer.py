@@ -9,6 +9,8 @@ from app.modules.qdrant_indexing.client import QdrantRestClient, build_qdrant_cl
 class AvatarMemoryQdrantWriter(Protocol):
     def collection_vector_size(self, *, collection_name: str) -> int | None: ...
 
+    def ensure_collection(self, *, collection_name: str, vector_size: int) -> None: ...
+
     def get_point(self, *, collection_name: str, point_id: str) -> dict[str, object] | None: ...
 
     def upsert_point(
@@ -33,6 +35,9 @@ class DefaultAvatarMemoryQdrantWriter:
 
     def collection_vector_size(self, *, collection_name: str) -> int | None:
         return self._client.get_collection_vector_size(collection_name=collection_name)
+
+    def ensure_collection(self, *, collection_name: str, vector_size: int) -> None:
+        self._client.ensure_collection(collection_name=collection_name, vector_size=vector_size)
 
     def get_point(self, *, collection_name: str, point_id: str) -> dict[str, object] | None:
         return self._client.get_point(collection_name=collection_name, point_id=point_id)

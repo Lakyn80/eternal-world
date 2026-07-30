@@ -34,13 +34,20 @@ class FakeEncoder:
 
 
 class FakeWriter:
-    def __init__(self) -> None:
+    def __init__(self, *, dimension: int | None = 1024) -> None:
+        self.dimension = dimension
         self.points: dict[tuple[str, str], dict[str, object]] = {}
         self.upsert_calls = 0
         self.delete_calls = 0
+        self.ensure_calls: list[tuple[str, int]] = []
 
     def collection_vector_size(self, *, collection_name: str) -> int | None:
-        return 1024
+        del collection_name
+        return self.dimension
+
+    def ensure_collection(self, *, collection_name: str, vector_size: int) -> None:
+        self.ensure_calls.append((collection_name, vector_size))
+        self.dimension = vector_size
 
     def get_point(self, *, collection_name: str, point_id: str) -> dict[str, object] | None:
         return self.points.get((collection_name, point_id))
@@ -199,6 +206,7 @@ def test_index_biography_direct_call_writes_evidence_and_points(client):
         result = index_biography(db, profile_id=profile_id, writer=writer, encoder=encoder, validate_runtime=False)
         assert result.status == "indexed"
         assert writer.upsert_calls >= 1
+        assert writer.ensure_calls == []
 
         profile = db.get(MemoryProfile, profile_id)
         assert profile.biography_status == "indexed"
@@ -210,6 +218,25 @@ def test_index_biography_direct_call_writes_evidence_and_points(client):
         assert len(chunks) >= 1
         embeddings = db.query(RagEmbedding).filter(RagEmbedding.source_id == sources[0].id).all()
         assert len(embeddings) == len(chunks)
+    finally:
+        db.close()
+
+
+def test_index_biography_creates_missing_qdrant_collection(client):
+    _token, profile_id = _setup_profile_with_biography(
+        client,
+        "bio-owner6b@example.com",
+        "Narodil jsem se v Praze a zil jsem tam cely zivot.",
+    )
+    db = _db()
+    try:
+        writer = FakeWriter(dimension=None)
+        encoder = FakeEncoder()
+        result = index_biography(db, profile_id=profile_id, writer=writer, encoder=encoder, validate_runtime=False)
+        assert result.status == "indexed"
+        assert writer.ensure_calls
+        assert writer.dimension == 1024
+        assert writer.upsert_calls >= 1
     finally:
         db.close()
 

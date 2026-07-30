@@ -8,6 +8,40 @@ Status as of 2026-07-16:
 - All future implementation work must follow its production execution, verification, scope, testing, documentation, git, and final-report rules.
 - `AGENTS.md` was added at the repository root to make this instruction visible as the default Codex project guidance.
 
+## Ops - Multilingual chat response language (2026-07-30)
+
+Goal: stop configured persona settings from forcing Czech answers when the user chats in English or Russian.
+
+### What changed
+
+- Chat detects message language (`cs`/`en`/`ru`/`de`) and selects `response_language` from that (UI locale only as fallback). No longer forces `primary_language` when detection fails.
+- Added `ru` to persona allowlist; default supported languages are `cs,en,ru`.
+- Brain response-language directive now includes English and German names.
+- Frontend persona panel offers Russian; chat sends UI `locale` with messages.
+- Ops script `ensure_persona_chat_languages.py` merges cs/en/ru into existing persona rows; staging deploy runs it.
+
+### Verification
+
+- Focused pytest: `test_chat_response_language.py`, persona defaults, biography/qdrant ensure suite as needed.
+
+## Ops - Auto-ensure active retrieval Qdrant collection (2026-07-30)
+
+Goal: stop biography / avatar-memory / contribution indexing from skipping with `Target memory collection does not exist` on a fresh local or staging Qdrant volume.
+
+### What changed
+
+- Added `backend/app/modules/qdrant_indexing/memory_collection.py` with `resolve_or_create_collection_dimension`.
+- Indexing `_build_plan` paths in biography / avatar-memory / memorial-contribution now create the missing collection (vector size from the active embedding model) instead of failing eligibility.
+- `DefaultAvatarMemoryQdrantWriter.ensure_collection` delegates to the existing Qdrant REST client.
+- Added idempotent ops script `backend/scripts/ensure_active_retrieval_collection.py`.
+- Staging deploy (`.github/workflows/deploy-staging.yml`) runs the script after embedding prefetch and before the family E2E bootstrap.
+- Tests: `backend/tests/test_memory_collection_ensure.py` plus biography create-on-missing coverage.
+
+### Verification
+
+- Focused pytest for memory-collection ensure + biography ingestion create path (local).
+- Local ops: `docker compose exec backend python scripts/ensure_active_retrieval_collection.py`.
+
 ## Task 65.1 - Minimal Account and Memorial Frontend Flow (2026-07-16)
 
 Goal: implement the minimal frontend flow in the new `frontend/react-export` Vite + React + TypeScript frontend on top of the Task 65 backend foundation without changing backend behavior, deploying, committing, or pushing. The flow covers: authenticated owner creates a memorial, owner sees/opens the workspace, owner invites a participant, invited participant accepts the invitation, contributor submits a memory contribution, owner/trusted reviewer sees the review queue, reviewer approves/rejects/archives, and approved current contributions are visibly active-memory eligible.

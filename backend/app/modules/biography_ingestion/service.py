@@ -53,6 +53,7 @@ from app.modules.embeddings.runtime import assert_real_embedding_runtime_for_e2e
 from app.modules.job_tracking.enums import BackgroundJobType
 from app.modules.job_tracking.service import create_job
 from app.modules.qdrant_indexing import repository as qdrant_index_repository
+from app.modules.qdrant_indexing.memory_collection import resolve_or_create_collection_dimension
 from app.modules.rag_chunks.validation import estimate_token_count
 
 
@@ -290,7 +291,11 @@ def _build_plan(db: Session, *, profile: MemoryProfile, writer: AvatarMemoryQdra
     if runtime.model_code != INDEX_MODEL_CODE:
         raise BiographyIngestionEligibilityError("Target profile is not configured for BGE-M3 memory retrieval")
     model = get_embedding_model(runtime.model_code)
-    collection_dimension = writer.collection_vector_size(collection_name=runtime.collection_name)
+    collection_dimension = resolve_or_create_collection_dimension(
+        writer,
+        collection_name=runtime.collection_name,
+        vector_size=model.dimension,
+    )
     if collection_dimension is None:
         raise BiographyIngestionEligibilityError("Target memory collection does not exist")
     if collection_dimension != model.dimension:

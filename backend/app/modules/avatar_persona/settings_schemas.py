@@ -16,14 +16,17 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 VoiceMode = Literal["original_recording", "warm_older", "younger_self"]
 VoiceStyle = Literal["warm", "calm", "older", "energetic"]
 PersonalityTrait = Literal["gentle", "funny", "thoughtful"]
-PersonaLanguage = Literal["cs", "en", "de"]
+PersonaLanguage = Literal["cs", "en", "ru", "de"]
 
 ALLOWED_VOICE_MODES: frozenset[str] = frozenset(
     {"original_recording", "warm_older", "younger_self"}
 )
 ALLOWED_VOICE_STYLES: frozenset[str] = frozenset({"warm", "calm", "older", "energetic"})
 ALLOWED_PERSONALITY_TRAITS: frozenset[str] = frozenset({"gentle", "funny", "thoughtful"})
-ALLOWED_PERSONA_LANGUAGES: frozenset[str] = frozenset({"cs", "en", "de"})
+ALLOWED_PERSONA_LANGUAGES: frozenset[str] = frozenset({"cs", "en", "ru", "de"})
+# Production chat locales offered by default so multilingual memorial chat
+# works without forcing Czech when the owner never customized languages.
+DEFAULT_SUPPORTED_LANGUAGES: tuple[PersonaLanguage, ...] = ("cs", "en", "ru")
 
 MAX_PERSONALITY_TRAITS = 8
 MAX_SUPPORTED_LANGUAGES = 8

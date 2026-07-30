@@ -10,7 +10,7 @@ import type {
 
 const MAX_COMMUNICATION = 4000;
 const TRAITS: AvatarPersonalityTrait[] = ['gentle', 'funny', 'thoughtful'];
-const LANGS: AvatarPersonaLanguage[] = ['cs', 'en', 'de'];
+const LANGS: AvatarPersonaLanguage[] = ['cs', 'en', 'ru', 'de'];
 const VOICE_MODES: AvatarVoiceMode[] = ['original_recording', 'warm_older', 'younger_self'];
 
 type PersonaCopy = {
@@ -35,6 +35,7 @@ type PersonaCopy = {
   voiceYounger: string;
   langCs: string;
   langEn: string;
+  langRu: string;
   langDe: string;
   primaryLanguage: string;
 };
@@ -162,7 +163,7 @@ export default function AvatarPersonaPanel({
   const voiceLabel = (mode: AvatarVoiceMode) =>
     mode === 'original_recording' ? t.voiceOriginal : mode === 'younger_self' ? t.voiceYounger : t.voiceWarmOlder;
   const langLabel = (code: AvatarPersonaLanguage) =>
-    code === 'cs' ? t.langCs : code === 'en' ? t.langEn : t.langDe;
+    code === 'cs' ? t.langCs : code === 'en' ? t.langEn : code === 'ru' ? t.langRu : t.langDe;
 
   return (
     <form className="mt-8 grid min-w-0 gap-5 rounded-[28px] border border-white/10 bg-black/20 p-4 sm:p-5" onSubmit={onSave}>

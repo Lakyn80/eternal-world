@@ -62,8 +62,9 @@ What the workflow does:
 6. Starts `db`, `redis`, and `qdrant`.
 7. Runs Alembic migrations.
 8. Prefetches the BGE-M3 model into the shared Hugging Face cache.
-9. Seeds the RU E2E demo profile with `python scripts/bootstrap_family_avatar_ru_e2e.py`.
-10. Starts `backend`, `celery_worker`, and `frontend`.
+9. Ensures the active retrieval Qdrant collection exists (`python scripts/ensure_active_retrieval_collection.py`).
+10. Seeds the RU E2E demo profile with `python scripts/bootstrap_family_avatar_ru_e2e.py`.
+11. Starts `backend`, `celery_worker`, and `frontend`.
 
 Manual server-side verification after deploy:
 

@@ -1,8 +1,11 @@
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel, Field, field_validator
+
+ChatLocale = Literal["cs", "en", "ru", "de"]
 
 
 def normalize_message_text(value: str) -> str:
@@ -16,6 +19,8 @@ def normalize_message_text(value: str) -> str:
 
 class ChatMessageCreate(BaseModel):
     message: str = Field(max_length=4000)
+    #: Optional UI locale hint used only when message-language detection fails.
+    locale: ChatLocale | None = None
 
     @field_validator("message")
     @classmethod

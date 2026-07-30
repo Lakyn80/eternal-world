@@ -17,6 +17,7 @@ from app.modules.avatar_persona.memory_query_intent import (
     MemoryQueryIntent,
     classify_memory_query_intent,
 )
+from app.modules.avatar_persona.language_detection import detect_message_language
 from app.modules.avatar_persona.settings_service import (
     build_avatar_persona_section,
     resolve_avatar_persona,
@@ -270,17 +271,19 @@ def send_chat_message(
     persona_section = (
         build_avatar_persona_section(resolved_persona) if resolved_persona.configured else None
     )
-    # Preserve pre-65.12 language behavior when persona settings were never saved:
-    # ``response_language=None`` keeps "match the user message" instructions.
-    response_language = (
-        select_response_language(
+    # When persona settings exist, prefer the user's message language (then UI
+    # locale). Never force primary_language when detection fails — that locked
+    # multilingual chat into Czech. Unconfigured personas keep match-user behavior.
+    response_language = None
+    if resolved_persona.configured:
+        detected_language = detect_message_language(payload.message)
+        ui_locale = payload.locale
+        response_language = select_response_language(
             resolved_persona,
-            detected_language=None,
-            explicit_supported_language=None,
+            detected_language=detected_language,
+            explicit_supported_language=ui_locale if detected_language is None else None,
+            fallback_to_primary=False,
         )
-        if resolved_persona.configured
-        else None
-    )
     ai_call_context = AiCallContext(
         feature=AiFeature.BRAIN_CHAT_RESPONSE,
         execution_source=ExecutionSource.FASTAPI,

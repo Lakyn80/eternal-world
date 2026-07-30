@@ -47,15 +47,21 @@ class FakeEncoder:
 
 
 class FakeWriter:
-    def __init__(self, *, fail_upsert: bool = False, dimension: int = 1024) -> None:
+    def __init__(self, *, fail_upsert: bool = False, dimension: int | None = 1024) -> None:
         self.fail_upsert = fail_upsert
         self.dimension = dimension
         self.points: dict[tuple[str, str], dict[str, object]] = {}
         self.upsert_calls = 0
         self.delete_calls = 0
+        self.ensure_calls: list[tuple[str, int]] = []
 
     def collection_vector_size(self, *, collection_name: str) -> int | None:
+        del collection_name
         return self.dimension
+
+    def ensure_collection(self, *, collection_name: str, vector_size: int) -> None:
+        self.ensure_calls.append((collection_name, vector_size))
+        self.dimension = vector_size
 
     def get_point(self, *, collection_name: str, point_id: str) -> dict[str, object] | None:
         return self.points.get((collection_name, point_id))

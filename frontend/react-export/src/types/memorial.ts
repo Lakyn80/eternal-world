@@ -76,7 +76,7 @@ export type WorkspaceTab = 'overview' | 'biography' | 'persona' | 'biographer' |
 export type AvatarVoiceMode = 'original_recording' | 'warm_older' | 'younger_self';
 export type AvatarVoiceStyle = 'warm' | 'calm' | 'older' | 'energetic';
 export type AvatarPersonalityTrait = 'gentle' | 'funny' | 'thoughtful';
-export type AvatarPersonaLanguage = 'cs' | 'en' | 'de';
+export type AvatarPersonaLanguage = 'cs' | 'en' | 'ru' | 'de';
 
 export type AvatarPersonaSettingsRead = {
   profile_id: number;

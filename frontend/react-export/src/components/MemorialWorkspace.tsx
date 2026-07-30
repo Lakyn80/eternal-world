@@ -343,6 +343,7 @@ export type Copy = {
   voiceYounger: string;
   langCs: string;
   langEn: string;
+  langRu: string;
   langDe: string;
   primaryLanguage: string;
   clearBiographyConfirmTitle: string;
@@ -628,6 +629,7 @@ export const COPY: Record<Lang, Copy> = {
     voiceYounger: 'Younger self',
     langCs: 'Czech',
     langEn: 'English',
+    langRu: 'Russian',
     langDe: 'German',
     primaryLanguage: 'Primary language',
     clearBiographyConfirmTitle: 'Clear this biography?',
@@ -913,6 +915,7 @@ export const COPY: Record<Lang, Copy> = {
     voiceYounger: 'Mladší já',
     langCs: 'Čeština',
     langEn: 'English',
+    langRu: 'Ruština',
     langDe: 'Deutsch',
     primaryLanguage: 'Hlavní jazyk',
     clearBiographyConfirmTitle: 'Vymazat tento životopis?',
@@ -1198,6 +1201,7 @@ export const COPY: Record<Lang, Copy> = {
     voiceYounger: 'Младшее я',
     langCs: 'Чешский',
     langEn: 'English',
+    langRu: 'Русский',
     langDe: 'Deutsch',
     primaryLanguage: 'Основной язык',
     clearBiographyConfirmTitle: 'Очистить эту биографию?',
@@ -1895,7 +1899,7 @@ export default function MemorialWorkspace({ lang }: { lang: Lang }) {
                     />
                   )}
                   {activeTab === 'chat' && (
-                    <ChatPanel email={session.email} profileId={selected.id} t={t} token={session.accessToken} />
+                    <ChatPanel email={session.email} lang={lang} profileId={selected.id} t={t} token={session.accessToken} />
                   )}
                   {activeTab === 'contributions' && (
                     <ContributionsSection
@@ -2536,7 +2540,19 @@ function chatDraftKey({ email, profileId }: { email: string; profileId: number }
   return `${CHAT_DRAFT_STORAGE_PREFIX}:${email}:${profileId}`;
 }
 
-function ChatPanel({ token, profileId, email, t }: { token: string; profileId: number; email: string; t: Copy }) {
+function ChatPanel({
+  token,
+  profileId,
+  email,
+  lang,
+  t
+}: {
+  token: string;
+  profileId: number;
+  email: string;
+  lang: Lang;
+  t: Copy;
+}) {
   const [messages, setMessages] = useState<ChatMessageRead[]>([]);
   const [text, setText] = useState(() => {
     try {
@@ -2605,7 +2621,7 @@ function ChatPanel({ token, profileId, email, t }: { token: string; profileId: n
     setMessages((items) => [...items, optimisticUserMessage]);
     setText('');
     try {
-      const response = await sendChatMessage(token, profileId, trimmed);
+      const response = await sendChatMessage(token, profileId, trimmed, { locale: lang });
       setMessages((items) => [
         ...items.filter((item) => item.id !== optimisticUserMessage.id),
         { id: response.message_id - 1, profile_id: response.profile_id, role: 'user', content: response.user_message, created_at: response.created_at },
