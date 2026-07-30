@@ -3,6 +3,9 @@
 Idempotent. Safe for local Docker and staging deploy so biography /
 avatar-memory / contribution indexing does not skip with
 \"Target memory collection does not exist\" on a fresh Qdrant volume.
+
+Uses the production-recommended collection (no per-user DB lookup) so the
+script can run during deploy bootstrap without a memorial owner context.
 """
 
 from __future__ import annotations
@@ -10,10 +13,8 @@ from __future__ import annotations
 import argparse
 import sys
 
-from app.db.session import SessionLocal
 from app.modules.active_retrieval_config.service import (
     get_production_recommended_active_retrieval_config,
-    resolve_runtime_active_retrieval_config,
 )
 from app.modules.avatar_memory_indexing.qdrant_writer import DefaultAvatarMemoryQdrantWriter
 from app.modules.embedding_models.service import get_embedding_model
@@ -25,35 +26,18 @@ def _emit(message: str) -> None:
 
 
 def _build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(
-        description="Ensure the active retrieval Qdrant collection exists."
+    return argparse.ArgumentParser(
+        description="Ensure the production-recommended retrieval Qdrant collection exists."
     )
-    parser.add_argument(
-        "--use-production-recommendation",
-        action="store_true",
-        help="Skip DB lookup and ensure the hardcoded production collection only.",
-    )
-    return parser
 
 
-def resolve_target(*, use_production_recommendation: bool) -> tuple[str, str, int]:
-    if use_production_recommendation:
-        runtime = get_production_recommended_active_retrieval_config()
-    else:
-        db = SessionLocal()
-        try:
-            runtime = resolve_runtime_active_retrieval_config(db)
-        finally:
-            db.close()
-
+def ensure_active_retrieval_collection() -> int:
+    runtime = get_production_recommended_active_retrieval_config()
     model = get_embedding_model(runtime.model_code)
-    return runtime.collection_name, runtime.model_code, model.dimension
+    collection_name = runtime.collection_name
+    model_code = runtime.model_code
+    vector_size = model.dimension
 
-
-def ensure_active_retrieval_collection(*, use_production_recommendation: bool = False) -> int:
-    collection_name, model_code, vector_size = resolve_target(
-        use_production_recommendation=use_production_recommendation
-    )
     writer = DefaultAvatarMemoryQdrantWriter()
     existing = writer.collection_vector_size(collection_name=collection_name)
     if existing is not None:
@@ -84,10 +68,8 @@ def ensure_active_retrieval_collection(*, use_production_recommendation: bool = 
 
 
 def main(argv: list[str] | None = None) -> int:
-    args = _build_parser().parse_args(argv)
-    return ensure_active_retrieval_collection(
-        use_production_recommendation=args.use_production_recommendation
-    )
+    _build_parser().parse_args(argv)
+    return ensure_active_retrieval_collection()
 
 
 if __name__ == "__main__":
