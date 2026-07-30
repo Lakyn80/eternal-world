@@ -85,6 +85,35 @@ Start Eternal World metrics collection without a second Grafana:
 docker compose up -d backend prometheus
 ```
 
+### Local Celery observability (optional profile)
+
+Flower (UI) + `celery-exporter` (Prometheus metrics) are **local-only** and
+gated behind Compose profile `celery-observability`. They are not part of
+default `docker compose up` and are **not** deployed to staging.
+
+```bash
+docker compose --profile celery-observability up -d flower celery_exporter
+# reload Prometheus so it can scrape the new target (if Prometheus already ran)
+docker compose up -d prometheus
+```
+
+- Flower UI: `http://127.0.0.1:5555` (basic auth `admin` / `local-flower-dev`)
+- Exporter metrics: scraped only inside Docker as `celery_exporter:9808` (no host port)
+- Prometheus job: `eternal_world_celery_exporter`
+
+Stop when done:
+
+```bash
+docker compose --profile celery-observability stop flower celery_exporter
+docker compose --profile celery-observability rm -f flower celery_exporter
+```
+
+Notes:
+
+- Flower does not push to Prometheus; Prometheus scrapes `celery_exporter`.
+- App metrics (`async_jobs_*`, `async_queue_depth`, …) on `backend:8000/metrics` stay unchanged.
+- Richer Celery *task event* series from the exporter may be sparse until workers emit events; broker queue visibility still works without changing worker commands.
+
 Local URLs:
 
 - Prometheus: `http://localhost:9090`
@@ -126,6 +155,7 @@ Verification:
 ```bash
 docker compose config --quiet
 docker compose --profile standalone-grafana config --quiet
+docker compose --profile celery-observability config --quiet
 curl http://localhost:8033/metrics
 curl http://localhost:9090/-/ready
 curl http://localhost:3002/api/health

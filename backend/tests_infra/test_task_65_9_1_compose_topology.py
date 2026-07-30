@@ -147,3 +147,24 @@ def test_declared_queue_names_cover_every_worker_queue_list() -> None:
     text = celery_app_source.read_text(encoding="utf-8")
     for queue_name in EXPECTED_GENERAL_WORKER_QUEUES | EXPECTED_EMBEDDING_QUEUES | EXPECTED_MAINTENANCE_QUEUES:
         assert f'"{queue_name}"' in text, f"queue {queue_name!r} must be declared in celery_app.py"
+
+
+def test_local_celery_observability_is_profile_gated_and_absent_from_prod() -> None:
+    """Flower + celery_exporter stay optional/local — never default stack or prod."""
+
+    dev = _load_compose(DEV_COMPOSE_PATH)
+    prod = _load_compose(PROD_COMPOSE_PATH)
+    dev_services = dev.get("services") or {}
+    prod_services = prod.get("services") or {}
+
+    assert "flower" in dev_services
+    assert "celery_exporter" in dev_services
+    assert "flower" not in prod_services
+    assert "celery_exporter" not in prod_services
+
+    assert dev_services["flower"].get("profiles") == ["celery-observability"]
+    assert dev_services["celery_exporter"].get("profiles") == ["celery-observability"]
+
+    flower_ports = dev_services["flower"].get("ports") or []
+    assert any("127.0.0.1:5555" in str(port) for port in flower_ports)
+    assert not (dev_services["celery_exporter"].get("ports") or [])

@@ -8,6 +8,22 @@ Status as of 2026-07-16:
 - All future implementation work must follow its production execution, verification, scope, testing, documentation, git, and final-report rules.
 - `AGENTS.md` was added at the repository root to make this instruction visible as the default Codex project guidance.
 
+## Ops - Local Flower + celery-exporter (2026-07-31)
+
+Goal: optional local Celery UI + Prometheus metrics without cluttering default compose or staging.
+
+### What changed
+
+- `docker-compose.yml` profile `celery-observability`: `flower` (UI on `127.0.0.1:5555`, basic auth) and `celery_exporter` (no host port; scrape on compose network).
+- `monitoring/prometheus/prometheus.yml` scrape job `eternal_world_celery_exporter` → `celery_exporter:9808`.
+- Docs: `README.md` Local Monitoring, `docs/async-job-platform-runbook.md` §0b.
+- Out of scope: `docker-compose.prod.yml`, staging deploy, worker `-Q` / routing changes, Grafana dashboard (use Explore / existing shared Grafana later if needed).
+
+### Verification
+
+- `docker compose --profile celery-observability config --quiet`
+- Start profile services; confirm Flower responds on localhost:5555 and Prometheus target for celery_exporter.
+
 ## Ops - Multilingual chat response language (2026-07-30)
 
 Goal: stop configured persona settings from forcing Czech answers when the user chats in English or Russian.

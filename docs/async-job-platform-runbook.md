@@ -32,6 +32,39 @@ should show `-Q document_processing,ai_generation,media,notifications`;
 show `-Q maintenance`. The static Compose-topology contract test asserts
 the same thing structurally (see §19).
 
+## 0b. Local Flower + celery-exporter (optional profile)
+
+Local-only Celery observability. **Not** part of default compose up and
+**not** on staging/`docker-compose.prod.yml`.
+
+| Piece | Role |
+|---|---|
+| `flower` | Web UI for workers/tasks (`127.0.0.1:5555`) |
+| `celery_exporter` | Prometheus `/metrics` on the compose network only |
+| Prometheus job `eternal_world_celery_exporter` | Scrapes `celery_exporter:9808` |
+
+```bash
+docker compose --profile celery-observability up -d flower celery_exporter
+docker compose up -d prometheus
+```
+
+- Flower: http://127.0.0.1:5555 — basic auth `admin` / `local-flower-dev`
+- Check exporter: `docker compose exec prometheus wget -qO- http://celery_exporter:9808/metrics | head`
+- Prometheus targets UI: http://localhost:9090/targets — job
+  `eternal_world_celery_exporter` is UP only while the profile is running;
+  DOWN when the profile is off is expected.
+
+Stop:
+
+```bash
+docker compose --profile celery-observability stop flower celery_exporter
+docker compose --profile celery-observability rm -f flower celery_exporter
+```
+
+Worker `-Q` flags and routing are intentionally unchanged. App series on
+`backend:8000/metrics` (`async_jobs_*`, …) remain the product source of
+truth for job lifecycle; the exporter adds broker/Celery-side visibility.
+
 ## 0a. Confirming the general worker cannot consume `embedding`
 
 ```bash

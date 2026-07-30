@@ -276,6 +276,46 @@ services:
     volumes:
       - ./backend:/app
 
+  # Local-only Celery observability (profile: celery-observability).
+  # NOT in default `docker compose up`, NOT in docker-compose.prod.yml /
+  # staging deploy. Flower = UI only; celery_exporter = Prometheus scrape
+  # target. Does not change worker commands, queue routing, or app metrics.
+  # Start:
+  #   docker compose --profile celery-observability up -d flower celery_exporter
+  # Stop:
+  #   docker compose --profile celery-observability stop flower celery_exporter
+  #   docker compose --profile celery-observability rm -f flower celery_exporter
+  flower:
+    image: mher/flower:2.0.1
+    container_name: eternal_world_flower
+    profiles:
+      - celery-observability
+    restart: unless-stopped
+    environment:
+      CELERY_BROKER_URL: redis://redis:6379/1
+      # Local-dev only credentials. Never reuse on staging/public hosts.
+      FLOWER_BASIC_AUTH: admin:local-flower-dev
+      FLOWER_PORT: "5555"
+      FLOWER_PURGE_OFFLINE_WORKERS: "60"
+    ports:
+      - "127.0.0.1:5555:5555"
+    depends_on:
+      - redis
+
+  celery_exporter:
+    image: danihodovic/celery-exporter:0.12.2
+    container_name: eternal_world_celery_exporter
+    profiles:
+      - celery-observability
+    restart: unless-stopped
+    environment:
+      CE_BROKER_URL: redis://redis:6379/1
+    # No host port publish: Prometheus scrapes on the compose network only.
+    depends_on:
+      - redis
+    expose:
+      - "9808"
+
   frontend:
     build:
       context: ./frontend
