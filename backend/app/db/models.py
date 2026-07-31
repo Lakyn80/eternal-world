@@ -430,6 +430,10 @@ class MemorialInvitation(TimestampMixin, Base):
             "role IN ('trusted_reviewer', 'contributor', 'viewer')",
             name="memorial_invitations_role",
         ),
+        CheckConstraint(
+            "preferred_locale_hint IS NULL OR preferred_locale_hint IN ('cs', 'en', 'ru')",
+            name="memorial_invitations_preferred_locale_hint",
+        ),
         Index("ix_memorial_invitations_profile_email", "profile_id", "email"),
         Index("ix_memorial_invitations_profile_status", "profile_id", "accepted_at", "revoked_at"),
     )
@@ -442,6 +446,7 @@ class MemorialInvitation(TimestampMixin, Base):
     )
     email: Mapped[str] = mapped_column(String(320), index=True, nullable=False)
     role: Mapped[str] = mapped_column(String(32), index=True, nullable=False)
+    preferred_locale_hint: Mapped[str | None] = mapped_column(String(8), nullable=True)
     token_hash: Mapped[str] = mapped_column(String(64), unique=True, index=True, nullable=False)
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True, nullable=False)
     accepted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), index=True, nullable=True)
@@ -479,6 +484,10 @@ class MemorialContribution(TimestampMixin, Base):
             "privacy_scope IN ('private_owner', 'selected_family', 'all_family', 'public_legacy')",
             name="memorial_contributions_privacy_scope",
         ),
+        CheckConstraint(
+            "source_language IN ('cs', 'ru', 'en', 'de')",
+            name="memorial_contributions_source_language",
+        ),
         Index("ix_memorial_contributions_profile_status", "profile_id", "status"),
         Index("ix_memorial_contributions_profile_current", "profile_id", "is_current"),
         Index("ix_memorial_contributions_author_status", "author_user_id", "status"),
@@ -498,6 +507,8 @@ class MemorialContribution(TimestampMixin, Base):
     )
     title: Mapped[str] = mapped_column(String(200), nullable=False)
     memory_text: Mapped[str] = mapped_column(Text, nullable=False)
+    #: Exact original language of ``memory_text`` (never overwritten by translation).
+    source_language: Mapped[str] = mapped_column(String(8), nullable=False)
     source_note: Mapped[str | None] = mapped_column(String(500), nullable=True)
     privacy_scope: Mapped[str] = mapped_column(
         String(32),
@@ -1727,7 +1738,7 @@ class MemoryContentTranslation(TimestampMixin, Base):
     __table_args__ = (
         CheckConstraint(
             "entity_type IN ('memory_candidate', 'family_memory_contribution', "
-            "'clarification_question', 'fa_chat_turn')",
+            "'clarification_question', 'fa_chat_turn', 'memorial_contribution')",
             name="memory_content_translations_entity_type",
         ),
         CheckConstraint(

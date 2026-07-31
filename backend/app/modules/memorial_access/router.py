@@ -115,6 +115,7 @@ def _build_invitation_read(invitation: MemorialInvitation) -> InvitationRead:
         profile_id=invitation.profile_id,
         email=invitation.email,
         role=invitation.role,
+        preferred_locale_hint=invitation.preferred_locale_hint,
         expires_at=invitation.expires_at,
         accepted_at=invitation.accepted_at,
         revoked_at=invitation.revoked_at,
@@ -160,7 +161,24 @@ def _build_contribution_read(
     *,
     promotion: MemorialContributionPromotion | None = None,
     db: Session | None = None,
+    current_user: User | None = None,
+    for_review: bool = False,
 ) -> ContributionRead:
+    from app.modules.memorial_access.contribution_translations import resolve_contribution_localized_views
+
+    localized = None
+    if db is not None and current_user is not None:
+        profile = db.get(MemoryProfile, contribution.profile_id)
+        if profile is not None:
+            localized = resolve_contribution_localized_views(
+                db,
+                contribution=contribution,
+                profile=profile,
+                viewer=current_user,
+                for_review=for_review,
+            )
+            db.commit()
+
     return ContributionRead(
         id=contribution.id,
         profile_id=contribution.profile_id,
@@ -168,6 +186,13 @@ def _build_contribution_read(
         author_email=contribution.author_user.email,
         title=contribution.title,
         memory_text=contribution.memory_text,
+        source_language=contribution.source_language,
+        canonical_language=localized.canonical_language if localized else None,
+        canonical_text=localized.canonical_text if localized else None,
+        canonical_translation_status=localized.canonical_translation_status if localized else None,
+        display_language=localized.display_language if localized else None,
+        display_text=localized.display_text if localized else None,
+        display_translation_status=localized.display_translation_status if localized else None,
         source_note=contribution.source_note,
         privacy_scope=contribution.privacy_scope,
         status=contribution.status,
@@ -187,6 +212,9 @@ def _build_contribution_read(
 def _build_contribution_reads(
     db: Session,
     contributions: list[MemorialContribution],
+    *,
+    current_user: User,
+    for_review: bool = False,
 ) -> list[ContributionRead]:
     promotions_by_contribution_id = contribution_indexing_repository.list_promotions_for_contributions(
         db,
@@ -201,6 +229,8 @@ def _build_contribution_reads(
             contribution,
             promotion=promotions_by_contribution_id.get(contribution.id),
             db=db,
+            current_user=current_user,
+            for_review=for_review,
         )
         for contribution in contributions
     ]
@@ -366,7 +396,9 @@ def submit_contribution_endpoint(
         )
     except (MemorialNotFoundError, MemorialForbiddenError, MemorialConflictError) as exc:
         _raise_access_error(exc)
-    return _build_contribution_read(contribution)  # freshly submitted: never has a promotion yet
+    return _build_contribution_read(
+        contribution, db=db, current_user=current_user
+    )  # freshly submitted: never has a promotion yet
 
 
 @router.get(
@@ -386,7 +418,7 @@ def list_contributions_endpoint(
         contributions = list_contributions(db, current_user=current_user, profile_id=profile_id)
     except (MemorialNotFoundError, MemorialForbiddenError, MemorialConflictError) as exc:
         _raise_access_error(exc)
-    return _build_contribution_reads(db, contributions)
+    return _build_contribution_reads(db, contributions, current_user=current_user)
 
 
 @router.get(
@@ -407,7 +439,7 @@ def list_review_queue_endpoint(
         contributions = list_review_queue(db, current_user=current_user, profile_id=profile_id)
     except (MemorialNotFoundError, MemorialForbiddenError, MemorialConflictError) as exc:
         _raise_access_error(exc)
-    return _build_contribution_reads(db, contributions)
+    return _build_contribution_reads(db, contributions, current_user=current_user, for_review=True)
 
 
 @router.post(
@@ -445,7 +477,9 @@ def approve_contribution_endpoint(
         db,
         contribution_id=contribution.id,
     )
-    return _build_contribution_read(contribution, promotion=promotion, db=db)
+    return _build_contribution_read(
+        contribution, promotion=promotion, db=db, current_user=current_user, for_review=True
+    )
 
 
 @router.post(
@@ -479,7 +513,7 @@ def reject_contribution_endpoint(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     except ContributionInvalidTransitionError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
-    return _build_contribution_read(contribution)
+    return _build_contribution_read(contribution, db=db, current_user=current_user, for_review=True)
 
 
 @router.post(
@@ -520,7 +554,9 @@ def archive_contribution_endpoint(
         db,
         contribution_id=contribution.id,
     )
-    return _build_contribution_read(contribution, promotion=promotion, db=db)
+    return _build_contribution_read(
+        contribution, promotion=promotion, db=db, current_user=current_user, for_review=True
+    )
 
 
 @router.post(
@@ -590,5 +626,7 @@ def retry_contribution_indexing_endpoint(
         db,
         contribution_id=contribution.id,
     )
-    return _build_contribution_read(contribution, promotion=promotion, db=db)
+    return _build_contribution_read(
+        contribution, promotion=promotion, db=db, current_user=current_user, for_review=True
+    )
 

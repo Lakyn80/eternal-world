@@ -92,11 +92,22 @@ class InvitationCreate(BaseModel):
     email: str
     role: InvitableMemorialRole
     expires_in_days: int = Field(default=7, ge=1, le=30)
+    #: Optional UI-language hint for the invitee (Task 65.13.3).
+    preferred_locale_hint: str | None = None
 
     @field_validator("email")
     @classmethod
     def normalize_email(cls, value: str) -> str:
         return normalize_and_validate_email(value)
+
+    @field_validator("preferred_locale_hint")
+    @classmethod
+    def validate_preferred_locale_hint(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        from app.modules.language_registry import assert_ui_language
+
+        return assert_ui_language(value)
 
 
 class InvitationRead(BaseModel):
@@ -106,6 +117,7 @@ class InvitationRead(BaseModel):
     profile_id: int
     email: str
     role: InvitableMemorialRole
+    preferred_locale_hint: str | None = None
     expires_at: datetime
     accepted_at: datetime | None
     revoked_at: datetime | None
@@ -135,6 +147,9 @@ class ContributionCreate(BaseModel):
     source_note: str | None = Field(default=None, max_length=500)
     privacy_scope: PrivacyScope = "private_owner"
     submit_for_review: bool = True
+    #: Exact original language of ``memory_text``. When omitted, the service
+    #: falls back to the author's ``preferred_ui_language``.
+    source_language: str | None = None
 
     @field_validator("title")
     @classmethod
@@ -150,6 +165,15 @@ class ContributionCreate(BaseModel):
     @classmethod
     def validate_source_note(cls, value: str | None) -> str | None:
         return normalize_optional_text(value)
+
+    @field_validator("source_language")
+    @classmethod
+    def validate_source_language(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        from app.modules.language_registry import assert_translation_language
+
+        return assert_translation_language(value)
 
 
 class ContributionReviewRequest(BaseModel):
@@ -180,6 +204,13 @@ class ContributionRead(BaseModel):
     author_email: str
     title: str
     memory_text: str
+    source_language: str
+    canonical_language: str | None = None
+    canonical_text: str | None = None
+    canonical_translation_status: str | None = None
+    display_language: str | None = None
+    display_text: str | None = None
+    display_translation_status: str | None = None
     source_note: str | None
     privacy_scope: PrivacyScope
     status: ContributionStatus

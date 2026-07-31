@@ -8,6 +8,36 @@ Status as of 2026-07-16:
 - All future implementation work must follow its production execution, verification, scope, testing, documentation, git, and final-report rules.
 - `AGENTS.md` was added at the repository root to make this instruction visible as the default Codex project guidance.
 
+## Task 65.13.3 - Invitations, Contributions and Viewer Translation (2026-07-31)
+
+Goal: preserve exact contribution originals, produce memorial-canonical text for owner review, expose viewer display translations, and carry invitation UI-locale hints — without changing RAG indexing to non-canonical text.
+
+### Decisions
+
+- Original: `MemorialContribution.memory_text` + `source_language` (never overwritten).
+- Derived texts: `MemoryContentTranslation` with new entity type `memorial_contribution` (Decision B store).
+- Review queue / approve responses use `canonical_text` (`for_review=True`); ignore reviewer UI language for body.
+- List/viewer responses resolve `display_text` to the viewer's `preferred_ui_language` (lazy ensure + original fallback).
+- Invitation: optional `preferred_locale_hint`; applied on accept only when user still has `DEFAULT_UI_LANGUAGE`.
+- Indexing unchanged: promotions still snapshot original `memory_text` (canonical-only indexing → 65.13.6).
+- Migration: `20260731_0032`.
+
+### What changed
+
+- Schema/API: contribution source language + localized read fields; invitation locale hint.
+- `memorial_access/contribution_translations.py` ensure/resolve helpers.
+- Frontend: review shows canonical (+ original disclosure); list shows display text.
+- Tests: `tests/test_task_65_13_3_contribution_viewer_translation.py`.
+
+### Out of scope
+
+- Biographer (65.13.4), chat (65.13.5), canonical RAG activation (65.13.6), live translation provider.
+
+### Verification
+
+- `pytest tests/test_task_65_13_3_contribution_viewer_translation.py tests/test_memorial_access.py tests/test_alembic.py` (local).
+- `alembic upgrade head` → `20260731_0032`.
+
 ## Task 65.13.2 - Translation Domain and Provider-Neutral Infrastructure (2026-07-31)
 
 Goal: lock **Decision B** (generalize `MemoryContentTranslation`) and harden the provider-neutral translation domain before invitations/viewer UI (65.13.3).

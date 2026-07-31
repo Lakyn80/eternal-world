@@ -232,6 +232,7 @@ def invite_participant(
         profile_id=profile_id,
         email=payload.email,
         role=payload.role,
+        preferred_locale_hint=payload.preferred_locale_hint,
         token_hash=hash_invitation_token(token),
         expires_at=_now() + timedelta(days=payload.expires_in_days),
         created_by_user_id=current_user.id,
@@ -242,6 +243,8 @@ def invite_participant(
 
 
 def accept_invitation(db: Session, *, current_user: User, token: str) -> MemorialMembership:
+    from app.modules.language_registry import DEFAULT_UI_LANGUAGE, assert_ui_language
+
     invitation = repository.get_invitation_by_token_hash(db, token_hash=hash_invitation_token(token))
     if invitation is None or invitation.revoked_at is not None or invitation.accepted_at is not None:
         raise InvitationInvalidError("Invitation is invalid")
@@ -249,6 +252,13 @@ def accept_invitation(db: Session, *, current_user: User, token: str) -> Memoria
         raise InvitationExpiredError("Invitation has expired")
     if invitation.email != current_user.email:
         raise InvitationEmailMismatchError("Invitation email does not match current user")
+
+    if (
+        invitation.preferred_locale_hint
+        and current_user.preferred_ui_language == DEFAULT_UI_LANGUAGE
+        and invitation.preferred_locale_hint != current_user.preferred_ui_language
+    ):
+        current_user.preferred_ui_language = assert_ui_language(invitation.preferred_locale_hint)
 
     existing = repository.get_active_membership(db, profile_id=invitation.profile_id, user_id=current_user.id)
     if existing is not None:
@@ -283,16 +293,34 @@ def submit_contribution(
     profile_id: int,
     payload: ContributionCreate,
 ) -> MemorialContribution:
+    from app.modules.language_registry import assert_translation_language
+    from app.modules.memorial_access.contribution_translations import ensure_canonical_and_author_display
+
     _require_role(db, profile_id=profile_id, user=current_user, allowed_roles=CONTRIBUTION_ROLES)
+    profile = repository.get_profile(db, profile_id=profile_id)
+    if profile is None:
+        raise MemorialNotFoundError("Memorial not found")
+
+    source_language = assert_translation_language(
+        payload.source_language or current_user.preferred_ui_language
+    )
     contribution = repository.create_contribution(
         db,
         profile_id=profile_id,
         author_user_id=current_user.id,
         title=payload.title,
         memory_text=payload.memory_text,
+        source_language=source_language,
         source_note=payload.source_note,
         privacy_scope=payload.privacy_scope,
         status="needs_review" if payload.submit_for_review else "draft",
+    )
+    db.flush()
+    ensure_canonical_and_author_display(
+        db,
+        contribution=contribution,
+        profile=profile,
+        author=current_user,
     )
     db.commit()
     db.refresh(contribution)

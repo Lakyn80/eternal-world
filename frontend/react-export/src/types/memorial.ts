@@ -43,6 +43,7 @@ export type InvitationCreateResponse = {
   profile_id: number;
   email: string;
   role: InvitableMemorialRole;
+  preferred_locale_hint?: string | null;
   expires_at: string;
   accepted_at: string | null;
   revoked_at: string | null;
@@ -58,6 +59,13 @@ export type ContributionRead = {
   author_email: string;
   title: string;
   memory_text: string;
+  source_language: string;
+  canonical_language?: string | null;
+  canonical_text?: string | null;
+  canonical_translation_status?: string | null;
+  display_language?: string | null;
+  display_text?: string | null;
+  display_translation_status?: string | null;
   source_note: string | null;
   privacy_scope: PrivacyScope;
   status: ContributionStatus;

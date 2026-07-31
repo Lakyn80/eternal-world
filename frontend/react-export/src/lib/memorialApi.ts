@@ -50,11 +50,13 @@ export type ContributionCreatePayload = {
   memory_text: string;
   source_note?: string | null;
   privacy_scope: PrivacyScope;
+  source_language?: string | null;
 };
 
 export type InvitationCreatePayload = {
   email: string;
   role: InvitableMemorialRole;
+  preferred_locale_hint?: string | null;
 };
 
 export class MemorialApiError extends Error {

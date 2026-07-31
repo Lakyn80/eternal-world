@@ -70,6 +70,7 @@ def test_alembic_configuration_loads_revision_history():
         "20260729_0028",
         "20260731_0030",
         "20260731_0031",
+        "20260731_0032",
     }.issubset(revision_ids)
 
     # Task 65.7 (chat active sessions), Task 65.9 (async job platform), and
@@ -80,7 +81,8 @@ def test_alembic_configuration_loads_revision_history():
     assert revisions_by_id["20260729_0028"].down_revision == "20260724_0027"
     assert revisions_by_id["20260731_0030"].down_revision == "20260729_0028"
     assert revisions_by_id["20260731_0031"].down_revision == "20260731_0030"
-    assert heads[0] == "20260731_0031"
+    assert revisions_by_id["20260731_0032"].down_revision == "20260731_0031"
+    assert heads[0] == "20260731_0032"
 
 
 def test_alembic_revision_module_imports():
@@ -121,15 +123,15 @@ def test_current_alembic_revision_module_imports():
         backend_dir
         / "alembic"
         / "versions"
-        / "20260731_0031_generalize_content_translation.py"
+        / "20260731_0032_contribution_viewer_translations.py"
     )
 
-    spec = spec_from_file_location("alembic_revision_20260731_0031", revision_path)
+    spec = spec_from_file_location("alembic_revision_20260731_0032", revision_path)
     assert spec is not None
     assert spec.loader is not None
 
     module = module_from_spec(spec)
     spec.loader.exec_module(module)
 
-    assert module.revision == "20260731_0031"
-    assert module.down_revision == "20260731_0030"
+    assert module.revision == "20260731_0032"
+    assert module.down_revision == "20260731_0031"

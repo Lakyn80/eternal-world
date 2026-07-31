@@ -4496,7 +4496,16 @@ export function ContributionList({
             <div className="flex min-w-0 flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
               <div className="min-w-0">
                 <h4 className="break-words text-lg font-semibold">{contribution.title}</h4>
-                <p className="mt-2 break-words text-sm leading-6 text-fg/60">{contribution.memory_text}</p>
+                <p className="mt-2 break-words text-sm leading-6 text-fg/60">
+                  {contribution.display_text || contribution.memory_text}
+                </p>
+                {contribution.source_language &&
+                  contribution.display_language &&
+                  contribution.display_language !== contribution.source_language && (
+                    <p className="mt-1 text-xs text-fg/38">
+                      original ({contribution.source_language}): {contribution.memory_text}
+                    </p>
+                  )}
                 <p className="mt-3 text-xs text-fg/38">
                   {contribution.author_email} · {formatDate(contribution.created_at, lang)}
                 </p>
@@ -4583,7 +4592,15 @@ function ReviewQueue({
       {queue.map((contribution) => (
         <article className="min-w-0 rounded-3xl border border-white/10 bg-black/20 p-4" key={contribution.id}>
           <h4 className="break-words text-lg font-semibold">{contribution.title}</h4>
-          <p className="mt-2 break-words text-sm leading-6 text-fg/60">{contribution.memory_text}</p>
+          <p className="mt-2 break-words text-sm leading-6 text-fg/60">
+            {contribution.canonical_text || contribution.memory_text}
+          </p>
+          {contribution.canonical_text &&
+            contribution.canonical_text !== contribution.memory_text && (
+              <p className="mt-1 text-xs text-fg/38">
+                original ({contribution.source_language}): {contribution.memory_text}
+              </p>
+            )}
           <p className="mt-3 text-xs text-fg/38">
             {contribution.author_email} · {formatDate(contribution.created_at, lang)}
           </p>
