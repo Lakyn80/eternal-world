@@ -40,9 +40,11 @@ import {
   startBiographyIngestion,
   submitContribution,
   updateBiography,
-  updateMemorialMetadata
+  updateMemorialMetadata,
+  updatePreferredUiLanguage
 } from '../lib/memorialApi';
 import { canInvite, canReview, canSubmitContribution, isActiveMemoryEligible } from '../lib/memorialPermissions';
+import { resolveLangAfterSessionRestore } from '../lib/langPreference';
 import { APP_ROOT_PATH, buildMemorialPath, navigate, parseAppRoute, usePathname } from '../lib/router';
 import { useJobStatusPoller } from '../hooks/useJobStatusPoller';
 import AvatarPersonaPanel from './AvatarPersonaPanel';
@@ -1667,8 +1669,16 @@ export default function MemorialWorkspace({
     getSession()
       .then((user) => {
         if (cancelled) return;
-        if (user.preferred_ui_language && setLang) {
-          setLang(user.preferred_ui_language);
+        // Never let account preferred_ui_language (often default "en") clobber
+        // an explicit local EN/CS/RU choice after marketing ↔ /app navigation.
+        if (setLang) {
+          const resolved = resolveLangAfterSessionRestore(user.preferred_ui_language);
+          if (resolved.source !== 'default') {
+            setLang(resolved.lang);
+          }
+          if (resolved.syncAccount) {
+            void updatePreferredUiLanguage('', resolved.lang).catch(() => {});
+          }
         }
         // No bearer token is available from a cookie-only resume - every
         // `memorialApi` call already falls back to the session cookie
