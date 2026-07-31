@@ -1012,7 +1012,7 @@ class BackgroundJob(TimestampMixin, Base):
                 "'smoke_test', 'system_milestone', 'rag_source_ingestion', 'rag_chunking', "
                 "'embedding_generation', 'qdrant_indexing', 'rag_retrieval', "
                 "'brain_agent_generation', 'media_processing', 'voice_generation', "
-                "'video_generation'"
+                "'video_generation', 'content_translation'"
                 ")"
             ),
             name="background_jobs_job_type",
@@ -1731,11 +1731,11 @@ class MemoryContentTranslation(TimestampMixin, Base):
             name="memory_content_translations_entity_type",
         ),
         CheckConstraint(
-            "source_language IN ('cs', 'ru', 'en')",
+            "source_language IN ('cs', 'ru', 'en', 'de')",
             name="memory_content_translations_source_language",
         ),
         CheckConstraint(
-            "target_language IN ('cs', 'ru', 'en')",
+            "target_language IN ('cs', 'ru', 'en', 'de')",
             name="memory_content_translations_target_language",
         ),
         CheckConstraint(
@@ -1757,6 +1757,11 @@ class MemoryContentTranslation(TimestampMixin, Base):
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)
+    profile_id: Mapped[int | None] = mapped_column(
+        ForeignKey("memory_profiles.id", ondelete="CASCADE"),
+        index=True,
+        nullable=True,
+    )
     candidate_id: Mapped[int | None] = mapped_column(
         ForeignKey("conversation_memory_candidates.id", ondelete="CASCADE"),
         index=True,

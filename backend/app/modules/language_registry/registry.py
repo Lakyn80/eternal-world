@@ -183,3 +183,10 @@ def assert_canonical_memorial_language(code: str) -> LanguageCode:
     if normalized is None or not is_canonical_memorial_language(normalized):
         raise ValueError("unsupported canonical memorial language")
     return normalized
+
+
+def assert_translation_language(code: str) -> LanguageCode:
+    normalized = normalize_language_code(code)
+    if normalized is None or not is_translation_language(normalized):
+        raise ValueError("unsupported translation language")
+    return normalized

@@ -4,6 +4,7 @@ _LANGUAGE_NAMES = {
     "cs": "Czech",
     "ru": "Russian",
     "en": "English",
+    "de": "German",
 }
 
 

@@ -40,6 +40,7 @@ class TranslationFieldRequest(BaseModel):
 
     model_config = ConfigDict(use_enum_values=True)
 
+    profile_id: int | None = None
     candidate_id: int | None = None
     contribution_id: int | None = None
     clarification_id: int | None = None
@@ -55,7 +56,8 @@ class MemoryContentTranslationRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: int
-    candidate_id: int
+    profile_id: int | None
+    candidate_id: int | None
     contribution_id: int | None
     clarification_id: int | None
     entity_type: str
@@ -95,8 +97,13 @@ class LocalizedContent(BaseModel):
     cs: LocalizedTextEntry | None = None
     ru: LocalizedTextEntry | None = None
     en: LocalizedTextEntry | None = None
+    de: LocalizedTextEntry | None = None
 
 
 class TranslationRetryResult(BaseModel):
     translation: MemoryContentTranslationRead
     retried: bool
+
+
+class HumanTranslationOverrideRequest(BaseModel):
+    translated_text: str = Field(min_length=1, max_length=4000)

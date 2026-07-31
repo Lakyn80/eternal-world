@@ -48,6 +48,7 @@ class BackgroundJobType(str, Enum):
     MEDIA_PROCESSING = "media_processing"
     VOICE_GENERATION = "voice_generation"
     VIDEO_GENERATION = "video_generation"
+    CONTENT_TRANSLATION = "content_translation"
 
 
 #: Job types that perform real embedding-model inference and therefore (a)

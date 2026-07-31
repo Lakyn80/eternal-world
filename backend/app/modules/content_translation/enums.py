@@ -6,13 +6,14 @@ from enum import Enum
 class SupportedContentLanguage(str, Enum):
     """Languages the content-translation layer supports.
 
-    The architecture stays unchanged when a new supported language is added:
-    extend this enum plus the language-name tables/check constraints.
+    Capability source of truth is ``language_registry.translation_languages``.
+    Keep this enum aligned with that registry (and DB check constraints).
     """
 
     CS = "cs"
     RU = "ru"
     EN = "en"
+    DE = "de"
 
 
 class TranslationStatus(str, Enum):

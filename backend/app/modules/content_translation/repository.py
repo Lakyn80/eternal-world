@@ -49,6 +49,7 @@ def start_pending_attempt(
     target_language: str,
     source_text: str,
     source_hash: str,
+    profile_id: int | None = None,
 ) -> MemoryContentTranslation:
     """Create or update-in-place the current translation row for this field.
 
@@ -67,6 +68,7 @@ def start_pending_attempt(
     )
     if existing is None:
         row = MemoryContentTranslation(
+            profile_id=profile_id,
             candidate_id=candidate_id,
             contribution_id=contribution_id,
             clarification_id=clarification_id,
@@ -88,6 +90,10 @@ def start_pending_attempt(
     if source_changed:
         existing.translation_version += 1
         existing.translated_text = None
+        existing.reviewed_at = None
+        existing.reviewed_by = None
+    if profile_id is not None:
+        existing.profile_id = profile_id
     existing.source_text = source_text
     existing.source_hash = source_hash
     existing.source_language = source_language
@@ -123,6 +129,75 @@ def mark_stale(db: Session, row: MemoryContentTranslation) -> MemoryContentTrans
     row.translation_status = "stale"
     db.flush()
     return row
+
+
+def mark_identity_translation(
+    db: Session,
+    row: MemoryContentTranslation,
+    *,
+    source_text: str,
+) -> MemoryContentTranslation:
+    """Persist a same-language identity result without calling a provider."""
+
+    row.translated_text = source_text
+    row.translation_status = "translated"
+    row.translation_provider = "identity"
+    row.translation_model = "identity"
+    row.translated_at = datetime.now(timezone.utc)
+    db.flush()
+    return row
+
+
+def apply_human_override(
+    db: Session,
+    row: MemoryContentTranslation,
+    *,
+    translated_text: str,
+    reviewed_by: str,
+) -> MemoryContentTranslation:
+    """Replace machine text with a human-reviewed override.
+
+    Does not change ``source_text`` / ``source_hash``. Increments
+    ``translation_version`` so consumers can detect the override.
+    """
+
+    row.translated_text = translated_text
+    row.translation_status = "human_reviewed"
+    row.translation_provider = row.translation_provider or "human"
+    row.translation_model = row.translation_model or "human"
+    row.translation_version += 1
+    row.translated_at = datetime.now(timezone.utc)
+    row.reviewed_at = datetime.now(timezone.utc)
+    row.reviewed_by = reviewed_by
+    db.flush()
+    return row
+
+
+def mark_human_reviewed(
+    db: Session,
+    row: MemoryContentTranslation,
+    *,
+    reviewed_by: str,
+) -> MemoryContentTranslation:
+    """Mark an existing usable translation as human-reviewed without edits."""
+
+    if row.translated_text is None or not str(row.translated_text).strip():
+        raise ValueError("cannot mark empty translation as human_reviewed")
+    row.translation_status = "human_reviewed"
+    row.reviewed_at = datetime.now(timezone.utc)
+    row.reviewed_by = reviewed_by
+    db.flush()
+    return row
+
+
+def list_for_profile(db: Session, *, profile_id: int) -> list[MemoryContentTranslation]:
+    return list(
+        db.scalars(
+            select(MemoryContentTranslation)
+            .where(MemoryContentTranslation.profile_id == profile_id)
+            .order_by(MemoryContentTranslation.id.asc())
+        )
+    )
 
 
 def count_by_status(db: Session) -> dict[str, int]:

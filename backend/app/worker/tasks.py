@@ -210,6 +210,94 @@ def run_multi_embedding_eval_job(self, job_id: int) -> dict[str, object]:
         db.close()
 
 
+@celery_app.task(bind=True, name="app.worker.tasks.run_content_translation_job")
+def run_content_translation_job(self, job_id: int) -> dict[str, object]:
+    """Execute a queued content-translation job on the ai_generation queue.
+
+    Domain failures are recorded on the job row; provider outages are already
+    persisted as ``translation_status=failed`` by the sync translation path
+    and therefore count as a successful job execution (the durable state is
+    the translation row, not a Celery retry storm).
+    """
+
+    from app.modules.content_translation.jobs import process_content_translation_job
+
+    session_factory = get_session_factory()
+    db = session_factory()
+    try:
+        background_job = job_tracking_repository.get_background_job_by_id(db, job_id=job_id)
+        if background_job is None:
+            return {"job_id": job_id, "status": "skipped", "reason": "job_not_found"}
+
+        mark_running(db, job_id=job_id, celery_task_id=self.request.id)
+        touch_heartbeat(db, job_id=job_id)
+        append_job_event(db, job_id=job_id, stage="content_translation", status="running")
+        try:
+            row = process_content_translation_job(db, job=background_job)
+            db.commit()
+        except (KeyError, ValueError, TypeError) as exc:
+            append_job_event(
+                db,
+                job_id=job_id,
+                stage="content_translation",
+                status="failed",
+                details={"exception_type": exc.__class__.__name__},
+            )
+            mark_failed(
+                db,
+                job_id=job_id,
+                error_message="Content translation job payload is invalid",
+                error_payload={"code": "content_translation_invalid_payload"},
+                safe_error_category="content_validation_failure",
+            )
+            return {"job_id": job_id, "status": "failed"}
+        except Exception as exc:
+            logger.exception("content_translation_job_failed", extra={"job_id": job_id})
+            append_job_event(
+                db,
+                job_id=job_id,
+                stage="content_translation",
+                status="failed",
+                details={"exception_type": exc.__class__.__name__},
+            )
+            mark_failed(
+                db,
+                job_id=job_id,
+                error_message="Content translation failed",
+                error_payload={"code": "content_translation_failed"},
+                safe_error_category="unknown_internal_failure",
+            )
+            return {"job_id": job_id, "status": "failed"}
+
+        append_job_event(
+            db,
+            job_id=job_id,
+            stage="content_translation",
+            status="succeeded",
+            details={
+                "translation_id": row.id,
+                "translation_status": row.translation_status,
+            },
+        )
+        mark_succeeded(
+            db,
+            job_id=job_id,
+            result_payload={
+                "translation_id": row.id,
+                "translation_status": row.translation_status,
+                "target_language": row.target_language,
+            },
+        )
+        return {
+            "job_id": job_id,
+            "status": "succeeded",
+            "translation_id": row.id,
+            "translation_status": row.translation_status,
+        }
+    finally:
+        db.close()
+
+
 @celery_app.task(bind=True, name="app.worker.tasks.run_memorial_contribution_indexing_job")
 def run_memorial_contribution_indexing_job(self, job_id: int) -> dict[str, object]:
     """Runs the heavy embedding/Qdrant step of the Task 65.1B contribution

@@ -8,6 +8,37 @@ Status as of 2026-07-16:
 - All future implementation work must follow its production execution, verification, scope, testing, documentation, git, and final-report rules.
 - `AGENTS.md` was added at the repository root to make this instruction visible as the default Codex project guidance.
 
+## Task 65.13.2 - Translation Domain and Provider-Neutral Infrastructure (2026-07-31)
+
+Goal: lock **Decision B** (generalize `MemoryContentTranslation`) and harden the provider-neutral translation domain before invitations/viewer UI (65.13.3).
+
+### Decisions
+
+- Store: **B — generalize existing store** (not A reuse-unchanged, not C parallel typed tables, not D replace).
+- Languages: registry `assert_translation_language`; DB/enum CHECK includes `de`.
+- Same-language: identity persistence (`provider=identity`), no provider call.
+- Human overrides: `apply_human_translation_override` / `mark_translation_human_reviewed` gated by memorial review capability (owner / trusted_reviewer).
+- Jobs: `BackgroundJobType.CONTENT_TRANSLATION` + outbox → Celery `run_content_translation_job` on `ai_generation` queue.
+- Migration: `20260731_0031` (nullable `profile_id` + language CHECK + job_type CHECK).
+
+### What changed
+
+- `content_translation` repository/service: `profile_id`, identity skip, human override writers.
+- `content_translation/jobs.py` + worker task + celery route.
+- `content_translation/authorization.py` review helper.
+- Metrics language-pair allowlist expanded for `de` and identity pairs.
+- Tests: `tests/test_task_65_13_2_content_translation.py`; alembic head → `20260731_0031`.
+
+### Out of scope (later phases)
+
+- Invitation/contribution viewer translations (65.13.3), Biographer (65.13.4), chat (65.13.5), RAG (65.13.6).
+- No live translation provider; no change to family_memory_enrichment’s hardwired cs→ru auto-path.
+
+### Verification
+
+- `pytest tests/test_task_65_13_2_content_translation.py tests/test_content_translation.py tests/test_alembic.py` (local).
+- `alembic upgrade head` → `20260731_0031`.
+
 ## Task 65.13.1 - Canonical Memorial Language Foundation (2026-07-31)
 
 Goal: separate mutable account UI language from immutable memorial canonical language; introduce a central language capability registry; reconcile avatar persona primary language as a derived mirror.

@@ -693,6 +693,16 @@ _CONTENT_TRANSLATION_LANGUAGE_PAIRS = frozenset(
         "en_cs",
         "ru_en",
         "en_ru",
+        "cs_de",
+        "de_cs",
+        "en_de",
+        "de_en",
+        "ru_de",
+        "de_ru",
+        "cs_cs",
+        "en_en",
+        "ru_ru",
+        "de_de",
     }
 )
 _CONTENT_TRANSLATION_RESULTS = frozenset({"success", "failed"})

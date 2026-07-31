@@ -76,6 +76,7 @@ celery_app.conf.task_routes = {
     "app.worker.tasks.run_biography_indexing_job": {"queue": EMBEDDING_QUEUE},
     "app.worker.tasks.run_rag_source_processing_job": {"queue": EMBEDDING_QUEUE},
     "app.worker.tasks.run_multi_embedding_eval_job": {"queue": EMBEDDING_QUEUE},
+    "app.worker.tasks.run_content_translation_job": {"queue": AI_GENERATION_QUEUE},
     "app.worker.tasks.run_outbox_dispatch_job": {"queue": MAINTENANCE_QUEUE},
     "app.worker.tasks.run_stale_job_recovery_job": {"queue": MAINTENANCE_QUEUE},
     "app.worker.tasks.run_job_smoke_test": {"queue": MAINTENANCE_QUEUE},
