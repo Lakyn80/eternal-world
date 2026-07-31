@@ -8,6 +8,58 @@ Status as of 2026-07-16:
 - All future implementation work must follow its production execution, verification, scope, testing, documentation, git, and final-report rules.
 - `AGENTS.md` was added at the repository root to make this instruction visible as the default Codex project guidance.
 
+## Task 65.13.6 - Canonical-Only RAG Indexing Activation (2026-07-31)
+
+Goal: index approved memorial contributions using memorial-canonical text only; never embed a foreign-language original when a memorial has a different canonical language; keep originals durable on the contribution row.
+
+### Decisions
+
+- Index snapshot (`MemorialContributionPromotion.approved_memory_text`) = usable MCT canonical text (or identity original when `source_language == canonical_language`).
+- Fail closed: missing/failed canonical translation blocks promotion/indexing for cross-language contributions.
+- Controlled activation flag: `settings.canonical_only_rag_indexing` (default `True`; `False` restores legacy original indexing for emergency rollback).
+- No new Alembic revision required (behavior change on existing promotion pipeline).
+
+### What changed
+
+- `memorial_contribution_indexing.service.resolve_indexable_contribution_text` + promote/validate paths.
+- Tests: `tests/test_task_65_13_6_canonical_rag_indexing.py`; 65.13.3 indexing expectation updated.
+
+### Out of scope
+
+- Live translation provider hardening; avatar-memory-promotion reindex of historical foreign originals; voice (65.14).
+
+### Verification
+
+- `pytest tests/test_task_65_13_6_canonical_rag_indexing.py tests/test_memorial_contribution_indexing.py tests/test_task_65_13_3_contribution_viewer_translation.py`
+
+## Task 65.13.5 - Chat Canonicalization (2026-07-31)
+
+Goal: preserve exact user chat originals; canonicalize user text for RAG/Brain; generate assistant replies in memorial canonical language; expose viewer display translations via MCT.
+
+### Decisions
+
+- `ChatMessage.content`: user = original; assistant = canonical Brain output.
+- `ChatMessage.source_language`: set on user turns.
+- MCT entity `chat_message` for user→canonical and assistant→viewer derived texts.
+- Brain `response_language` = `MemoryProfile.canonical_language` (viewer language is display-only).
+- Translation failure never rolls back durable chat rows; assistant display falls back to canonical.
+- Migration: `20260731_0034`.
+
+### What changed
+
+- `chat/message_translations.py`; `send_chat_message` / history / active restore localized reads.
+- API: `ChatSendResponse.user_message_language`, `ai_response_language`, `ai_response_translation_status`.
+- Tests: `tests/test_task_65_13_5_chat_canonicalization.py` (+ focused `test_chat.py` updates).
+
+### Out of scope
+
+- Canonical RAG indexing (65.13.6); streaming transport; live translation provider.
+
+### Verification
+
+- `pytest tests/test_task_65_13_5_chat_canonicalization.py tests/test_chat.py tests/test_alembic.py`
+- `alembic upgrade head` → `20260731_0034`.
+
 ## Task 65.13.4 - AI Biographer Canonical Language Integration (2026-07-31)
 
 Goal: generate and store Biographer questions in the memorial canonical language; expose viewer display translations without creating per-locale pending identities; preserve foreign-language answers with a canonical translation for review.

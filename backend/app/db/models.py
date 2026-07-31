@@ -657,6 +657,10 @@ class ChatMessage(TimestampMixin, Base):
             "role IN ('system', 'user', 'assistant')",
             name="chat_messages_role",
         ),
+        CheckConstraint(
+            "source_language IS NULL OR source_language IN ('cs', 'ru', 'en', 'de')",
+            name="chat_messages_source_language",
+        ),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)
@@ -671,7 +675,10 @@ class ChatMessage(TimestampMixin, Base):
         nullable=True,
     )
     role: Mapped[str] = mapped_column(String(16), nullable=False)
+    #: Durable original for user turns; memorial-canonical text for assistant.
     content: Mapped[str] = mapped_column(Text, nullable=False)
+    #: Detected/declared language of the user original (null for assistant).
+    source_language: Mapped[str | None] = mapped_column(String(8), nullable=True)
     token_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
     message_metadata: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
 
@@ -1739,7 +1746,7 @@ class MemoryContentTranslation(TimestampMixin, Base):
         CheckConstraint(
             "entity_type IN ('memory_candidate', 'family_memory_contribution', "
             "'clarification_question', 'fa_chat_turn', 'memorial_contribution', "
-            "'biographer_question', 'biographer_answer')",
+            "'biographer_question', 'biographer_answer', 'chat_message')",
             name="memory_content_translations_entity_type",
         ),
         CheckConstraint(

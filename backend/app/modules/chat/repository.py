@@ -13,6 +13,7 @@ def create_chat_message(
     profile_id: int,
     role: str,
     content: str,
+    source_language: str | None = None,
     token_count: int | None = None,
     message_metadata: dict | None = None,
 ) -> ChatMessage:
@@ -21,6 +22,7 @@ def create_chat_message(
         memory_profile_id=profile_id,
         role=role,
         content=content,
+        source_language=source_language,
         token_count=token_count,
         message_metadata=message_metadata,
     )

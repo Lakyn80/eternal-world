@@ -162,7 +162,7 @@ def test_invitation_locale_hint_applied_on_accept_when_default_ui(client):
     assert me_after.json()["preferred_ui_language"] == "cs"
 
 
-def test_approve_still_indexes_original_memory_text(client):
+def test_approve_indexes_canonical_not_foreign_original(client):
     owner_token = _register_and_login(client, "ct65-index-owner@example.com")
     profile_id = _create_memorial(client, owner_token, canonical_language="cs")
     original = "Original English contribution text for indexing."
@@ -179,6 +179,9 @@ def test_approve_still_indexes_original_memory_text(client):
     )
     assert submitted.status_code == 201
     contribution_id = submitted.json()["id"]
+    canonical_text = submitted.json()["canonical_text"]
+    assert canonical_text is not None
+    assert canonical_text.startswith("[en->cs] ")
 
     approved = client.post(
         f"/api/memorials/{profile_id}/contributions/{contribution_id}/approve",
@@ -194,6 +197,9 @@ def test_approve_still_indexes_original_memory_text(client):
             db, contribution_id=contribution_id
         )
         assert promotion is not None
-        assert promotion.approved_memory_text == original
+        # Task 65.13.6: index snapshot is memorial-canonical, not the EN original.
+        assert promotion.approved_memory_text == canonical_text
+        assert promotion.language == "cs"
+        assert promotion.approved_memory_text != original
     finally:
         db.close()

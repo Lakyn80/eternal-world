@@ -35,6 +35,7 @@ from uuid import NAMESPACE_URL, uuid5
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.core.config import settings
 from app.core.logging import get_logger, log_event
 from app.db.models import (
     MemorialContribution,
@@ -46,8 +47,14 @@ from app.db.models import (
     User,
 )
 from app.modules.active_retrieval_config.service import resolve_runtime_active_retrieval_config
+from app.modules.content_translation.enums import CURRENT_USABLE_TRANSLATION_STATUSES
+from app.modules.content_translation.repository import get_current as get_current_translation
 from app.modules.embedding_models.service import get_embedding_model
 from app.modules.embeddings.providers import build_embedding_provider
+from app.modules.language_registry import (
+    assert_canonical_memorial_language,
+    assert_translation_language,
+)
 from app.modules.embeddings.providers.base import EmbeddingVector
 from app.modules.embeddings.providers.bge_m3_hybrid import BgeM3HybridEmbeddingAdapter
 from app.modules.embeddings.runtime import assert_real_embedding_runtime_for_e2e
@@ -165,6 +172,71 @@ def normalize_memory_text(text: str) -> str:
     return normalized
 
 
+def resolve_indexable_contribution_text(
+    db: Session,
+    *,
+    contribution: MemorialContribution,
+    profile: MemoryProfile,
+) -> tuple[str, str]:
+    """Return ``(text, language)`` that may be embedded into RAG.
+
+    Task 65.13.6: with ``canonical_only_rag_indexing`` enabled (default),
+    only memorial-canonical text is indexable. Same-language contributions
+    use the durable original; cross-language contributions require a usable
+    MCT canonical translation (fail closed — never index a foreign original).
+    """
+
+    if not settings.canonical_only_rag_indexing:
+        # Emergency rollback path: legacy original-text indexing.
+        return contribution.memory_text, contribution.source_language
+
+    # Lazy import: contribution_translations → content_translation.service, and
+    # memorial_access.service already imports this module at startup.
+    from app.modules.memorial_access.contribution_translations import (
+        ENTITY_MEMORIAL_CONTRIBUTION,
+        FIELD_MEMORY_TEXT,
+        ensure_contribution_translation,
+    )
+
+    canonical = assert_canonical_memorial_language(profile.canonical_language)
+    source = assert_translation_language(contribution.source_language)
+    if source == canonical:
+        return contribution.memory_text, canonical
+
+    row = get_current_translation(
+        db,
+        entity_type=ENTITY_MEMORIAL_CONTRIBUTION,
+        entity_id=str(contribution.id),
+        field_name=FIELD_MEMORY_TEXT,
+        target_language=canonical,
+    )
+    if row is None:
+        owner = db.get(User, profile.user_id)
+        if owner is None:
+            raise ContributionIndexingEligibilityError(
+                "Canonical translation is required before indexing foreign-language contributions"
+            )
+        row = ensure_contribution_translation(
+            db,
+            contribution=contribution,
+            target_language=canonical,
+            actor=owner,
+        )
+        db.flush()
+
+    if (
+        row is not None
+        and row.translation_status in CURRENT_USABLE_TRANSLATION_STATUSES
+        and row.translated_text
+        and str(row.translated_text).strip()
+    ):
+        return row.translated_text, canonical
+
+    raise ContributionIndexingEligibilityError(
+        "Canonical translation is required before indexing foreign-language contributions"
+    )
+
+
 def build_deterministic_point_id(*, promotion: MemorialContributionPromotion) -> str:
     identity = f"memorial-contribution-promotion:{promotion.id}:{promotion.profile_id}"
     return str(uuid5(NAMESPACE_URL, identity))
@@ -188,15 +260,24 @@ def promote_contribution(
     if existing is not None:
         return PromotionCreateOutcome(promotion=existing, created=False)
 
-    normalized_text = normalize_memory_text(contribution.memory_text)
+    profile = db.get(MemoryProfile, contribution.profile_id)
+    if profile is None:
+        raise ContributionIndexingEligibilityError("Promotion target profile is invalid")
+
+    index_text, index_language = resolve_indexable_contribution_text(
+        db,
+        contribution=contribution,
+        profile=profile,
+    )
+    normalized_text = normalize_memory_text(index_text)
     promotion = repository.create_promotion(
         db,
         contribution_id=contribution.id,
         profile_id=contribution.profile_id,
         promotion_status="pending_index",
-        approved_memory_text=contribution.memory_text,
+        approved_memory_text=index_text,
         normalized_memory_text=normalized_text,
-        language=None,
+        language=index_language,
         source_contribution_status_snapshot=contribution.status,
     )
     db.flush()
@@ -265,14 +346,21 @@ def _validate_promotion_identity(
         # A later archive/supersede must retire the promotion instead of
         # indexing it - see retire_contribution_promotion.
         raise ContributionIndexingEligibilityError("Source contribution is no longer approved/current")
-    if normalize_memory_text(contribution.memory_text) != normalize_memory_text(
-        promotion.approved_memory_text
-    ):
-        raise ContributionIndexingConflictError("Contribution text does not match promotion snapshot")
 
     profile = db.get(MemoryProfile, promotion.profile_id)
     if profile is None:
         raise ContributionIndexingEligibilityError("Promotion target profile is invalid")
+
+    # Task 65.13.6: approved_memory_text is the index snapshot (canonical when
+    # enabled), not necessarily the durable contribution original.
+    expected_text, _expected_language = resolve_indexable_contribution_text(
+        db,
+        contribution=contribution,
+        profile=profile,
+    )
+    if normalize_memory_text(expected_text) != normalize_memory_text(promotion.approved_memory_text):
+        raise ContributionIndexingConflictError("Contribution text does not match promotion snapshot")
+
     owner = db.get(User, profile.user_id)
     if owner is None:
         raise ContributionIndexingEligibilityError("Promotion target profile owner is invalid")

@@ -38,6 +38,9 @@ class Settings(BaseSettings):
     ai_brain_memory_evidence_preview_length: int = Field(default=480, gt=0)
     ai_brain_rag_evidence_preview_length: int = Field(default=1200, gt=0)
     content_translation_provider: str = "mock"
+    #: Task 65.13.6 — when True, memorial contribution indexing embeds only
+    #: memorial-canonical text (never a foreign-language original).
+    canonical_only_rag_indexing: bool = True
     content_translation_model: str = ""
     content_translation_api_key: SecretStr | None = None
     content_translation_base_url: str = "https://api.openai.com/v1"

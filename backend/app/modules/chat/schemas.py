@@ -32,7 +32,11 @@ class ChatMessageRead(BaseModel):
     id: int
     profile_id: int | None
     role: str
+    #: Display-facing text (user original; assistant viewer translation or canonical fallback).
     content: str
+    source_language: str | None = None
+    display_language: str | None = None
+    display_translation_status: str | None = None
     created_at: datetime
 
 
@@ -40,8 +44,13 @@ class ChatSendResponse(BaseModel):
     message_id: int
     profile_id: int
     conversation_id: str
+    #: Durable original user text (never overwritten by translation).
     user_message: str
+    user_message_language: str | None = None
+    #: Viewer-facing assistant text (translated when needed; canonical fallback).
     ai_response_text: str
+    ai_response_language: str | None = None
+    ai_response_translation_status: str | None = None
     audio_url: str | None
     video_url: str | None
     created_at: datetime

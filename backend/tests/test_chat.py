@@ -15,6 +15,15 @@ def _register_and_login(client, email: str) -> str:
     return login_response.json()["access_token"]
 
 
+def _set_ui_language(client, token: str, language: str) -> None:
+    response = client.patch(
+        "/api/auth/me/preferences",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"preferred_ui_language": language},
+    )
+    assert response.status_code == 200
+
+
 def _create_profile(client, token: str, name: str = "Chat Profile") -> int:
     response = client.post(
         "/api/memory-profiles",
@@ -26,31 +35,38 @@ def _create_profile(client, token: str, name: str = "Chat Profile") -> int:
 
 def test_authenticated_user_can_send_message_to_own_profile(client):
     token = _register_and_login(client, "chat-owner@example.com")
+    _set_ui_language(client, token, "cs")
     profile_id = _create_profile(client, token)
+    # Czech diacritics → same-language identity path (canonical memorial is cs).
+    message = "Ahoj, jak se máš?"
 
     response = client.post(
         f"/api/chat/{profile_id}/messages",
         headers={"Authorization": f"Bearer {token}"},
-        json={"message": "Hello there"},
+        json={"message": message},
     )
 
     assert response.status_code == 200
     body = response.json()
     assert body["profile_id"] == profile_id
-    assert body["user_message"] == "Hello there"
-    assert body["ai_response_text"] == "Chat Profile mock reply: I heard 'Hello there'. Recent messages considered: 0."
+    assert body["user_message"] == message
+    assert body["ai_response_text"] == (
+        f"Chat Profile mock reply: I heard '{message}'. Recent messages considered: 0."
+    )
     assert body["audio_url"] is None
     assert body["video_url"] is None
 
 
 def test_chat_message_stores_user_message_and_ai_response_text(client):
     token = _register_and_login(client, "chat-storage@example.com")
+    _set_ui_language(client, token, "cs")
     profile_id = _create_profile(client, token)
+    message = "Dobrý den, toto je test."
 
     send_response = client.post(
         f"/api/chat/{profile_id}/messages",
         headers={"Authorization": f"Bearer {token}"},
-        json={"message": "Remember this line"},
+        json={"message": message},
     )
     history_response = client.get(
         f"/api/chat/{profile_id}/messages",
@@ -62,24 +78,25 @@ def test_chat_message_stores_user_message_and_ai_response_text(client):
     history = history_response.json()
     assert len(history) == 2
     assert history[0]["role"] == "user"
-    assert history[0]["content"] == "Remember this line"
+    assert history[0]["content"] == message
     assert history[1]["role"] == "assistant"
     assert history[1]["content"] == send_response.json()["ai_response_text"]
 
 
 def test_authenticated_user_can_list_own_chat_history(client):
     token = _register_and_login(client, "chat-history@example.com")
+    _set_ui_language(client, token, "cs")
     profile_id = _create_profile(client, token)
 
     client.post(
         f"/api/chat/{profile_id}/messages",
         headers={"Authorization": f"Bearer {token}"},
-        json={"message": "First"},
+        json={"message": "První zpráva."},
     )
     client.post(
         f"/api/chat/{profile_id}/messages",
         headers={"Authorization": f"Bearer {token}"},
-        json={"message": "Second"},
+        json={"message": "Druhá zpráva."},
     )
 
     response = client.get(
@@ -90,8 +107,8 @@ def test_authenticated_user_can_list_own_chat_history(client):
     assert response.status_code == 200
     history = response.json()
     assert len(history) == 4
-    assert history[0]["content"] == "First"
-    assert history[2]["content"] == "Second"
+    assert history[0]["content"] == "První zpráva."
+    assert history[2]["content"] == "Druhá zpráva."
 
 
 def test_unauthenticated_send_is_rejected(client):
@@ -174,4 +191,6 @@ def test_sql_like_text_is_treated_as_normal_user_content(client):
 
     assert send_response.status_code == 200
     assert history_response.status_code == 200
+    # User original is always preserved in history content, even when English
+    # was canonicalized for Brain/RAG under Task 65.13.5.
     assert history_response.json()[0]["content"] == user_text
