@@ -249,5 +249,8 @@ volumes:
     name: eternal-world-hetzner-qdrant-data
   media_data:
     name: eternal-world-hetzner-media-data
+  # Shared across AI projects on this Hetzner host (same pattern as Russia).
+  # App data (Postgres/Redis/Qdrant/media) stays project-isolated.
   huggingface_cache:
-    name: eternal-world-hetzner-huggingface-cache
+    external: true
+    name: ${SHARED_HF_VOLUME:-shared_huggingface_cache}

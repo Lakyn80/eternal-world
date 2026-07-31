@@ -13,9 +13,11 @@ Goal: one immutable GHCR build per commit; two fully isolated production install
 - Environments `production-russia` / `production-hetzner` with separate secrets.
 - Hetzner Compose under `deploy/hetzner/` (`name: eternal-world-hetzner`, unique volumes/ports).
 - Hetzner loopback ports: backend `8133`, frontend `3117` (Russia stays `8033`/`3017`).
+- Hetzner HF model cache uses the same host-wide external volume as Russia:
+  `shared_huggingface_cache` (app DB/Redis/Qdrant/media stay isolated).
 - Frontend prod image uses empty `VITE_API_URL` (same-origin `/api`) so one image serves both domains.
 - Russia dual deploy never overwrites on-server `.env.prod` (only patches image tags).
-- Never `docker compose down -v`. No data sync between regions.
+- Never `docker compose down -v`. No app-data sync between regions.
 - Legacy `.github/workflows/deploy-staging.yml` kept for emergency Russia-only manual deploys.
 
 ### What changed

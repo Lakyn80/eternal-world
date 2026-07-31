@@ -19,6 +19,9 @@ if [ -n "${GHCR_LOGIN_USER:-}" ] && [ -n "${GHCR_LOGIN_TOKEN:-}" ]; then
   printf '%s\n' "${GHCR_LOGIN_TOKEN}" | docker login ghcr.io -u "${GHCR_LOGIN_USER}" --password-stdin
 fi
 
+# Same host-wide HF model cache as Russia / other lukiora AI projects on this box.
+docker volume create shared_huggingface_cache >/dev/null
+
 mkdir -p /etc/nginx/sites-available /etc/nginx/sites-enabled
 # Do not touch other site configs (e.g. rag.lukiora.com).
 
@@ -49,13 +52,14 @@ if [ ! -f .env.prod ]; then
 fi
 
 tmp_env="$(mktemp)"
-grep -vE '^(BACKEND_IMAGE|FRONTEND_IMAGE|BACKEND_HOST_PORT|FRONTEND_HOST_PORT|BACKEND_CORS_ORIGINS|VITE_API_URL|COMPOSE_PROJECT_NAME)=' .env.prod > "${tmp_env}" || true
+grep -vE '^(BACKEND_IMAGE|FRONTEND_IMAGE|BACKEND_HOST_PORT|FRONTEND_HOST_PORT|BACKEND_CORS_ORIGINS|VITE_API_URL|COMPOSE_PROJECT_NAME|SHARED_HF_VOLUME)=' .env.prod > "${tmp_env}" || true
 {
   printf '%s\n' "COMPOSE_PROJECT_NAME=eternal-world-hetzner"
   printf '%s\n' "BACKEND_IMAGE=ghcr.io/lakyn80/eternal-world-backend:${IMAGE_TAG}"
   printf '%s\n' "FRONTEND_IMAGE=ghcr.io/lakyn80/eternal-world-frontend:${IMAGE_TAG}"
   printf '%s\n' "BACKEND_HOST_PORT=${BACKEND_HOST_PORT}"
   printf '%s\n' "FRONTEND_HOST_PORT=${FRONTEND_HOST_PORT}"
+  printf '%s\n' "SHARED_HF_VOLUME=shared_huggingface_cache"
   printf '%s\n' "BACKEND_CORS_ORIGINS=https://${APP_DOMAIN}"
   printf '%s\n' "VITE_API_URL="
 } >> "${tmp_env}"

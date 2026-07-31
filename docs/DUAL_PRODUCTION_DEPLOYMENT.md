@@ -2,7 +2,9 @@
 
 Eternal World runs as **two completely independent production installations**.
 They share GitHub source and GHCR images only. They never share databases,
-Redis, Qdrant, media, backups, secrets, or volumes.
+Redis, Qdrant, media, backups, secrets, or volumes — except the optional
+host-wide Hugging Face model cache `shared_huggingface_cache` on each server
+(same pattern on Russia and Hetzner so multiple AI projects can reuse model weights).
 
 | | Russia | Hetzner |
 |---|---|---|
@@ -11,6 +13,7 @@ Redis, Qdrant, media, backups, secrets, or volumes.
 | App dir | `/opt/eternal-world` | `/opt/eternal-world` |
 | Compose | `docker-compose.prod.yml` | `deploy/hetzner/docker-compose.yml` |
 | Compose project | `eternal-world` | `eternal-world-hetzner` |
+| HF model cache | `shared_huggingface_cache` (external) | `shared_huggingface_cache` (external) |
 | Backend loopback | `127.0.0.1:8033` | `127.0.0.1:8133` |
 | Frontend loopback | `127.0.0.1:3017` | `127.0.0.1:3117` |
 | GitHub Environment | `production-russia` | `production-hetzner` |
