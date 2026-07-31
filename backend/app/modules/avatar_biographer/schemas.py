@@ -7,7 +7,7 @@ from pydantic import BaseModel, Field, field_validator
 
 from app.modules.family_memory_enrichment.schemas import ClarificationQuestionRead
 
-SUPPORTED_LOCALES = ("cs", "ru")
+SUPPORTED_LOCALES = ("cs", "en", "ru")
 
 #: Task 65.6 - bounded, closed question-intent classification (never
 #: free-form) so it stays a safe, low-cardinality provenance/metric field.
@@ -41,8 +41,12 @@ class BiographerQuestionRead(BaseModel):
     id: int
     profile_id: int
     topic: str
+    #: Language of the stored canonical ``question_text`` (memorial canonical).
     locale: str
     question_text: str
+    display_language: str | None = None
+    display_text: str | None = None
+    display_translation_status: str | None = None
     status: str
     asked_at: datetime
     answered_at: datetime | None
@@ -52,8 +56,11 @@ class BiographerQuestionRead(BaseModel):
 
 
 class BiographerAnswerRequest(BaseModel):
-    locale: str = Field(pattern="^(cs|ru)$")
+    #: Language the answer was written in (viewer/author language).
+    locale: str = Field(pattern="^(cs|en|ru|de)$")
     answer_text: str = Field(min_length=1, max_length=2000)
+    #: Optional explicit source language; defaults to ``locale``.
+    source_language: str | None = None
 
     @field_validator("answer_text")
     @classmethod
@@ -62,6 +69,15 @@ class BiographerAnswerRequest(BaseModel):
         if not normalized:
             raise ValueError("answer_text must not be empty")
         return normalized
+
+    @field_validator("source_language")
+    @classmethod
+    def validate_source_language(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        from app.modules.language_registry import assert_translation_language
+
+        return assert_translation_language(value)
 
 
 class BiographerAnswerResponse(BaseModel):

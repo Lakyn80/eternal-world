@@ -104,7 +104,13 @@ def get_topic(key: str) -> BiographerTopic | None:
 
 
 def question_text_for(topic: BiographerTopic, *, locale: str) -> str:
-    return topic.questions.get(locale, topic.questions["ru"])
+    if locale in topic.questions:
+        return topic.questions[locale]
+    if "en" in topic.questions:
+        return topic.questions["en"]
+    if "cs" in topic.questions:
+        return topic.questions["cs"]
+    return topic.questions["ru"]
 
 
 def next_unused_topic(*, used_topic_keys: set[str]) -> BiographerTopic | None:

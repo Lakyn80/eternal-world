@@ -92,7 +92,7 @@ def get_biographer_resume_endpoint(
     # this endpoint shipped without a locale param and the resume state
     # previously never returned any viewer-facing clarification text of its
     # own to localize.
-    locale: str = Query(default="cs", pattern="^(cs|ru)$"),
+    locale: str = Query(default="cs", pattern="^(cs|en|ru)$"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> BiographerResumeRead:
@@ -105,7 +105,7 @@ def get_biographer_resume_endpoint(
         )
     except (MemorialNotFoundError, MemorialForbiddenError) as exc:
         _raise_access_error(exc)
-    state = get_resume_state(db, profile=profile, locale=locale)
+    state = get_resume_state(db, profile=profile, locale=locale, current_user=current_user)
     return BiographerResumeRead(
         profile_id=state.profile_id,
         biography_status=state.biography_status,
@@ -133,7 +133,7 @@ def get_biographer_resume_endpoint(
 )
 def get_next_biographer_question_endpoint(
     profile_id: ProfileIdPath,
-    locale: str = Query(pattern="^(cs|ru)$"),
+    locale: str = Query(pattern="^(cs|en|ru)$"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> BiographerQuestionRead | None:
@@ -197,6 +197,7 @@ def answer_biographer_question_endpoint(
             actor_role=actor_role,
             locale=payload.locale,
             answer_text=payload.answer_text,
+            source_language=payload.source_language,
         )
     except BiographerNotFoundError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc

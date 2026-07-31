@@ -8,6 +8,34 @@ Status as of 2026-07-16:
 - All future implementation work must follow its production execution, verification, scope, testing, documentation, git, and final-report rules.
 - `AGENTS.md` was added at the repository root to make this instruction visible as the default Codex project guidance.
 
+## Task 65.13.4 - AI Biographer Canonical Language Integration (2026-07-31)
+
+Goal: generate and store Biographer questions in the memorial canonical language; expose viewer display translations without creating per-locale pending identities; preserve foreign-language answers with a canonical translation for review.
+
+### Decisions
+
+- Pending identity stays **one row per profile** (`uq_biographer_questions_profile_pending`) — quarantined per-locale pending (`20260731_0029`) is not restored.
+- Generation language = `MemoryProfile.canonical_language`; request `locale` is display preference only.
+- MCT entity types: `biographer_question`, `biographer_answer`.
+- Answers: original text preserved; candidate `language` = canonical; MCT row for canonical translation.
+- Migration: `20260731_0033`.
+
+### What changed
+
+- `avatar_biographer/question_translations.py` ensure/resolve helpers.
+- `get_next_question` / resume / answer path updated for canonical generation + display fields.
+- API: `BiographerQuestionRead.display_*`; answer `source_language`; locale query allows `en`.
+- Tests: `tests/test_task_65_13_4_biographer_canonical_language.py`.
+
+### Out of scope
+
+- Chat canonicalize (65.13.5), canonical RAG activation (65.13.6), live translation provider.
+
+### Verification
+
+- `pytest tests/test_task_65_13_4_biographer_canonical_language.py tests/test_alembic.py` (+ focused biographer regressions).
+- `alembic upgrade head` → `20260731_0033`.
+
 ## Task 65.13.3 - Invitations, Contributions and Viewer Translation (2026-07-31)
 
 Goal: preserve exact contribution originals, produce memorial-canonical text for owner review, expose viewer display translations, and carry invitation UI-locale hints — without changing RAG indexing to non-canonical text.

@@ -39,7 +39,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.metrics import observe_biographer_resume
-from app.db.models import BiographerQuestion, ConversationMemoryCandidate, MemoryProfile
+from app.db.models import BiographerQuestion, ConversationMemoryCandidate, MemoryProfile, User
 from app.modules.avatar_biographer import repository
 from app.modules.avatar_biographer.repair import repair_stale_active_clarification_blocks
 from app.modules.avatar_biographer.schemas import BiographerQuestionRead
@@ -106,7 +106,13 @@ def _next_clarification_question_read(
     return read
 
 
-def get_resume_state(db: Session, *, profile: MemoryProfile, locale: str = "cs") -> BiographerResumeState:
+def get_resume_state(
+    db: Session,
+    *,
+    profile: MemoryProfile,
+    locale: str = "cs",
+    current_user: User | None = None,
+) -> BiographerResumeState:
     # Task 65.10.1: self-heal a resumed session whose stored
     # `unresolved_clarification_count` claims a clarification is pending but
     # no real, answerable clarification row exists for it - BEFORE
@@ -116,7 +122,18 @@ def get_resume_state(db: Session, *, profile: MemoryProfile, locale: str = "cs")
 
     eligibility = get_eligibility(db, profile=profile)
     pending = repository.get_pending_question(db, profile_id=profile.id)
-    active_question = _build_read(pending) if pending is not None else None
+    if pending is not None and current_user is not None:
+        from app.modules.avatar_biographer.service import _build_localized_read
+
+        active_question = _build_localized_read(
+            db,
+            question=pending,
+            profile=profile,
+            viewer=current_user,
+            display_locale=locale,
+        )
+    else:
+        active_question = _build_read(pending) if pending is not None else None
 
     candidate = _latest_biographer_candidate(db, profile_id=profile.id)
     candidate_id = candidate.id if candidate is not None else None

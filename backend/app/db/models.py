@@ -1738,7 +1738,8 @@ class MemoryContentTranslation(TimestampMixin, Base):
     __table_args__ = (
         CheckConstraint(
             "entity_type IN ('memory_candidate', 'family_memory_contribution', "
-            "'clarification_question', 'fa_chat_turn', 'memorial_contribution')",
+            "'clarification_question', 'fa_chat_turn', 'memorial_contribution', "
+            "'biographer_question', 'biographer_answer')",
             name="memory_content_translations_entity_type",
         ),
         CheckConstraint(

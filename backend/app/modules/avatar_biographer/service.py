@@ -102,19 +102,53 @@ class BiographerConflictError(Exception):
     pass
 
 
-def _build_read(question: BiographerQuestion) -> BiographerQuestionRead:
+def _build_read(
+    question: BiographerQuestion,
+    *,
+    display_language: str | None = None,
+    display_text: str | None = None,
+    display_translation_status: str | None = None,
+) -> BiographerQuestionRead:
     return BiographerQuestionRead(
         id=question.id,
         profile_id=question.profile_id,
         topic=question.topic,
         locale=question.locale,
         question_text=question.question_text,
+        display_language=display_language,
+        display_text=display_text if display_text is not None else question.question_text,
+        display_translation_status=display_translation_status,
         status=question.status,
         asked_at=question.asked_at,
         answered_at=question.answered_at,
         resulting_candidate_id=question.resulting_candidate_id,
         generation_mode=question.generation_mode,
         fallback_used=question.fallback_used,
+    )
+
+
+def _build_localized_read(
+    db: Session,
+    *,
+    question: BiographerQuestion,
+    profile: MemoryProfile,
+    viewer: User,
+    display_locale: str | None,
+) -> BiographerQuestionRead:
+    from app.modules.avatar_biographer.question_translations import resolve_biographer_question_views
+
+    views = resolve_biographer_question_views(
+        db,
+        question=question,
+        profile=profile,
+        viewer=viewer,
+        display_locale=display_locale,
+    )
+    return _build_read(
+        question,
+        display_language=views.display_language,
+        display_text=views.display_text,
+        display_translation_status=views.display_translation_status,
     )
 
 
@@ -232,7 +266,18 @@ def get_next_question(
 ) -> BiographerQuestionRead | None:
     """Returns the current pending question (resuming state if one already
     exists), a newly generated context-aware question for the next
-    coverage-selected topic, or `None` once no topic remains selectable."""
+    coverage-selected topic, or `None` once no topic remains selectable.
+
+    Task 65.13.4: question text is generated and stored in the memorial
+    ``canonical_language``. The request ``locale`` is only a viewer display
+    preference used to attach a derived translation — it never creates a
+    second pending question identity.
+    """
+
+    from app.modules.language_registry import assert_canonical_memorial_language
+
+    display_locale = locale
+    canonical_language = assert_canonical_memorial_language(profile.canonical_language)
 
     eligibility = get_eligibility(db, profile=profile)
     log_event(
@@ -251,12 +296,20 @@ def get_next_question(
             profile_id=profile.id,
             reason=eligibility.blocked_reason,
         )
-        observe_biographer_blocked(reason=eligibility.blocked_reason or "other", locale=locale)
+        observe_biographer_blocked(
+            reason=eligibility.blocked_reason or "other", locale=canonical_language
+        )
         raise BiographerBlockedError(eligibility.blocked_reason or "blocked")
 
     pending = repository.get_pending_question(db, profile_id=profile.id)
     if pending is not None:
-        return _build_read(pending)
+        return _build_localized_read(
+            db,
+            question=pending,
+            profile=profile,
+            viewer=current_user,
+            display_locale=display_locale,
+        )
 
     all_questions = repository.list_questions_for_profile(db, profile_id=profile.id)
     unresolved_candidate_topics = repository.get_unresolved_candidate_topic_keys(db, profile_id=profile.id)
@@ -269,7 +322,7 @@ def get_next_question(
     # topic, computed from the same bounded, verified, owner/profile-scoped
     # evidence it received before.
     context_batch = _safe_context_batch(
-        db, current_user=current_user, profile_id=profile.id, locale=locale
+        db, current_user=current_user, profile_id=profile.id, locale=canonical_language
     )
     observe_biographer_topic_query_batch(
         topic_query_batch_size=context_batch.topic_query_batch_size,
@@ -302,7 +355,9 @@ def get_next_question(
     selected = coverage.select_next_topic(coverages, total_questions_asked=len(all_questions))
     if selected is None:
         if any(c.blocked_from_selection for c in coverages):
-            observe_biographer_blocked(reason=BLOCKED_CANDIDATE_WAITING_FOR_REVIEW, locale=locale)
+            observe_biographer_blocked(
+                reason=BLOCKED_CANDIDATE_WAITING_FOR_REVIEW, locale=canonical_language
+            )
             raise BiographerBlockedError(BLOCKED_CANDIDATE_WAITING_FOR_REVIEW)
         return None
 
@@ -342,7 +397,7 @@ def get_next_question(
         db,
         topic=topic,
         context_package=context_package,
-        locale=locale,
+        locale=canonical_language,
         profile_id=profile.id,
         user_id=current_user.id,
         trace_id=trace_id,
@@ -353,15 +408,20 @@ def get_next_question(
     duration_seconds = perf_counter() - started_at
 
     observe_biographer_generation_duration(
-        locale=locale, result=generated.validation_result, duration_seconds=duration_seconds
+        locale=canonical_language,
+        result=generated.validation_result,
+        duration_seconds=duration_seconds,
     )
     observe_biographer_question(
-        locale=locale, topic=topic.key, result=generated.validation_result, generation_mode=generated.generation_mode
+        locale=canonical_language,
+        topic=topic.key,
+        result=generated.validation_result,
+        generation_mode=generated.generation_mode,
     )
     if generated.fallback_used:
         observe_biographer_fallback(
             reason="validation_failed_twice" if context_package.retrieval_used else "retrieval_unavailable",
-            locale=locale,
+            locale=canonical_language,
         )
 
     try:
@@ -369,7 +429,7 @@ def get_next_question(
             db,
             profile_id=profile.id,
             topic=topic.key,
-            locale=locale,
+            locale=canonical_language,
             question_text=generated.question_text,
             generation_mode=generated.generation_mode,
             provider=generated.provider,
@@ -390,7 +450,13 @@ def get_next_question(
         db.rollback()
         winner = repository.get_pending_question(db, profile_id=profile.id)
         if winner is not None:
-            return _build_read(winner)
+            return _build_localized_read(
+                db,
+                question=winner,
+                profile=profile,
+                viewer=current_user,
+                display_locale=display_locale,
+            )
         raise
     db.refresh(question)
 
@@ -403,7 +469,13 @@ def get_next_question(
         question_id=question.id,
         generation_mode=question.generation_mode,
     )
-    return _build_read(question)
+    return _build_localized_read(
+        db,
+        question=question,
+        profile=profile,
+        viewer=current_user,
+        display_locale=display_locale,
+    )
 
 
 def skip_question(db: Session, *, profile: MemoryProfile, question_id: int) -> BiographerQuestionRead:
@@ -449,12 +521,19 @@ def answer_question(
     actor_role: FamilyMemoryActorRole,
     locale: str,
     answer_text: str,
+    source_language: str | None = None,
 ) -> BiographerAnswerResponse:
+    from app.modules.avatar_biographer.question_translations import ensure_biographer_answer_translation
+    from app.modules.language_registry import assert_canonical_memorial_language, assert_translation_language
+
     question = repository.get_question_for_profile(db, profile_id=profile.id, question_id=question_id)
     if question is None:
         raise BiographerNotFoundError("Biographer question not found")
     if question.status != "pending":
         raise BiographerConflictError("Question is not pending")
+
+    answer_source_language = assert_translation_language(source_language or locale)
+    canonical_language = assert_canonical_memorial_language(profile.canonical_language)
 
     topic = topic_catalog.get_topic(question.topic)
     intended_memory_type = topic.memory_type if topic is not None else "general"
@@ -469,7 +548,9 @@ def answer_question(
         user_message_excerpt=excerpt,
         proposed_memory_text=excerpt,
         reason=f"AI Biographer topic: {question.topic}",
-        language=locale,
+        #: Candidate language tracks memorial canonical for owner review
+        #: (Task 65.13.4). Exact original answer text is preserved below.
+        language=canonical_language,
         enrichment_status=EnrichmentStatus.DRAFT,
         finalized_memory_text=None,
         privacy_scope=PrivacyScope.PRIVATE_OWNER,
@@ -485,6 +566,15 @@ def answer_question(
         candidate_id=candidate.id,
         actor=actor,
         initial_text=answer_text,
+    )
+
+    ensure_biographer_answer_translation(
+        db,
+        profile=profile,
+        candidate_id=candidate.id,
+        source_language=answer_source_language,
+        answer_text=answer_text,
+        actor=current_user,
     )
 
     if candidate.memory_type != intended_memory_type:
@@ -536,8 +626,10 @@ def answer_question(
         candidate_id=candidate.id,
         enrichment_status=enrichment.enrichment_status.value,
         unresolved_clarification_count=enrichment.unresolved_clarification_count,
+        answer_source_language=answer_source_language,
+        canonical_language=canonical_language,
     )
-    observe_biographer_direct_answer(result="accepted", locale=locale)
+    observe_biographer_direct_answer(result="accepted", locale=canonical_language)
 
     repository.mark_answered(
         db,

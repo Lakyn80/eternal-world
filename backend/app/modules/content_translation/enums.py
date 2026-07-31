@@ -47,6 +47,8 @@ class TranslatableEntityType(str, Enum):
     CLARIFICATION_QUESTION = "clarification_question"
     FA_CHAT_TURN = "fa_chat_turn"
     MEMORIAL_CONTRIBUTION = "memorial_contribution"
+    BIOGRAPHER_QUESTION = "biographer_question"
+    BIOGRAPHER_ANSWER = "biographer_answer"
 
 
 class ContentTranslationProviderName(str, Enum):

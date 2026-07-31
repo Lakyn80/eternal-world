@@ -9,7 +9,11 @@ from app.modules.avatar_biographer.context_package import TopicContextPackage
 from app.modules.avatar_biographer.topics import BiographerTopic
 from app.db.models import BiographerQuestion
 
-_LOCALE_NAMES = {"cs": "Czech (čeština)", "ru": "Russian (русский)"}
+_LOCALE_NAMES = {
+    "cs": "Czech (čeština)",
+    "ru": "Russian (русский)",
+    "en": "English",
+}
 
 _QUESTION_INTENTS = (
     "specific_memory",
