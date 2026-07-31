@@ -84,8 +84,6 @@ export type Copy = {
   password: string;
   signedInAs: string;
   signOut: string;
-  sessionExpired: string;
-  refresh: string;
   chat: string;
   chatEmpty: string;
   chatPlaceholder: string;
@@ -374,8 +372,6 @@ export const COPY: Record<Lang, Copy> = {
     password: 'Password',
     signedInAs: 'Signed in as',
     signOut: 'Sign out',
-    sessionExpired: 'Your session has expired. Please sign in again.',
-    refresh: 'Refresh',
     chat: 'Chat',
     chatEmpty: 'No messages yet. Say hello to start the conversation.',
     chatPlaceholder: 'Write a message...',
@@ -662,8 +658,6 @@ export const COPY: Record<Lang, Copy> = {
     password: 'Heslo',
     signedInAs: 'Přihlášen jako',
     signOut: 'Odhlásit',
-    sessionExpired: 'Vaše přihlášení vypršelo. Přihlaste se prosím znovu.',
-    refresh: 'Obnovit',
     chat: 'Chat',
     chatEmpty: 'Zatím žádné zprávy. Napište pozdrav a začněte konverzaci.',
     chatPlaceholder: 'Napište zprávu...',
@@ -950,8 +944,6 @@ export const COPY: Record<Lang, Copy> = {
     password: 'Пароль',
     signedInAs: 'Вошли как',
     signOut: 'Выйти',
-    sessionExpired: 'Ваш сеанс истёк. Пожалуйста, войдите снова.',
-    refresh: 'Обновить',
     chat: 'Чат',
     chatEmpty: 'Пока нет сообщений. Напишите привет, чтобы начать разговор.',
     chatPlaceholder: 'Напишите сообщение...',
@@ -1637,10 +1629,16 @@ export default function MemorialWorkspace({
 
   function onAuthenticated(nextSession: AuthSession) {
     setSession(nextSession);
+    setNotice(null);
+    setError(null);
     void loadMemorials(nextSession.accessToken, { resolveBootstrap: true });
   }
 
-  function signOut(reason?: 'expired') {
+  function signOut(_reason?: 'expired') {
+    // On 401 we silently return to the login form — no "session expired"
+    // banner. That notice was often wrong (stale handler / leftover after
+    // re-login) and showed the wrong language because the unauthorized
+    // callback closed over the first-render copy strings.
     setSession(null);
     setMemorials([]);
     setSelected(null);
@@ -1648,7 +1646,7 @@ export default function MemorialWorkspace({
     setContributions([]);
     setReviewQueue([]);
     setError(null);
-    setNotice(reason === 'expired' ? t.sessionExpired : null);
+    setNotice(null);
     void logoutSession().catch(() => {});
     // Clear the active-memorial URL too, so a subsequently logged-in user
     // (same browser tab) never lands back on the previous user's deep link.
@@ -1744,10 +1742,7 @@ export default function MemorialWorkspace({
                   <p className="text-xs uppercase tracking-[.22em] text-fg/40">{t.signedInAs}</p>
                   <strong className="block truncate text-sm text-fg sm:text-base">{session.email}</strong>
                 </div>
-                <div className="grid grid-cols-2 gap-2 sm:flex sm:justify-end">
-                  <button className="rounded-full border border-white/15 px-4 py-2.5 text-sm text-fg/75 transition hover:bg-white/10" onClick={() => void loadMemorials()} type="button">
-                    {t.refresh}
-                  </button>
+                <div className="flex sm:justify-end">
                   <button className="rounded-full border border-white/15 px-4 py-2.5 text-sm text-fg/75 transition hover:bg-white/10" onClick={() => signOut()} type="button">
                     {t.signOut}
                   </button>
