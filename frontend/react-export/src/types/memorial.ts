@@ -18,6 +18,9 @@ export type MemorialRead = {
   personality: string | null;
   catchphrases: string | null;
   is_public: boolean;
+  canonical_language: 'cs' | 'en' | 'ru';
+  canonical_language_source: string;
+  canonical_language_locked_at: string;
   current_user_role: MemorialRole;
   created_at: string;
   updated_at: string;

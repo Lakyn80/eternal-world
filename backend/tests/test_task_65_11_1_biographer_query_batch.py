@@ -211,7 +211,7 @@ def _register_and_login(client, email: str) -> str:
 
 def create_memorial_with_indexed_biography(client, email: str) -> tuple[str, int]:
     token = _register_and_login(client, email)
-    created = client.post("/api/memorials", headers=_auth_headers(token), json={"name": "Batch Memorial"})
+    created = client.post("/api/memorials", headers=_auth_headers(token), json={"name": "Batch Memorial", "canonical_language": "cs", "confirm_canonical_language": True})
     assert created.status_code == 201
     profile_id = created.json()["id"]
 

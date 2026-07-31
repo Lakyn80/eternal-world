@@ -1,5 +1,6 @@
 import type { Lang } from '../i18n';
 import { navigate } from '../lib/router';
+import { updatePreferredUiLanguage } from '../lib/memorialApi';
 import MemorialWorkspace from './MemorialWorkspace';
 
 const LANGS: Lang[] = ['en', 'cs', 'ru'];
@@ -16,6 +17,13 @@ export default function AuthenticatedApp({ lang, setLang }: { lang: Lang; setLan
     `font-sans text-xs font-medium rounded-full px-3 py-1.5 transition-colors ${
       lang === candidate ? 'bg-cyan/20 text-[#bfe9ff]' : 'text-fg/50 hover:text-fg/70'
     }`;
+
+  const onSetLang = (next: Lang) => {
+    setLang(next);
+    void updatePreferredUiLanguage('', next).catch(() => {
+      // Cookie session may be absent on public shell; local preference still applies.
+    });
+  };
 
   return (
     <div className="min-h-screen bg-ink text-fg font-sans">
@@ -38,14 +46,14 @@ export default function AuthenticatedApp({ lang, setLang }: { lang: Lang; setLan
         </button>
         <div className="flex shrink-0 items-center gap-1 p-[3px] border border-white/[0.12] rounded-full">
           {LANGS.map((candidate) => (
-            <button className={langButtonClassName(candidate)} key={candidate} onClick={() => setLang(candidate)} type="button">
+            <button className={langButtonClassName(candidate)} key={candidate} onClick={() => onSetLang(candidate)} type="button">
               {candidate.toUpperCase()}
             </button>
           ))}
         </div>
       </nav>
       <main className="pt-16">
-        <MemorialWorkspace lang={lang} />
+        <MemorialWorkspace lang={lang} setLang={onSetLang} />
       </main>
     </div>
   );

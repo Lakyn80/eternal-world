@@ -175,14 +175,20 @@ def _retire_contribution_promotion_safely(db: Session, *, contribution: Memorial
 
 
 def create_memorial(db: Session, *, current_user: User, payload: MemorialCreate) -> tuple[MemoryProfile, MemorialMembership]:
+    from app.modules.language_registry.persona_sync import sync_persona_languages_to_canonical, utcnow
+
     current_profiles = memory_profiles_repository.count_memory_profiles_for_user(db, current_user.id)
     enforce_memory_profile_creation_limit(current_user=current_user, current_profiles=current_profiles)
+    profile_fields = payload.model_dump(exclude={"confirm_canonical_language"})
     profile = memory_profiles_repository.create_memory_profile(
         db,
         user_id=current_user.id,
-        **payload.model_dump(),
+        canonical_language_source="creator_preference",
+        canonical_language_locked_at=utcnow(),
+        **profile_fields,
     )
     db.flush()
+    sync_persona_languages_to_canonical(db, profile=profile)
     membership = repository.create_membership(
         db,
         profile_id=profile.id,

@@ -41,6 +41,8 @@ export type MemorialCreatePayload = {
   biography?: string | null;
   personality?: string | null;
   catchphrases?: string | null;
+  canonical_language: 'cs' | 'en' | 'ru';
+  confirm_canonical_language: true;
 };
 
 export type ContributionCreatePayload = {
@@ -169,7 +171,19 @@ export async function register(email: string, password: string, fullName: string
 export type SessionUser = {
   id: number;
   email: string;
+  preferred_ui_language?: 'cs' | 'en' | 'ru';
 };
+
+export async function updatePreferredUiLanguage(
+  accessToken: string,
+  preferred_ui_language: 'cs' | 'en' | 'ru'
+): Promise<SessionUser> {
+  return requestJson<SessionUser>(
+    '/api/auth/me/preferences',
+    { method: 'PATCH', body: JSON.stringify({ preferred_ui_language }) },
+    accessToken
+  );
+}
 
 /** Task 65.7 (Part B.13): the startup rehydration probe - resolves the
  * browser-session cookie (set by `login`) into the current user, with no

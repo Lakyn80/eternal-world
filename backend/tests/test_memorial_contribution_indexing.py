@@ -89,7 +89,7 @@ def _register_and_login(client, email: str) -> str:
 
 
 def _create_memorial(client, token: str, name: str = "Bridge Memorial") -> int:
-    response = client.post("/api/memorials", headers=_auth_headers(token), json={"name": name})
+    response = client.post("/api/memorials", headers=_auth_headers(token), json={"name": name, "canonical_language": "cs", "confirm_canonical_language": True})
     assert response.status_code == 201
     return response.json()["id"]
 

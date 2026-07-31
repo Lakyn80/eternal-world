@@ -256,7 +256,7 @@ def test_backpressure_created_via_a_is_enforced_via_b(replica_a, replica_b, monk
     monkeypatch.setattr(settings, "max_active_heavy_jobs_per_user", 1)
 
     profile_response = replica_a.post(
-        "/api/memory-profiles", headers=_auth_headers(token), json={"name": "Multi-replica profile"}
+        "/api/memory-profiles", headers=_auth_headers(token), json={"name": "Multi-replica profile", "canonical_language": "cs", "confirm_canonical_language": True}
     )
     profile_id = profile_response.json()["id"]
     source_response = replica_a.post(
@@ -289,7 +289,7 @@ def test_backpressure_created_via_a_is_enforced_via_b(replica_a, replica_b, monk
 def test_active_chat_written_via_a_resumes_via_b(replica_a, replica_b):
     token = _register_and_login(replica_a, "multi-replica-chat@example.com")
     profile_response = replica_a.post(
-        "/api/memory-profiles", headers=_auth_headers(token), json={"name": "Chat profile"}
+        "/api/memory-profiles", headers=_auth_headers(token), json={"name": "Chat profile", "canonical_language": "cs", "confirm_canonical_language": True}
     )
     profile_id = profile_response.json()["id"]
 

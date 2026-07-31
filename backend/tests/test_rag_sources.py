@@ -30,7 +30,7 @@ def _create_profile(client, token: str, name: str) -> int:
     response = client.post(
         "/api/memory-profiles",
         headers=_auth_headers(token),
-        json={"name": name},
+        json={"name": name, "canonical_language": "cs", "confirm_canonical_language": True},
     )
     return response.json()["id"]
 

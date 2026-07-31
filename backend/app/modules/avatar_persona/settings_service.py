@@ -90,15 +90,39 @@ def resolve_avatar_persona(
 ) -> ResolvedAvatarPersona:
     """One bounded lookup per profile/request. Never logs communication text."""
 
+    from app.modules.language_registry import (
+        assert_canonical_memorial_language,
+        default_supported_chat_languages,
+        is_canonical_memorial_language,
+        is_chat_input_language,
+    )
+
     row = settings_repository.get_settings_by_profile_id(db, profile_id=profile.id)
     if row is None:
+        if is_canonical_memorial_language(getattr(profile, "canonical_language", None)):
+            canonical = assert_canonical_memorial_language(profile.canonical_language)
+            return ResolvedAvatarPersona(
+                profile_id=profile.id,
+                voice_mode=DEFAULT_VOICE_MODE,
+                voice_style=DEFAULT_VOICE_STYLE,
+                personality_traits=[],
+                primary_language=canonical,  # type: ignore[arg-type]
+                supported_languages=list(default_supported_chat_languages(primary=canonical)),
+                remembered_age=None,
+                communication_profile="",
+                configured=False,
+            )
         return default_resolved_persona(profile_id=profile.id)
 
-    primary = (
-        row.primary_language
-        if row.primary_language in ALLOWED_PERSONA_LANGUAGES
-        else DEFAULT_PRIMARY_LANGUAGE
-    )
+    # Memorial canonical language is the source of truth for persona primary.
+    if is_canonical_memorial_language(getattr(profile, "canonical_language", None)):
+        primary = assert_canonical_memorial_language(profile.canonical_language)
+    else:
+        primary = (
+            row.primary_language
+            if row.primary_language in ALLOWED_PERSONA_LANGUAGES
+            else DEFAULT_PRIMARY_LANGUAGE
+        )
     voice_mode: VoiceMode = (
         row.voice_mode if row.voice_mode in ALLOWED_VOICE_MODES else DEFAULT_VOICE_MODE  # type: ignore[assignment]
     )
@@ -109,13 +133,20 @@ def resolve_avatar_persona(
     if len(communication) > MAX_COMMUNICATION_PROFILE_LENGTH:
         communication = communication[:MAX_COMMUNICATION_PROFILE_LENGTH]
 
+    supported = _normalize_languages(row.supported_languages, primary=primary)
+    # Ensure chat-capable languages remain available even when older rows only
+    # stored the primary code.
+    for code in default_supported_chat_languages(primary=primary):  # type: ignore[arg-type]
+        if code not in supported and is_chat_input_language(code):
+            supported.append(code)  # type: ignore[arg-type]
+
     return ResolvedAvatarPersona(
         profile_id=profile.id,
         voice_mode=voice_mode,
         voice_style=voice_style,
         personality_traits=_normalize_traits(row.personality_traits),
         primary_language=primary,  # type: ignore[arg-type]
-        supported_languages=_normalize_languages(row.supported_languages, primary=primary),
+        supported_languages=supported,
         remembered_age=row.remembered_age,
         communication_profile=communication,
         configured=True,
@@ -233,7 +264,9 @@ def select_response_language(
         return explicit_supported_language
     if detected_language is not None and detected_language in persona.supported_languages:
         return detected_language
-    if detected_language is not None and detected_language in ALLOWED_PERSONA_LANGUAGES:
+    from app.modules.language_registry import is_chat_input_language
+
+    if detected_language is not None and is_chat_input_language(detected_language):
         return detected_language
     if fallback_to_primary:
         return persona.primary_language
@@ -272,6 +305,13 @@ def apply_settings_update(
 ) -> ResolvedAvatarPersona:
     """Owner update path — allowlisted fields only; never logs persona text."""
 
+    language_fields = fields_set & {"primary_language", "supported_languages"}
+    if language_fields:
+        raise AvatarPersonaValidationError(
+            "Persona languages are derived from the memorial canonical language "
+            "and cannot be changed here"
+        )
+
     current = resolve_avatar_persona(db, profile=profile)
     voice_mode = payload.voice_mode if "voice_mode" in fields_set and payload.voice_mode is not None else current.voice_mode
     voice_style = (
@@ -282,16 +322,8 @@ def apply_settings_update(
         if "personality_traits" in fields_set and payload.personality_traits is not None
         else list(current.personality_traits)
     )
-    primary = (
-        payload.primary_language
-        if "primary_language" in fields_set and payload.primary_language is not None
-        else current.primary_language
-    )
-    supported = (
-        list(payload.supported_languages)
-        if "supported_languages" in fields_set and payload.supported_languages is not None
-        else list(current.supported_languages)
-    )
+    primary = current.primary_language
+    supported = list(current.supported_languages)
     if primary not in supported:
         supported = [primary, *[code for code in supported if code != primary]]
 

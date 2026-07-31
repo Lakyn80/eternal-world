@@ -230,6 +230,8 @@ export type Copy = {
   createMemorial: string;
   name: string;
   description: string;
+  canonicalLanguage: string;
+  confirmCanonicalLanguage: string;
   yourMemorials: string;
   empty: string;
   openWorkspace: string;
@@ -515,6 +517,8 @@ export const COPY: Record<Lang, Copy> = {
     createMemorial: 'Create memorial',
     name: 'Name',
     description: 'Description',
+    canonicalLanguage: 'Memorial language',
+    confirmCanonicalLanguage: 'I understand this memorial language cannot be changed later',
     yourMemorials: 'Your memorials',
     empty: 'No memorials are available for this account yet.',
     openWorkspace: 'Open workspace',
@@ -801,6 +805,8 @@ export const COPY: Record<Lang, Copy> = {
     createMemorial: 'Vytvořit memorial',
     name: 'Jméno',
     description: 'Popis',
+    canonicalLanguage: 'Jazyk memorialu',
+    confirmCanonicalLanguage: 'Rozumím, že jazyk memorialu už později nepůjde změnit',
     yourMemorials: 'Vaše memorialy',
     empty: 'Tento účet zatím nemá žádný memorial.',
     openWorkspace: 'Otevřít workspace',
@@ -1087,6 +1093,8 @@ export const COPY: Record<Lang, Copy> = {
     createMemorial: 'Создать мемориал',
     name: 'Имя',
     description: 'Описание',
+    canonicalLanguage: 'Язык мемориала',
+    confirmCanonicalLanguage: 'Я понимаю, что язык мемориала нельзя будет изменить позже',
     yourMemorials: 'Ваши мемориалы',
     empty: 'Для этого аккаунта пока нет мемориалов.',
     openWorkspace: 'Открыть workspace',
@@ -1376,7 +1384,13 @@ export function shortTextPreview(value: string | null | undefined): string {
   return `${normalized.slice(0, SHORT_PREVIEW_MAX_LENGTH).trimEnd()}…`;
 }
 
-export default function MemorialWorkspace({ lang }: { lang: Lang }) {
+export default function MemorialWorkspace({
+  lang,
+  setLang
+}: {
+  lang: Lang;
+  setLang?: (next: Lang) => void;
+}) {
   const t = COPY[lang];
   const [session, setSession] = useState<AuthSession | null>(null);
   const [memorials, setMemorials] = useState<MemorialRead[]>([]);
@@ -1655,6 +1669,9 @@ export default function MemorialWorkspace({ lang }: { lang: Lang }) {
     getSession()
       .then((user) => {
         if (cancelled) return;
+        if (user.preferred_ui_language && setLang) {
+          setLang(user.preferred_ui_language);
+        }
         // No bearer token is available from a cookie-only resume - every
         // `memorialApi` call already falls back to the session cookie
         // (`credentials: 'include'`) whenever no token is supplied, so an
@@ -2117,6 +2134,8 @@ export function CreateMemorialForm({
 }) {
   const [name, setName] = useState('');
   const [biography, setBiography] = useState('');
+  const [canonicalLanguage, setCanonicalLanguage] = useState<'cs' | 'en' | 'ru'>('cs');
+  const [confirmCanonical, setConfirmCanonical] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [limitErrorOnSubmit, setLimitErrorOnSubmit] = useState(false);
@@ -2127,21 +2146,25 @@ export function CreateMemorialForm({
       setError('Memorial name is required.');
       return;
     }
+    if (!confirmCanonical) {
+      setError(t.confirmCanonicalLanguage);
+      return;
+    }
     setBusy(true);
     setError(null);
     setLimitErrorOnSubmit(false);
     try {
-      const memorial = await createMemorial(token, { name: name.trim(), biography: biography.trim() || null });
+      const memorial = await createMemorial(token, {
+        name: name.trim(),
+        biography: biography.trim() || null,
+        canonical_language: canonicalLanguage,
+        confirm_canonical_language: true
+      });
       setName('');
       setBiography('');
+      setConfirmCanonical(false);
       onCreated(memorial);
     } catch (createError) {
-      // The backend remains authoritative: even if the frontend's own
-      // billing-limits check said the form should be offered, a concurrent
-      // change (e.g. another tab already created the last allowed profile)
-      // can still return this error on submit. Normalize it into the same
-      // friendly, actionable message rather than surfacing raw backend
-      // wording, and preserve the entered draft text instead of clearing it.
       if (createError instanceof MemorialApiError && createError.status === 403) {
         setLimitErrorOnSubmit(true);
       } else {
@@ -2176,6 +2199,27 @@ export function CreateMemorialForm({
       <form className="mt-5 grid gap-4" onSubmit={submit}>
         <Field label={t.name} value={name} onChange={setName} required />
         <Textarea label={t.description} value={biography} onChange={setBiography} />
+        <label className="grid gap-2 text-sm text-fg/62">
+          <span>{t.canonicalLanguage}</span>
+          <select
+            className="rounded-2xl border border-white/10 bg-ink px-4 py-3 text-fg outline-none focus:border-cyan/70"
+            onChange={(event) => setCanonicalLanguage(event.target.value as 'cs' | 'en' | 'ru')}
+            value={canonicalLanguage}
+          >
+            <option value="cs">Čeština (cs)</option>
+            <option value="en">English (en)</option>
+            <option value="ru">Русский (ru)</option>
+          </select>
+        </label>
+        <label className="flex items-start gap-3 text-sm text-fg/70">
+          <input
+            checked={confirmCanonical}
+            className="mt-1"
+            onChange={(event) => setConfirmCanonical(event.target.checked)}
+            type="checkbox"
+          />
+          <span>{t.confirmCanonicalLanguage}</span>
+        </label>
         {error && <p className="rounded-2xl border border-red-400/30 bg-red-500/10 px-4 py-3 text-sm text-red-100">{error}</p>}
         <button className="rounded-full bg-gradient-to-r from-cyan to-violet px-6 py-3.5 text-sm font-semibold text-ink disabled:opacity-55" disabled={busy} type="submit">
           {busy ? t.creating : t.createMemorial}

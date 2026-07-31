@@ -39,6 +39,8 @@ class MemoryProfileCreate(BaseModel):
     personality: str | None = None
     catchphrases: str | None = None
     is_public: bool = False
+    canonical_language: str = Field(min_length=2, max_length=8)
+    confirm_canonical_language: bool = False
 
     @field_validator("name")
     @classmethod
@@ -50,13 +52,24 @@ class MemoryProfileCreate(BaseModel):
     def validate_optional_text(cls, value: str | None) -> str | None:
         return normalize_optional_text(value)
 
+    @field_validator("canonical_language")
+    @classmethod
+    def validate_canonical_language(cls, value: str) -> str:
+        from app.modules.language_registry import assert_canonical_memorial_language
+
+        return assert_canonical_memorial_language(value)
+
     @model_validator(mode="after")
-    def validate_dates(self) -> "MemoryProfileCreate":
+    def validate_dates_and_confirmation(self) -> "MemoryProfileCreate":
         validate_date_range(self.birth_date, self.death_date)
+        if not self.confirm_canonical_language:
+            raise ValueError("confirm_canonical_language must be true")
         return self
 
 
 class MemoryProfileUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     name: str | None = Field(default=None, max_length=120)
     birth_date: date | None = None
     death_date: date | None = None
@@ -102,6 +115,9 @@ class MemoryProfileRead(BaseModel):
     personality: str | None
     catchphrases: str | None
     is_public: bool
+    canonical_language: str
+    canonical_language_source: str
+    canonical_language_locked_at: datetime
     created_at: datetime
     updated_at: datetime
 
@@ -139,6 +155,9 @@ def build_memory_profile_read(memory_profile: Any) -> MemoryProfileRead:
         personality=memory_profile.personality,
         catchphrases=memory_profile.catchphrases,
         is_public=memory_profile.is_public,
+        canonical_language=memory_profile.canonical_language,
+        canonical_language_source=memory_profile.canonical_language_source,
+        canonical_language_locked_at=memory_profile.canonical_language_locked_at,
         created_at=memory_profile.created_at,
         updated_at=memory_profile.updated_at,
     )

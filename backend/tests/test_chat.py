@@ -19,7 +19,7 @@ def _create_profile(client, token: str, name: str = "Chat Profile") -> int:
     response = client.post(
         "/api/memory-profiles",
         headers={"Authorization": f"Bearer {token}"},
-        json={"name": name},
+        json={"name": name, "canonical_language": "cs", "confirm_canonical_language": True},
     )
     return response.json()["id"]
 

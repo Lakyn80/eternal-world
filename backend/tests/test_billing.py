@@ -183,7 +183,7 @@ def test_billing_limits_current_profiles_reflects_real_memory_profile_count(clie
     assert before.json()["current_usage"]["current_profiles"] == 0
 
     create_response = client.post(
-        "/api/memorials", headers=_auth_headers(token), json={"name": "First Memorial"}
+        "/api/memorials", headers=_auth_headers(token), json={"name": "First Memorial", "canonical_language": "cs", "confirm_canonical_language": True}
     )
     assert create_response.status_code == 201
 
@@ -193,7 +193,15 @@ def test_billing_limits_current_profiles_reflects_real_memory_profile_count(clie
 
 def test_billing_limits_current_profiles_is_scoped_to_the_requesting_user(client):
     other_token = _register_and_login(client, "billing-limits-other@example.com")
-    client.post("/api/memorials", headers=_auth_headers(other_token), json={"name": "Someone Else's Memorial"})
+    client.post(
+        "/api/memorials",
+        headers=_auth_headers(other_token),
+        json={
+            "name": "Someone Else's Memorial",
+            "canonical_language": "cs",
+            "confirm_canonical_language": True,
+        },
+    )
 
     token = _register_and_login(client, "billing-limits-self@example.com")
     response = client.get("/api/billing/limits", headers=_auth_headers(token))

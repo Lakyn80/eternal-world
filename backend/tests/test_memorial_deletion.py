@@ -76,7 +76,7 @@ def _register_and_login(client, email: str) -> str:
 
 
 def _create_memorial(client, token: str, name: str = "Deletion Memorial") -> int:
-    response = client.post("/api/memorials", headers=_auth_headers(token), json={"name": name})
+    response = client.post("/api/memorials", headers=_auth_headers(token), json={"name": name, "canonical_language": "cs", "confirm_canonical_language": True})
     assert response.status_code == 201
     return response.json()["id"]
 
@@ -311,6 +311,6 @@ def test_owner_can_create_new_memorial_after_deleting_previous_one(client):
     assert delete_response.status_code == 204
 
     recreate_response = client.post(
-        "/api/memorials", headers=_auth_headers(token), json={"name": "Second Memorial"}
+        "/api/memorials", headers=_auth_headers(token), json={"name": "Second Memorial", "canonical_language": "cs", "confirm_canonical_language": True}
     )
     assert recreate_response.status_code == 201

@@ -35,7 +35,7 @@ def _create_memorial(client, token: str, name: str = "Capability Memorial") -> i
     response = client.post(
         "/api/memorials",
         headers=_auth_headers(token),
-        json={"name": name},
+        json={"name": name, "canonical_language": "cs", "confirm_canonical_language": True},
     )
     assert response.status_code == 201
     return response.json()["id"]

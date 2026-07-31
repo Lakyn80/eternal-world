@@ -8,6 +8,34 @@ Status as of 2026-07-16:
 - All future implementation work must follow its production execution, verification, scope, testing, documentation, git, and final-report rules.
 - `AGENTS.md` was added at the repository root to make this instruction visible as the default Codex project guidance.
 
+## Task 65.13.1 - Canonical Memorial Language Foundation (2026-07-31)
+
+Goal: separate mutable account UI language from immutable memorial canonical language; introduce a central language capability registry; reconcile avatar persona primary language as a derived mirror.
+
+### Decisions
+
+- Ownership: `MemoryProfile.canonical_language` is the memorial source of truth (Decision A).
+- Provenance: `canonical_language_source` is always persisted (`creator_preference` on create; backfill uses `avatar_persona` / `manual_review_required` / `application_fallback` — never a silent unmarked Czech default).
+- Registry: `app.modules.language_registry` distinguishes UI / canonical memorial / translation / chat capabilities. `de` is chat+translation capable, not UI and not memorial-canonical.
+- Migration revision: `20260731_0030` (does not reuse quarantined biographer `20260731_0029`).
+
+### What changed
+
+- Schema: `users.preferred_ui_language`; `memory_profiles.canonical_language` + `canonical_language_source` + `canonical_language_locked_at`.
+- Create APIs require `canonical_language` + `confirm_canonical_language=true`; updates cannot change canonical language.
+- Persona language PATCH rejected; resolve/sync mirrors memorial canonical.
+- Auth: `PATCH /api/auth/me/preferences`; `/me` and `/session` expose UI language.
+- Frontend: create-memorial language + confirmation; persona languages read-only; UI lang syncs with server preference.
+
+### Out of scope (later phases)
+
+- Content translation pipeline (65.13.2), contributions/viewer translations (65.13.3), Biographer canonicalization (65.13.4), chat canonicalize (65.13.5), RAG activation (65.13.6).
+
+### Verification
+
+- `pytest tests/test_task_65_13_1_canonical_language.py tests/test_alembic.py tests/test_memory_profiles.py tests/test_memorial_access.py tests/test_task_65_12_avatar_persona_settings.py` → 40 passed.
+- Local Alembic at `20260731_0030`; backfill sources observed: `avatar_persona` / `application_fallback`.
+
 ## Ops - Local Flower + celery-exporter (2026-07-31)
 
 Goal: optional local Celery UI + Prometheus metrics without cluttering default compose or staging.

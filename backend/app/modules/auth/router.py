@@ -16,7 +16,7 @@ from app.modules.auth.service import (
     login_user,
     register_user,
 )
-from app.modules.users.schemas import UserRead
+from app.modules.users.schemas import UserPreferencesUpdate, UserRead
 
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
@@ -115,6 +115,32 @@ def get_session(current_user: User = Depends(get_current_user)) -> UserRead:
     endpoint to call on startup, independent of `/me`'s original bearer-
     only intent."""
 
+    return UserRead.model_validate(current_user)
+
+
+@router.patch(
+    "/me/preferences",
+    response_model=UserRead,
+    responses={
+        status.HTTP_401_UNAUTHORIZED: {"model": ErrorResponse},
+        status.HTTP_422_UNPROCESSABLE_ENTITY: {"model": ErrorResponse},
+    },
+)
+def update_my_preferences(
+    payload: UserPreferencesUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> UserRead:
+    """Update mutable account UI preferences (Task 65.13.1).
+
+    Changing ``preferred_ui_language`` never alters any memorial's
+    immutable ``canonical_language``.
+    """
+
+    current_user.preferred_ui_language = payload.preferred_ui_language
+    db.add(current_user)
+    db.commit()
+    db.refresh(current_user)
     return UserRead.model_validate(current_user)
 
 

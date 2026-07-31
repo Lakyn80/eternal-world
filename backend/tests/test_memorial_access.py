@@ -28,7 +28,7 @@ def _create_memorial(client, token: str, name: str = "Babička Marie") -> int:
     response = client.post(
         "/api/memorials",
         headers=_auth_headers(token),
-        json={"name": name, "biography": "Rodinný memorial"},
+        json={"name": name, "biography": "Rodinný memorial", "canonical_language": "cs", "confirm_canonical_language": True},
     )
     assert response.status_code == 201
     return response.json()["id"]
@@ -71,7 +71,12 @@ def test_owner_can_create_memorial_and_becomes_owner_member(client):
     response = client.post(
         "/api/memorials",
         headers=_auth_headers(token),
-        json={"name": "Babička Marie", "personality": "Laskavá"},
+        json={
+            "name": "Babička Marie",
+            "personality": "Laskavá",
+            "canonical_language": "cs",
+            "confirm_canonical_language": True,
+        },
     )
 
     assert response.status_code == 201

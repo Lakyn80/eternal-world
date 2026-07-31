@@ -10,7 +10,6 @@ import type {
 
 const MAX_COMMUNICATION = 4000;
 const TRAITS: AvatarPersonalityTrait[] = ['gentle', 'funny', 'thoughtful'];
-const LANGS: AvatarPersonaLanguage[] = ['cs', 'en', 'ru', 'de'];
 const VOICE_MODES: AvatarVoiceMode[] = ['original_recording', 'warm_older', 'younger_self'];
 
 type PersonaCopy = {
@@ -99,17 +98,6 @@ export default function AvatarPersonaPanel({
     setTraits((current) => (current.includes(trait) ? current.filter((item) => item !== trait) : [...current, trait]));
   }
 
-  function toggleLanguage(code: AvatarPersonaLanguage) {
-    setLanguages((current) => {
-      if (current.includes(code)) {
-        if (code === primary) return current;
-        const next = current.filter((item) => item !== code);
-        return next.length === 0 ? current : next;
-      }
-      return [...current, code];
-    });
-  }
-
   async function onSave(event: FormEvent) {
     event.preventDefault();
     if (busy) return;
@@ -122,10 +110,6 @@ export default function AvatarPersonaPanel({
       setError(lang === 'cs' ? 'Text je příliš dlouhý.' : 'Text is too long.');
       return;
     }
-    if (!languages.includes(primary)) {
-      setError(lang === 'cs' ? 'Hlavní jazyk musí být mezi podporovanými.' : 'Primary language must stay selected.');
-      return;
-    }
 
     setBusy(true);
     setError(null);
@@ -134,8 +118,6 @@ export default function AvatarPersonaPanel({
       const saved = await updateAvatarPersonaSettings(token, profileId, {
         voice_mode: voiceMode,
         personality_traits: traits,
-        primary_language: primary,
-        supported_languages: languages,
         remembered_age: parsedAge,
         communication_profile: communication
       });
@@ -213,34 +195,19 @@ export default function AvatarPersonaPanel({
 
       <div className="grid gap-2">
         <span className="text-xs uppercase tracking-[.18em] text-fg/40">{t.personaLanguages}</span>
-        <div className="flex flex-wrap gap-2">
-          {LANGS.map((code) => (
-            <button
-              className={`rounded-full border px-4 py-2 text-sm ${
-                languages.includes(code) ? 'border-cyan/50 bg-cyan/15 text-cyan' : 'border-white/10 text-fg/70'
-              }`}
-              key={code}
-              onClick={() => toggleLanguage(code)}
-              type="button"
-            >
-              {langLabel(code)}
-            </button>
-          ))}
-        </div>
-        <label className="mt-2 grid gap-1 text-sm text-fg/60">
-          <span>{t.primaryLanguage}</span>
-          <select
-            className="rounded-2xl border border-white/10 bg-ink px-4 py-2.5 text-fg outline-none"
-            onChange={(event) => setPrimary(event.target.value as AvatarPersonaLanguage)}
-            value={primary}
-          >
-            {languages.map((code) => (
-              <option key={code} value={code}>
-                {langLabel(code)}
-              </option>
-            ))}
-          </select>
-        </label>
+        <p className="text-sm text-fg/70">
+          {t.primaryLanguage}: <strong className="text-fg">{langLabel(primary)}</strong>
+        </p>
+        <p className="text-xs text-fg/45">
+          {languages.map((code) => langLabel(code)).join(' · ')}
+        </p>
+        <p className="text-xs text-fg/40">
+          {lang === 'cs'
+            ? 'Jazyky persony odpovídají neměnnému jazyku memorialu.'
+            : lang === 'ru'
+              ? 'Языки персоны соответствуют неизменяемому языку мемориала.'
+              : 'Persona languages follow the immutable memorial language.'}
+        </p>
       </div>
 
       <label className="grid gap-2 text-sm text-fg/62">

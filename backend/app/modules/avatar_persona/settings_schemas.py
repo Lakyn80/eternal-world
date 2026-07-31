@@ -12,6 +12,8 @@ from typing import Literal
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
+from app.modules.language_registry import chat_input_languages, ui_languages
+
 
 VoiceMode = Literal["original_recording", "warm_older", "younger_self"]
 VoiceStyle = Literal["warm", "calm", "older", "energetic"]
@@ -23,10 +25,14 @@ ALLOWED_VOICE_MODES: frozenset[str] = frozenset(
 )
 ALLOWED_VOICE_STYLES: frozenset[str] = frozenset({"warm", "calm", "older", "energetic"})
 ALLOWED_PERSONALITY_TRAITS: frozenset[str] = frozenset({"gentle", "funny", "thoughtful"})
-ALLOWED_PERSONA_LANGUAGES: frozenset[str] = frozenset({"cs", "en", "ru", "de"})
-# Production chat locales offered by default so multilingual memorial chat
-# works without forcing Czech when the owner never customized languages.
-DEFAULT_SUPPORTED_LANGUAGES: tuple[PersonaLanguage, ...] = ("cs", "en", "ru")
+# Derived from the central language registry (chat-input capability), not an
+# ad-hoc persona-only allowlist. ``de`` is registered for chat/translation,
+# not for full UI localization or memorial canonical language.
+ALLOWED_PERSONA_LANGUAGES: frozenset[str] = frozenset(chat_input_languages())
+DEFAULT_SUPPORTED_LANGUAGES: tuple[PersonaLanguage, ...] = tuple(  # type: ignore[assignment]
+    code for code in ("cs", "en", "ru") if code in ALLOWED_PERSONA_LANGUAGES
+)
+ALLOWED_UI_LANGUAGES: frozenset[str] = frozenset(ui_languages())
 
 MAX_PERSONALITY_TRAITS = 8
 MAX_SUPPORTED_LANGUAGES = 8

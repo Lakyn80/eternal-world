@@ -24,6 +24,10 @@ class MemorialCreate(BaseModel):
     personality: str | None = None
     catchphrases: str | None = None
     is_public: bool = False
+    #: Immutable memorial language chosen at create (Task 65.13.1).
+    canonical_language: str = Field(min_length=2, max_length=8)
+    #: Explicit confirmation that the creator understands the language is locked.
+    confirm_canonical_language: bool = False
 
     @field_validator("name")
     @classmethod
@@ -35,9 +39,18 @@ class MemorialCreate(BaseModel):
     def validate_optional_fields(cls, value: str | None) -> str | None:
         return normalize_optional_text(value)
 
+    @field_validator("canonical_language")
+    @classmethod
+    def validate_canonical_language(cls, value: str) -> str:
+        from app.modules.language_registry import assert_canonical_memorial_language
+
+        return assert_canonical_memorial_language(value)
+
     @model_validator(mode="after")
-    def validate_dates(self) -> "MemorialCreate":
+    def validate_dates_and_confirmation(self) -> "MemorialCreate":
         validate_date_range(self.birth_date, self.death_date)
+        if not self.confirm_canonical_language:
+            raise ValueError("confirm_canonical_language must be true")
         return self
 
 
@@ -53,6 +66,9 @@ class MemorialRead(BaseModel):
     personality: str | None
     catchphrases: str | None
     is_public: bool
+    canonical_language: str
+    canonical_language_source: str
+    canonical_language_locked_at: datetime
     current_user_role: MemorialRole
     created_at: datetime
     updated_at: datetime

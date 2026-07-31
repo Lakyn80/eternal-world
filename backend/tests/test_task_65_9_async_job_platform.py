@@ -658,7 +658,7 @@ def test_per_user_active_job_limit_returns_429_semantics(client, monkeypatch):
 def test_per_profile_active_job_limit(client, monkeypatch):
     token = _register_and_login(client, "backpressure-profile@example.com")
     profile_response = client.post(
-        "/api/memory-profiles", headers={"Authorization": f"Bearer {token}"}, json={"name": "P"}
+        "/api/memory-profiles", headers={"Authorization": f"Bearer {token}"}, json={"name": "P", "canonical_language": "cs", "confirm_canonical_language": True}
     )
     profile_id = profile_response.json()["id"]
     monkeypatch.setattr(settings, "max_active_heavy_jobs_per_profile", 1)

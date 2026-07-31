@@ -46,6 +46,14 @@ class User(TimestampMixin, Base):
         default=False,
         server_default=text("false"),
     )
+    #: Mutable account UI chrome language (Task 65.13.1). Independent of any
+    #: memorial's immutable ``canonical_language``.
+    preferred_ui_language: Mapped[str] = mapped_column(
+        String(8),
+        nullable=False,
+        default="en",
+        server_default=text("'en'"),
+    )
 
     memory_profiles: Mapped[list[MemoryProfile]] = relationship(
         back_populates="user",
@@ -130,6 +138,17 @@ class MemoryProfile(TimestampMixin, Base):
             "biography_status IN ('draft', 'ready_for_ingestion', 'ingesting', 'indexed', 'failed', 'stale')",
             name="memory_profiles_biography_status",
         ),
+        CheckConstraint(
+            "canonical_language IN ('cs', 'en', 'ru')",
+            name="memory_profiles_canonical_language",
+        ),
+        CheckConstraint(
+            "canonical_language_source IN ("
+            "'existing_profile', 'avatar_persona', 'creator_preference', "
+            "'reliable_content_metadata', 'application_fallback', 'manual_review_required'"
+            ")",
+            name="memory_profiles_canonical_language_source",
+        ),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)
@@ -154,6 +173,27 @@ class MemoryProfile(TimestampMixin, Base):
     biography: Mapped[str | None] = mapped_column(Text, nullable=True)
     personality: Mapped[str | None] = mapped_column(Text, nullable=True)
     catchphrases: Mapped[str | None] = mapped_column(Text, nullable=True)
+    #: Immutable memorial language after create (Task 65.13.1). Avatar / RAG /
+    #: Biographer / owner review consume this language; UI chrome does not.
+    canonical_language: Mapped[str] = mapped_column(
+        String(8),
+        nullable=False,
+        default="cs",
+        server_default=text("'cs'"),
+    )
+    #: Auditable reason the canonical language was assigned. Never leave
+    #: undocumented application defaults unmarked.
+    canonical_language_source: Mapped[str] = mapped_column(
+        String(64),
+        nullable=False,
+        default="application_fallback",
+        server_default=text("'application_fallback'"),
+    )
+    canonical_language_locked_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
     is_public: Mapped[bool] = mapped_column(
         Boolean,
         nullable=False,

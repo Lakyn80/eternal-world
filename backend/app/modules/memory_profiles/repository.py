@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from datetime import datetime
+
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
 
@@ -22,6 +24,9 @@ def create_memory_profile(
     personality: str | None,
     catchphrases: str | None,
     is_public: bool,
+    canonical_language: str,
+    canonical_language_source: str,
+    canonical_language_locked_at: datetime,
 ) -> MemoryProfile:
     memory_profile = MemoryProfile(
         user_id=user_id,
@@ -32,6 +37,9 @@ def create_memory_profile(
         personality=personality,
         catchphrases=catchphrases,
         is_public=is_public,
+        canonical_language=canonical_language,
+        canonical_language_source=canonical_language_source,
+        canonical_language_locked_at=canonical_language_locked_at,
     )
     db.add(memory_profile)
     return memory_profile

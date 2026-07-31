@@ -30,7 +30,7 @@ def _register_and_login(client, email: str) -> str:
 
 
 def _create_memorial(client, token: str, name: str = "Persona Memorial") -> int:
-    response = client.post("/api/memorials", headers=_auth_headers(token), json={"name": name})
+    response = client.post("/api/memorials", headers=_auth_headers(token), json={"name": name, "canonical_language": "cs", "confirm_canonical_language": True})
     assert response.status_code == 201
     return response.json()["id"]
 
@@ -66,8 +66,6 @@ def test_owner_can_update_and_reload_persona_settings(client):
             "voice_mode": "younger_self",
             "voice_style": "calm",
             "personality_traits": ["gentle", "funny", "thoughtful"],
-            "primary_language": "cs",
-            "supported_languages": ["cs", "en", "de"],
             "remembered_age": 62,
             "communication_profile": "Mluvím klidně a používám kratší věty.",
         },
@@ -75,6 +73,7 @@ def test_owner_can_update_and_reload_persona_settings(client):
     assert patch.status_code == 200
     assert patch.json()["remembered_age"] == 62
     assert patch.json()["personality_traits"] == ["gentle", "funny", "thoughtful"]
+    assert patch.json()["primary_language"] == "cs"
 
     reload = client.get(
         f"/api/memorials/{profile_id}/avatar-persona",
@@ -163,8 +162,6 @@ def test_partial_update_preserves_unrelated_values(client):
             "personality_traits": ["gentle"],
             "remembered_age": 55,
             "communication_profile": "Keep this text",
-            "supported_languages": ["cs", "en"],
-            "primary_language": "cs",
         },
     )
 
@@ -246,13 +243,17 @@ def test_prompt_section_delimits_adversarial_communication_text(client):
 def test_language_selection_and_single_resolve(client):
     token = _register_and_login(client, "persona-lang-owner@example.com")
     profile_id = _create_memorial(client, token)
-    client.patch(
-        f"/api/memorials/{profile_id}/avatar-persona",
-        headers=_auth_headers(token),
-        json={
-            "primary_language": "cs",
-            "supported_languages": ["cs", "en"],
-        },
+    # Language PATCH is rejected — canonical memorial language drives persona.
+    assert (
+        client.patch(
+            f"/api/memorials/{profile_id}/avatar-persona",
+            headers=_auth_headers(token),
+            json={
+                "primary_language": "cs",
+                "supported_languages": ["cs", "en"],
+            },
+        ).status_code
+        == 400
     )
 
     db = _db()
@@ -263,9 +264,13 @@ def test_language_selection_and_single_resolve(client):
         first = resolve_avatar_persona(db, profile=profile)
         second = resolve_avatar_persona(db, profile=profile)
         assert first.model_dump() == second.model_dump()
+        assert first.primary_language == "cs"
         assert select_response_language(first, detected_language="en") == "en"
         # Allowlisted chat locales answer even when not listed on older personas.
         assert select_response_language(first, detected_language="de") == "de"
+        assert (
+            select_response_language(first, detected_language="fr", fallback_to_primary=False) is None
+        )
         assert (
             select_response_language(
                 first, detected_language="de", explicit_supported_language="en"

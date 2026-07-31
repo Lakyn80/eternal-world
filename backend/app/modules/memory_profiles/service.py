@@ -74,16 +74,23 @@ def create_memory_profile(
     current_user: User,
     payload: MemoryProfileCreate,
 ) -> MemoryProfile:
+    from app.modules.language_registry.persona_sync import sync_persona_languages_to_canonical, utcnow
+
     current_profiles = repository.count_memory_profiles_for_user(db, current_user.id)
     enforce_memory_profile_creation_limit(
         current_user=current_user,
         current_profiles=current_profiles,
     )
+    profile_fields = payload.model_dump(exclude={"confirm_canonical_language"})
     memory_profile = repository.create_memory_profile(
         db,
         user_id=current_user.id,
-        **payload.model_dump(),
+        canonical_language_source="creator_preference",
+        canonical_language_locked_at=utcnow(),
+        **profile_fields,
     )
+    db.flush()
+    sync_persona_languages_to_canonical(db, profile=memory_profile)
     db.commit()
     db.refresh(memory_profile)
     return memory_profile
