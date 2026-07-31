@@ -1,0 +1,503 @@
+name: Deploy Production
+
+# Dual production deploy: one immutable GHCR build, two independent servers.
+# Production branch: staging/eternalworld-lukiora-20260715 (current live branch).
+# Legacy manual Russia-only workflow remains in deploy-staging.yml until retired.
+
+on:
+  push:
+    branches:
+      - staging/eternalworld-lukiora-20260715
+  workflow_dispatch:
+    inputs:
+      deployment_target:
+        description: Which production target(s) to deploy
+        required: true
+        type: choice
+        default: both
+        options:
+          - both
+          - russia
+          - hetzner
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAMESPACE: lakyn80
+  PYTHON_AI_BASE_IMAGE: ghcr.io/lakyn80/python-ai-base-py312
+  PYTHON_AI_BASE_TAG: py312-v1
+  BACKEND_IMAGE_NAME: eternal-world-backend
+  FRONTEND_IMAGE_NAME: eternal-world-frontend
+  PRODUCTION_BRANCH: staging/eternalworld-lukiora-20260715
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    outputs:
+      git_sha: ${{ steps.vars.outputs.git_sha }}
+      image_tag: ${{ steps.vars.outputs.image_tag }}
+      short_sha: ${{ steps.vars.outputs.short_sha }}
+      deploy_russia: ${{ steps.vars.outputs.deploy_russia }}
+      deploy_hetzner: ${{ steps.vars.outputs.deploy_hetzner }}
+    steps:
+      - id: vars
+        shell: bash
+        run: |
+          set -euo pipefail
+          git_sha="${GITHUB_SHA}"
+          short_sha="${git_sha:0:12}"
+          # Production deploys always use the full immutable commit SHA.
+          image_tag="${git_sha}"
+
+          deploy_russia=false
+          deploy_hetzner=false
+          if [[ "${{ github.event_name }}" == "push" ]]; then
+            deploy_russia=true
+            deploy_hetzner=true
+          else
+            target="${{ github.event.inputs.deployment_target }}"
+            case "${target}" in
+              both)
+                deploy_russia=true
+                deploy_hetzner=true
+                ;;
+              russia)
+                deploy_russia=true
+                ;;
+              hetzner)
+                deploy_hetzner=true
+                ;;
+              *)
+                echo "Unknown deployment_target=${target}" >&2
+                exit 1
+                ;;
+            esac
+          fi
+
+          {
+            echo "git_sha=${git_sha}"
+            echo "image_tag=${image_tag}"
+            echo "short_sha=${short_sha}"
+            echo "deploy_russia=${deploy_russia}"
+            echo "deploy_hetzner=${deploy_hetzner}"
+          } >> "${GITHUB_OUTPUT}"
+
+  validate:
+    runs-on: ubuntu-latest
+    needs: prepare
+    services:
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.prepare.outputs.git_sha }}
+
+      - name: Validate Russia compose
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > .env.prod <<'EOF'
+          COMPOSE_PROJECT_NAME=eternal-world
+          BACKEND_IMAGE=ghcr.io/lakyn80/eternal-world-backend:deadbeef
+          FRONTEND_IMAGE=ghcr.io/lakyn80/eternal-world-frontend:deadbeef
+          BACKEND_HOST_PORT=8033
+          FRONTEND_HOST_PORT=3017
+          SHARED_HF_VOLUME=shared_huggingface_cache
+          POSTGRES_DB=eternal_world
+          POSTGRES_USER=eternal
+          POSTGRES_PASSWORD=validate-only
+          VITE_API_URL=
+          EOF
+          docker compose --env-file .env.prod -f docker-compose.prod.yml config >/dev/null
+          rm -f .env.prod
+
+      - name: Validate Hetzner compose
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > deploy/hetzner/.env.prod <<'EOF'
+          COMPOSE_PROJECT_NAME=eternal-world-hetzner
+          BACKEND_IMAGE=ghcr.io/lakyn80/eternal-world-backend:deadbeef
+          FRONTEND_IMAGE=ghcr.io/lakyn80/eternal-world-frontend:deadbeef
+          BACKEND_HOST_PORT=8133
+          FRONTEND_HOST_PORT=3117
+          POSTGRES_DB=eternal_world_hetzner
+          POSTGRES_USER=eternal_hetzner
+          POSTGRES_PASSWORD=validate-only
+          VITE_API_URL=
+          EOF
+          docker compose --env-file deploy/hetzner/.env.prod -f deploy/hetzner/docker-compose.yml config >/dev/null
+          rm -f deploy/hetzner/.env.prod
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Backend unit tests
+        working-directory: backend
+        env:
+          PYTHONPATH: .
+          REDIS_URL: redis://localhost:6379/0
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          python -m pytest -q
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Frontend production typecheck (react-export)
+        working-directory: frontend/react-export
+        run: |
+          npm install
+          npx tsc -b --pretty false
+
+  build-and-push:
+    runs-on: ubuntu-latest
+    needs:
+      - prepare
+      - validate
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.prepare.outputs.git_sha }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Shared Python AI base metadata
+        id: meta_ai_base
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.PYTHON_AI_BASE_IMAGE }}
+          tags: |
+            type=raw,value=${{ env.PYTHON_AI_BASE_TAG }}
+            type=raw,value=latest
+
+      - name: Build and push shared Python AI base image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./backend
+          file: ./backend/Dockerfile.ai-base
+          push: true
+          tags: ${{ steps.meta_ai_base.outputs.tags }}
+          labels: ${{ steps.meta_ai_base.outputs.labels }}
+          cache-from: type=gha,scope=python-ai-base-py312
+          cache-to: type=gha,mode=max,scope=python-ai-base-py312
+
+      - name: Backend metadata
+        id: meta_backend
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAMESPACE }}/${{ env.BACKEND_IMAGE_NAME }}
+          tags: |
+            type=raw,value=${{ needs.prepare.outputs.image_tag }}
+            type=raw,value=${{ needs.prepare.outputs.short_sha }}
+            type=raw,value=latest
+          labels: |
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.revision=${{ needs.prepare.outputs.git_sha }}
+
+      - name: Build and push backend image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./backend
+          file: ./backend/Dockerfile.prod
+          push: true
+          build-args: |
+            PYTHON_AI_BASE_IMAGE=${{ env.PYTHON_AI_BASE_IMAGE }}:${{ env.PYTHON_AI_BASE_TAG }}
+          tags: ${{ steps.meta_backend.outputs.tags }}
+          labels: ${{ steps.meta_backend.outputs.labels }}
+          cache-from: type=gha,scope=eternal-world-backend
+          cache-to: type=gha,mode=max,scope=eternal-world-backend
+
+      - name: Frontend metadata
+        id: meta_frontend
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAMESPACE }}/${{ env.FRONTEND_IMAGE_NAME }}
+          tags: |
+            type=raw,value=${{ needs.prepare.outputs.image_tag }}
+            type=raw,value=${{ needs.prepare.outputs.short_sha }}
+            type=raw,value=latest
+          labels: |
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.revision=${{ needs.prepare.outputs.git_sha }}
+
+      - name: Build and push frontend image (same-origin API URL)
+        uses: docker/build-push-action@v6
+        with:
+          context: ./frontend
+          file: ./frontend/Dockerfile.prod
+          push: true
+          # Empty VITE_API_URL => relative /api paths so one image serves both domains.
+          build-args: |
+            VITE_API_URL=
+          tags: ${{ steps.meta_frontend.outputs.tags }}
+          labels: ${{ steps.meta_frontend.outputs.labels }}
+          cache-from: type=gha,scope=eternal-world-frontend
+          cache-to: type=gha,mode=max,scope=eternal-world-frontend
+
+  deploy-russia:
+    runs-on: ubuntu-latest
+    needs:
+      - prepare
+      - build-and-push
+    if: needs.prepare.outputs.deploy_russia == 'true'
+    environment: production-russia
+    concurrency:
+      group: production-russia
+      cancel-in-progress: false
+    timeout-minutes: 90
+    env:
+      APP_DOMAIN: eternalworld.lukiora.ru
+      APP_DIR: /opt/eternal-world
+      BACKEND_HOST_PORT: "8033"
+      FRONTEND_HOST_PORT: "3017"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.prepare.outputs.git_sha }}
+
+      - name: Prepare SSH
+        shell: bash
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh
+          printf '%s\n' "${{ secrets.DEPLOY_SSH_KEY }}" | tr -d '\r' > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          port="${DEPLOY_PORT:-22}"
+          ssh-keyscan -p "${port}" -H "${DEPLOY_HOST}" >> ~/.ssh/known_hosts
+
+      - name: Copy files to Russia
+        shell: bash
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+        run: |
+          set -euo pipefail
+          DEPLOY_PORT="${DEPLOY_PORT:-22}"
+          DEPLOY_USER="${DEPLOY_USER:-root}"
+          SSH=(ssh -p "${DEPLOY_PORT}" "${DEPLOY_USER}@${DEPLOY_HOST}")
+          SCP=(scp -P "${DEPLOY_PORT}")
+          "${SSH[@]}" "mkdir -p ${{ env.APP_DIR }}/infra/nginx ${{ env.APP_DIR }}/deploy/russia"
+          "${SCP[@]}" docker-compose.prod.yml "${DEPLOY_USER}@${DEPLOY_HOST}:${{ env.APP_DIR }}/docker-compose.prod.yml"
+          "${SCP[@]}" infra/nginx/eternalworld.lukiora.ru.bootstrap.conf "${DEPLOY_USER}@${DEPLOY_HOST}:${{ env.APP_DIR }}/infra/nginx/eternalworld.lukiora.ru.bootstrap.conf"
+          "${SCP[@]}" infra/nginx/eternalworld.lukiora.ru.conf "${DEPLOY_USER}@${DEPLOY_HOST}:${{ env.APP_DIR }}/infra/nginx/eternalworld.lukiora.ru.conf"
+          "${SCP[@]}" deploy/russia/remote-deploy.sh "${DEPLOY_USER}@${DEPLOY_HOST}:${{ env.APP_DIR }}/deploy/russia/remote-deploy.sh"
+
+      - name: Refuse deploy if Russia .env.prod is missing
+        shell: bash
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+        run: |
+          set -euo pipefail
+          DEPLOY_PORT="${DEPLOY_PORT:-22}"
+          DEPLOY_USER="${DEPLOY_USER:-root}"
+          # Never regenerate Russia secrets from CI — preserve the live on-server .env.prod.
+          if ! ssh -p "${DEPLOY_PORT}" "${DEPLOY_USER}@${DEPLOY_HOST}" "test -f ${{ env.APP_DIR }}/.env.prod"; then
+            echo "Russia ${{ env.APP_DIR }}/.env.prod is missing." >&2
+            echo "Restore it on the server before deploying; CI will not overwrite Russian secrets." >&2
+            exit 1
+          fi
+          echo "Russia .env.prod present — image tags will be patched in place; secrets untouched."
+
+      - name: Deploy Russia
+        shell: bash
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          GHCR_LOGIN_USER: ${{ github.actor }}
+          GHCR_LOGIN_TOKEN: ${{ github.token }}
+          LETSENCRYPT_EMAIL: ${{ secrets.LETSENCRYPT_EMAIL }}
+          IMAGE_TAG: ${{ needs.prepare.outputs.image_tag }}
+        run: |
+          set -euo pipefail
+          DEPLOY_PORT="${DEPLOY_PORT:-22}"
+          DEPLOY_USER="${DEPLOY_USER:-root}"
+          ssh -p "${DEPLOY_PORT}" "${DEPLOY_USER}@${DEPLOY_HOST}" \
+            "chmod +x ${{ env.APP_DIR }}/deploy/russia/remote-deploy.sh && \
+             APP_DIR='${{ env.APP_DIR }}' \
+             APP_DOMAIN='${{ env.APP_DOMAIN }}' \
+             BACKEND_HOST_PORT='${{ env.BACKEND_HOST_PORT }}' \
+             FRONTEND_HOST_PORT='${{ env.FRONTEND_HOST_PORT }}' \
+             IMAGE_TAG='${IMAGE_TAG}' \
+             GHCR_LOGIN_USER='${GHCR_LOGIN_USER}' \
+             GHCR_LOGIN_TOKEN='${GHCR_LOGIN_TOKEN}' \
+             LETSENCRYPT_EMAIL='${LETSENCRYPT_EMAIL}' \
+             ${{ env.APP_DIR }}/deploy/russia/remote-deploy.sh"
+
+  deploy-hetzner:
+    runs-on: ubuntu-latest
+    needs:
+      - prepare
+      - build-and-push
+    if: needs.prepare.outputs.deploy_hetzner == 'true'
+    environment: production-hetzner
+    concurrency:
+      group: production-hetzner
+      cancel-in-progress: false
+    timeout-minutes: 90
+    env:
+      APP_DOMAIN: eternal.world.lukiora.com
+      APP_DIR: /opt/eternal-world
+      BACKEND_HOST_PORT: "8133"
+      FRONTEND_HOST_PORT: "3117"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.prepare.outputs.git_sha }}
+
+      - name: Prepare SSH
+        shell: bash
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh
+          printf '%s\n' "${{ secrets.DEPLOY_SSH_KEY }}" | tr -d '\r' > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          port="${DEPLOY_PORT:-22}"
+          ssh-keyscan -p "${port}" -H "${DEPLOY_HOST}" >> ~/.ssh/known_hosts
+
+      - name: Copy Hetzner deploy files
+        shell: bash
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+        run: |
+          set -euo pipefail
+          DEPLOY_PORT="${DEPLOY_PORT:-22}"
+          DEPLOY_USER="${DEPLOY_USER:-root}"
+          SSH=(ssh -p "${DEPLOY_PORT}" "${DEPLOY_USER}@${DEPLOY_HOST}")
+          SCP=(scp -P "${DEPLOY_PORT}")
+          "${SSH[@]}" "mkdir -p ${{ env.APP_DIR }}/nginx ${{ env.APP_DIR }}/deploy"
+          "${SCP[@]}" deploy/hetzner/docker-compose.yml "${DEPLOY_USER}@${DEPLOY_HOST}:${{ env.APP_DIR }}/docker-compose.yml"
+          "${SCP[@]}" deploy/hetzner/nginx/eternal.world.lukiora.com.bootstrap.conf "${DEPLOY_USER}@${DEPLOY_HOST}:${{ env.APP_DIR }}/nginx/eternal.world.lukiora.com.bootstrap.conf"
+          "${SCP[@]}" deploy/hetzner/nginx/eternal.world.lukiora.com.conf "${DEPLOY_USER}@${DEPLOY_HOST}:${{ env.APP_DIR }}/nginx/eternal.world.lukiora.com.conf"
+          "${SCP[@]}" deploy/hetzner/remote-deploy.sh "${DEPLOY_USER}@${DEPLOY_HOST}:${{ env.APP_DIR }}/remote-deploy.sh"
+          "${SCP[@]}" deploy/hetzner/.env.example "${DEPLOY_USER}@${DEPLOY_HOST}:${{ env.APP_DIR }}/.env.example"
+
+      - name: Optionally seed Hetzner env from GitHub Environment secrets
+        shell: bash
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+        run: |
+          set -euo pipefail
+          DEPLOY_PORT="${DEPLOY_PORT:-22}"
+          DEPLOY_USER="${DEPLOY_USER:-root}"
+          # If .env.prod is missing and Environment app secrets are present, seed once.
+          # Never overwrite an existing on-server .env.prod (protects local edits).
+          if ssh -p "${DEPLOY_PORT}" "${DEPLOY_USER}@${DEPLOY_HOST}" "test -f ${{ env.APP_DIR }}/.env.prod"; then
+            echo "Hetzner .env.prod already present — leaving secrets untouched."
+            exit 0
+          fi
+          if [ -z "${{ secrets.POSTGRES_PASSWORD }}" ] || [ -z "${{ secrets.JWT_SECRET_KEY }}" ]; then
+            echo "Hetzner .env.prod missing and Environment app secrets incomplete." >&2
+            echo "Create ${{ env.APP_DIR }}/.env.prod from .env.example on the server first." >&2
+            exit 1
+          fi
+          mkdir -p .deploy
+          {
+            echo "COMPOSE_PROJECT_NAME=eternal-world-hetzner"
+            echo "BACKEND_IMAGE=${{ env.REGISTRY }}/${{ env.IMAGE_NAMESPACE }}/${{ env.BACKEND_IMAGE_NAME }}:${{ needs.prepare.outputs.image_tag }}"
+            echo "FRONTEND_IMAGE=${{ env.REGISTRY }}/${{ env.IMAGE_NAMESPACE }}/${{ env.FRONTEND_IMAGE_NAME }}:${{ needs.prepare.outputs.image_tag }}"
+            echo "BACKEND_HOST_PORT=${{ env.BACKEND_HOST_PORT }}"
+            echo "FRONTEND_HOST_PORT=${{ env.FRONTEND_HOST_PORT }}"
+            echo "POSTGRES_DB=${{ secrets.POSTGRES_DB }}"
+            echo "POSTGRES_USER=${{ secrets.POSTGRES_USER }}"
+            echo "POSTGRES_PASSWORD=${{ secrets.POSTGRES_PASSWORD }}"
+            echo "APP_NAME=Eternal World API"
+            echo "ENVIRONMENT=production"
+            echo "SQLALCHEMY_ECHO=false"
+            echo "BACKEND_CORS_ORIGINS=https://${{ env.APP_DOMAIN }}"
+            echo "JWT_SECRET_KEY=${{ secrets.JWT_SECRET_KEY }}"
+            echo "JWT_ALGORITHM=HS256"
+            echo "JWT_ACCESS_TOKEN_EXPIRE_MINUTES=30"
+            echo "JWT_ISSUER=eternal-world"
+            echo "JWT_AUDIENCE=eternal-world-api"
+            echo "AI_BRAIN_PROVIDER=${{ secrets.AI_BRAIN_PROVIDER }}"
+            echo "AI_BRAIN_BASE_URL=${{ secrets.AI_BRAIN_BASE_URL }}"
+            echo "AI_BRAIN_MODEL=${{ secrets.AI_BRAIN_MODEL }}"
+            echo "AI_BRAIN_API_KEY=${{ secrets.AI_BRAIN_API_KEY }}"
+            echo "AI_BRAIN_TIMEOUT_SECONDS=30"
+            echo "CONTENT_TRANSLATION_PROVIDER=${{ secrets.CONTENT_TRANSLATION_PROVIDER }}"
+            echo "CONTENT_TRANSLATION_BASE_URL=${{ secrets.CONTENT_TRANSLATION_BASE_URL }}"
+            echo "CONTENT_TRANSLATION_MODEL=${{ secrets.CONTENT_TRANSLATION_MODEL }}"
+            echo "CONTENT_TRANSLATION_API_KEY=${{ secrets.CONTENT_TRANSLATION_API_KEY }}"
+            echo "CONTENT_TRANSLATION_TIMEOUT_SECONDS=20"
+            echo "CONTENT_TRANSLATION_MAX_RETRIES=1"
+            echo "EMBEDDING_PROVIDER=sentence_transformers"
+            echo "SENTENCE_TRANSFORMERS_DEVICE=cpu"
+            echo "QDRANT_COLLECTION_NAME=eternal_world_hetzner_rag_chunks"
+            echo "QDRANT_TIMEOUT_SECONDS=10"
+            echo "QDRANT_INDEXING_ENABLED=true"
+            echo "MEDIA_STORAGE_PROVIDER=local"
+            echo "MEDIA_MAX_FILE_SIZE_BYTES=20971520"
+            echo "CELERY_TASK_ALWAYS_EAGER=false"
+            echo "CELERY_TASK_EAGER_PROPAGATES=false"
+            echo "VITE_API_URL="
+          } > .deploy/.env.prod
+          scp -P "${DEPLOY_PORT}" .deploy/.env.prod "${DEPLOY_USER}@${DEPLOY_HOST}:${{ env.APP_DIR }}/.env.prod"
+
+      - name: Deploy Hetzner
+        shell: bash
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          GHCR_LOGIN_USER: ${{ github.actor }}
+          GHCR_LOGIN_TOKEN: ${{ github.token }}
+          LETSENCRYPT_EMAIL: ${{ secrets.LETSENCRYPT_EMAIL }}
+          IMAGE_TAG: ${{ needs.prepare.outputs.image_tag }}
+        run: |
+          set -euo pipefail
+          DEPLOY_PORT="${DEPLOY_PORT:-22}"
+          DEPLOY_USER="${DEPLOY_USER:-root}"
+          ssh -p "${DEPLOY_PORT}" "${DEPLOY_USER}@${DEPLOY_HOST}" \
+            "chmod +x ${{ env.APP_DIR }}/remote-deploy.sh && \
+             APP_DIR='${{ env.APP_DIR }}' \
+             APP_DOMAIN='${{ env.APP_DOMAIN }}' \
+             BACKEND_HOST_PORT='${{ env.BACKEND_HOST_PORT }}' \
+             FRONTEND_HOST_PORT='${{ env.FRONTEND_HOST_PORT }}' \
+             IMAGE_TAG='${IMAGE_TAG}' \
+             GHCR_LOGIN_USER='${GHCR_LOGIN_USER}' \
+             GHCR_LOGIN_TOKEN='${GHCR_LOGIN_TOKEN}' \
+             LETSENCRYPT_EMAIL='${LETSENCRYPT_EMAIL}' \
+             ${{ env.APP_DIR }}/remote-deploy.sh"

@@ -12,9 +12,24 @@ Production-ready MVP base for AI memory social platform.
 - Frontend tests: Vitest
 - CI: GitHub Actions
 
-## Staging Deploy
+## Dual Production Deploy (Russia + Hetzner)
+
+Canonical guide: [`docs/DUAL_PRODUCTION_DEPLOYMENT.md`](docs/DUAL_PRODUCTION_DEPLOYMENT.md).
+
+- Workflow: `.github/workflows/deploy-production.yml`
+- Production branch: `staging/eternalworld-lukiora-20260715`
+- One GHCR build per commit SHA → deploy to Russia and/or Hetzner
+- Manual `workflow_dispatch` input `deployment_target`: `both` | `russia` | `hetzner`
+- Environments: `production-russia`, `production-hetzner`
+- Hetzner compose/nginx: `deploy/hetzner/`
+- Hetzner ports (loopback): backend `8133`, frontend `3117`
+
+## Staging Deploy (legacy Russia-only)
 
 The test server target is `https://eternalworld.lukiora.ru`.
+
+Prefer the dual production workflow above for new deploys. The legacy
+manual Russia-only workflow remains available:
 
 Key runtime decisions:
 

@@ -1,5 +1,8 @@
 name: Deploy Staging
 
+# Legacy Russia-only manual deploy.
+# Prefer .github/workflows/deploy-production.yml for dual Russia+Hetzner deploys.
+
 on:
   workflow_dispatch:
 

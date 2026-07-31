@@ -25,6 +25,10 @@ import type {
   PrivacyScope
 } from '../types/memorial';
 
+/** Empty ``VITE_API_URL`` = same-origin relative paths (required for one
+ * production image serving both eternalworld.lukiora.ru and
+ * eternal.world.lukiora.com behind nginx ``/api`` proxy). Local/dev keeps
+ * the localhost default when the env var is unset. */
 const API_BASE_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:8033';
 
 type LoginResponse = {

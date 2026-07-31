@@ -1,0 +1,253 @@
+# Hetzner production Compose — completely isolated from Russia.
+#
+# Project name, volumes, ports, and secrets must never collide with the
+# Russian install (docker-compose.prod.yml / COMPOSE_PROJECT_NAME=eternal-world).
+#
+# Usage on the Hetzner host:
+#   cd /opt/eternal-world
+#   docker compose --env-file .env.prod -f docker-compose.yml pull
+#   docker compose --env-file .env.prod -f docker-compose.yml up -d --remove-orphans
+#
+# Never run: docker compose down -v
+
+name: eternal-world-hetzner
+
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: eternal-world-hetzner-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks:
+      - eternal_world_hetzner
+
+  redis:
+    image: redis:7-alpine
+    container_name: eternal-world-hetzner-redis
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks:
+      - eternal_world_hetzner
+
+  qdrant:
+    image: qdrant/qdrant:v1.13.6
+    container_name: eternal-world-hetzner-qdrant
+    restart: unless-stopped
+    volumes:
+      - qdrant_data:/qdrant/storage
+    networks:
+      - eternal_world_hetzner
+
+  backend:
+    image: ${BACKEND_IMAGE:?BACKEND_IMAGE must be set to an immutable GHCR SHA tag}
+    container_name: eternal-world-hetzner-backend
+    restart: unless-stopped
+    env_file:
+      - .env.prod
+    environment:
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+      REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis:6379/1
+      CELERY_RESULT_BACKEND: redis://redis:6379/1
+      QDRANT_URL: http://qdrant:6333
+      MEDIA_ROOT: /app/media
+      MEDIA_PUBLIC_BASE_URL: /media
+      SENTENCE_TRANSFORMERS_CACHE_DIR: /models/huggingface
+      HF_HOME: /models/huggingface
+      HUGGINGFACE_HUB_CACHE: /models/huggingface
+      TRANSFORMERS_CACHE: /models/huggingface
+      SENTENCE_TRANSFORMERS_HOME: /models/huggingface
+      EMBEDDING_CACHE_ENABLED: "true"
+      EMBEDDING_CACHE_PROVIDER: redis
+      EMBEDDING_CACHE_TTL_SECONDS: "604800"
+      EMBEDDING_CACHE_KEY_PREFIX: eternal_world_hetzner
+      CUDA_VISIBLE_DEVICES: ""
+      NVIDIA_VISIBLE_DEVICES: void
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      qdrant:
+        condition: service_started
+    ports:
+      - "127.0.0.1:${BACKEND_HOST_PORT:-8133}:8000"
+    volumes:
+      - media_data:/app/media
+      - huggingface_cache:/models/huggingface
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health/runtime').read()"]
+      interval: 15s
+      timeout: 5s
+      retries: 20
+      start_period: 20s
+    networks:
+      - eternal_world_hetzner
+
+  celery_worker:
+    image: ${BACKEND_IMAGE:?BACKEND_IMAGE must be set to an immutable GHCR SHA tag}
+    container_name: eternal-world-hetzner-celery-worker
+    restart: unless-stopped
+    command: >
+      celery -A app.worker.celery_app.celery_app worker
+      -Q document_processing,ai_generation,media,notifications
+      --loglevel=info
+      -n celery_worker@%h
+    env_file:
+      - .env.prod
+    environment:
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+      REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis:6379/1
+      CELERY_RESULT_BACKEND: redis://redis:6379/1
+      QDRANT_URL: http://qdrant:6333
+      MEDIA_ROOT: /app/media
+      MEDIA_PUBLIC_BASE_URL: /media
+      SENTENCE_TRANSFORMERS_CACHE_DIR: /models/huggingface
+      HF_HOME: /models/huggingface
+      HUGGINGFACE_HUB_CACHE: /models/huggingface
+      TRANSFORMERS_CACHE: /models/huggingface
+      SENTENCE_TRANSFORMERS_HOME: /models/huggingface
+      EMBEDDING_CACHE_ENABLED: "true"
+      EMBEDDING_CACHE_PROVIDER: redis
+      EMBEDDING_CACHE_TTL_SECONDS: "604800"
+      EMBEDDING_CACHE_KEY_PREFIX: eternal_world_hetzner
+      CUDA_VISIBLE_DEVICES: ""
+      NVIDIA_VISIBLE_DEVICES: void
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      qdrant:
+        condition: service_started
+    volumes:
+      - media_data:/app/media
+      - huggingface_cache:/models/huggingface
+    networks:
+      - eternal_world_hetzner
+
+  embedding_worker:
+    image: ${BACKEND_IMAGE:?BACKEND_IMAGE must be set to an immutable GHCR SHA tag}
+    container_name: eternal-world-hetzner-embedding-worker
+    restart: unless-stopped
+    command: >
+      celery -A app.worker.celery_app.celery_app worker
+      -Q embedding
+      --concurrency=1
+      --prefetch-multiplier=1
+      --loglevel=info
+      -n embedding_worker@%h
+    env_file:
+      - .env.prod
+    environment:
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+      REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis:6379/1
+      CELERY_RESULT_BACKEND: redis://redis:6379/1
+      QDRANT_URL: http://qdrant:6333
+      MEDIA_ROOT: /app/media
+      MEDIA_PUBLIC_BASE_URL: /media
+      SENTENCE_TRANSFORMERS_CACHE_DIR: /models/huggingface
+      HF_HOME: /models/huggingface
+      HUGGINGFACE_HUB_CACHE: /models/huggingface
+      TRANSFORMERS_CACHE: /models/huggingface
+      SENTENCE_TRANSFORMERS_HOME: /models/huggingface
+      EMBEDDING_CACHE_ENABLED: "true"
+      EMBEDDING_CACHE_PROVIDER: redis
+      EMBEDDING_CACHE_TTL_SECONDS: "604800"
+      EMBEDDING_CACHE_KEY_PREFIX: eternal_world_hetzner
+      CUDA_VISIBLE_DEVICES: ""
+      NVIDIA_VISIBLE_DEVICES: void
+      EMBEDDING_WORKER_SELF_RECYCLE_ENABLED: "true"
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      qdrant:
+        condition: service_started
+    volumes:
+      - media_data:/app/media
+      - huggingface_cache:/models/huggingface
+    networks:
+      - eternal_world_hetzner
+
+  maintenance_worker:
+    image: ${BACKEND_IMAGE:?BACKEND_IMAGE must be set to an immutable GHCR SHA tag}
+    container_name: eternal-world-hetzner-maintenance-worker
+    restart: unless-stopped
+    command: >
+      celery -A app.worker.celery_app.celery_app worker
+      -Q maintenance
+      --concurrency=1
+      --loglevel=info
+      -B
+      -n maintenance_worker@%h
+    env_file:
+      - .env.prod
+    environment:
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+      REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis:6379/1
+      CELERY_RESULT_BACKEND: redis://redis:6379/1
+      QDRANT_URL: http://qdrant:6333
+      EMBEDDING_PROVIDER: mock
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      qdrant:
+        condition: service_started
+    volumes:
+      - media_data:/app/media
+    networks:
+      - eternal_world_hetzner
+
+  frontend:
+    image: ${FRONTEND_IMAGE:?FRONTEND_IMAGE must be set to an immutable GHCR SHA tag}
+    container_name: eternal-world-hetzner-frontend
+    restart: unless-stopped
+    env_file:
+      - .env.prod
+    depends_on:
+      backend:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:${FRONTEND_HOST_PORT:-3117}:3000"
+    networks:
+      - eternal_world_hetzner
+
+networks:
+  eternal_world_hetzner:
+    name: eternal-world-hetzner-net
+
+volumes:
+  postgres_data:
+    name: eternal-world-hetzner-postgres-data
+  redis_data:
+    name: eternal-world-hetzner-redis-data
+  qdrant_data:
+    name: eternal-world-hetzner-qdrant-data
+  media_data:
+    name: eternal-world-hetzner-media-data
+  huggingface_cache:
+    name: eternal-world-hetzner-huggingface-cache

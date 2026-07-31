@@ -1,5 +1,42 @@
 # Project Progress
 
+## Dual Production Deploy (Russia + Hetzner) — 2026-08-01
+
+Goal: one immutable GHCR build per commit; two fully isolated production installs
+(`eternalworld.lukiora.ru` and `eternal.world.lukiora.com`) with no shared data.
+
+### Decisions
+
+- Production branch remains `staging/eternalworld-lukiora-20260715`.
+- Workflow `.github/workflows/deploy-production.yml`: push → both targets;
+  `workflow_dispatch` `deployment_target` = `both` | `russia` | `hetzner`.
+- Environments `production-russia` / `production-hetzner` with separate secrets.
+- Hetzner Compose under `deploy/hetzner/` (`name: eternal-world-hetzner`, unique volumes/ports).
+- Hetzner loopback ports: backend `8133`, frontend `3117` (Russia stays `8033`/`3017`).
+- Frontend prod image uses empty `VITE_API_URL` (same-origin `/api`) so one image serves both domains.
+- Russia dual deploy never overwrites on-server `.env.prod` (only patches image tags).
+- Never `docker compose down -v`. No data sync between regions.
+- Legacy `.github/workflows/deploy-staging.yml` kept for emergency Russia-only manual deploys.
+
+### What changed
+
+- New: `deploy/hetzner/*`, `deploy/russia/remote-deploy.sh`, `docs/DUAL_PRODUCTION_DEPLOYMENT.md`
+- New: `.github/workflows/deploy-production.yml`
+- `frontend/react-export/vite.config.ts` allowedHosts for Hetzner domain
+- README + this progress entry
+
+### Out of scope / not done in this change
+
+- No push to GitHub; no live deploy to either server
+- No Certbot run on Hetzner yet (docs + bootstrap nginx prepared)
+- No Russian data-residency / replication work
+
+### Verification (local)
+
+- `docker compose config` for Russia `docker-compose.prod.yml` and Hetzner compose
+- Workflow YAML parse
+- Backend pytest / frontend typecheck as available locally
+
 ## 0. Operating Protocol
 
 Status as of 2026-07-16:
