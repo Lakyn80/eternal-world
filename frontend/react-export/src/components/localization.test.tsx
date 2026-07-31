@@ -108,6 +108,7 @@ describe('Czech UI raw-enum scan', () => {
         author_email: 'a@example.com',
         title: 'Title',
         memory_text: 'Text',
+        source_language: 'cs',
         source_note: null,
         privacy_scope: 'private_owner',
         status: 'needs_review',

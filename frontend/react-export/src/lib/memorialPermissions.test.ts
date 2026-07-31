@@ -32,6 +32,7 @@ describe('memorialPermissions', () => {
       author_email: 'a@example.com',
       title: 't',
       memory_text: 'm',
+      source_language: 'cs',
       source_note: null,
       privacy_scope: 'all_family',
       status: 'approved',

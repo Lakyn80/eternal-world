@@ -176,6 +176,7 @@ function baseContribution(overrides: Partial<ContributionRead> = {}): Contributi
     author_email: 'author@example.com',
     title: 'A recollection',
     memory_text: 'A specific family recollection.',
+    source_language: 'cs',
     source_note: null,
     privacy_scope: 'all_family',
     status: 'approved',
