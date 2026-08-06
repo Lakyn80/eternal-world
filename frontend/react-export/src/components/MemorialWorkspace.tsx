@@ -45,6 +45,7 @@ import {
 } from '../lib/memorialApi';
 import { canInvite, canReview, canSubmitContribution, isActiveMemoryEligible } from '../lib/memorialPermissions';
 import { resolveLangAfterSessionRestore } from '../lib/langPreference';
+import { notifyServiceWorkerLogoutCleanup } from '../lib/pwa';
 import { APP_ROOT_PATH, buildMemorialPath, navigate, parseAppRoute, usePathname } from '../lib/router';
 import { useJobStatusPoller } from '../hooks/useJobStatusPoller';
 import AvatarPersonaPanel from './AvatarPersonaPanel';
@@ -1650,6 +1651,8 @@ export default function MemorialWorkspace({
     setError(null);
     setNotice(null);
     void logoutSession().catch(() => {});
+    // Privacy-safe PWA shell cache cleanup only — does not revoke JWTs.
+    void notifyServiceWorkerLogoutCleanup().catch(() => {});
     // Clear the active-memorial URL too, so a subsequently logged-in user
     // (same browser tab) never lands back on the previous user's deep link.
     navigate(APP_ROOT_PATH);
