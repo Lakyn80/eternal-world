@@ -2454,3 +2454,17 @@ Task 65.12B — Final Review, Commit and Push — byl proveden a **dokoncen**. P
 Pred pushem: Alembic `20260729_0028`; backend focused **14 passed**; FE **16 passed**; `tsc -b` ok; health ok; `.cursor/` nestaged. Dva commity: implementace + dokumentace. Zahrnuje i FE zalozku **Hlas a povaha** a natural lack-of-evidence phrasing.
 
 Task 65.12B se **povazuje za dokonceny**. Zadna existujici sekce teto roadmapy nebyla prepsana.
+
+## 50. Task 65.13.9 status (2026-08-06) — authentication security inventory and privacy-safe PWA foundation, completed
+
+Task 65.13.9 — Create a Complete Authentication Security Review Package and Implement a Privacy-Safe Production PWA Foundation — byl proveden a **dokoncen** v rozsahu zadani. Plny popis viz `PROJECT_PROGRESS.md`, sekce `Task 65.13.9`.
+
+**Workstream A:** inventar autentizace/autorizace + CodeRabbit balicek v `artifacts/security/task_65_13_9_auth_review/` (ASVS 5.0.0-oriented gap matrix, threat model, dataflow). **Zadne zmeny production auth chovani.**
+
+**Workstream B — rozhodnuti C:** nova PWA foundation na Vite `frontend/react-export` (manifest, versioned service worker, offline shell, ikony). Service worker **nikdy** necachuje `/api/**`, tokeny ani privatni memorial data.
+
+Testy: FE `pwa.test.ts` + `memorialApi.test.ts` **20 passed**; `tsc -b` OK; `npm run build` OK. Zadne commit/push; `.cursor/` beze zmeny; zadne migrace/DB/Redis/Qdrant mutace; zadny LLM/embedding.
+
+Task 65.13.9 se **povazuje za dokonceny**. Zadna existujici sekce teto roadmapy nebyla prepsana.
+
+Dalsi doporuceny task: **Task 65.13.10 — Authentication and Account Security Hardening after CodeRabbit Review**.

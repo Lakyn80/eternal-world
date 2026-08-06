@@ -1,0 +1,86 @@
+# Task 65.13.9 — CodeRabbit authentication / authorization review scope
+# Starting SHA: df5fd85e7a9ecce980c1494ada665fa9d4229df8
+# Branch: staging/eternalworld-lukiora-20260715
+# Do not review unrelated AI/RAG/embedding modules unless they call auth helpers.
+
+## critical authentication core
+backend/app/core/security.py
+backend/app/core/config.py
+backend/app/modules/auth/router.py
+backend/app/modules/auth/service.py
+backend/app/modules/auth/schemas.py
+backend/app/modules/auth/dependencies.py
+backend/app/modules/users/repository.py
+backend/app/modules/users/schemas.py
+backend/app/db/models.py
+
+## session/token core
+backend/app/modules/auth/browser_session.py
+backend/app/cache/redis_client.py
+
+## authorization
+backend/app/modules/memorial_access/capabilities.py
+backend/app/modules/memorial_access/repository.py
+backend/app/modules/memorial_access/service.py
+backend/app/modules/memorial_access/router.py
+backend/app/modules/memorial_access/schemas.py
+backend/app/modules/content_translation/authorization.py
+
+## registration/recovery (recovery absent — confirm gaps)
+backend/app/modules/auth/router.py
+backend/app/modules/auth/service.py
+backend/app/modules/auth/schemas.py
+
+## invitation
+backend/app/modules/memorial_access/service.py
+backend/app/modules/memorial_access/router.py
+backend/app/modules/memorial_access/repository.py
+backend/app/modules/memorial_access/schemas.py
+backend/alembic/versions/20260716_0021_add_memorial_access_foundation.py
+
+## protected memorial entry points (object-level auth consumers)
+backend/app/modules/chat/router.py
+backend/app/modules/rag_retrieval/router.py
+backend/app/modules/biography_ingestion/router.py
+backend/app/modules/avatar_biographer/router.py
+backend/app/modules/memorial_candidates/router.py
+backend/app/modules/avatar_persona/router.py
+backend/app/modules/memory_profiles/router.py
+backend/app/modules/family_memory_enrichment/router.py
+
+## frontend auth
+frontend/react-export/src/lib/memorialApi.ts
+frontend/react-export/src/components/MemorialWorkspace.tsx
+frontend/react-export/src/components/AuthenticatedApp.tsx
+frontend/react-export/src/lib/router.ts
+frontend/react-export/src/lib/langPreference.ts
+frontend/react-export/src/main.tsx
+frontend/react-export/src/App.tsx
+
+## PWA boundaries (must not weaken auth)
+frontend/react-export/public/manifest.webmanifest
+frontend/react-export/public/sw.js
+frontend/react-export/public/offline.html
+frontend/react-export/src/lib/pwa.ts
+frontend/react-export/index.html
+frontend/react-export/vite.config.ts
+
+## deployment/config
+backend/app/main.py
+infra/nginx/eternalworld.lukiora.ru.conf
+deploy/hetzner/nginx/eternal.world.lukiora.com.conf
+docker-compose.prod.yml
+deploy/hetzner/docker-compose.yml
+.env.prod.example
+deploy/hetzner/.env.example
+backend/requirements.runtime.txt
+
+## tests
+backend/tests/test_auth.py
+backend/tests/test_security.py
+backend/tests/test_authenticated_workspace_reliability.py
+backend/tests/test_memorial_access.py
+backend/tests/test_memorial_capabilities.py
+frontend/react-export/src/lib/memorialApi.test.ts
+frontend/react-export/src/lib/pwa.test.ts
+frontend/react-export/src/components/MemorialWorkspace.test.tsx

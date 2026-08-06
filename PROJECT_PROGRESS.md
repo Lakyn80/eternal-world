@@ -1,5 +1,36 @@
 # Project Progress
 
+## Task 65.13.9 — Authentication Security Inventory and Production PWA Foundation (2026-08-06)
+
+Goal: produce an auditable authentication/authorization review package for CodeRabbit (OWASP ASVS 5.0.0-oriented) and implement a privacy-safe installable PWA foundation without changing authentication production behavior.
+
+Starting SHA: `df5fd85e7a9ecce980c1494ada665fa9d4229df8` on `staging/eternalworld-lukiora-20260715` (= origin). Pre-existing untracked `.cursor/` left untouched. No commit/push.
+
+### Workstream A — Auth inventory (no auth behavior changes)
+
+- Complete surface map: JWT access tokens + Redis HttpOnly browser sessions; no refresh tokens; no password-reset; no email verification; no MFA/passkeys; no auth HTTP rate limit; no WebSocket/SSE auth.
+- Object-level memorial authorization via `resolve_authorized_profile` + capability matrix.
+- CodeRabbit package: `artifacts/security/task_65_13_9_auth_review/` (scope, symbol index, dataflow, threat model, ASVS gap matrix, test coverage, runtime checklist, CodeRabbit prompt/sequence, remediation backlog, PWA decision gate, auth↔PWA cross-check).
+- Authentication production files were **not** modified.
+
+### Workstream B — PWA foundation (Decision C)
+
+- Native Vite `public/` PWA (no `vite-plugin-pwa`): `manifest.webmanifest`, versioned `sw.js`, `offline.html`, icons.
+- Cache allowlist: `/assets/*`, `/icons/*`, manifest, offline page only.
+- Never cache `/api/**`, non-GET, Authorization headers, `no-store`, invitation `token` query.
+- SW registers only when `import.meta.env.PROD`; logout notifies shell-cache cleanup without claiming session revocation.
+- Tests: `frontend/react-export/src/lib/pwa.test.ts` (8) + `memorialApi.test.ts` (12) → 20 passed; `tsc -b` OK; `npm run build` OK; dist contains manifest/sw/offline/icons.
+
+### Explicit non-claims
+
+- Does **not** claim accounts are “100% secure”.
+- Requires Task **65.13.10** auth hardening after CodeRabbit + independent penetration test before public launch.
+- Local `/health` checks were unavailable in this environment (runtime containers not responding); see runtime checklist for production verification.
+
+### Next recommended task
+
+**Task 65.13.10 — Authentication and Account Security Hardening after CodeRabbit Review.**
+
 ## Dual Production Deploy (Russia + Hetzner) — 2026-08-01
 
 Goal: one immutable GHCR build per commit; two fully isolated production installs
