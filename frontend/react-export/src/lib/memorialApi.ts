@@ -66,13 +66,23 @@ export type InvitationCreatePayload = {
 export class MemorialApiError extends Error {
   readonly status: number;
   readonly detail: string;
+  /** Seconds from Retry-After when the API signals overload (Task 65.13.11). */
+  readonly retryAfterSeconds: number | null;
 
-  constructor(status: number, detail: string) {
+  constructor(status: number, detail: string, retryAfterSeconds: number | null = null) {
     super(detail);
     this.name = 'MemorialApiError';
     this.status = status;
     this.detail = detail;
+    this.retryAfterSeconds = retryAfterSeconds;
   }
+}
+
+function parseRetryAfterSeconds(response: Response): number | null {
+  const raw = response.headers.get('Retry-After');
+  if (!raw) return null;
+  const seconds = Number.parseInt(raw, 10);
+  return Number.isFinite(seconds) && seconds >= 0 ? seconds : null;
 }
 
 let onUnauthorized: (() => void) | null = null;
@@ -89,10 +99,15 @@ function buildApiUrl(path: string): string {
   return `${API_BASE_URL.replace(/\/$/, '')}${path}`;
 }
 
-async function parseError(response: Response): Promise<string> {
+async function parseError(response: Response, retryAfterSeconds: number | null = null): Promise<string> {
   try {
     const payload = (await response.json()) as { detail?: unknown };
-    if (typeof payload.detail === 'string' && payload.detail.trim()) return payload.detail;
+    if (typeof payload.detail === 'string' && payload.detail.trim()) {
+      if ((response.status === 429 || response.status === 503) && retryAfterSeconds != null) {
+        return `${payload.detail} Try again in ${retryAfterSeconds}s.`;
+      }
+      return payload.detail;
+    }
     if (Array.isArray(payload.detail)) return 'Submitted data did not pass validation.';
   } catch {
     // Non-JSON responses are intentionally collapsed into a safe message.
@@ -104,7 +119,16 @@ async function parseError(response: Response): Promise<string> {
   if (response.status === 404) return 'The memorial or invitation was not found.';
   if (response.status === 409) return 'This action conflicts with something already in progress.';
   if (response.status === 422) return 'Submitted data did not pass validation.';
-  if (response.status === 503) return 'The background worker or search index is temporarily unavailable.';
+  if (response.status === 429) {
+    return retryAfterSeconds != null
+      ? `Too many requests. Try again in ${retryAfterSeconds}s.`
+      : 'Too many requests. Please try again shortly.';
+  }
+  if (response.status === 503) {
+    return retryAfterSeconds != null
+      ? `Service temporarily unavailable. Try again in ${retryAfterSeconds}s.`
+      : 'The service is temporarily unavailable.';
+  }
   return 'The request could not be completed.';
 }
 
@@ -146,11 +170,12 @@ async function requestJson<T>(path: string, init: RequestInit | undefined = {}, 
   }
 
   if (!response.ok) {
-    const detail = await parseError(response);
+    const retryAfterSeconds = parseRetryAfterSeconds(response);
+    const detail = await parseError(response, retryAfterSeconds);
     if (response.status === 401 && !ANONYMOUS_TOLERANT_PATHS.has(path)) {
       onUnauthorized?.();
     }
-    throw new MemorialApiError(response.status, detail);
+    throw new MemorialApiError(response.status, detail, retryAfterSeconds);
   }
 
   if (response.status === 204) {

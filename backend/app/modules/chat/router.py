@@ -9,6 +9,7 @@ from app.db.models import User
 from app.db.session import get_db
 from app.modules.auth.dependencies import get_current_user
 from app.modules.auth.schemas import ErrorResponse
+from app.modules.chat.http_errors import CHAT_ADMISSION_HTTP_ERRORS, raise_chat_admission_http
 from app.modules.chat.schemas import ChatActiveRead, ChatMessageCreate, ChatMessageRead, ChatSendResponse
 from app.modules.chat.service import (
     ChatForbiddenError,
@@ -31,6 +32,8 @@ ProfileIdPath = Annotated[int, Path(gt=0)]
         status.HTTP_401_UNAUTHORIZED: {"model": ErrorResponse},
         status.HTTP_403_FORBIDDEN: {"model": ErrorResponse},
         status.HTTP_404_NOT_FOUND: {"model": ErrorResponse},
+        status.HTTP_429_TOO_MANY_REQUESTS: {"model": ErrorResponse},
+        status.HTTP_503_SERVICE_UNAVAILABLE: {"model": ErrorResponse},
     },
 )
 def send_message(
@@ -56,6 +59,8 @@ def send_message(
             status_code=status.HTTP_403_FORBIDDEN,
             detail=str(exc),
         ) from exc
+    except CHAT_ADMISSION_HTTP_ERRORS as exc:
+        raise_chat_admission_http(exc)
 
 
 @router.get(

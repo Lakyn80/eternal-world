@@ -32,6 +32,21 @@ def _force_mock_ai_providers(monkeypatch):
 
 
 @pytest.fixture(autouse=True)
+def _chat_admission_in_memory_redis(monkeypatch):
+    """Task 65.13.11 — hermetic lease/rate store for every test process.
+
+    Production uses Redis Lua scripts; tests inject InMemoryAdmissionRedis so
+    chat paths stay deterministic without a live Redis dependency and without
+    disabling admission (which would hide regressions).
+    """
+
+    from app.modules.chat import admission as chat_admission
+
+    store = chat_admission.InMemoryAdmissionRedis()
+    monkeypatch.setattr(chat_admission, "get_redis_client", lambda: store)
+
+
+@pytest.fixture(autouse=True)
 def _guard_against_real_provider_calls(monkeypatch):
     """Defense in depth beyond `_force_mock_ai_providers`: a test that
     explicitly re-enables a real provider (to unit-test that provider

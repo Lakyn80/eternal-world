@@ -2468,3 +2468,13 @@ Testy: FE `pwa.test.ts` + `memorialApi.test.ts` **20 passed**; `tsc -b` OK; `npm
 Task 65.13.9 se **povazuje za dokonceny**. Zadna existujici sekce teto roadmapy nebyla prepsana.
 
 Dalsi doporuceny task: **Task 65.13.10 — Authentication and Account Security Hardening after CodeRabbit Review**.
+
+## 51. Task 65.13.11 status (2026-08-08) — chat/LLM admission control and load robustness, completed
+
+Task 65.13.11 — Chat/LLM Admission Control and Load Robustness — byl proveden a **dokoncen**. Plny popis viz `PROJECT_PROGRESS.md`, sekce `Task 65.13.11`.
+
+**Nejde o async rewrite.** Sync chat dostal produkcni admission control (lease-based Redis Brain semaphore, atomicky rate limit, Brain lease az po RAG, 429/503 mapping, FE Retry-After). Auth hardening zustava Task **65.13.10**.
+
+Testy: backend admission+chat passed (docker); FE memorialApi **14 passed**. Zadne commit/push.
+
+Dalsi doporuceny sled: load-test sync varianty → **Task 65.13.12 Async Chat Path** → **Task 65.13.13 Streaming**; paralelne/oddellene **65.13.10** auth hardening.

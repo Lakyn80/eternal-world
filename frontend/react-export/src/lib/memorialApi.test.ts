@@ -6,16 +6,17 @@ import {
   indexCandidateMemory,
   login,
   ownerReviewCandidate,
+  sendChatMessage,
   setUnauthorizedHandler,
   startBiographyIngestion,
   updateAvatarPersonaSettings,
   updateBiography
 } from './memorialApi';
 
-function jsonResponse(status: number, body: unknown): Response {
+function jsonResponse(status: number, body: unknown, headers: Record<string, string> = {}): Response {
   return new Response(JSON.stringify(body), {
     status,
-    headers: { 'Content-Type': 'application/json' }
+    headers: { 'Content-Type': 'application/json', ...headers }
   });
 }
 
@@ -158,6 +159,35 @@ describe('memorialApi', () => {
     await expect(startBiographyIngestion('secret-token', 7)).rejects.toMatchObject({
       status: 409,
       detail: 'A job is already running'
+    });
+  });
+
+  it('maps chat 429 with Retry-After without auto-retry storm', async () => {
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse(429, { detail: 'Chat rate limit exceeded. Please try again shortly.' }, { 'Retry-After': '15' })
+    );
+
+    await expect(sendChatMessage('secret-token', 7, 'hello')).rejects.toMatchObject({
+      status: 429,
+      retryAfterSeconds: 15,
+      detail: expect.stringContaining('Try again in 15s')
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('maps chat 503 capacity saturation with Retry-After', async () => {
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse(
+        503,
+        { detail: 'Chat capacity is temporarily saturated. Please try again shortly.' },
+        { 'Retry-After': '15' }
+      )
+    );
+
+    await expect(sendChatMessage('secret-token', 7, 'hello')).rejects.toMatchObject({
+      status: 503,
+      retryAfterSeconds: 15,
+      detail: expect.stringContaining('Try again in 15s')
     });
   });
 

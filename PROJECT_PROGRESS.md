@@ -1,5 +1,34 @@
 # Project Progress
 
+
+## Task 65.13.11 — Chat/LLM Admission Control and Load Robustness (2026-08-08)
+
+Goal: make the current **synchronous** chat path safe under concurrent load without rewriting the API to asyncio. Admission control is infrastructure that remains after a future async refactor.
+
+Starting branch: `staging/eternalworld-lukiora-20260715`. Auth production behavior unchanged (65.13.10 still owns auth rate limits). No commit/push in this task unless requested.
+
+### What landed
+
+- Redis lease-based Brain semaphore + per-user inflight leases (ZSET + Lua); atomic fixed-window rate limit (Lua INCR+EXPIRE).
+- Two-phase path: user rate/inflight → RAG → Brain lease → DeepSeek → release.
+- Plan-aware chat rate (FREE/BASIC stricter via `allow_unlimited_chat`); demo FA chat shares Brain pool, separate IP rate bucket.
+- HTTP: 429 (user rate/inflight), 503 (Brain saturated / Redis admission down / provider timeout|429|503); other errors not masked.
+- Metrics: `eternal_world_chat_admission_rejected_total`, `eternal_world_chat_brain_leases`; backend `/metrics` debounces `refresh_async_queue_metrics`.
+- FE: `MemorialApiError.retryAfterSeconds` + 429/503 copy; no auto-retry storm.
+- Compose: removed `embedding_worker` `container_name` (local + Hetzner) so scale works.
+
+### Tests
+
+- Backend (docker): `tests/test_task_65_13_11_chat_admission.py` + `tests/test_chat.py` → **passed**.
+- Frontend: `memorialApi.test.ts` → **14 passed**.
+
+### Explicit non-claims / next
+
+- Not an asyncio rewrite. Not auth hardening.
+- Next after load-test of sync+admission: **65.13.12 Async Chat Path**; streaming **65.13.13**.
+- Auth abuse controls remain **65.13.10**.
+
+
 ## Task 65.13.9 — Authentication Security Inventory and Production PWA Foundation (2026-08-06)
 
 Goal: produce an auditable authentication/authorization review package for CodeRabbit (OWASP ASVS 5.0.0-oriented) and implement a privacy-safe installable PWA foundation without changing authentication production behavior.

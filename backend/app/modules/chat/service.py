@@ -29,7 +29,14 @@ from app.modules.ai_agents.schemas import (
     MemoryProfileContext,
     OrchestratorChatRequest,
 )
+from app.modules.billing.service import get_effective_plan_definition_for_user
 from app.modules.chat import active_session, redis_snapshot, repository
+from app.modules.chat.admission import (
+    brain_chat_admission,
+    map_brain_provider_error,
+    resolve_user_chat_rate_limit,
+    user_chat_admission,
+)
 from app.modules.chat.message_translations import (
     ensure_assistant_display_translation,
     ensure_user_canonical_translation,
@@ -315,6 +322,29 @@ def send_chat_message(
         current_user=current_user,
         profile_id=profile_id,
     )
+    plan = get_effective_plan_definition_for_user(current_user)
+    rate_limit = resolve_user_chat_rate_limit(
+        allow_unlimited_chat=plan.limits.allow_unlimited_chat
+    )
+
+    with user_chat_admission(user_id=current_user.id, rate_limit_per_minute=rate_limit):
+        return _send_chat_message_admitted(
+            db,
+            current_user=current_user,
+            profile=profile,
+            profile_id=profile_id,
+            payload=payload,
+        )
+
+
+def _send_chat_message_admitted(
+    db: Session,
+    *,
+    current_user: User,
+    profile: MemoryProfile,
+    profile_id: int,
+    payload: ChatMessageCreate,
+) -> ChatSendResponse:
     canonical_language = assert_canonical_memorial_language(profile.canonical_language)
     source_language = _resolve_user_source_language(
         message=payload.message,
@@ -409,32 +439,39 @@ def send_chat_message(
         memorial_id=profile_id,
         message_id=user_message.id,
     )
-    orchestrator_response, ai_action = run_instrumented_single_attempt_action(
-        db,
-        context=ai_call_context,
-        step_type=AiStepType.PROVIDER_GENERATION,
-        provider=settings.ai_brain_provider,
-        model=settings.ai_brain_model,
-        operation=lambda: orchestrator.generate_chat_response(
-            OrchestratorChatRequest(
-                profile=_build_profile_context(profile),
-                avatar_persona_section=persona_section,
-                user_message=brain_user_message,
-                recent_history=[
-                    _build_history_entry(
-                        db,
-                        message=message,
-                        profile=profile,
-                        actor=current_user,
+    try:
+        with brain_chat_admission():
+            orchestrator_response, ai_action = run_instrumented_single_attempt_action(
+                db,
+                context=ai_call_context,
+                step_type=AiStepType.PROVIDER_GENERATION,
+                provider=settings.ai_brain_provider,
+                model=settings.ai_brain_model,
+                operation=lambda: orchestrator.generate_chat_response(
+                    OrchestratorChatRequest(
+                        profile=_build_profile_context(profile),
+                        avatar_persona_section=persona_section,
+                        user_message=brain_user_message,
+                        recent_history=[
+                            _build_history_entry(
+                                db,
+                                message=message,
+                                profile=profile,
+                                actor=current_user,
+                            )
+                            for message in recent_history
+                        ],
+                        grounded_context=grounded_context,
+                        response_language=response_language,
                     )
-                    for message in recent_history
-                ],
-                grounded_context=grounded_context,
-                response_language=response_language,
+                ),
+                extract_token_usage=_extract_brain_token_usage,
             )
-        ),
-        extract_token_usage=_extract_brain_token_usage,
-    )
+    except Exception as exc:
+        mapped = map_brain_provider_error(exc)
+        if mapped is not None:
+            raise mapped from exc
+        raise
 
     assistant_message = repository.create_chat_message(
         db,

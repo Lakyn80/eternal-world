@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 from app.core.logging import get_logger, log_event
 from app.core.metrics import observe_fa_chat_error, observe_fa_chat_success
 from app.db.session import get_db
+from app.modules.chat.http_errors import CHAT_ADMISSION_HTTP_ERRORS, raise_chat_admission_http
 from app.modules.avatar_memory_promotions.schemas import (
     AvatarMemoryPromotionRead,
     build_avatar_memory_promotion_read,
@@ -210,6 +211,7 @@ def send_demo_fa_chat_message(
     trace_id = getattr(request.state, "request_id", None) or "unknown"
     started_at = perf_counter()
     debug_enabled = bool(payload.debug)
+    client_host = request.client.host if request.client is not None else "anonymous"
     try:
         response = run_demo_fa_chat_message(
             db,
@@ -222,6 +224,7 @@ def send_demo_fa_chat_message(
             actor_role=payload.actor_role.value if payload.actor_role is not None else None,
             relationship_to_owner=payload.relationship_to_owner,
             locale=payload.locale,
+            admission_client_key=client_host,
         )
         observe_fa_chat_success(
             duration_seconds=perf_counter() - started_at,
@@ -292,6 +295,13 @@ def send_demo_fa_chat_message(
                 en="There is no pending clarification question for this candidate.",
             ),
         ) from exc
+    except CHAT_ADMISSION_HTTP_ERRORS as exc:
+        observe_fa_chat_error(
+            outcome="admission_rejected",
+            debug=debug_enabled,
+            duration_seconds=perf_counter() - started_at,
+        )
+        raise_chat_admission_http(exc)
     except HTTPException:
         raise
     except Exception as exc:

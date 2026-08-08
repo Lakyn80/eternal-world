@@ -33,6 +33,11 @@ from app.modules.ai_agents.brain.context import (
 )
 from app.modules.ai_agents.schemas import MemoryProfileContext, OrchestratorChatRequest
 from app.core.config import settings as app_settings
+from app.modules.chat.admission import (
+    brain_chat_admission,
+    demo_rate_admission,
+    map_brain_provider_error,
+)
 from app.modules.provider_usage import service as provider_usage_service
 from app.modules.provider_usage.context import AiCallContext
 from app.modules.provider_usage.enums import AiFeature, AiStepType, ExecutionSource
@@ -1424,6 +1429,7 @@ def run_demo_fa_chat_message(
     actor_role: str | None = None,
     relationship_to_owner: str | None = None,
     locale: str = "ru",
+    admission_client_key: str = "anonymous",
 ) -> DemoFaChatMessageResponse:
     """Run one FA-chat turn.
 
@@ -1450,6 +1456,36 @@ def run_demo_fa_chat_message(
     """
     normalized_message = _normalize_message_text(message, locale=locale)
     message_hash_prefix = _build_message_hash_prefix(normalized_message)
+    with demo_rate_admission(client_key=admission_client_key):
+        return _run_demo_fa_chat_message_admitted(
+            db,
+            profile_id=profile_id,
+            normalized_message=normalized_message,
+            message_hash_prefix=message_hash_prefix,
+            debug=debug,
+            trace_id=trace_id,
+            active_memory_candidate_id=active_memory_candidate_id,
+            actor_id=actor_id,
+            actor_role=actor_role,
+            relationship_to_owner=relationship_to_owner,
+            locale=locale,
+        )
+
+
+def _run_demo_fa_chat_message_admitted(
+    db: Session,
+    *,
+    profile_id: int | None,
+    normalized_message: str,
+    message_hash_prefix: str,
+    debug: bool,
+    trace_id: str,
+    active_memory_candidate_id: int | None,
+    actor_id: str | None,
+    actor_role: str | None,
+    relationship_to_owner: str | None,
+    locale: str,
+) -> DemoFaChatMessageResponse:
     resolved_profile = _resolve_demo_profile(db, profile_id=profile_id, locale=locale)
     avatar_persona = _resolve_demo_avatar_persona()
     actor = (
@@ -1677,34 +1713,41 @@ def run_demo_fa_chat_message(
         resolved_locale=locale,
         memorial_id=resolved_profile.profile.id,
     )
-    orchestrator_response, _ai_action = run_instrumented_single_attempt_action(
-        db,
-        context=ai_call_context,
-        step_type=AiStepType.PROVIDER_GENERATION,
-        provider=app_settings.ai_brain_provider,
-        model=app_settings.ai_brain_model,
-        operation=lambda: orchestrator.generate_chat_response(
-            OrchestratorChatRequest(
-                profile=_build_profile_context(resolved_profile.profile),
-                avatar_persona=avatar_persona,
-                user_message=normalized_message,
-                recent_history=[],
-                grounded_context=grounded_context,
-                # Direct-locale architecture (Task 64.5.2): the Brain receives the
-                # ORIGINAL untranslated user_message above plus this explicit
-                # response_language, and answers directly in that language - no
-                # separate query-translation or answer-translation call. See
-                # prompt_builder._build_response_language_directive.
-                response_language=locale,
+    try:
+        with brain_chat_admission():
+            orchestrator_response, _ai_action = run_instrumented_single_attempt_action(
+                db,
+                context=ai_call_context,
+                step_type=AiStepType.PROVIDER_GENERATION,
+                provider=app_settings.ai_brain_provider,
+                model=app_settings.ai_brain_model,
+                operation=lambda: orchestrator.generate_chat_response(
+                    OrchestratorChatRequest(
+                        profile=_build_profile_context(resolved_profile.profile),
+                        avatar_persona=avatar_persona,
+                        user_message=normalized_message,
+                        recent_history=[],
+                        grounded_context=grounded_context,
+                        # Direct-locale architecture (Task 64.5.2): the Brain receives the
+                        # ORIGINAL untranslated user_message above plus this explicit
+                        # response_language, and answers directly in that language - no
+                        # separate query-translation or answer-translation call. See
+                        # prompt_builder._build_response_language_directive.
+                        response_language=locale,
+                    )
+                ),
+                extract_token_usage=lambda resp: normalize_openai_compatible_usage(
+                    raw_response={
+                        "id": (resp.metadata or {}).get("provider_request_id"),
+                        "usage": (resp.metadata or {}).get("usage"),
+                    }
+                ),
             )
-        ),
-        extract_token_usage=lambda resp: normalize_openai_compatible_usage(
-            raw_response={
-                "id": (resp.metadata or {}).get("provider_request_id"),
-                "usage": (resp.metadata or {}).get("usage"),
-            }
-        ),
-    )
+    except Exception as exc:
+        mapped = map_brain_provider_error(exc)
+        if mapped is not None:
+            raise mapped from exc
+        raise
     metadata = dict(orchestrator_response.metadata)
     persona_applied = bool(metadata.get("persona_applied", True))
     lack_of_evidence = bool(metadata.get("output_guard_lack_of_evidence")) or (

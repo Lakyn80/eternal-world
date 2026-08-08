@@ -117,6 +117,19 @@ class Settings(BaseSettings):
     #: repair tool must never race a real user filling out the review form.
     biographer_stuck_clarification_min_age_hours: int = Field(default=24, gt=0)
 
+    #: Task 65.13.11 — sync chat/LLM admission control (Redis leases + rate).
+    #: Protects the request path before any async rewrite; not a capacity claim.
+    chat_admission_enabled: bool = True
+    chat_rate_limit_per_user_per_minute: int = Field(default=10, gt=0)
+    chat_rate_limit_limited_plan_per_minute: int = Field(default=5, gt=0)
+    chat_rate_limit_demo_per_minute: int = Field(default=20, gt=0)
+    chat_max_inflight_per_user: int = Field(default=1, gt=0)
+    chat_max_global_brain_inflight: int = Field(default=8, gt=0)
+    chat_lease_ttl_margin_seconds: float = Field(default=10, gt=0)
+    chat_overload_retry_after_seconds: int = Field(default=15, gt=0)
+    #: Debounce for refreshing async queue gauges on backend `/metrics` scrapes.
+    metrics_async_queue_refresh_min_interval_seconds: float = Field(default=20, ge=0)
+
     model_config = SettingsConfigDict(
         env_file=ENV_FILE_CANDIDATES,
         env_file_encoding="utf-8",

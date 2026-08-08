@@ -536,6 +536,15 @@ CHAT_REDIS_OPERATIONS_TOTAL = Counter(
     "Total Chat Redis snapshot operations, by operation and result.",
     labelnames=("operation", "result"),
 )
+CHAT_ADMISSION_REJECTED_TOTAL = Counter(
+    "eternal_world_chat_admission_rejected_total",
+    "Chat admission control rejections by reason (Task 65.13.11).",
+    labelnames=("reason",),
+)
+CHAT_BRAIN_LEASES = Gauge(
+    "eternal_world_chat_brain_leases",
+    "Active global Brain/LLM admission leases after the last acquire/release (Task 65.13.11).",
+)
 REVIEW_ACTIONS_TOTAL = Counter(
     "eternal_world_review_actions_total",
     "Total owner-review actions on memory candidates, by action and result.",
@@ -575,7 +584,25 @@ _BIOGRAPHER_RESUME_STATES = frozenset(
     }
 )
 _CHAT_OPERATIONS = frozenset({"send", "restore", "reset"})
+_CHAT_OPERATION_RESULTS = frozenset(
+    {
+        "success",
+        "error",
+        "rate_limited",
+        "saturated",
+        "provider_unavailable",
+        "admission_unavailable",
+    }
+)
 _CHAT_REDIS_OPERATIONS = frozenset({"snapshot_restored", "snapshot_rebuilt", "snapshot_written", "reset"})
+_CHAT_ADMISSION_REJECT_REASONS = frozenset(
+    {
+        "rate_limited",
+        "user_inflight",
+        "brain_saturated",
+        "admission_unavailable",
+    }
+)
 _REVIEW_ACTIONS = frozenset(
     {"confirm", "edit_and_confirm", "reject", "request_more_details", "mark_disputed", "approve_multiple_perspectives"}
 )
@@ -616,8 +643,18 @@ def observe_biographer_direct_answer(*, result: str, locale: str | None) -> None
 def observe_chat_operation(*, operation: str, result: str) -> None:
     CHAT_OPERATIONS_TOTAL.labels(
         operation=_normalize_choice(operation, allowed=_CHAT_OPERATIONS),
-        result=_normalize_choice(result, allowed=frozenset({"success", "error"}), fallback="error"),
+        result=_normalize_choice(result, allowed=_CHAT_OPERATION_RESULTS, fallback="error"),
     ).inc()
+
+
+def observe_chat_admission_rejected(*, reason: str) -> None:
+    CHAT_ADMISSION_REJECTED_TOTAL.labels(
+        reason=_normalize_choice(reason, allowed=_CHAT_ADMISSION_REJECT_REASONS, fallback="other"),
+    ).inc()
+
+
+def set_chat_brain_leases(active: int) -> None:
+    CHAT_BRAIN_LEASES.set(max(0, int(active)))
 
 
 def observe_chat_redis_operation(*, operation: str, result: str) -> None:

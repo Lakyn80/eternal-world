@@ -419,6 +419,17 @@ or `maintenance_worker` never runs a migration or a data reset.
 - Repeated `embedding_worker_recycle_request_total` increments in a short
   window → the embedding worker's environment (not just one job) is
   unhealthy; investigate before it becomes a customer-visible outage.
+- Task 65.13.11 chat admission: sustained rise in
+  `eternal_world_chat_admission_rejected_total{reason="brain_saturated"}`
+  or `rate_limited` → reduce Brain concurrency load, raise
+  `CHAT_MAX_GLOBAL_BRAIN_INFLIGHT` only after measuring DeepSeek limits, or
+  investigate a stuck lease storm (leases self-expire via TTL).
+- `eternal_world_chat_brain_leases` stuck at the configured max for longer
+  than `AI_BRAIN_TIMEOUT_SECONDS + CHAT_LEASE_TTL_MARGIN_SECONDS` → Redis
+  lease purge may be failing; check Redis health.
+- Backend `/metrics` now debounces `refresh_async_queue_metrics` so
+  `async_queue_depth` / `async_oldest_job_age_seconds` stay fresh in the
+  scraped API process (not only in `maintenance_worker`).
 
 ## 18. Running smoke / scale / stress load profiles
 
