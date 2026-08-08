@@ -2478,3 +2478,13 @@ Task 65.13.11 — Chat/LLM Admission Control and Load Robustness — byl provede
 Testy: backend admission+chat passed (docker); FE memorialApi **14 passed**. Zadne commit/push.
 
 Dalsi doporuceny sled: load-test sync varianty → **Task 65.13.12 Async Chat Path** → **Task 65.13.13 Streaming**; paralelne/oddellene **65.13.10** auth hardening.
+
+## 52. Task 65.13.11A status (2026-08-09) — chat admission validation and load certification, completed
+
+Task 65.13.11A — Full Validation and Controlled Load Benchmark of Chat Admission Control — byl proveden a **dokoncen**. Plny popis viz `PROJECT_PROGRESS.md`, sekce `Task 65.13.11A`.
+
+Hermeticke testy + controlled synthetic load (fake Brain latency) potvrdily lease-based Redis admission, atomic rate limit, fail-closed Redis, 429/503 mapping, a `max Brain inflight <= 8`. **VERDICT A — READY_FOR_ASYNC_BASELINE.**
+
+Zadne commit/push. Zadny real DeepSeek/embedding. Zadny restart stacku.
+
+Dalsi doporuceny task: **Task 65.13.12 — Async Chat Path** (admission control zustava povinnou vrstvou). Auth hardening zustava **65.13.10**.

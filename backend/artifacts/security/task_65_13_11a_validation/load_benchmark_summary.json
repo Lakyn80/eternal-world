@@ -1,0 +1,211 @@
+{
+  "task": "65.13.11A",
+  "configured_global_brain_inflight": 8,
+  "configured_user_inflight": 10000,
+  "scenarios": {
+    "FAST": [
+      {
+        "concurrency": 1,
+        "attempts": 1,
+        "ok": 1,
+        "429": 0,
+        "503": 0,
+        "unexpected_5xx": 0,
+        "p50_ms": 50.54,
+        "p95_ms": 50.54,
+        "max_brain_inflight": 1
+      },
+      {
+        "concurrency": 2,
+        "attempts": 2,
+        "ok": 2,
+        "429": 0,
+        "503": 0,
+        "unexpected_5xx": 0,
+        "p50_ms": 50.66,
+        "p95_ms": 50.7,
+        "max_brain_inflight": 2
+      },
+      {
+        "concurrency": 4,
+        "attempts": 4,
+        "ok": 4,
+        "429": 0,
+        "503": 0,
+        "unexpected_5xx": 0,
+        "p50_ms": 50.99,
+        "p95_ms": 51.28,
+        "max_brain_inflight": 4
+      },
+      {
+        "concurrency": 8,
+        "attempts": 8,
+        "ok": 8,
+        "429": 0,
+        "503": 0,
+        "unexpected_5xx": 0,
+        "p50_ms": 51.04,
+        "p95_ms": 54.2,
+        "max_brain_inflight": 8
+      },
+      {
+        "concurrency": 16,
+        "attempts": 16,
+        "ok": 8,
+        "429": 0,
+        "503": 8,
+        "unexpected_5xx": 0,
+        "p50_ms": 50.61,
+        "p95_ms": 50.96,
+        "max_brain_inflight": 8
+      },
+      {
+        "concurrency": 32,
+        "attempts": 32,
+        "ok": 8,
+        "429": 0,
+        "503": 24,
+        "unexpected_5xx": 0,
+        "p50_ms": 0.74,
+        "p95_ms": 50.97,
+        "max_brain_inflight": 8
+      },
+      {
+        "concurrency": 64,
+        "attempts": 64,
+        "ok": 13,
+        "429": 0,
+        "503": 51,
+        "unexpected_5xx": 0,
+        "p50_ms": 0.83,
+        "p95_ms": 57.54,
+        "max_brain_inflight": 8
+      }
+    ],
+    "NORMAL": [
+      {
+        "concurrency": 1,
+        "attempts": 1,
+        "ok": 1,
+        "429": 0,
+        "503": 0,
+        "unexpected_5xx": 0,
+        "p50_ms": 501.12,
+        "p95_ms": 501.12,
+        "max_brain_inflight": 1
+      },
+      {
+        "concurrency": 2,
+        "attempts": 2,
+        "ok": 2,
+        "429": 0,
+        "503": 0,
+        "unexpected_5xx": 0,
+        "p50_ms": 500.57,
+        "p95_ms": 500.8,
+        "max_brain_inflight": 2
+      },
+      {
+        "concurrency": 4,
+        "attempts": 4,
+        "ok": 4,
+        "429": 0,
+        "503": 0,
+        "unexpected_5xx": 0,
+        "p50_ms": 500.91,
+        "p95_ms": 501.07,
+        "max_brain_inflight": 4
+      },
+      {
+        "concurrency": 8,
+        "attempts": 8,
+        "ok": 8,
+        "429": 0,
+        "503": 0,
+        "unexpected_5xx": 0,
+        "p50_ms": 500.99,
+        "p95_ms": 501.42,
+        "max_brain_inflight": 8
+      },
+      {
+        "concurrency": 16,
+        "attempts": 16,
+        "ok": 8,
+        "429": 0,
+        "503": 8,
+        "unexpected_5xx": 0,
+        "p50_ms": 500.56,
+        "p95_ms": 501.16,
+        "max_brain_inflight": 8
+      },
+      {
+        "concurrency": 32,
+        "attempts": 32,
+        "ok": 8,
+        "429": 0,
+        "503": 24,
+        "unexpected_5xx": 0,
+        "p50_ms": 0.58,
+        "p95_ms": 500.99,
+        "max_brain_inflight": 8
+      }
+    ],
+    "SLOW": [
+      {
+        "concurrency": 1,
+        "attempts": 1,
+        "ok": 1,
+        "429": 0,
+        "503": 0,
+        "unexpected_5xx": 0,
+        "p50_ms": 2001.06,
+        "p95_ms": 2001.06,
+        "max_brain_inflight": 1
+      },
+      {
+        "concurrency": 2,
+        "attempts": 2,
+        "ok": 2,
+        "429": 0,
+        "503": 0,
+        "unexpected_5xx": 0,
+        "p50_ms": 2000.53,
+        "p95_ms": 2000.88,
+        "max_brain_inflight": 2
+      },
+      {
+        "concurrency": 4,
+        "attempts": 4,
+        "ok": 4,
+        "429": 0,
+        "503": 0,
+        "unexpected_5xx": 0,
+        "p50_ms": 2001.27,
+        "p95_ms": 2002.41,
+        "max_brain_inflight": 4
+      },
+      {
+        "concurrency": 8,
+        "attempts": 8,
+        "ok": 8,
+        "429": 0,
+        "503": 0,
+        "unexpected_5xx": 0,
+        "p50_ms": 2000.79,
+        "p95_ms": 2001.22,
+        "max_brain_inflight": 8
+      },
+      {
+        "concurrency": 16,
+        "attempts": 16,
+        "ok": 8,
+        "429": 0,
+        "503": 8,
+        "unexpected_5xx": 0,
+        "p50_ms": 2000.48,
+        "p95_ms": 2001.06,
+        "max_brain_inflight": 8
+      }
+    ]
+  }
+}

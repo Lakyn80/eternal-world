@@ -1,6 +1,34 @@
 # Project Progress
 
 
+## Task 65.13.11A — Full Validation and Controlled Load Benchmark (2026-08-09)
+
+Goal: certify Task 65.13.11 admission control under hermetic failure-mode and controlled synthetic load before any async chat refactor. No architecture change; no real DeepSeek/embeddings; no commit/push.
+
+Baseline: `staging/eternalworld-lukiora-20260715` @ `0fc549175297d0fc33a89218823e047a5762bacc` (= origin). Task 65.13.11 already committed. Working tree only had validation additions + local `.cursor/`.
+
+### Mechanism confirmed
+
+- Rate limit: atomic fixed-window Lua (`INCR`+`EXPIRE` in one script).
+- Per-user inflight + global Brain: Redis ZSET lease semaphore + Lua; TTL = `ai_brain_timeout_seconds + chat_lease_ttl_margin_seconds`.
+- Defaults: rate 10/min (limited plan 5/min), user inflight 1, global Brain 8, Retry-After 15s.
+- `allow_unlimited_chat` only raises rate threshold; never bypasses global Brain cap.
+
+### Results
+
+- Backend: `test_task_65_13_11_chat_admission.py` + `test_task_65_13_11a_chat_admission_validation.py` + `test_chat.py` → **39 passed** (docker, mock providers).
+- Failure modes: 429/503 + Retry-After; Redis down fail-closed; provider timeout/429→503; ValueError not masked; lease release on RAG/Brain errors; stale lease purge; 10× concurrent acquire with limit 3 never exceeded; demo/auth share Brain pool, distinct rate buckets.
+- Load matrix (fake Brain 50/500/2000 ms): max Brain inflight always ≤ 8; above-cap concurrency yields 503; unexpected 5xx = 0. Summary: `backend/artifacts/security/task_65_13_11a_validation/load_benchmark_summary.json`.
+- FE: memorialApi **14 passed**; `tsc -b` OK; `npm run build` OK. Draft restored on error; no auto-retry loop; `busy` gate retained.
+- Metrics: admission reject counter + brain leases; `/metrics` exposes `async_queue_depth` (debounced refresh). No user/profile labels.
+- Compose: `embedding_worker` has no fixed `container_name` (dev + Hetzner); concurrency remains 1. `docker compose config` OK.
+- Runtime (read-only): `/health` ok; frontend 200; metrics scrape OK. No stack restart.
+
+### Verdict
+
+**VERDICT A — READY_FOR_ASYNC_BASELINE.** Task 65.13.12 Async Chat Path may begin. Auth hardening remains Task 65.13.10.
+
+
 ## Task 65.13.11 — Chat/LLM Admission Control and Load Robustness (2026-08-08)
 
 Goal: make the current **synchronous** chat path safe under concurrent load without rewriting the API to asyncio. Admission control is infrastructure that remains after a future async refactor.
@@ -11475,3 +11503,4 @@ Modular registry: `frontend/react-export/src/demo/` (`types`, `registry`, `perso
 ### Next recommended task
 
 Commit when requested. Optional follow-up: locale-scoped packs for Next.js v2 / FA-chat Eva demo if product wants the same rule there.
+

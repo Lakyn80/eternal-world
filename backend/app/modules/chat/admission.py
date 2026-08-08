@@ -6,6 +6,7 @@ Does not replace asyncio; protects the current sync chat path under load.
 
 from __future__ import annotations
 
+import threading
 import time
 import uuid
 from contextlib import contextmanager
@@ -345,29 +346,35 @@ def map_brain_provider_error(exc: BaseException) -> ChatProviderUnavailableError
 
 
 class InMemoryAdmissionRedis:
-    """Minimal Redis stand-in supporting the admission Lua scripts via eval."""
+    """Minimal Redis stand-in supporting the admission Lua scripts via eval.
+
+    A re-entrant lock serializes ``eval`` so concurrent tests observe the same
+    single-threaded atomicity Redis provides for Lua scripts (Task 65.13.11A).
+    """
 
     def __init__(self) -> None:
         self._strings: dict[str, int] = {}
         self._string_expiry: dict[str, float] = {}
         self._zsets: dict[str, dict[str, float]] = {}
+        self._lock = threading.RLock()
 
     def eval(self, script: str, numkeys: int, *keys_and_args: object) -> object:
-        keys = [str(keys_and_args[i]) for i in range(numkeys)]
-        args = list(keys_and_args[numkeys:])
-        if script.strip() == RATE_LIMIT_LUA.strip():
-            return self._rate_limit(keys[0], int(args[0]), int(args[1]))
-        if script.strip() == LEASE_ACQUIRE_LUA.strip():
-            return self._lease_acquire(
-                keys[0],
-                float(args[0]),
-                float(args[1]),
-                int(args[2]),
-                str(args[3]),
-            )
-        if script.strip() == LEASE_RELEASE_LUA.strip():
-            return self._lease_release(keys[0], str(args[0]))
-        raise NotImplementedError("Unsupported Lua script in InMemoryAdmissionRedis")
+        with self._lock:
+            keys = [str(keys_and_args[i]) for i in range(numkeys)]
+            args = list(keys_and_args[numkeys:])
+            if script.strip() == RATE_LIMIT_LUA.strip():
+                return self._rate_limit(keys[0], int(args[0]), int(args[1]))
+            if script.strip() == LEASE_ACQUIRE_LUA.strip():
+                return self._lease_acquire(
+                    keys[0],
+                    float(args[0]),
+                    float(args[1]),
+                    int(args[2]),
+                    str(args[3]),
+                )
+            if script.strip() == LEASE_RELEASE_LUA.strip():
+                return self._lease_release(keys[0], str(args[0]))
+            raise NotImplementedError("Unsupported Lua script in InMemoryAdmissionRedis")
 
     def _purge_string_if_expired(self, key: str) -> None:
         expires = self._string_expiry.get(key)
