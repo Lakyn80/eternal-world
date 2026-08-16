@@ -1,0 +1,49 @@
+{
+  "task": "65.13.12A",
+  "question": "Does synchronous RAG execution measurably block the event loop?",
+  "answer": "YES",
+  "note": "Probe uses controlled time.sleep on the event loop as a stand-in for sync Qdrant/RAG network I/O currently executed on the request task.",
+  "results": [
+    {
+      "rag_block_ms": 10.0,
+      "wall_ms": 20.28,
+      "heartbeat_max_delay_s": 0.0204,
+      "heartbeat_p95_delay_s": 0.0204,
+      "heartbeat_count": 2,
+      "blocks_event_loop": true
+    },
+    {
+      "rag_block_ms": 50.0,
+      "wall_ms": 60.34,
+      "heartbeat_max_delay_s": 0.0604,
+      "heartbeat_p95_delay_s": 0.0604,
+      "heartbeat_count": 2,
+      "blocks_event_loop": true
+    },
+    {
+      "rag_block_ms": 100.0,
+      "wall_ms": 110.24,
+      "heartbeat_max_delay_s": 0.1103,
+      "heartbeat_p95_delay_s": 0.1103,
+      "heartbeat_count": 2,
+      "blocks_event_loop": true
+    },
+    {
+      "rag_block_ms": 250.0,
+      "wall_ms": 260.32,
+      "heartbeat_max_delay_s": 0.2604,
+      "heartbeat_p95_delay_s": 0.2604,
+      "heartbeat_count": 2,
+      "blocks_event_loop": true
+    },
+    {
+      "rag_block_ms": 500.0,
+      "wall_ms": 510.25,
+      "heartbeat_max_delay_s": 0.5103,
+      "heartbeat_p95_delay_s": 0.5103,
+      "heartbeat_count": 2,
+      "blocks_event_loop": true
+    }
+  ],
+  "recommended_action": "MEASURE_IN_PRODUCTION_LATER"
+}

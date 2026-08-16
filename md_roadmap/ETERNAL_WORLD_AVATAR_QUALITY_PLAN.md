@@ -2504,3 +2504,13 @@ Task 65.13.12 — Convert the Critical Chat Request Path to Real Async I/O — b
 Testy: hermetic async + admission + chat regressions; async load matrix s oddelenym accepted/rejected latency; event-loop heartbeat proof; global cap=3×20×10. Artifact: `backend/artifacts/security/task_65_13_12_validation/async_load_benchmark_summary.json`.
 
 **VERDICT A — ASYNC_CHAT_PATH_READY.** Zadne commit/push. Zadny real DeepSeek. Zadna auth zmena. Streaming zustava **65.13.13**. Dalsi: **65.13.12A** sync-vs-async comparison; paralelne **65.13.10** auth hardening.
+
+## 54. Task 65.13.12A status (2026-08-17) — sync vs async load comparison, completed
+
+Task 65.13.12A — Sync vs Async Controlled Load Comparison and Remaining Chat Bottleneck Certification — byl proveden a **dokoncen**. Plny popis viz `PROJECT_PROGRESS.md`, sekce `Task 65.13.12A`.
+
+**Metodika:** historicke 11A vs 12 artefakty = **PARTIALLY_COMPARABLE**; primarni dukaz = same-host Method B (test-only sync-ref `time.sleep` na event loop vs true `asyncio.sleep`) pod stejnym admission.
+
+**Vysledek:** async Brain wait realne zlepsuje event-loop responsiveness (500 ms: HB max ~4.0 s sync-ref vs ~0.021 s async; 2000 ms: ~16 s vs ~0.022 s). Global Brain cap zustava; violations=0; leases bez uniku. Dominantni stage zustava `brain_provider`. Redis bridge materialne neomezuje. RAG/SQL sync dokazi zablokovat loop pri dlouhem I/O, ale neospravedlnuji okamzity 65.13.12B.
+
+**VERDICT A — ASYNC_FOUNDATION_CERTIFIED.** Zadne commit/push. Zadny dalsi async refactor ted. Dalsi: **65.13.10** auth hardening; pozdeji **65.13.13** streaming. Artifact: `backend/artifacts/security/task_65_13_12a_validation/`.

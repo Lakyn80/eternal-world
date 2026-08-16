@@ -1,0 +1,75 @@
+{
+  "task": "65.13.12A",
+  "question": "Is the Redis threadpool bridge materially affecting chat capacity or event-loop responsiveness?",
+  "answer": "NO",
+  "host": {
+    "os": "Linux",
+    "platform": "Linux-6.6.87.2-microsoft-standard-WSL2-x86_64-with-glibc2.41",
+    "python": "3.12.13",
+    "cpu_count_logical": 20,
+    "process_rss_hint": 119008,
+    "timestamp_utc": "2026-08-16T22:59:54.391722+00:00",
+    "fake_provider_mode": "deterministic_sleep",
+    "note": "local/dev hermetic benchmark; not production capacity"
+  },
+  "admission_bridge_by_concurrency": {
+    "1": {
+      "concurrency": 1,
+      "p50_ms": 3.51,
+      "p95_ms": 3.51,
+      "p99_ms": 3.51,
+      "end_to_end_ms": 3.6,
+      "heartbeat_max_delay_s": 0.0209,
+      "heartbeat_p95_delay_s": 0.0209
+    },
+    "8": {
+      "concurrency": 8,
+      "p50_ms": 10.63,
+      "p95_ms": 11.25,
+      "p99_ms": 11.25,
+      "end_to_end_ms": 11.64,
+      "heartbeat_max_delay_s": 0.0218,
+      "heartbeat_p95_delay_s": 0.0218
+    },
+    "16": {
+      "concurrency": 16,
+      "p50_ms": 14.08,
+      "p95_ms": 14.82,
+      "p99_ms": 14.83,
+      "end_to_end_ms": 15.83,
+      "heartbeat_max_delay_s": 0.021,
+      "heartbeat_p95_delay_s": 0.021
+    },
+    "32": {
+      "concurrency": 32,
+      "p50_ms": 23.9,
+      "p95_ms": 24.16,
+      "p99_ms": 24.42,
+      "end_to_end_ms": 25.17,
+      "heartbeat_max_delay_s": 0.0222,
+      "heartbeat_p95_delay_s": 0.0222
+    },
+    "64": {
+      "concurrency": 64,
+      "p50_ms": 42.69,
+      "p95_ms": 44.31,
+      "p99_ms": 44.4,
+      "end_to_end_ms": 46.53,
+      "heartbeat_max_delay_s": 0.0263,
+      "heartbeat_p95_delay_s": 0.0263
+    }
+  },
+  "threadpool_saturation": {
+    "bridged_ops": 48,
+    "block_ms": 50.0,
+    "max_observed_workers": 32,
+    "configured_max_workers": 32,
+    "wall_ms": 106.42,
+    "heartbeat_max_delay_s": 0.0211,
+    "bridge_can_saturate_before_brain_cap": true
+  },
+  "configured_chat_bridge_max_workers": 32,
+  "can_bridge_saturate_before_brain_cap": true,
+  "note": "Bridge can queue when synthetic bridged work >> Brain cap, but short Redis admission ops did not materially stall the event loop in this probe.",
+  "recommended_action": "NO_CHANGE"
+}

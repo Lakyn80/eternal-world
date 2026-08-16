@@ -1,0 +1,95 @@
+{
+  "task": "65.13.12A",
+  "question": "Does synchronous SQLAlchemy work currently justify a scoped AsyncSession migration for the chat path?",
+  "answer": "NO",
+  "justifies_scoped_asyncsession": false,
+  "event_loop_blocks_when_db_sleep_ge_100ms": true,
+  "note": "Sync ORM on the request task can block the loop if DB I/O is long; typical chat prep/finalize durations in hermetic fixtures are short. No production evidence here that AsyncSession is the next required step.",
+  "results": {
+    "pre_brain": [
+      {
+        "segment": "pre_brain",
+        "db_block_ms": 5.0,
+        "wall_ms": 55.99,
+        "heartbeat_max_delay_s": 0.0204,
+        "heartbeat_p95_delay_s": 0.0204,
+        "blocks_event_loop": true
+      },
+      {
+        "segment": "pre_brain",
+        "db_block_ms": 20.0,
+        "wall_ms": 70.81,
+        "heartbeat_max_delay_s": 0.0204,
+        "heartbeat_p95_delay_s": 0.0204,
+        "blocks_event_loop": true
+      },
+      {
+        "segment": "pre_brain",
+        "db_block_ms": 50.0,
+        "wall_ms": 101.03,
+        "heartbeat_max_delay_s": 0.0205,
+        "heartbeat_p95_delay_s": 0.0205,
+        "blocks_event_loop": false
+      },
+      {
+        "segment": "pre_brain",
+        "db_block_ms": 100.0,
+        "wall_ms": 150.77,
+        "heartbeat_max_delay_s": 0.0204,
+        "heartbeat_p95_delay_s": 0.0204,
+        "blocks_event_loop": false
+      },
+      {
+        "segment": "pre_brain",
+        "db_block_ms": 250.0,
+        "wall_ms": 304.11,
+        "heartbeat_max_delay_s": 0.0207,
+        "heartbeat_p95_delay_s": 0.0207,
+        "blocks_event_loop": false
+      }
+    ],
+    "post_brain": [
+      {
+        "segment": "post_brain",
+        "db_block_ms": 5.0,
+        "wall_ms": 55.52,
+        "heartbeat_max_delay_s": 0.0247,
+        "heartbeat_p95_delay_s": 0.0247,
+        "blocks_event_loop": true
+      },
+      {
+        "segment": "post_brain",
+        "db_block_ms": 20.0,
+        "wall_ms": 70.84,
+        "heartbeat_max_delay_s": 0.0306,
+        "heartbeat_p95_delay_s": 0.0306,
+        "blocks_event_loop": true
+      },
+      {
+        "segment": "post_brain",
+        "db_block_ms": 50.0,
+        "wall_ms": 101.95,
+        "heartbeat_max_delay_s": 0.0611,
+        "heartbeat_p95_delay_s": 0.0611,
+        "blocks_event_loop": true
+      },
+      {
+        "segment": "post_brain",
+        "db_block_ms": 100.0,
+        "wall_ms": 151.71,
+        "heartbeat_max_delay_s": 0.1111,
+        "heartbeat_p95_delay_s": 0.1111,
+        "blocks_event_loop": true
+      },
+      {
+        "segment": "post_brain",
+        "db_block_ms": 250.0,
+        "wall_ms": 300.94,
+        "heartbeat_max_delay_s": 0.2606,
+        "heartbeat_p95_delay_s": 0.2606,
+        "blocks_event_loop": true
+      }
+    ]
+  },
+  "recommended_action": "MEASURE_IN_PRODUCTION_LATER"
+}

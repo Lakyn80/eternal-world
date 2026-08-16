@@ -1,6 +1,61 @@
 # Project Progress
 
 
+## Task 65.13.12A — Sync vs Async Controlled Load Comparison (2026-08-17)
+
+Goal: measure whether Task 65.13.12’s true-async Brain wait materially improved event-loop responsiveness and useful concurrency under unchanged admission control, and certify whether RAG / SQLAlchemy / Redis-bridge justify an immediate follow-up async refactor. Measurement only — no broad async rewrite. No commit/push.
+
+### Baseline
+
+- Branch: `staging/eternalworld-lukiora-20260715`
+- Local HEAD: `c4f46b684b52652faa4ef06025a84abab87cf6d0` (Task 65.13.12 committed; ahead 2 of origin `0fc5491…`)
+- Sync baseline commit: `3dd3013995c5b0a5eed7c620f8175afee42f606e` (65.13.11A)
+- Sync artifact: `backend/artifacts/security/task_65_13_11a_validation/load_benchmark_summary.json`
+- Async artifact: `backend/artifacts/security/task_65_13_12_validation/async_load_benchmark_summary.json`
+- Historical comparability: **PARTIALLY_COMPARABLE** (11A mixed p50/p95; no heartbeat; threaded sync Brain). Primary evidence = same-host **Method B**.
+
+### Same-host Method B (primary)
+
+Test-only sync reference: `time.sleep` on the event-loop task vs `await asyncio.sleep` under identical InMemory admission (global Brain=8, user inflight neutralized).
+
+Event-loop (concurrency=8):
+
+| Brain latency | Sync-ref max HB gap | Async max HB gap | Sync-ref e2e | Async e2e |
+|---|---:|---:|---:|---:|
+| 500 ms | ~4.02 s | ~0.021 s | ~4022 ms | ~522 ms |
+| 2000 ms | ~16.02 s | ~0.022 s | ~16024 ms | ~2016 ms |
+
+Async keeps the loop responsive (HB ≪ provider latency). Sync-ref freezes the loop for ~N×latency when N concurrent waits share one loop.
+
+Admission: max Brain ≤ 8; violations=0; leaked leases=0. Cap regression 3×20×10 OK.
+
+### Isolation probes
+
+| Subsystem | Result | Action |
+|---|---|---|
+| Brain HTTP | native async; proven loop benefit | NO_CHANGE |
+| Redis admission bridge | short ops; HB delay ≪ material; p50 ~7–54 ms by concurrency | NO_CHANGE |
+| RAG/Qdrant (sync on request task) | synthetic block ≥100 ms stalls loop; stage share ~3% under synthetic 15 ms RAG | MEASURE_IN_PRODUCTION_LATER |
+| SQLAlchemy prep/finalize | can stall if long; not justifying scoped AsyncSession now | MEASURE_IN_PRODUCTION_LATER |
+
+Dominant stage after async conversion: **brain_provider** (~93% NORMAL / ~97% SLOW of synthetic pipeline).
+
+### Artifacts
+
+`backend/artifacts/security/task_65_13_12a_validation/`:
+`sync_vs_async_summary.json`, `event_loop_responsiveness.json`, `stage_latency_summary.json`, `rag_blocking_probe.json`, `sqlalchemy_blocking_probe.json`, `redis_bridge_probe.json`.
+
+### Tests
+
+- New: `tests/test_task_65_13_12a_sync_vs_async_comparison.py` → **12 passed**
+- Regression 12+11+11A+chat → **59 passed**
+- FE memorialApi + `tsc -b` OK; no FE production changes
+
+### Verdict
+
+**VERDICT A — ASYNC_FOUNDATION_CERTIFIED.** Close the 65.13.12 async foundation; do not perform more async refactoring now. Next product priorities: **65.13.10** auth hardening; later **65.13.13** streaming/SSE. Monitor RAG/DB durations in production before any 65.13.12B.
+
+
 ## Task 65.13.12 — Async Chat Path (True Async Brain Wait) (2026-08-09)
 
 Goal: convert the latency-critical authenticated chat request path so Brain/provider network wait does not block the FastAPI event loop, while preserving all Task 65.13.11 admission guarantees. No global AsyncSession migration. No streaming. No auth behavior change. No commit/push.

@@ -1,0 +1,112 @@
+{
+  "task": "65.13.12A",
+  "heartbeat_period_s": 0.02,
+  "host": {
+    "os": "Linux",
+    "platform": "Linux-6.6.87.2-microsoft-standard-WSL2-x86_64-with-glibc2.41",
+    "python": "3.12.13",
+    "cpu_count_logical": 20,
+    "process_rss_hint": 118688,
+    "timestamp_utc": "2026-08-16T22:58:24.354714+00:00",
+    "fake_provider_mode": "deterministic_sleep",
+    "note": "local/dev hermetic benchmark; not production capacity"
+  },
+  "results": {
+    "500": {
+      "sync_ref": {
+        "mode": "sync_ref",
+        "concurrency": 8,
+        "latency_ms": 500.0,
+        "attempts": 8,
+        "ok": 8,
+        "429": 0,
+        "503": 0,
+        "unexpected_5xx": 0,
+        "accepted_p50_ms": 4010.95,
+        "accepted_p95_ms": 4012.41,
+        "rejected_p50_ms": 0.0,
+        "rejected_p95_ms": 0.0,
+        "end_to_end_ms": 4013.01,
+        "max_brain_inflight": 1,
+        "admission_acquire_p50_ms": 2007.02,
+        "admission_acquire_p95_ms": 3507.6,
+        "heartbeat_count": 3,
+        "heartbeat_expected": 200,
+        "heartbeat_max_delay_s": 4.0122,
+        "heartbeat_p95_delay_s": 4.0122
+      },
+      "async": {
+        "mode": "async",
+        "concurrency": 8,
+        "latency_ms": 500.0,
+        "attempts": 8,
+        "ok": 8,
+        "429": 0,
+        "503": 0,
+        "unexpected_5xx": 0,
+        "accepted_p50_ms": 510.1,
+        "accepted_p95_ms": 510.21,
+        "rejected_p50_ms": 0.0,
+        "rejected_p95_ms": 0.0,
+        "end_to_end_ms": 510.4,
+        "max_brain_inflight": 8,
+        "admission_acquire_p50_ms": 3.78,
+        "admission_acquire_p95_ms": 3.87,
+        "heartbeat_count": 27,
+        "heartbeat_expected": 25,
+        "heartbeat_max_delay_s": 0.0236,
+        "heartbeat_p95_delay_s": 0.0211
+      }
+    },
+    "2000": {
+      "sync_ref": {
+        "mode": "sync_ref",
+        "concurrency": 8,
+        "latency_ms": 2000.0,
+        "attempts": 8,
+        "ok": 8,
+        "429": 0,
+        "503": 0,
+        "unexpected_5xx": 0,
+        "accepted_p50_ms": 16010.32,
+        "accepted_p95_ms": 16011.12,
+        "rejected_p50_ms": 0.0,
+        "rejected_p95_ms": 0.0,
+        "end_to_end_ms": 16011.31,
+        "max_brain_inflight": 1,
+        "admission_acquire_p50_ms": 8006.08,
+        "admission_acquire_p95_ms": 14006.17,
+        "heartbeat_count": 3,
+        "heartbeat_expected": 800,
+        "heartbeat_max_delay_s": 16.0098,
+        "heartbeat_p95_delay_s": 16.0098
+      },
+      "async": {
+        "mode": "async",
+        "concurrency": 8,
+        "latency_ms": 2000.0,
+        "attempts": 8,
+        "ok": 8,
+        "429": 0,
+        "503": 0,
+        "unexpected_5xx": 0,
+        "accepted_p50_ms": 2008.69,
+        "accepted_p95_ms": 2008.92,
+        "rejected_p50_ms": 0.0,
+        "rejected_p95_ms": 0.0,
+        "end_to_end_ms": 2010.56,
+        "max_brain_inflight": 8,
+        "admission_acquire_p50_ms": 4.25,
+        "admission_acquire_p95_ms": 5.14,
+        "heartbeat_count": 101,
+        "heartbeat_expected": 100,
+        "heartbeat_max_delay_s": 0.021,
+        "heartbeat_p95_delay_s": 0.0203
+      }
+    }
+  },
+  "verdict": {
+    "async_keeps_loop_responsive": true,
+    "sync_ref_blocks_loop_near_provider_latency": true
+  }
+}
