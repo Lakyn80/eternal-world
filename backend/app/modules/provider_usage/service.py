@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from time import perf_counter
-from typing import Any, Callable
+from typing import Any
 
 from sqlalchemy.orm import Session
 
@@ -392,6 +393,122 @@ def run_instrumented_single_attempt_action(
         duration_seconds=(action.duration_ms or 0) / 1000,
     )
     return result.response, action
+
+
+async def run_instrumented_single_attempt_action_async(
+    db: Session,
+    *,
+    context: AiCallContext,
+    step_type: AiStepType,
+    provider: str,
+    model: str,
+    operation: Callable[[], Awaitable[Any]],
+    extract_token_usage: Callable[[Any], NormalizedTokenUsage],
+) -> tuple[Any, AiAction]:
+    """Async variant: audit rows use the request Session; ``operation`` is awaited.
+
+    The Session is intentionally idle across the await (same task, never shared
+    across threads). Paid provider network I/O must not run on this Session.
+    """
+
+    action = repository.create_action(db, context=context)
+    db.commit()
+    step = repository.create_step(
+        db,
+        action=action,
+        step_type=step_type,
+        sequence_number=1,
+        execution_source=context.execution_source,
+        cache_status=CacheStatus.NOT_APPLICABLE,
+    )
+    db.commit()
+    try:
+        attempt, is_new = repository.get_or_create_pending_attempt(
+            db,
+            action=action,
+            step=step,
+            attempt_number=1,
+            provider=provider,
+            model=model,
+            retry_reason=None,
+        )
+        db.commit()
+    except Exception as exc:
+        db.rollback()
+        observe_ai_audit_failure(stage="pre_call", feature=action.feature)
+        raise AuditPersistenceError(
+            "Failed to durably record a pending provider attempt before the call"
+        ) from exc
+
+    if not is_new and attempt.status != ProviderAttemptStatus.PENDING.value:
+        raise AuditPersistenceError("Provider attempt already finalized; refusing duplicate async call")
+
+    started_at = perf_counter()
+    try:
+        response = await operation()
+    except Exception as exc:
+        latency_ms = int((perf_counter() - started_at) * 1000)
+        status, error_category = _classify_provider_exception(exc)
+        try:
+            repository.finalize_attempt_failure(
+                db,
+                attempt,
+                status=status,
+                error_category=error_category,
+                latency_ms=latency_ms,
+            )
+            repository.recompute_step_totals(db, step)
+            db.commit()
+        except Exception:
+            db.rollback()
+            observe_ai_audit_failure(stage="post_call_failure", feature=action.feature)
+        _try_finalize_action_failed(db, action, error_category=error_category)
+        observe_ai_provider_attempt(
+            provider=provider,
+            model=model,
+            feature=action.feature,
+            status=status.value,
+            latency_seconds=latency_ms / 1000,
+        )
+        raise
+
+    latency_ms = int((perf_counter() - started_at) * 1000)
+    try:
+        token_usage = extract_token_usage(response)
+        normalized_usage = calculate_provider_usage_cost(
+            provider=provider, model=model, token_usage=token_usage
+        )
+        repository.finalize_attempt_success(
+            db,
+            attempt,
+            normalized_usage=normalized_usage,
+            latency_ms=latency_ms,
+        )
+        repository.recompute_step_totals(db, step)
+        repository.finalize_action(db, action, status=AiActionStatus.SUCCEEDED)
+        db.commit()
+    except Exception as exc:
+        db.rollback()
+        observe_ai_audit_failure(stage="post_call_success", feature=action.feature)
+        raise AuditFinalizationError(
+            "Provider call succeeded but usage/cost persistence failed"
+        ) from exc
+
+    observe_ai_provider_attempt(
+        provider=provider,
+        model=model,
+        feature=action.feature,
+        status=ProviderAttemptStatus.SUCCEEDED.value,
+        latency_seconds=latency_ms / 1000,
+        token_usage=normalized_usage,
+    )
+    observe_ai_action_completed(
+        feature=action.feature,
+        status=action.status,
+        execution_source=action.execution_source,
+        duration_seconds=(action.duration_ms or 0) / 1000,
+    )
+    return response, action
 
 
 def _try_finalize_action_failed(db: Session, action: AiAction, *, error_category: str) -> None:

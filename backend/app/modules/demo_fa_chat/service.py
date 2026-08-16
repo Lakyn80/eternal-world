@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import asyncio
+from collections.abc import Callable
 from dataclasses import dataclass
 from time import perf_counter
 
@@ -17,6 +19,7 @@ from app.core.metrics import (
     observe_rag_retrieval_success,
 )
 from app.db.models import User
+from app.db.session import get_session_factory
 from app.modules.active_retrieval_config.exceptions import ActiveRetrievalConfigNotFoundError
 from app.modules.active_retrieval_config.service import (
     get_active_retrieval_config,
@@ -31,8 +34,13 @@ from app.modules.ai_agents.brain.context import (
     is_verified_evidence_result,
     prioritize_corrected_memory_evidence,
 )
-from app.modules.ai_agents.schemas import MemoryProfileContext, OrchestratorChatRequest
+from app.modules.ai_agents.schemas import (
+    MemoryProfileContext,
+    OrchestratorChatRequest,
+    OrchestratorChatResponse,
+)
 from app.core.config import settings as app_settings
+from app.modules.chat.async_bridge import run_sync_in_chat_bridge
 from app.modules.chat.admission import (
     brain_chat_admission,
     demo_rate_admission,
@@ -1417,6 +1425,61 @@ def build_demo_memory_candidate_review_response(
     )
 
 
+async def run_demo_fa_chat_message_async(
+    *,
+    profile_id: int | None,
+    message: str,
+    debug: bool,
+    trace_id: str,
+    active_memory_candidate_id: int | None = None,
+    actor_id: str | None = None,
+    actor_role: str | None = None,
+    relationship_to_owner: str | None = None,
+    locale: str = "ru",
+    admission_client_key: str = "anonymous",
+) -> DemoFaChatMessageResponse:
+    """Demo FA chat with true-async Brain wait (Task 65.13.12).
+
+    Sync RAG/DB/admission remain on Starlette's bounded threadpool. The Brain
+    provider coroutine is scheduled on the running event loop via
+    ``run_coroutine_threadsafe`` so network wait does not block the loop.
+    """
+
+    loop = asyncio.get_running_loop()
+    orchestrator = get_agent_orchestrator()
+
+    def brain_call(request: OrchestratorChatRequest) -> OrchestratorChatResponse:
+        async_fn = getattr(orchestrator, "generate_chat_response_async", None)
+        if async_fn is None:
+            return orchestrator.generate_chat_response(request)
+        coro = async_fn(request)
+        if not asyncio.iscoroutine(coro):
+            return coro
+        return asyncio.run_coroutine_threadsafe(coro, loop).result()
+
+    def _run() -> DemoFaChatMessageResponse:
+        db = get_session_factory()()
+        try:
+            return run_demo_fa_chat_message(
+                db,
+                profile_id=profile_id,
+                message=message,
+                debug=debug,
+                trace_id=trace_id,
+                active_memory_candidate_id=active_memory_candidate_id,
+                actor_id=actor_id,
+                actor_role=actor_role,
+                relationship_to_owner=relationship_to_owner,
+                locale=locale,
+                admission_client_key=admission_client_key,
+                brain_call=brain_call,
+            )
+        finally:
+            db.close()
+
+    return await run_sync_in_chat_bridge(_run, operation="demo_prepare")
+
+
 def run_demo_fa_chat_message(
     db: Session,
     *,
@@ -1430,6 +1493,7 @@ def run_demo_fa_chat_message(
     relationship_to_owner: str | None = None,
     locale: str = "ru",
     admission_client_key: str = "anonymous",
+    brain_call: Callable[[OrchestratorChatRequest], OrchestratorChatResponse] | None = None,
 ) -> DemoFaChatMessageResponse:
     """Run one FA-chat turn.
 
@@ -1469,6 +1533,7 @@ def run_demo_fa_chat_message(
             actor_role=actor_role,
             relationship_to_owner=relationship_to_owner,
             locale=locale,
+            brain_call=brain_call,
         )
 
 
@@ -1485,6 +1550,7 @@ def _run_demo_fa_chat_message_admitted(
     actor_role: str | None,
     relationship_to_owner: str | None,
     locale: str,
+    brain_call: Callable[[OrchestratorChatRequest], OrchestratorChatResponse] | None = None,
 ) -> DemoFaChatMessageResponse:
     resolved_profile = _resolve_demo_profile(db, profile_id=profile_id, locale=locale)
     avatar_persona = _resolve_demo_avatar_persona()
@@ -1713,6 +1779,20 @@ def _run_demo_fa_chat_message_admitted(
         resolved_locale=locale,
         memorial_id=resolved_profile.profile.id,
     )
+    orchestrator_request = OrchestratorChatRequest(
+        profile=_build_profile_context(resolved_profile.profile),
+        avatar_persona=avatar_persona,
+        user_message=normalized_message,
+        recent_history=[],
+        grounded_context=grounded_context,
+        # Direct-locale architecture (Task 64.5.2): the Brain receives the
+        # ORIGINAL untranslated user_message above plus this explicit
+        # response_language, and answers directly in that language - no
+        # separate query-translation or answer-translation call. See
+        # prompt_builder._build_response_language_directive.
+        response_language=locale,
+    )
+    resolved_brain_call = brain_call or orchestrator.generate_chat_response
     try:
         with brain_chat_admission():
             orchestrator_response, _ai_action = run_instrumented_single_attempt_action(
@@ -1721,21 +1801,7 @@ def _run_demo_fa_chat_message_admitted(
                 step_type=AiStepType.PROVIDER_GENERATION,
                 provider=app_settings.ai_brain_provider,
                 model=app_settings.ai_brain_model,
-                operation=lambda: orchestrator.generate_chat_response(
-                    OrchestratorChatRequest(
-                        profile=_build_profile_context(resolved_profile.profile),
-                        avatar_persona=avatar_persona,
-                        user_message=normalized_message,
-                        recent_history=[],
-                        grounded_context=grounded_context,
-                        # Direct-locale architecture (Task 64.5.2): the Brain receives the
-                        # ORIGINAL untranslated user_message above plus this explicit
-                        # response_language, and answers directly in that language - no
-                        # separate query-translation or answer-translation call. See
-                        # prompt_builder._build_response_language_directive.
-                        response_language=locale,
-                    )
-                ),
+                operation=lambda: resolved_brain_call(orchestrator_request),
                 extract_token_usage=lambda resp: normalize_openai_compatible_usage(
                     raw_response={
                         "id": (resp.metadata or {}).get("provider_request_id"),

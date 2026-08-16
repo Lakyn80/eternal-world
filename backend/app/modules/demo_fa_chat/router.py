@@ -63,7 +63,7 @@ from .service import (
     list_demo_memory_promotions,
     reject_demo_memory_candidate,
     retry_demo_memory_candidate_translation,
-    run_demo_fa_chat_message,
+    run_demo_fa_chat_message_async,
 )
 from app.modules.conversation_memory_candidates.service import (
     ConversationMemoryCandidateInvalidTransitionError,
@@ -203,18 +203,16 @@ def _optional_actor_context(
         status.HTTP_500_INTERNAL_SERVER_ERROR: {"model": DemoFaChatErrorResponse},
     },
 )
-def send_demo_fa_chat_message(
+async def send_demo_fa_chat_message(
     payload: DemoFaChatMessageRequest,
     request: Request,
-    db: Session = Depends(get_db),
 ) -> DemoFaChatMessageResponse:
     trace_id = getattr(request.state, "request_id", None) or "unknown"
     started_at = perf_counter()
     debug_enabled = bool(payload.debug)
     client_host = request.client.host if request.client is not None else "anonymous"
     try:
-        response = run_demo_fa_chat_message(
-            db,
+        response = await run_demo_fa_chat_message_async(
             profile_id=payload.profile_id,
             message=payload.message,
             debug=debug_enabled,

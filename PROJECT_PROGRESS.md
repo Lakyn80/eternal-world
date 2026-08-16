@@ -1,6 +1,55 @@
 # Project Progress
 
 
+## Task 65.13.12 — Async Chat Path (True Async Brain Wait) (2026-08-09)
+
+Goal: convert the latency-critical authenticated chat request path so Brain/provider network wait does not block the FastAPI event loop, while preserving all Task 65.13.11 admission guarantees. No global AsyncSession migration. No streaming. No auth behavior change. No commit/push.
+
+Baseline: `staging/eternalworld-lukiora-20260715` @ `3dd3013995c5b0a5eed7c620f8175afee42f606e` (local HEAD, ahead 1 of origin `0fc5491…`). Working tree clean except local `?? .cursor/`.
+
+### Architecture decision
+
+**Decision B + C:** add true `httpx.AsyncClient` Brain path (`generate_response_async`) while retaining sync `generate_response` for non-chat consumers; Redis admission remains sync Lua/ZSET and is bridged via a **bounded** chat ThreadPoolExecutor (`max_workers=32`); SQLAlchemy/RAG stay on the request Session (idle only during awaited Brain call — not AsyncSession).
+
+### Async boundary
+
+| Layer | Mode |
+|---|---|
+| Router `send_message` | `async def` |
+| Brain provider HTTP | **TRUE_ASYNC** (`httpx.AsyncClient`, shared process client) |
+| Redis admission | **THREADPOOL_BRIDGE** (same Lua/ZSET semantics) |
+| SQLAlchemy chat prep/finalize/audit | sync on request Session (no cross-thread Session) |
+| RAG / Qdrant / embeddings | sync on request path (bridged only via existing sync stack; not on Brain await) |
+| Demo FA chat Brain wait | true async provider via `run_coroutine_threadsafe` from bridge thread |
+
+### Admission unchanged
+
+Defaults remain: rate 10/min (limited 5), user inflight 1, global Brain 8, Retry-After 15s; fail-closed Redis; lease release on success/error/cancellation.
+
+### Validation
+
+- New: `tests/test_task_65_13_12_async_chat_path.py`, `tests/test_task_65_13_12_async_validation.py`
+- Focused docker pytest (mock providers): 65.13.12 + 65.13.11 + chat + openai provider → **48 passed**, 1 unrelated env-dependent Settings config assertion when `AI_BRAIN_MODEL` is present in container env
+- Async load matrix: accepted/rejected latencies split; max Brain ≤ 8; unexpected 5xx = 0; heartbeat max delay ≪ provider wait. Artifact: `backend/artifacts/security/task_65_13_12_validation/async_load_benchmark_summary.json`
+- Global cap proof: limit=3 × 20 concurrent × 10 reps → max ≤ 3
+- Event-loop responsiveness proven with concurrent `asyncio.sleep` Brain fakes + heartbeat
+- Python `compileall` on changed modules OK
+- No frontend production changes required (API contract unchanged)
+- Runtime read-only health checked when stack up
+
+### Remaining technical debt / next
+
+- Sync SQLAlchemy/RAG still execute on the request task around the Brain await (not AsyncSession).
+- Redis admission still sync under bounded bridge.
+- Demo orchestration still uses a bridge thread for non-Brain work.
+- **Task 65.13.12A** may begin for sync-vs-async comparison under admission.
+- Streaming remains later (**65.13.13**). Auth hardening remains **65.13.10**.
+
+### Verdict
+
+**VERDICT A — ASYNC_CHAT_PATH_READY.**
+
+
 ## Task 65.13.11A — Full Validation and Controlled Load Benchmark (2026-08-09)
 
 Goal: certify Task 65.13.11 admission control under hermetic failure-mode and controlled synthetic load before any async chat refactor. No architecture change; no real DeepSeek/embeddings; no commit/push.

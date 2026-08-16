@@ -1,12 +1,17 @@
 from __future__ import annotations
 
+import asyncio
 import logging
+from dataclasses import dataclass
 
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.core.logging import get_logger, get_request_id, log_event
-from app.core.metrics import observe_chat_operation
+from app.core.metrics import (
+    observe_chat_async_cancellation,
+    observe_chat_operation,
+)
 from app.modules.ai_agents.brain.context import (
     build_grounded_context,
     build_rag_evidence_items,
@@ -28,10 +33,13 @@ from app.modules.ai_agents.schemas import (
     ChatHistoryEntry,
     MemoryProfileContext,
     OrchestratorChatRequest,
+    OrchestratorChatResponse,
 )
 from app.modules.billing.service import get_effective_plan_definition_for_user
 from app.modules.chat import active_session, redis_snapshot, repository
 from app.modules.chat.admission import (
+    async_brain_chat_admission,
+    async_user_chat_admission,
     brain_chat_admission,
     map_brain_provider_error,
     resolve_user_chat_rate_limit,
@@ -55,7 +63,10 @@ from app.modules.memorial_access.capabilities import MemorialCapability, resolve
 from app.modules.memorial_access.service import MemorialForbiddenError, MemorialNotFoundError
 from app.modules.provider_usage.context import AiCallContext
 from app.modules.provider_usage.enums import AiFeature, AiStepType, ExecutionSource
-from app.modules.provider_usage.service import run_instrumented_single_attempt_action
+from app.modules.provider_usage.service import (
+    run_instrumented_single_attempt_action,
+    run_instrumented_single_attempt_action_async,
+)
 from app.modules.provider_usage.usage import normalize_openai_compatible_usage
 from app.modules.qdrant_indexing.exceptions import QdrantClientError, QdrantCollectionConfigurationError
 from app.modules.rag_retrieval.exceptions import (
@@ -308,6 +319,324 @@ def _retrieve_rag_evidence_safely(
         selected_chunk_ids=[result.chunk_id for result in prioritized_results],
     )
     return build_rag_evidence_items(prioritized_results)
+
+
+@dataclass(frozen=True)
+class _AsyncChatPrep:
+    """Pure data handed across the await boundary (no ORM Session/objects)."""
+
+    user_id: int
+    profile_id: int
+    conversation_id: str
+    user_message_id: int
+    user_message_content: str
+    brain_user_message: str
+    user_canonical_status: str
+    canonical_language: str
+    source_language: str
+    display_language: str
+    orchestrator_request: OrchestratorChatRequest
+    ai_call_context: AiCallContext
+
+
+async def send_chat_message_async(
+    db: Session,
+    *,
+    current_user: User,
+    profile_id: int,
+    payload: ChatMessageCreate,
+) -> ChatSendResponse:
+    """Authenticated chat send with true-async Brain wait (Task 65.13.12).
+
+    Redis admission is bridged off the event loop. SQLAlchemy/RAG stay on the
+    request Session (same task; never shared across threads). The Session is
+    idle only during the awaited Brain provider call — not AsyncSession.
+    """
+
+    plan = get_effective_plan_definition_for_user(current_user)
+    rate_limit = resolve_user_chat_rate_limit(
+        allow_unlimited_chat=plan.limits.allow_unlimited_chat
+    )
+    async with async_user_chat_admission(
+        user_id=current_user.id,
+        rate_limit_per_minute=rate_limit,
+    ):
+        return await _send_chat_message_admitted_async(
+            db,
+            current_user=current_user,
+            profile_id=profile_id,
+            payload=payload,
+        )
+
+
+async def _send_chat_message_admitted_async(
+    db: Session,
+    *,
+    current_user: User,
+    profile_id: int,
+    payload: ChatMessageCreate,
+) -> ChatSendResponse:
+    prep = _prepare_chat_for_async_brain(
+        db,
+        current_user=current_user,
+        profile_id=profile_id,
+        payload=payload,
+        trace_id=get_request_id(),
+    )
+    orchestrator = get_agent_orchestrator()
+    try:
+        async with async_brain_chat_admission():
+            orchestrator_response, ai_action = await run_instrumented_single_attempt_action_async(
+                db,
+                context=prep.ai_call_context,
+                step_type=AiStepType.PROVIDER_GENERATION,
+                provider=settings.ai_brain_provider,
+                model=settings.ai_brain_model,
+                operation=lambda: orchestrator.generate_chat_response_async(
+                    prep.orchestrator_request
+                ),
+                extract_token_usage=_extract_brain_token_usage,
+            )
+    except asyncio.CancelledError:
+        observe_chat_async_cancellation()
+        raise
+    except Exception as exc:
+        mapped = map_brain_provider_error(exc)
+        if mapped is not None:
+            raise mapped from exc
+        raise
+
+    return _finalize_chat_after_async_brain(
+        db,
+        prep=prep,
+        orchestrator_response=orchestrator_response,
+        ai_action_id=ai_action.id,
+    )
+
+
+def _prepare_chat_for_async_brain(
+    db: Session,
+    *,
+    current_user: User,
+    profile_id: int,
+    payload: ChatMessageCreate,
+    trace_id: str | None,
+) -> _AsyncChatPrep:
+    profile = _get_authorized_profile_or_raise(
+        db,
+        current_user=current_user,
+        profile_id=profile_id,
+    )
+    canonical_language = assert_canonical_memorial_language(profile.canonical_language)
+    source_language = _resolve_user_source_language(
+        message=payload.message,
+        locale=payload.locale,
+        preferred_ui_language=current_user.preferred_ui_language,
+        canonical_language=canonical_language,
+    )
+    display_language = _resolve_display_language(
+        source_language=source_language,
+        locale=payload.locale,
+        preferred_ui_language=current_user.preferred_ui_language,
+        canonical_language=canonical_language,
+    )
+    recent_history = repository.list_recent_chat_messages_for_profile(
+        db,
+        user_id=current_user.id,
+        profile_id=profile_id,
+        limit=RECENT_HISTORY_LIMIT,
+    )
+    profile_memories = memories_repository.list_memories_for_profile(
+        db,
+        user_id=profile.user_id,
+        profile_id=profile_id,
+    )
+    active = active_session.get_or_create_active_session(
+        db, user_id=current_user.id, profile_id=profile_id
+    )
+    conversation_id = active.conversation_id
+    user_message = repository.create_chat_message(
+        db,
+        user_id=current_user.id,
+        profile_id=profile_id,
+        role="user",
+        content=payload.message,
+        source_language=source_language,
+        message_metadata={"source": "chat_api", "conversation_id": conversation_id},
+    )
+    db.flush()
+    ensure_user_canonical_translation(
+        db,
+        profile=profile,
+        message=user_message,
+        source_language=source_language,
+        actor=current_user,
+    )
+    db.flush()
+    brain_user_message, user_canonical_status = resolve_user_canonical_text(
+        db,
+        profile=profile,
+        message=user_message,
+        actor=current_user,
+        ensure_missing=False,
+    )
+    retrieved_evidence_items = _retrieve_rag_evidence_safely(
+        db,
+        current_user=current_user,
+        profile_id=profile_id,
+        user_message=brain_user_message,
+    )
+    grounded_context = build_grounded_context(
+        profile=profile,
+        memories=profile_memories,
+        user_message=brain_user_message,
+        retrieved_evidence_items=retrieved_evidence_items,
+    )
+    resolved_persona = resolve_avatar_persona(db, profile=profile)
+    persona_section = (
+        build_avatar_persona_section(resolved_persona) if resolved_persona.configured else None
+    )
+    history_entries = [
+        _build_history_entry(
+            db,
+            message=message,
+            profile=profile,
+            actor=current_user,
+        )
+        for message in recent_history
+    ]
+    # Persist the user turn before awaiting Brain so a cancelled provider wait
+    # does not lose the durable original message.
+    db.commit()
+    return _AsyncChatPrep(
+        user_id=current_user.id,
+        profile_id=profile_id,
+        conversation_id=conversation_id,
+        user_message_id=user_message.id,
+        user_message_content=user_message.content,
+        brain_user_message=brain_user_message,
+        user_canonical_status=user_canonical_status,
+        canonical_language=canonical_language,
+        source_language=source_language,
+        display_language=display_language,
+        orchestrator_request=OrchestratorChatRequest(
+            profile=_build_profile_context(profile),
+            avatar_persona_section=persona_section,
+            user_message=brain_user_message,
+            recent_history=history_entries,
+            grounded_context=grounded_context,
+            response_language=canonical_language,
+        ),
+        ai_call_context=AiCallContext(
+            feature=AiFeature.BRAIN_CHAT_RESPONSE,
+            execution_source=ExecutionSource.FASTAPI,
+            trace_id=trace_id,
+            user_id=current_user.id,
+            memorial_id=profile_id,
+            message_id=user_message.id,
+        ),
+    )
+
+
+def _finalize_chat_after_async_brain(
+    db: Session,
+    *,
+    prep: _AsyncChatPrep,
+    orchestrator_response: OrchestratorChatResponse,
+    ai_action_id: int,
+) -> ChatSendResponse:
+    user = db.get(User, prep.user_id)
+    profile = db.get(MemoryProfile, prep.profile_id)
+    user_message = db.get(ChatMessage, prep.user_message_id)
+    if user is None or profile is None or user_message is None:
+        raise ChatProfileNotFoundError("Memory profile not found")
+
+    assistant_message = repository.create_chat_message(
+        db,
+        user_id=prep.user_id,
+        profile_id=prep.profile_id,
+        role="assistant",
+        content=orchestrator_response.text,
+        source_language=None,
+        message_metadata={
+            "reply_to_message_id": user_message.id,
+            "provider_name": orchestrator_response.provider_name,
+            "ai_action_id": ai_action_id,
+            "conversation_id": prep.conversation_id,
+            "canonical_language": prep.canonical_language,
+            "user_canonical_status": prep.user_canonical_status,
+            "display_language": prep.display_language,
+            **orchestrator_response.metadata,
+        },
+    )
+    db.flush()
+    display_row = ensure_assistant_display_translation(
+        db,
+        profile=profile,
+        message=assistant_message,
+        display_language=prep.display_language,
+        actor=user,
+    )
+    db.flush()
+    assistant_views = resolve_chat_message_views(
+        db,
+        message=assistant_message,
+        profile=profile,
+        viewer=user,
+        display_locale=prep.display_language,
+        ensure_missing=False,
+    )
+    metadata = dict(assistant_message.message_metadata or {})
+    metadata["display_translation_status"] = assistant_views.display_translation_status
+    metadata["display_translation_provider"] = getattr(display_row, "translation_provider", None)
+    assistant_message.message_metadata = metadata
+    db.commit()
+    db.refresh(assistant_message)
+    db.refresh(user_message)
+
+    snapshot_assistant_content = assistant_views.display_text
+    for message, snapshot_content in (
+        (user_message, user_message.content),
+        (assistant_message, snapshot_assistant_content),
+    ):
+        redis_snapshot.append_message(
+            user_id=prep.user_id,
+            profile_id=prep.profile_id,
+            conversation_id=prep.conversation_id,
+            message=SnapshotMessage(
+                id=message.id,
+                role=message.role,
+                content=snapshot_content,
+                created_at=message.created_at.isoformat(),
+            ),
+        )
+    observe_chat_operation(operation="send", result="success")
+    log_event(
+        _logger,
+        logging.INFO,
+        "chat_active_loaded",
+        profile_id=prep.profile_id,
+        conversation_id=prep.conversation_id,
+        message_count=2,
+        canonical_language=prep.canonical_language,
+        source_language=prep.source_language,
+        display_language=assistant_views.display_language,
+        user_canonical_status=prep.user_canonical_status,
+        display_translation_status=assistant_views.display_translation_status,
+    )
+    return ChatSendResponse(
+        message_id=assistant_message.id,
+        profile_id=prep.profile_id,
+        conversation_id=prep.conversation_id,
+        user_message=user_message.content,
+        user_message_language=prep.source_language,
+        ai_response_text=assistant_views.display_text,
+        ai_response_language=assistant_views.display_language,
+        ai_response_translation_status=assistant_views.display_translation_status,
+        audio_url=orchestrator_response.audio_url,
+        video_url=orchestrator_response.video_url,
+        created_at=assistant_message.created_at,
+    )
 
 
 def send_chat_message(

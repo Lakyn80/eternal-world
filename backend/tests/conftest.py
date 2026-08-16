@@ -7,7 +7,7 @@ from sqlalchemy.pool import StaticPool
 
 from app.core.config import settings
 from app.db.base import Base
-from app.db.session import get_db
+from app.db.session import get_db, set_session_factory_override
 from app.main import app
 from app.modules.embeddings.providers.bge_m3_hybrid import clear_bge_m3_hybrid_shared_model_cache
 
@@ -59,6 +59,7 @@ def _guard_against_real_provider_calls(monkeypatch):
     testcontainers if any) is untouched."""
 
     real_send = httpx.Client.send
+    real_async_send = httpx.AsyncClient.send
 
     def guarded_send(self, request, *args, **kwargs):
         if request.url.host in _BLOCKED_PROVIDER_HOSTS:
@@ -68,7 +69,16 @@ def _guard_against_real_provider_calls(monkeypatch):
             )
         return real_send(self, request, *args, **kwargs)
 
+    async def guarded_async_send(self, request, *args, **kwargs):
+        if request.url.host in _BLOCKED_PROVIDER_HOSTS:
+            raise AssertionError(
+                f"Automated test attempted a real async HTTP call to {request.url.host} - "
+                "provider calls must be mocked/injected in tests, never real."
+            )
+        return await real_async_send(self, request, *args, **kwargs)
+
     monkeypatch.setattr(httpx.Client, "send", guarded_send)
+    monkeypatch.setattr(httpx.AsyncClient, "send", guarded_async_send)
 
 
 @pytest.fixture(autouse=True)
@@ -119,11 +129,13 @@ def client():
 
     app.dependency_overrides[get_db] = override_get_db
     app.state.testing_session_local = testing_session_local
+    set_session_factory_override(testing_session_local)
 
     with TestClient(app) as test_client:
         yield test_client
 
     app.dependency_overrides.clear()
+    set_session_factory_override(None)
     if hasattr(app.state, "testing_session_local"):
         delattr(app.state, "testing_session_local")
     Base.metadata.drop_all(bind=engine)

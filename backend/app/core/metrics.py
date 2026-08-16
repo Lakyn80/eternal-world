@@ -545,6 +545,22 @@ CHAT_BRAIN_LEASES = Gauge(
     "eternal_world_chat_brain_leases",
     "Active global Brain/LLM admission leases after the last acquire/release (Task 65.13.11).",
 )
+BRAIN_PROVIDER_AWAIT_SECONDS = Histogram(
+    "eternal_world_brain_provider_await_seconds",
+    "Brain provider async network await duration (Task 65.13.12).",
+    labelnames=("provider",),
+    buckets=(0.05, 0.1, 0.25, 0.5, 1.0, 2.0, 5.0, 10.0, 30.0, 60.0),
+)
+CHAT_THREADPOOL_BRIDGE_SECONDS = Histogram(
+    "eternal_world_chat_threadpool_bridge_seconds",
+    "Duration of transitional sync work bridged off the event loop (Task 65.13.12).",
+    labelnames=("operation",),
+    buckets=(0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.0, 5.0, 15.0),
+)
+CHAT_ASYNC_CANCELLATIONS_TOTAL = Counter(
+    "eternal_world_chat_async_cancellations_total",
+    "Chat async path cancellations observed during provider wait (Task 65.13.12).",
+)
 REVIEW_ACTIONS_TOTAL = Counter(
     "eternal_world_review_actions_total",
     "Total owner-review actions on memory candidates, by action and result.",
@@ -655,6 +671,37 @@ def observe_chat_admission_rejected(*, reason: str) -> None:
 
 def set_chat_brain_leases(active: int) -> None:
     CHAT_BRAIN_LEASES.set(max(0, int(active)))
+
+
+_CHAT_THREADPOOL_OPERATIONS = frozenset(
+    {
+        "admission",
+        "chat_prepare",
+        "chat_finalize",
+        "demo_prepare",
+        "demo_finalize",
+        "audit_start",
+        "audit_finish",
+        "rag",
+        "db",
+    }
+)
+
+
+def observe_brain_provider_await(*, provider: str, duration_seconds: float) -> None:
+    BRAIN_PROVIDER_AWAIT_SECONDS.labels(
+        provider=_normalize_choice(provider, allowed=frozenset(_NORMALIZED_BRAIN_PROVIDERS), fallback="other"),
+    ).observe(max(0.0, float(duration_seconds)))
+
+
+def observe_chat_threadpool_bridge(*, operation: str, duration_seconds: float) -> None:
+    CHAT_THREADPOOL_BRIDGE_SECONDS.labels(
+        operation=_normalize_choice(operation, allowed=_CHAT_THREADPOOL_OPERATIONS, fallback="other"),
+    ).observe(max(0.0, float(duration_seconds)))
+
+
+def observe_chat_async_cancellation() -> None:
+    CHAT_ASYNC_CANCELLATIONS_TOTAL.inc()
 
 
 def observe_chat_redis_operation(*, operation: str, result: str) -> None:

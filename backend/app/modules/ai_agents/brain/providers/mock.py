@@ -48,3 +48,8 @@ class MockBrainAgentProvider:
                 "grounding_status": resolve_grounding_status(request),
             },
         )
+
+    async def generate_response_async(self, request: BrainAgentRequest) -> BrainAgentResponse:
+        """Pure in-memory mock — no network I/O (SHORT_SYNC under async API)."""
+
+        return self.generate_response(request)

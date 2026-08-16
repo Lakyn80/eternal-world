@@ -17,7 +17,7 @@ from app.modules.chat.service import (
     get_active_chat,
     list_chat_messages,
     reset_chat,
-    send_chat_message,
+    send_chat_message_async,
 )
 
 
@@ -36,14 +36,16 @@ ProfileIdPath = Annotated[int, Path(gt=0)]
         status.HTTP_503_SERVICE_UNAVAILABLE: {"model": ErrorResponse},
     },
 )
-def send_message(
+async def send_message(
     profile_id: ProfileIdPath,
     payload: ChatMessageCreate,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> ChatSendResponse:
+    """Task 65.13.12: async chat send — Brain wait is non-blocking on the event loop."""
+
     try:
-        return send_chat_message(
+        return await send_chat_message_async(
             db,
             current_user=current_user,
             profile_id=profile_id,

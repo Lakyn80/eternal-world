@@ -2,11 +2,16 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from time import perf_counter
-from typing import Any, Callable
+from typing import Any, Callable, NoReturn
 
 import httpx
 
 from app.core.config import Settings, settings
+from app.core.metrics import observe_brain_provider_await
+from app.modules.ai_agents.brain.async_http import (
+    build_brain_async_timeout,
+    get_shared_brain_async_http_client,
+)
 from app.modules.ai_agents.brain.providers.grounding import (
     build_lack_of_evidence_response,
     resolve_grounding_status,
@@ -35,6 +40,7 @@ class OpenAICompatibleBrainAgentProvider:
         temperature: float = 0.2,
         max_tokens: int | None = None,
         http_client_factory: Callable[[float], Any] | None = None,
+        async_http_client: httpx.AsyncClient | None = None,
     ) -> None:
         self.model = model
         self.api_key = api_key
@@ -43,6 +49,7 @@ class OpenAICompatibleBrainAgentProvider:
         self.temperature = temperature
         self.max_tokens = max_tokens
         self._http_client_factory = http_client_factory or self._default_http_client_factory
+        self._async_http_client = async_http_client
 
     @classmethod
     def from_settings(
@@ -80,21 +87,10 @@ class OpenAICompatibleBrainAgentProvider:
         )
 
     def generate_response(self, request: BrainAgentRequest) -> BrainAgentResponse:
-        from app.modules.ai_agents.brain.provider import (
-            BrainProviderRequestError,
-            BrainProviderResponseError,
-        )
+        """Synchronous path for non-chat / legacy consumers (httpx.Client)."""
 
         if should_return_lack_of_evidence_response(request):
-            return build_lack_of_evidence_response(
-                request,
-                provider_name=self.provider_name,
-                metadata={
-                    "provider_type": self.provider_name,
-                    "model": self.model,
-                    "latency_ms": 0,
-                },
-            )
+            return self._lack_of_evidence_response(request)
 
         prepared_request = self.build_request(request)
         started_at = perf_counter()
@@ -107,25 +103,91 @@ class OpenAICompatibleBrainAgentProvider:
                     json=prepared_request.payload,
                 )
                 response.raise_for_status()
-        except httpx.TimeoutException as exc:
+        except Exception as exc:
+            self._raise_mapped_httpx_error(exc)
+
+        return self._build_success_response(
+            request,
+            response=response,
+            latency_ms=int((perf_counter() - started_at) * 1000),
+        )
+
+    async def generate_response_async(self, request: BrainAgentRequest) -> BrainAgentResponse:
+        """True async path for chat: awaits httpx.AsyncClient network I/O."""
+
+        if should_return_lack_of_evidence_response(request):
+            return self._lack_of_evidence_response(request)
+
+        prepared_request = self.build_request(request)
+        started_at = perf_counter()
+        client = self._async_http_client or await get_shared_brain_async_http_client(
+            timeout_seconds=self.timeout_seconds,
+        )
+        request_timeout = build_brain_async_timeout(self.timeout_seconds)
+
+        try:
+            response = await client.post(
+                prepared_request.url,
+                headers=prepared_request.headers,
+                json=prepared_request.payload,
+                timeout=request_timeout,
+            )
+            response.raise_for_status()
+        except Exception as exc:
+            self._raise_mapped_httpx_error(exc)
+
+        latency_ms = int((perf_counter() - started_at) * 1000)
+        observe_brain_provider_await(
+            provider=self.provider_name,
+            duration_seconds=latency_ms / 1000.0,
+        )
+        return self._build_success_response(
+            request,
+            response=response,
+            latency_ms=latency_ms,
+        )
+
+    def _lack_of_evidence_response(self, request: BrainAgentRequest) -> BrainAgentResponse:
+        return build_lack_of_evidence_response(
+            request,
+            provider_name=self.provider_name,
+            metadata={
+                "provider_type": self.provider_name,
+                "model": self.model,
+                "latency_ms": 0,
+            },
+        )
+
+    def _raise_mapped_httpx_error(self, exc: BaseException) -> NoReturn:
+        from app.modules.ai_agents.brain.provider import BrainProviderRequestError
+
+        if isinstance(exc, httpx.TimeoutException):
             raise BrainProviderRequestError(
                 "OpenAI-compatible provider request timed out"
             ) from exc
-        except httpx.NetworkError as exc:
+        if isinstance(exc, httpx.NetworkError):
             raise BrainProviderRequestError(
                 "OpenAI-compatible provider network request failed"
             ) from exc
-        except httpx.HTTPStatusError as exc:
+        if isinstance(exc, httpx.HTTPStatusError):
             status_code = exc.response.status_code if exc.response is not None else "unknown"
             raise BrainProviderRequestError(
                 f"OpenAI-compatible provider returned HTTP {status_code}"
             ) from exc
-        except httpx.HTTPError as exc:
+        if isinstance(exc, httpx.HTTPError):
             raise BrainProviderRequestError(
                 "OpenAI-compatible provider request failed"
             ) from exc
+        raise exc
 
-        latency_ms = int((perf_counter() - started_at) * 1000)
+    def _build_success_response(
+        self,
+        request: BrainAgentRequest,
+        *,
+        response: httpx.Response,
+        latency_ms: int,
+    ) -> BrainAgentResponse:
+        from app.modules.ai_agents.brain.provider import BrainProviderResponseError
 
         try:
             data = response.json()

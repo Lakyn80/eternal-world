@@ -46,6 +46,25 @@ class AgentOrchestrator:
             metadata=metadata,
         )
 
+    async def generate_chat_response_async(
+        self,
+        request: OrchestratorChatRequest,
+    ) -> OrchestratorChatResponse:
+        brain_response: BrainAgentResponse = await self.brain_service.generate_chat_response_async(
+            request
+        )
+        metadata = {
+            "orchestrator_mode": "brain_only",
+            **brain_response.metadata,
+        }
+        return OrchestratorChatResponse(
+            text=brain_response.text,
+            audio_url=None,
+            video_url=None,
+            provider_name=brain_response.provider_name,
+            metadata=metadata,
+        )
+
 
 @lru_cache(maxsize=1)
 def get_agent_orchestrator() -> AgentOrchestrator:

@@ -2488,3 +2488,19 @@ Hermeticke testy + controlled synthetic load (fake Brain latency) potvrdily leas
 Zadne commit/push. Zadny real DeepSeek/embedding. Zadny restart stacku.
 
 Dalsi doporuceny task: **Task 65.13.12 — Async Chat Path** (admission control zustava povinnou vrstvou). Auth hardening zustava **65.13.10**.
+
+## 53. Task 65.13.12 status (2026-08-09) — async chat path (true Brain await), completed
+
+Task 65.13.12 — Convert the Critical Chat Request Path to Real Async I/O — byl proveden a **dokoncen**. Plny popis viz `PROJECT_PROGRESS.md`, sekce `Task 65.13.12`.
+
+**Async boundary (ne cely backend):**
+- Authenticated `POST /api/chat/{id}/messages` je `async`; Brain provider ceka na `httpx.AsyncClient` (`generate_response_async`).
+- Sync `generate_response` zachovan pro non-chat consumers.
+- Redis admission (Lua/ZSET) beze zmeny semantiky; short Redis transakce pres bounded chat bridge executor.
+- SQLAlchemy/RAG zustavaji sync na request Session (idle jen behem await Brain); **zadna AsyncSession migrace**.
+- Demo FA chat sdili global Brain cap; provider wait je async-compatible.
+- Admission invarianty 65.13.11 zachovany (10/5 rate, user=1, Brain=8, Retry-After=15, fail-closed).
+
+Testy: hermetic async + admission + chat regressions; async load matrix s oddelenym accepted/rejected latency; event-loop heartbeat proof; global cap=3×20×10. Artifact: `backend/artifacts/security/task_65_13_12_validation/async_load_benchmark_summary.json`.
+
+**VERDICT A — ASYNC_CHAT_PATH_READY.** Zadne commit/push. Zadny real DeepSeek. Zadna auth zmena. Streaming zustava **65.13.13**. Dalsi: **65.13.12A** sync-vs-async comparison; paralelne **65.13.10** auth hardening.

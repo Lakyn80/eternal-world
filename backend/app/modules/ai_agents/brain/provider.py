@@ -14,6 +14,9 @@ class BrainAgentProvider(Protocol):
     def generate_response(self, request: BrainAgentRequest) -> BrainAgentResponse:
         ...
 
+    async def generate_response_async(self, request: BrainAgentRequest) -> BrainAgentResponse:
+        ...
+
 
 class BrainProviderConfigurationError(ValueError):
     pass

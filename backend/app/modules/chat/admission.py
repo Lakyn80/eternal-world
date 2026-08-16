@@ -1,7 +1,10 @@
-"""Task 65.13.11 — Redis chat/LLM admission control.
+"""Task 65.13.11 / 65.13.12 — Redis chat/LLM admission control.
 
 Lease-based semaphores (ZSET + Lua) and atomic fixed-window rate limiting.
-Does not replace asyncio; protects the current sync chat path under load.
+Task 65.13.12 keeps the sync Redis implementation and exposes async
+context managers that bridge short Redis transactions via Starlette's
+bounded threadpool (transitional technical debt — not a second admission
+implementation).
 """
 
 from __future__ import annotations
@@ -9,9 +12,9 @@ from __future__ import annotations
 import threading
 import time
 import uuid
-from contextlib import contextmanager
+from contextlib import asynccontextmanager, contextmanager
 from dataclasses import dataclass
-from typing import Iterator, Protocol
+from typing import AsyncIterator, Iterator, Protocol
 
 from redis import Redis
 from redis.exceptions import RedisError
@@ -22,6 +25,7 @@ from app.core.metrics import (
     observe_chat_admission_rejected,
     set_chat_brain_leases,
 )
+from app.modules.chat.async_bridge import run_sync_in_chat_bridge
 
 
 #: Atomic fixed-window rate limit: INCR + EXPIRE in one script so a crash
@@ -316,6 +320,46 @@ def resolve_user_chat_rate_limit(*, allow_unlimited_chat: bool) -> int:
     if allow_unlimited_chat:
         return int(settings.chat_rate_limit_per_user_per_minute)
     return int(settings.chat_rate_limit_limited_plan_per_minute)
+
+
+@asynccontextmanager
+async def async_user_chat_admission(
+    *,
+    user_id: int,
+    rate_limit_per_minute: int,
+) -> AsyncIterator[None]:
+    """Async wrapper: sync Redis admission runs in the chat bridge executor."""
+
+    cm = user_chat_admission(user_id=user_id, rate_limit_per_minute=rate_limit_per_minute)
+    await run_sync_in_chat_bridge(cm.__enter__, operation="admission")
+    try:
+        yield
+    finally:
+        await run_sync_in_chat_bridge(cm.__exit__, None, None, None, operation="admission")
+
+
+@asynccontextmanager
+async def async_brain_chat_admission() -> AsyncIterator[None]:
+    """Async wrapper around global Brain lease acquire/release."""
+
+    cm = brain_chat_admission()
+    await run_sync_in_chat_bridge(cm.__enter__, operation="admission")
+    try:
+        yield
+    finally:
+        await run_sync_in_chat_bridge(cm.__exit__, None, None, None, operation="admission")
+
+
+@asynccontextmanager
+async def async_demo_rate_admission(*, client_key: str) -> AsyncIterator[None]:
+    """Async wrapper around the demo rate-limit bucket."""
+
+    cm = demo_rate_admission(client_key=client_key)
+    await run_sync_in_chat_bridge(cm.__enter__, operation="admission")
+    try:
+        yield
+    finally:
+        await run_sync_in_chat_bridge(cm.__exit__, None, None, None, operation="admission")
 
 
 def map_brain_provider_error(exc: BaseException) -> ChatProviderUnavailableError | None:
