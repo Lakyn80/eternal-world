@@ -1,11 +1,12 @@
 import { getMarketingDemo, matchDemoReply } from './demo';
+import type { DemoImage } from './demo';
 
 export type Lang = 'en' | 'cs' | 'ru';
 
 export interface FeatureT { title: string; desc: string; points: string[]; }
 export interface BrainT { name: string; sub: string; }
-export interface EventT { year: number; title: string; desc: string; media: string[]; }
-export interface MomentT { slot: string; ph: string; quote: string; caption: string; }
+export interface EventT { year: number; title: string; desc: string; media: string[]; image?: DemoImage; }
+export interface MomentT { slot: string; ph: string; quote: string; caption: string; image?: DemoImage; }
 export interface Replies { childhood: string; y1995: string; advice: string; marie: string; fallback: string; }
 
 export interface Copy {

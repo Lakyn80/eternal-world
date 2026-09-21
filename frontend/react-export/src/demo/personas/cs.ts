@@ -13,7 +13,7 @@ export const csMarketingDemo: MarketingDemoPersona = {
     demoPersona: 'Uchovaná vzpomínka · Brno',
     demoPlaceholder: 'Zeptejte se Josefa…',
     greet:
-      'Dobrý den. Jsem Josef — tedy vzpomínka na něj. Zeptejte se mě na cokoli, na co byste se ptali jeho.',
+      'Ahoj. Jsem Josef — tak, jak si ho jeho rodina pamatuje. Ptej se mě na cokoli.',
   },
   events: [
     {
@@ -49,8 +49,12 @@ export const csMarketingDemo: MarketingDemoPersona = {
     {
       year: 1995,
       title: 'K moři starou škodovkou',
-      desc: 'Jeli k moři oslavit Haninu promoci. Auto se dvakrát rozbilo. Celou cestu se smáli.',
+      desc: 'Jeli k moři oslavit Haninu promoci. Auto se dvakrát rozbilo, ale právě ty neplánované zastávky udělaly z cesty nezapomenutelný výlet.',
       media: ['12 fotek', 'Video'],
+      image: {
+        src: '/imgs/skodovka.png',
+        alt: 'Rodinný výlet k moři se starou škodovkou',
+      },
     },
     {
       year: 2003,
@@ -78,6 +82,10 @@ export const csMarketingDemo: MarketingDemoPersona = {
       quote: '„Dědo, mám vzít tu práci v Praze?"',
       caption:
         'Vnučka se ptá svého AI dědečka na radu — a dostává odpověď, kterou by jí opravdu dal.',
+      image: {
+        src: '/imgs/vnucka_deda.png',
+        alt: 'Vnučka rozmlouvá s digitální vzpomínkou svého dědečka',
+      },
     },
     {
       slot: 'moment-2',
@@ -85,21 +93,29 @@ export const csMarketingDemo: MarketingDemoPersona = {
       quote: '„Chtěla jsem jen znovu slyšet jeho hlas."',
       caption:
         'Maminka poslouchá, jak její otec ještě jednou vypráví příběh roku 1972 — svým vlastním hlasem.',
+      image: {
+        src: '/imgs/vnucka.png',
+        alt: 'Dcera poslouchá nahrávku hlasu svého otce',
+      },
     },
     {
       slot: 'moment-3',
       ph: 'Fotka: rodinná historie',
       quote: '„Vyprávěj mi o naší rodině. Od začátku."',
       caption: 'Syn poznává rodinnou historii rozhovorem, ne dokumentem.',
+      image: {
+        src: '/imgs/deda.png',
+        alt: 'Syn prochází rodinné fotografie s digitální vzpomínkou svého otce',
+      },
     },
   ],
   replies: {
     childhood:
-      'Vyrostl jsem v Brně, v bytě nad pekárnou na Pekařské. Léta patřila řece — dodnes bych vám popsal, jak voněla po dešti.',
+      'Vyrůstal jsem v Brně na Pekařské, přímo nad pekárnou. V létě jsme byli skoro pořád u řeky. Po dešti měla úplně zvláštní vůni. Tu si pamatuju dodnes.',
     milestone:
-      'Rok 1995 — Hana dokončila vysokou školu. Jeli jsme to oslavit k moři starou škodovkou. Dvakrát se rozbila. Celou cestu jsme se smáli.',
+      'Hana promovala. Chtěli jsme to pořádně oslavit, tak jsme sedli do staré škodovky a vyrazili k moři. Auto se cestou dvakrát porouchalo, ale zpětně jsou právě ty neplánované zastávky jedna z mých nejoblíbenějších vzpomínek.',
     advice:
-      'Nešetřete sváteční talíře na návštěvy. Používejte je. Skoro nic, čeho se dnes bojíte, nebude za deset let důležité — lidé ano.',
+      'Neodkládej hezké věci na potom. Ani sváteční talíře, ani návštěvu, ani telefonát někomu, koho máš rád. Čas běží rychleji, než si myslíš.',
     spouse:
       'Marie. Padesát let, a ten déšť na naší svatbě. Udělal bych to všechno znovu, i s tím deštěm.',
     fallback:

@@ -1,5 +1,35 @@
 # Project Progress
 
+## Czech homepage demo copy and family photography (2026-09-21)
+
+Goal: modernize the Czech 1995 timeline memory and demo-chat voice, then
+replace the Czech homepage image placeholders with the supplied family photos.
+
+What changed:
+- The Czech 1995 timeline now uses the requested natural description of the
+  unplanned stops during the seaside trip.
+- Josef's Czech greeting, childhood answer, 1995 answer, and advice answer use
+  the approved conversational copy. The three suggested questions are
+  unchanged and covered by regression assertions.
+- `skodovka.png` is shown for the selected 1995 event. `vnucka_deda.png`,
+  `vnucka.png`, and `deda.png` are shown in the three Czech family moments.
+- Homepage demo data gained an optional typed image descriptor. `ImageSlot`
+  renders supplied images with lazy loading, stable containers, object-cover,
+  and descriptive alt text while preserving the existing placeholder fallback.
+- Images are attached only to the Czech persona pack; English and Russian demo
+  personas remain culturally isolated and unchanged.
+
+Verification:
+- Targeted Vitest: `9 passed` across marketing persona and rendered homepage
+  media tests.
+- `npm run build` (`tsc -b && vite build`) passed.
+- All four local asset URLs returned HTTP 200 as `image/png` after restarting
+  the local frontend dev container.
+- `git diff --check` passed.
+
+No backend, database, retrieval, embedding, Redis, Qdrant, model, deployment,
+or fallback behavior changed. No commit, push, or deployment was performed.
+
 ## Canonical biography editor state synchronization (2026-09-21)
 
 Goal: ensure an owner can extend a biography over time and always reopen the

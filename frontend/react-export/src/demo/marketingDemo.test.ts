@@ -17,6 +17,33 @@ describe('locale-scoped marketing demos', () => {
     expect(JSON.stringify(cs)).toMatch(/Sametový/);
   });
 
+  it('shows the supplied Czech family photos with the revised 1995 memory', () => {
+    const cs = getMarketingDemo('cs');
+    const trip = cs.events.find((event) => event.year === 1995);
+
+    expect(trip?.desc).toBe(
+      'Jeli k moři oslavit Haninu promoci. Auto se dvakrát rozbilo, ale právě ty neplánované zastávky udělaly z cesty nezapomenutelný výlet.'
+    );
+    expect(trip?.image?.src).toBe('/imgs/skodovka.png');
+    expect(cs.replies.milestone).not.toMatch(/Celou cestu jsme se smáli/);
+    expect(cs.moments.map((moment) => moment.image?.src)).toEqual([
+      '/imgs/vnucka_deda.png',
+      '/imgs/vnucka.png',
+      '/imgs/deda.png',
+    ]);
+    expect(cs.copy.greet).toBe(
+      'Ahoj. Jsem Josef — tak, jak si ho jeho rodina pamatuje. Ptej se mě na cokoli.'
+    );
+    expect(cs.replies.childhood).toMatch(/Vyrůstal jsem v Brně na Pekařské/);
+    expect(cs.replies.milestone).toMatch(/Hana promovala/);
+    expect(cs.replies.advice).toMatch(/Neodkládej hezké věci na potom/);
+    expect(cs.suggestions).toEqual([
+      'Vyprávěj mi o svém dětství.',
+      'Co se stalo v roce 1995?',
+      'Jakou radu bys mi dal?',
+    ]);
+  });
+
   it('uses English realia for English — not Brno/Josef', () => {
     const en = getMarketingDemo('en');
     expect(en.displayName).toBe('James');

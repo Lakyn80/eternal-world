@@ -1,15 +1,34 @@
+import type { DemoImage } from '../demo';
+
 interface Props {
   id: string;
   placeholder: string;
   className?: string;
+  image?: DemoImage;
 }
 
 /** Drag-and-drop image placeholder. Wire this up to real upload/asset logic. */
-export default function ImageSlot({ id, placeholder, className = '' }: Props) {
+export default function ImageSlot({ id, placeholder, className = '', image }: Props) {
   const onDrop = (e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault();
     // TODO: handle e.dataTransfer.files[0] upload
   };
+
+  if (image) {
+    return (
+      <div id={id} className={`overflow-hidden rounded-2xl bg-black/20 ${className}`}>
+        <img
+          alt={image.alt}
+          className="h-full w-full object-cover"
+          decoding="async"
+          loading="lazy"
+          src={image.src}
+          style={{ objectPosition: image.objectPosition ?? 'center' }}
+        />
+      </div>
+    );
+  }
+
   return (
     <div
       id={id}

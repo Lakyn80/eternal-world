@@ -20,7 +20,7 @@ export default function Moments({ lang }: { lang: Lang }) {
         {moments.map((m) => (
           <div key={m.slot} className="min-w-0 flex flex-col bg-white/[0.035] border border-white/[0.08] rounded-[22px] overflow-hidden backdrop-blur-md">
             <div className="h-[230px]">
-              <ImageSlot id={m.slot} placeholder={m.ph} className="w-full h-full rounded-none" />
+              <ImageSlot image={m.image} id={m.slot} placeholder={m.ph} className="w-full h-full rounded-none" />
             </div>
             <div className="p-5 flex flex-col gap-3 sm:p-6.5 sm:pt-6.5 sm:pb-7.5">
               <div className="break-words font-serif italic text-[21px] leading-snug text-gold text-pretty">{m.quote}</div>

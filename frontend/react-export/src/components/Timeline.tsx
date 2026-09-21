@@ -70,7 +70,7 @@ export default function Timeline({ lang }: { lang: Lang }) {
 
       <div className="flex w-[min(880px,calc(100%-32px))] flex-col gap-5 items-stretch mx-auto mt-6.5 p-5 bg-white/[0.035] border border-white/[0.09] rounded-[22px] backdrop-blur-lg animate-fadein sm:w-[min(880px,calc(100%-48px))] sm:p-7 md:flex-row md:gap-6.5">
         <div className="h-[190px] w-full flex-none md:w-[240px]">
-          <ImageSlot id={`tl-${sel.year}`} placeholder={t.tlDrop} className="w-full h-full" />
+          <ImageSlot id={`tl-${sel.year}`} image={sel.image} placeholder={t.tlDrop} className="w-full h-full" />
         </div>
         <div className="min-w-0 flex-1 flex flex-col justify-center gap-2.5">
           <div className="font-serif text-[42px] text-gold leading-none">{sel.year}</div>

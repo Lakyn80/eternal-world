@@ -10,11 +10,18 @@
 
 export type DemoLang = 'en' | 'cs' | 'ru';
 
+export interface DemoImage {
+  src: string;
+  alt: string;
+  objectPosition?: string;
+}
+
 export interface DemoEvent {
   year: number;
   title: string;
   desc: string;
   media: string[];
+  image?: DemoImage;
 }
 
 export interface DemoMoment {
@@ -22,6 +29,7 @@ export interface DemoMoment {
   ph: string;
   quote: string;
   caption: string;
+  image?: DemoImage;
 }
 
 export interface DemoReplies {
