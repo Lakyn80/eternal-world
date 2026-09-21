@@ -391,8 +391,18 @@ describe('BiographyPanel - clear biography (separate from deleting the memorial)
       baseBiographyStatus({ status: 'draft', content_hash: null })
     );
     const user = userEvent.setup();
+    const onBiographyUpdated = vi.fn();
 
-    render(<BiographyPanel initialBiography="Existing text." lang="en" profileId={7} t={t} token="tok" />);
+    render(
+      <BiographyPanel
+        initialBiography="Existing text."
+        lang="en"
+        onBiographyUpdated={onBiographyUpdated}
+        profileId={7}
+        t={t}
+        token="tok"
+      />
+    );
     await screen.findByLabelText(t.biographyTextLabel);
 
     const clearButton = screen.getByRole('button', { name: t.clearBiography });
@@ -403,6 +413,7 @@ describe('BiographyPanel - clear biography (separate from deleting the memorial)
     await user.click(screen.getByRole('button', { name: t.clearBiographyConfirmYes }));
     await waitFor(() => expect(api.clearBiography).toHaveBeenCalledWith('tok', 7));
     expect(screen.getByLabelText(t.biographyTextLabel)).toHaveValue('');
+    expect(onBiographyUpdated).toHaveBeenCalledWith(null);
   });
 
   it('does not offer Clear biography for an empty, never-saved biography', async () => {

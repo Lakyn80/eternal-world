@@ -1904,6 +1904,15 @@ export default function MemorialWorkspace({
                     <BiographyPanel
                       initialBiography={selected.biography}
                       lang={lang}
+                      onBiographyUpdated={(biography) => {
+                        const profileId = selected.id;
+                        setSelected((current) =>
+                          current?.id === profileId ? { ...current, biography } : current
+                        );
+                        setMemorials((items) =>
+                          items.map((item) => (item.id === profileId ? { ...item, biography } : item))
+                        );
+                      }}
                       profileId={selected.id}
                       t={t}
                       token={session.accessToken}
@@ -2850,13 +2859,15 @@ export function BiographyPanel({
   profileId,
   t,
   lang,
-  initialBiography
+  initialBiography,
+  onBiographyUpdated
 }: {
   token: string;
   profileId: number;
   t: Copy;
   lang: Lang;
   initialBiography: string | null;
+  onBiographyUpdated?: (biography: string | null) => void;
 }) {
   const [text, setText] = useState(initialBiography ?? '');
   const [status, setStatus] = useState<BiographyStatusRead | null>(null);
@@ -2957,7 +2968,10 @@ export function BiographyPanel({
     setNotice(null);
     try {
       const next = await updateBiography(token, profileId, text);
+      const savedBiography = text.trim();
       setStatus(next);
+      setText(savedBiography);
+      onBiographyUpdated?.(savedBiography);
       // `update_biography` is idempotent: saving text identical to what is
       // already stored is a no-op and leaves status exactly as it was. If
       // the biography was already `indexed`, showing "saved, not indexed
@@ -3016,6 +3030,7 @@ export function BiographyPanel({
       const next = await clearBiography(token, profileId);
       setStatus(next);
       setText('');
+      onBiographyUpdated?.(null);
       setConfirmingClear(false);
     } catch (clearError) {
       setError(safeError(clearError));

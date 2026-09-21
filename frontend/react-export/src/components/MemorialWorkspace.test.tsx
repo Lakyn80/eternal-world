@@ -325,6 +325,47 @@ describe('BiographyPanel', () => {
     expect(await screen.findByText(t.biographySavedNotIndexed)).toBeInTheDocument();
   });
 
+  it('publishes the complete saved biography so reopening the panel keeps every added memory', async () => {
+    vi.mocked(api.updateBiography).mockResolvedValue(baseBiographyStatus({ status: 'ready_for_ingestion' }));
+    const user = userEvent.setup();
+    const onBiographyUpdated = vi.fn();
+    const expandedBiography =
+      'Narodil jsem se v Praze.\n\nPozd\u011bji jsem p\u0159idal dal\u0161\u00ed vzpom\u00ednku.\n\n\u041f\u0430\u043c\u044f\u0442\u044c \u043e \u0441\u0435\u043c\u044c\u0435 \u0442\u0430\u043a\u0436\u0435 \u043e\u0441\u0442\u0430\u043b\u0430\u0441\u044c.';
+
+    const firstRender = render(
+      <BiographyPanel
+        initialBiography="Narodil jsem se v Praze."
+        lang="cs"
+        onBiographyUpdated={onBiographyUpdated}
+        profileId={7}
+        t={COPY.cs}
+        token="tok"
+      />
+    );
+    const textarea = await screen.findByLabelText(COPY.cs.biographyTextLabel);
+    await user.clear(textarea);
+    await user.type(textarea, expandedBiography);
+    await user.click(screen.getByRole('button', { name: COPY.cs.biographySave }));
+
+    await waitFor(() =>
+      expect(api.updateBiography).toHaveBeenCalledWith('tok', 7, expandedBiography)
+    );
+    expect(onBiographyUpdated).toHaveBeenCalledWith(expandedBiography);
+
+    firstRender.unmount();
+    render(
+      <BiographyPanel
+        initialBiography={onBiographyUpdated.mock.calls[0][0]}
+        lang="cs"
+        profileId={7}
+        t={COPY.cs}
+        token="tok"
+      />
+    );
+
+    expect(await screen.findByLabelText(COPY.cs.biographyTextLabel)).toHaveValue(expandedBiography);
+  });
+
   it('starting indexing requires an explicit confirmation click before calling the backend', async () => {
     vi.mocked(api.getBiographyStatus).mockResolvedValue(baseBiographyStatus({ status: 'ready_for_ingestion' }));
     vi.mocked(api.startBiographyIngestion).mockResolvedValue({

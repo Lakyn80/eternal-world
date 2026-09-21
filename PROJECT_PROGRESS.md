@@ -1,5 +1,57 @@
 # Project Progress
 
+## Canonical biography editor state synchronization (2026-09-21)
+
+Goal: ensure an owner can extend a biography over time and always reopen the
+complete latest canonical document before indexing or editing it again. No
+commit, push, production deployment, or export-format work was requested.
+
+Root cause:
+- Postgres persistence and the biography indexing service already used the
+  complete `MemoryProfile.biography` value correctly.
+- After a successful save or clear, `BiographyPanel` updated only its local
+  state. The parent workspace retained the old `selected.biography` value, so
+  leaving and reopening the tab during the same SPA session remounted the
+  editor with stale text even though the backend held the new version.
+
+What changed:
+- Successful biography saves now publish the backend-normalized complete text
+  to the parent workspace, which synchronizes both the selected memorial and
+  the memorial list. Clear publishes `null` through the same path.
+- The API contract remains full-document replacement. No server-side append was
+  added, avoiding duplicate paragraphs on idempotent re-save.
+- Existing concurrency semantics remain unchanged: each full-document update is
+  committed atomically and concurrent clients remain last-write-wins. The fix
+  adds no read-modify-append race.
+- Regression coverage now verifies three successive complete versions in Czech
+  and Russian, exact API/DB round trips, idempotent re-save, owner/profile
+  isolation, stale-to-reindexed lifecycle, and preservation of old plus newly
+  added text in the latest indexed chunks.
+
+Verification:
+- Backend Docker regression: `14 passed`, 2 dependency deprecation warnings.
+- Frontend main suite: `61 passed`, including the new remount regression.
+- Frontend Task 65.5 suite: 20 passed; one pre-existing test still fails because
+  it submits Create Memorial without the now-required canonical-language
+  confirmation, so its mocked plan-limit response is never reached.
+- `npm run build` (`tsc -b && vite build`) passed.
+- Backend `python -m compileall` passed. The repository defines no separate
+  lint or formatter-check command for these files.
+- Local Docker runtime: `/health` and `/health/runtime` returned 200; database,
+  Redis, and Qdrant were `ok`. Authenticated API smoke saved an initial text,
+  then a complete expanded Czech/Russian text; both round trips were exact and
+  the initial portion remained present. Frontend root returned 200.
+- The default Windows bind-mount `uvicorn --reload` process hit a pre-existing
+  watchfiles `Cannot allocate memory` error. Runtime smoke therefore used the
+  same image and source with hot reload disabled; application startup and all
+  requests were clean.
+- `git diff --check` passed.
+
+Safety matrix: retrieval logic **no**; embedding logic **no**; Redis cache
+behavior **no**; Qdrant data/configuration modified by implementation **no**;
+model downloaded **no**; fallback introduced **no**. Tests used fake encoder
+and Qdrant writer. No migration was required.
+
 ## Explicit production deployment targeting (2026-09-21)
 
 Goal: prevent an ordinary push from deploying both independent production
