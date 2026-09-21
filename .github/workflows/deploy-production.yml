@@ -1,24 +1,22 @@
 name: Deploy Production
 
-# Dual production deploy: one immutable GHCR build, two independent servers.
+# Manual production deploy: one immutable GHCR build, explicit target selection.
 # Production branch: staging/eternalworld-lukiora-20260715 (current live branch).
 # Legacy manual Russia-only workflow remains in deploy-staging.yml until retired.
 
 on:
-  push:
-    branches:
-      - staging/eternalworld-lukiora-20260715
   workflow_dispatch:
     inputs:
       deployment_target:
-        description: Which production target(s) to deploy
+        description: Select an explicit production target
         required: true
         type: choice
-        default: both
+        default: select-target
         options:
-          - both
-          - russia
+          - select-target
           - hetzner
+          - russia
+          - both
 
 permissions:
   contents: read
@@ -54,28 +52,23 @@ jobs:
 
           deploy_russia=false
           deploy_hetzner=false
-          if [[ "${{ github.event_name }}" == "push" ]]; then
-            deploy_russia=true
-            deploy_hetzner=true
-          else
-            target="${{ github.event.inputs.deployment_target }}"
-            case "${target}" in
-              both)
-                deploy_russia=true
-                deploy_hetzner=true
-                ;;
-              russia)
-                deploy_russia=true
-                ;;
-              hetzner)
-                deploy_hetzner=true
-                ;;
-              *)
-                echo "Unknown deployment_target=${target}" >&2
-                exit 1
-                ;;
-            esac
-          fi
+          target="${{ github.event.inputs.deployment_target }}"
+          case "${target}" in
+            both)
+              deploy_russia=true
+              deploy_hetzner=true
+              ;;
+            russia)
+              deploy_russia=true
+              ;;
+            hetzner)
+              deploy_hetzner=true
+              ;;
+            *)
+              echo "Select deployment_target=hetzner, russia, or both." >&2
+              exit 1
+              ;;
+          esac
 
           {
             echo "git_sha=${git_sha}"

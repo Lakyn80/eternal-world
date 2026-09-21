@@ -20,6 +20,7 @@ host-wide Hugging Face model cache `shared_huggingface_cache` on each server
 | Nginx templates | `infra/nginx/eternalworld.lukiora.ru*.conf` | `deploy/hetzner/nginx/` |
 
 Production branch: `staging/eternalworld-lukiora-20260715`.
+Pushing this branch does not deploy either production server.
 
 Workflow: `.github/workflows/deploy-production.yml`.
 
@@ -28,7 +29,7 @@ Legacy Russia-only manual workflow (unchanged): `.github/workflows/deploy-stagin
 ## Architecture
 
 ```text
-Push / workflow_dispatch
+ Explicit workflow_dispatch target
         │
         ▼
    prepare (target flags)
@@ -120,7 +121,7 @@ If `/opt/eternal-world/.env.prod` is missing, the workflow can seed it from:
 | `CONTENT_TRANSLATION_BASE_URL` |
 | `CONTENT_TRANSLATION_MODEL` |
 | `CONTENT_TRANSLATION_API_KEY` |
-| `LETSENCRYPT_EMAIL` (optional) |
+| `LETSENCRYPT_EMAIL` (required for automatic initial TLS issuance) |
 
 Use **different** DB passwords and JWT secrets than Russia. Do not copy Russian
 production credentials.
@@ -136,24 +137,22 @@ Map historical repo secrets if needed for the legacy `deploy-staging.yml` only:
 - `STAGING_SSH_PRIVATE_KEY` → keep for legacy workflow
 - `STAGING_POSTGRES_*`, `STAGING_JWT_*`, `STAGING_AI_*`, `STAGING_CONTENT_*`
 
-## Automatic push deploy
+## Push behavior
 
-A push to `staging/eternalworld-lukiora-20260715` runs:
+A push to `staging/eternalworld-lukiora-20260715` does **not** run this production
+deployment workflow. This prevents a source push from implicitly deploying both
+independent production servers.
 
-1. validation/tests
-2. one GHCR build for that commit SHA
-3. deploy Russia
-4. deploy Hetzner
-
-Both targets receive the same immutable SHA image tags.
+Use the manual workflow and choose the intended target explicitly.
 
 ## Manual deploy (`workflow_dispatch`)
 
 Input `deployment_target`:
 
-- `both` (default)
-- `russia`
+- `select-target` (safe default; exits before validation, build, or deploy)
 - `hetzner`
+- `russia`
+- `both` (deploys both only when explicitly selected)
 
 Actions → **Deploy Production** → Run workflow → choose target.
 
@@ -214,7 +213,7 @@ sudo certbot --nginx -d eternalworld.lukiora.com
 ```
 
 After GitHub Environments/secrets are configured, run **Deploy Production** with
-`deployment_target=hetzner` (or wait for a push that deploys both).
+`deployment_target=hetzner`.
 
 Safe compose commands only:
 

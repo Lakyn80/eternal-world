@@ -1,5 +1,36 @@
 # Project Progress
 
+## Explicit production deployment targeting (2026-09-21)
+
+Goal: prevent an ordinary push from deploying both independent production
+installations and require an explicit target for every production deployment.
+
+What changed:
+- `deploy-production.yml` is now manual-only (`workflow_dispatch`); branch pushes
+  no longer trigger production deployment.
+- `deployment_target` defaults to the non-deploying `select-target` placeholder.
+  The workflow exits before validation, image build, or deployment until
+  `hetzner`, `russia`, or `both` is selected explicitly.
+- `both` remains available, but can no longer be selected implicitly.
+- Dual-production deployment documentation now describes the manual-only flow.
+
+Verification:
+- Workflow YAML syntax validation.
+- Static assertions for manual-only trigger and explicit target mapping.
+- VS Code GitHub Actions language-server validation: 0 diagnostics after
+  configuring `LETSENCRYPT_EMAIL` in both production Environments and the
+  legacy repository scope.
+- `git diff --check`.
+
+Operational note: this commit does not deploy either environment.
+`LETSENCRYPT_EMAIL` is configured in the `production-hetzner`,
+`production-russia`, and legacy repository scopes. A future manual Hetzner-only
+deployment can therefore request the new TLS certificate.
+
+No Russia configuration, application runtime, database, Redis, Qdrant, model,
+retrieval, or cache behavior changed.
+
+
 ## Hetzner domain rename — eternalworld.lukiora.com (2026-09-21)
 
 Goal: move the Hetzner/Czech production hostname from `eternal.world.lukiora.com`
