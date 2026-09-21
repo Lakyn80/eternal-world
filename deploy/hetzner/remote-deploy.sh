@@ -26,7 +26,7 @@ mkdir -p /etc/nginx/sites-available /etc/nginx/sites-enabled
 # Do not touch other site configs (e.g. rag.lukiora.com).
 
 if [ ! -f "/etc/letsencrypt/live/${APP_DOMAIN}/fullchain.pem" ]; then
-  cp "${APP_DIR}/nginx/eternal.world.lukiora.com.bootstrap.conf" "/etc/nginx/sites-available/${APP_DOMAIN}"
+  cp "${APP_DIR}/nginx/eternalworld.lukiora.com.bootstrap.conf" "/etc/nginx/sites-available/${APP_DOMAIN}"
   ln -sfn "/etc/nginx/sites-available/${APP_DOMAIN}" "/etc/nginx/sites-enabled/${APP_DOMAIN}"
   nginx -t
   systemctl reload nginx
@@ -38,7 +38,7 @@ if [ ! -f "/etc/letsencrypt/live/${APP_DOMAIN}/fullchain.pem" ]; then
 fi
 
 if [ -f "/etc/letsencrypt/live/${APP_DOMAIN}/fullchain.pem" ]; then
-  cp "${APP_DIR}/nginx/eternal.world.lukiora.com.conf" "/etc/nginx/sites-available/${APP_DOMAIN}"
+  cp "${APP_DIR}/nginx/eternalworld.lukiora.com.conf" "/etc/nginx/sites-available/${APP_DOMAIN}"
   ln -sfn "/etc/nginx/sites-available/${APP_DOMAIN}" "/etc/nginx/sites-enabled/${APP_DOMAIN}"
   nginx -t
   systemctl reload nginx

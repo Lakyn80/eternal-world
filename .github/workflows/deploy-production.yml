@@ -366,7 +366,7 @@ jobs:
       cancel-in-progress: false
     timeout-minutes: 90
     env:
-      APP_DOMAIN: eternal.world.lukiora.com
+      APP_DOMAIN: eternalworld.lukiora.com
       APP_DIR: /opt/eternal-world
       BACKEND_HOST_PORT: "8133"
       FRONTEND_HOST_PORT: "3117"
@@ -403,8 +403,8 @@ jobs:
           SCP=(scp -P "${DEPLOY_PORT}")
           "${SSH[@]}" "mkdir -p ${{ env.APP_DIR }}/nginx ${{ env.APP_DIR }}/deploy"
           "${SCP[@]}" deploy/hetzner/docker-compose.yml "${DEPLOY_USER}@${DEPLOY_HOST}:${{ env.APP_DIR }}/docker-compose.yml"
-          "${SCP[@]}" deploy/hetzner/nginx/eternal.world.lukiora.com.bootstrap.conf "${DEPLOY_USER}@${DEPLOY_HOST}:${{ env.APP_DIR }}/nginx/eternal.world.lukiora.com.bootstrap.conf"
-          "${SCP[@]}" deploy/hetzner/nginx/eternal.world.lukiora.com.conf "${DEPLOY_USER}@${DEPLOY_HOST}:${{ env.APP_DIR }}/nginx/eternal.world.lukiora.com.conf"
+          "${SCP[@]}" deploy/hetzner/nginx/eternalworld.lukiora.com.bootstrap.conf "${DEPLOY_USER}@${DEPLOY_HOST}:${{ env.APP_DIR }}/nginx/eternalworld.lukiora.com.bootstrap.conf"
+          "${SCP[@]}" deploy/hetzner/nginx/eternalworld.lukiora.com.conf "${DEPLOY_USER}@${DEPLOY_HOST}:${{ env.APP_DIR }}/nginx/eternalworld.lukiora.com.conf"
           "${SCP[@]}" deploy/hetzner/remote-deploy.sh "${DEPLOY_USER}@${DEPLOY_HOST}:${{ env.APP_DIR }}/remote-deploy.sh"
           "${SCP[@]}" deploy/hetzner/.env.example "${DEPLOY_USER}@${DEPLOY_HOST}:${{ env.APP_DIR }}/.env.example"
 

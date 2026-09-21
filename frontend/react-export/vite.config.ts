@@ -14,7 +14,7 @@ export default defineConfig({
     // Vite preview rejects unknown Host headers with 403 unless listed here.
     allowedHosts: [
       'eternalworld.lukiora.ru',
-      'eternal.world.lukiora.com',
+      'eternalworld.lukiora.com',
       '.lukiora.ru',
       '.lukiora.com',
     ],

@@ -8,7 +8,7 @@ host-wide Hugging Face model cache `shared_huggingface_cache` on each server
 
 | | Russia | Hetzner |
 |---|---|---|
-| Domain | `eternalworld.lukiora.ru` | `eternal.world.lukiora.com` |
+| Domain | `eternalworld.lukiora.ru` | `eternalworld.lukiora.com` |
 | Server | existing RU host | `77.42.74.23` |
 | App dir | `/opt/eternal-world` | `/opt/eternal-world` |
 | Compose | `docker-compose.prod.yml` | `deploy/hetzner/docker-compose.yml` |
@@ -68,8 +68,8 @@ domains via same-origin `/api` through Nginx.
 
 - `deploy/hetzner/docker-compose.yml`
 - `deploy/hetzner/.env.example`
-- `deploy/hetzner/nginx/eternal.world.lukiora.com.bootstrap.conf`
-- `deploy/hetzner/nginx/eternal.world.lukiora.com.conf`
+- `deploy/hetzner/nginx/eternalworld.lukiora.com.bootstrap.conf`
+- `deploy/hetzner/nginx/eternalworld.lukiora.com.conf`
 - `deploy/hetzner/remote-deploy.sh`
 - On server: `/opt/eternal-world/.env.prod` (seeded once if missing; otherwise only image tags are patched)
 
@@ -200,17 +200,17 @@ nano .env.prod   # set unique POSTGRES_*, JWT_*, AI_* keys; leave ports 8133/311
 Install Nginx site (HTTP bootstrap for Certbot):
 
 ```bash
-sudo cp /opt/eternal-world/nginx/eternal.world.lukiora.com.bootstrap.conf \
-  /etc/nginx/sites-available/eternal.world.lukiora.com
-sudo ln -sfn /etc/nginx/sites-available/eternal.world.lukiora.com \
-  /etc/nginx/sites-enabled/eternal.world.lukiora.com
+sudo cp /opt/eternal-world/nginx/eternalworld.lukiora.com.bootstrap.conf \
+  /etc/nginx/sites-available/eternalworld.lukiora.com
+sudo ln -sfn /etc/nginx/sites-available/eternalworld.lukiora.com \
+  /etc/nginx/sites-enabled/eternalworld.lukiora.com
 sudo nginx -t && sudo systemctl reload nginx
 ```
 
 Issue TLS:
 
 ```bash
-sudo certbot --nginx -d eternal.world.lukiora.com
+sudo certbot --nginx -d eternalworld.lukiora.com
 ```
 
 After GitHub Environments/secrets are configured, run **Deploy Production** with
@@ -232,7 +232,7 @@ docker compose --env-file .env.prod -f docker-compose.yml up -d --remove-orphans
 docker compose --env-file .env.prod -f docker-compose.yml ps
 curl -fsS http://127.0.0.1:8133/health/runtime
 curl -I http://127.0.0.1:3117/
-curl -I https://eternal.world.lukiora.com/
+curl -I https://eternalworld.lukiora.com/
 ```
 
 Russia equivalents use ports `8033` / `3017` and `docker-compose.prod.yml`.

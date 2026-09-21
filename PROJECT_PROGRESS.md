@@ -1,5 +1,33 @@
 # Project Progress
 
+## Hetzner domain rename — eternalworld.lukiora.com (2026-09-21)
+
+Goal: move the Hetzner/Czech production hostname from `eternal.world.lukiora.com`
+to `eternalworld.lukiora.com` after the public Cloudflare path for the old
+three-label hostname failed TLS negotiation while the Hetzner origin itself
+served HTTPS successfully.
+
+What changed:
+- GitHub production deploy now uses `APP_DOMAIN=eternalworld.lukiora.com` for
+  the `production-hetzner` target.
+- Hetzner nginx templates were renamed to `eternalworld.lukiora.com*.conf` and
+  now use the new `server_name` plus matching Let's Encrypt certificate path.
+- Hetzner deploy script copies the renamed templates and patches
+  `BACKEND_CORS_ORIGINS=https://eternalworld.lukiora.com`.
+- Frontend Vite allowed hosts and Hetzner `.env.example` now include the new
+  hostname.
+- Dual production deployment documentation now uses the new hostname.
+
+Operational follow-up:
+- DNS/Cloudflare must point `eternalworld.lukiora.com` to Hetzner
+  `77.42.74.23`.
+- Run the Hetzner production deploy so Certbot can issue/activate the new
+  certificate and nginx site.
+- Optional cleanup: remove the old `eternal.world.lukiora.com` nginx site and
+  certificate after confirming no traffic uses it.
+
+No app database, Redis, Qdrant, model, retrieval, or cache behavior changed.
+
 
 ## Task 65.13.12A — Sync vs Async Controlled Load Comparison (2026-08-17)
 
@@ -195,7 +223,7 @@ Starting SHA: `df5fd85e7a9ecce980c1494ada665fa9d4229df8` on `staging/eternalworl
 ## Dual Production Deploy (Russia + Hetzner) — 2026-08-01
 
 Goal: one immutable GHCR build per commit; two fully isolated production installs
-(`eternalworld.lukiora.ru` and `eternal.world.lukiora.com`) with no shared data.
+(`eternalworld.lukiora.ru` and `eternalworld.lukiora.com`) with no shared data.
 
 ### Decisions
 
