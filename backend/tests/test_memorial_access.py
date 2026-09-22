@@ -2,9 +2,10 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 
-from app.db.models import MemorialInvitation
+from app.db.models import MemorialInvitation, MemorialMembership
 from app.main import app
 from app.modules.memorial_access.service import list_active_memory_contributions
+from app.modules.memorial_access import repository as membership_repository
 
 
 PASSWORD = "StrongPass123"
@@ -452,4 +453,187 @@ def test_email_delivery_failure_revokes_invitation(client, monkeypatch):
     raw_token = captured["accept_url"].split("token=", 1)[1]
     accepted = _accept(client, guest_token, raw_token)
     assert accepted.status_code == 404
+
+
+def _user_id(client, token: str) -> int:
+    response = client.get("/api/auth/me", headers=_auth_headers(token))
+    assert response.status_code == 200
+    return response.json()["id"]
+
+
+def test_owner_soft_revokes_contributor_and_access_is_lost(client):
+    owner_token = _register_and_login(client, "revoke-owner65@example.com")
+    contributor_token = _register_and_login(client, "revoke-contributor65@example.com")
+    profile_id = _create_memorial(client, owner_token)
+    invitation_token = _invite(client, owner_token, profile_id, "revoke-contributor65@example.com")
+    accepted = _accept(client, contributor_token, invitation_token)
+    assert accepted.status_code == 200
+    contributor_user_id = accepted.json()["user_id"]
+    owner_user_id = _user_id(client, owner_token)
+
+    revoke = client.delete(
+        f"/api/memorials/{profile_id}/members/{contributor_user_id}",
+        headers=_auth_headers(owner_token),
+    )
+    assert revoke.status_code == 200
+    body = revoke.json()
+    assert body["status"] == "revoked"
+    assert body["user_id"] == contributor_user_id
+    assert body["role"] == "contributor"
+
+    db = app.state.testing_session_local()
+    try:
+        membership = (
+            db.query(MemorialMembership)
+            .filter(
+                MemorialMembership.profile_id == profile_id,
+                MemorialMembership.user_id == contributor_user_id,
+            )
+            .one()
+        )
+        assert membership.status == membership_repository.MEMBERSHIP_STATUS_REVOKED
+        assert membership.revoked_at is not None
+        assert membership.revoked_by_user_id == owner_user_id
+    finally:
+        db.close()
+
+    members = client.get(f"/api/memorials/{profile_id}/members", headers=_auth_headers(owner_token))
+    assert members.status_code == 200
+    assert all(item["user_id"] != contributor_user_id for item in members.json())
+    assert any(item["role"] == "owner" for item in members.json())
+
+    denied = client.get(f"/api/memorials/{profile_id}", headers=_auth_headers(contributor_token))
+    assert denied.status_code == 404
+
+
+def test_non_owners_cannot_revoke_members(client):
+    owner_token = _register_and_login(client, "revoke-authz-owner65@example.com")
+    contributor_token = _register_and_login(client, "revoke-authz-contrib65@example.com")
+    reviewer_token = _register_and_login(client, "revoke-authz-reviewer65@example.com")
+    viewer_token = _register_and_login(client, "revoke-authz-viewer65@example.com")
+    outsider_token = _register_and_login(client, "revoke-authz-outsider65@example.com")
+    profile_id = _create_memorial(client, owner_token)
+
+    contrib_invite = _invite(client, owner_token, profile_id, "revoke-authz-contrib65@example.com", "contributor")
+    reviewer_invite = _invite(client, owner_token, profile_id, "revoke-authz-reviewer65@example.com", "trusted_reviewer")
+    viewer_invite = _invite(client, owner_token, profile_id, "revoke-authz-viewer65@example.com", "viewer")
+    assert _accept(client, contributor_token, contrib_invite).status_code == 200
+    assert _accept(client, reviewer_token, reviewer_invite).status_code == 200
+    assert _accept(client, viewer_token, viewer_invite).status_code == 200
+
+    contributor_user_id = _user_id(client, contributor_token)
+    reviewer_user_id = _user_id(client, reviewer_token)
+
+    assert (
+        client.delete(
+            f"/api/memorials/{profile_id}/members/{reviewer_user_id}",
+            headers=_auth_headers(contributor_token),
+        ).status_code
+        == 403
+    )
+    assert (
+        client.delete(
+            f"/api/memorials/{profile_id}/members/{contributor_user_id}",
+            headers=_auth_headers(reviewer_token),
+        ).status_code
+        == 403
+    )
+    assert (
+        client.delete(
+            f"/api/memorials/{profile_id}/members/{contributor_user_id}",
+            headers=_auth_headers(viewer_token),
+        ).status_code
+        == 403
+    )
+    assert (
+        client.delete(
+            f"/api/memorials/{profile_id}/members/{contributor_user_id}",
+            headers=_auth_headers(outsider_token),
+        ).status_code
+        == 404
+    )
+
+def test_owner_cannot_revoke_owner_membership(client):
+    owner_token = _register_and_login(client, "revoke-self-owner65@example.com")
+    profile_id = _create_memorial(client, owner_token)
+    owner_user_id = _user_id(client, owner_token)
+
+    response = client.delete(
+        f"/api/memorials/{profile_id}/members/{owner_user_id}",
+        headers=_auth_headers(owner_token),
+    )
+    assert response.status_code == 403
+    assert "owner" in response.json()["detail"].lower()
+
+
+def test_unknown_membership_revoke_is_not_found(client):
+    owner_token = _register_and_login(client, "revoke-missing-owner65@example.com")
+    profile_id = _create_memorial(client, owner_token)
+
+    response = client.delete(
+        f"/api/memorials/{profile_id}/members/999999",
+        headers=_auth_headers(owner_token),
+    )
+    assert response.status_code == 404
+
+
+def test_revoked_member_can_be_reactivated_by_new_invitation(client):
+    owner_token = _register_and_login(client, "reactivate-owner65@example.com")
+    member_token = _register_and_login(client, "reactivate-member65@example.com")
+    profile_id = _create_memorial(client, owner_token)
+    first_invite = _invite(client, owner_token, profile_id, "reactivate-member65@example.com", "contributor")
+    first_accept = _accept(client, member_token, first_invite)
+    assert first_accept.status_code == 200
+    member_user_id = first_accept.json()["user_id"]
+    membership_id = first_accept.json()["id"]
+
+    revoke = client.delete(
+        f"/api/memorials/{profile_id}/members/{member_user_id}",
+        headers=_auth_headers(owner_token),
+    )
+    assert revoke.status_code == 200
+
+    second_invite = _invite(client, owner_token, profile_id, "reactivate-member65@example.com", "trusted_reviewer")
+    second_accept = _accept(client, member_token, second_invite)
+    assert second_accept.status_code == 200
+    body = second_accept.json()
+    assert body["id"] == membership_id
+    assert body["role"] == "trusted_reviewer"
+    assert body["status"] == "active"
+
+    db = app.state.testing_session_local()
+    try:
+        membership = db.get(MemorialMembership, membership_id)
+        assert membership is not None
+        assert membership.status == membership_repository.MEMBERSHIP_STATUS_ACTIVE
+        assert membership.role == "trusted_reviewer"
+        assert membership.revoked_at is None
+        assert membership.revoked_by_user_id is None
+        assert db.query(MemorialMembership).filter(MemorialMembership.profile_id == profile_id).count() == 2
+    finally:
+        db.close()
+
+    visible = client.get(f"/api/memorials/{profile_id}", headers=_auth_headers(member_token))
+    assert visible.status_code == 200
+    assert visible.json()["current_user_role"] == "trusted_reviewer"
+
+
+def test_double_revoke_is_not_found(client):
+    owner_token = _register_and_login(client, "double-revoke-owner65@example.com")
+    member_token = _register_and_login(client, "double-revoke-member65@example.com")
+    profile_id = _create_memorial(client, owner_token)
+    invite = _invite(client, owner_token, profile_id, "double-revoke-member65@example.com")
+    accepted = _accept(client, member_token, invite)
+    member_user_id = accepted.json()["user_id"]
+
+    first = client.delete(
+        f"/api/memorials/{profile_id}/members/{member_user_id}",
+        headers=_auth_headers(owner_token),
+    )
+    second = client.delete(
+        f"/api/memorials/{profile_id}/members/{member_user_id}",
+        headers=_auth_headers(owner_token),
+    )
+    assert first.status_code == 200
+    assert second.status_code == 404
 

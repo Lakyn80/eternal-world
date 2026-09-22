@@ -67,6 +67,7 @@ from app.modules.memorial_access.service import (
     list_review_queue,
     reject_contribution,
     retry_contribution_indexing,
+    revoke_member,
     submit_contribution,
 )
 
@@ -317,6 +318,33 @@ def list_members_endpoint(
     except (MemorialNotFoundError, MemorialForbiddenError, MemorialConflictError) as exc:
         _raise_access_error(exc)
     return [_build_membership_read(membership) for membership in memberships]
+
+
+@router.delete(
+    "/api/memorials/{profile_id}/members/{user_id}",
+    response_model=MembershipRead,
+    responses={
+        status.HTTP_401_UNAUTHORIZED: {"model": ErrorResponse},
+        status.HTTP_403_FORBIDDEN: {"model": ErrorResponse},
+        status.HTTP_404_NOT_FOUND: {"model": ErrorResponse},
+    },
+)
+def revoke_member_endpoint(
+    profile_id: ProfileIdPath,
+    user_id: Annotated[int, Path(gt=0)],
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> MembershipRead:
+    try:
+        membership = revoke_member(
+            db,
+            current_user=current_user,
+            profile_id=profile_id,
+            target_user_id=user_id,
+        )
+    except (MemorialNotFoundError, MemorialForbiddenError, MemorialConflictError) as exc:
+        _raise_access_error(exc)
+    return _build_membership_read(membership)
 
 
 @router.post(

@@ -1,9 +1,15 @@
 from __future__ import annotations
 
+from datetime import datetime
+
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
 from app.db.models import MemorialContribution, MemorialInvitation, MemorialMembership, MemoryProfile
+
+
+MEMBERSHIP_STATUS_ACTIVE = "active"
+MEMBERSHIP_STATUS_REVOKED = "revoked"
 
 
 def create_membership(
@@ -18,11 +24,28 @@ def create_membership(
         profile_id=profile_id,
         user_id=user_id,
         role=role,
-        status="active",
+        status=MEMBERSHIP_STATUS_ACTIVE,
         created_by_user_id=created_by_user_id,
     )
     db.add(membership)
     return membership
+
+
+def get_membership(
+    db: Session,
+    *,
+    profile_id: int,
+    user_id: int,
+) -> MemorialMembership | None:
+    statement = (
+        select(MemorialMembership)
+        .options(selectinload(MemorialMembership.user))
+        .where(
+            MemorialMembership.profile_id == profile_id,
+            MemorialMembership.user_id == user_id,
+        )
+    )
+    return db.scalar(statement)
 
 
 def get_active_membership(
@@ -34,7 +57,7 @@ def get_active_membership(
     statement = select(MemorialMembership).where(
         MemorialMembership.profile_id == profile_id,
         MemorialMembership.user_id == user_id,
-        MemorialMembership.status == "active",
+        MemorialMembership.status == MEMBERSHIP_STATUS_ACTIVE,
     )
     return db.scalar(statement)
 
@@ -45,11 +68,37 @@ def list_active_memberships(db: Session, *, profile_id: int) -> list[MemorialMem
         .options(selectinload(MemorialMembership.user))
         .where(
             MemorialMembership.profile_id == profile_id,
-            MemorialMembership.status == "active",
+            MemorialMembership.status == MEMBERSHIP_STATUS_ACTIVE,
         )
         .order_by(MemorialMembership.role.asc(), MemorialMembership.id.asc())
     )
     return list(db.scalars(statement))
+
+
+def revoke_membership(
+    db: Session,
+    *,
+    membership: MemorialMembership,
+    revoked_by_user_id: int,
+    revoked_at: datetime,
+) -> MemorialMembership:
+    membership.status = MEMBERSHIP_STATUS_REVOKED
+    membership.revoked_at = revoked_at
+    membership.revoked_by_user_id = revoked_by_user_id
+    return membership
+
+
+def reactivate_membership(
+    db: Session,
+    *,
+    membership: MemorialMembership,
+    role: str,
+) -> MemorialMembership:
+    membership.status = MEMBERSHIP_STATUS_ACTIVE
+    membership.role = role
+    membership.revoked_at = None
+    membership.revoked_by_user_id = None
+    return membership
 
 
 def list_profiles_for_member(db: Session, *, user_id: int) -> list[tuple[MemoryProfile, MemorialMembership]]:
@@ -58,7 +107,7 @@ def list_profiles_for_member(db: Session, *, user_id: int) -> list[tuple[MemoryP
         .join(MemorialMembership, MemorialMembership.profile_id == MemoryProfile.id)
         .where(
             MemorialMembership.user_id == user_id,
-            MemorialMembership.status == "active",
+            MemorialMembership.status == MEMBERSHIP_STATUS_ACTIVE,
         )
         .order_by(MemoryProfile.id.asc())
     )

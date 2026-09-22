@@ -293,6 +293,19 @@ export async function listMembers(accessToken: string, profileId: number): Promi
   return requestJson<MembershipRead[]>(`/api/memorials/${profileId}/members`, undefined, accessToken);
 }
 
+/** Owner soft-revokes a non-owner membership. Does not delete the membership row. */
+export async function revokeMember(
+  accessToken: string,
+  profileId: number,
+  userId: number
+): Promise<MembershipRead> {
+  return requestJson<MembershipRead>(
+    `/api/memorials/${profileId}/members/${userId}`,
+    { method: 'DELETE' },
+    accessToken
+  );
+}
+
 export async function inviteParticipant(
   accessToken: string,
   profileId: number,

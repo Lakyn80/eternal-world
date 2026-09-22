@@ -4,6 +4,11 @@ export function canInvite(role: MemorialRole): boolean {
   return role === 'owner';
 }
 
+/** Owner-only: soft-revoke non-owner members. Backend enforces independently. */
+export function canManageMembers(role: MemorialRole): boolean {
+  return role === 'owner';
+}
+
 export function canReview(role: MemorialRole): boolean {
   return role === 'owner' || role === 'trusted_reviewer';
 }

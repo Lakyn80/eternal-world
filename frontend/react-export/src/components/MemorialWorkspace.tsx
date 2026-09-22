@@ -28,6 +28,7 @@ import {
   login,
   logoutSession,
   MemorialApiError,
+  revokeMember,
   ownerReviewCandidate,
   register,
   resetChat,
@@ -43,7 +44,7 @@ import {
   updateMemorialMetadata,
   updatePreferredUiLanguage
 } from '../lib/memorialApi';
-import { canInvite, canReview, canSubmitContribution, isActiveMemoryEligible } from '../lib/memorialPermissions';
+import { canInvite, canManageMembers, canReview, canSubmitContribution, isActiveMemoryEligible } from '../lib/memorialPermissions';
 import { resolveLangAfterSessionRestore } from '../lib/langPreference';
 import { notifyServiceWorkerLogoutCleanup } from '../lib/pwa';
 import { APP_ROOT_PATH, buildMemorialPath, navigate, parseAppRoute, usePathname } from '../lib/router';
@@ -295,6 +296,12 @@ export type Copy = {
   inviteParticipant: string;
   inviteHelp: string;
   invitationCreated: string;
+  removeMember: string;
+  removeMemberConfirmTitle: string;
+  removeMemberConfirmBody: string;
+  removeMemberConfirmYes: string;
+  removeMemberSuccess: string;
+  removeMemberFailed: string;
   inviteSent: string;
   inviteAlreadyMember: string;
   inviteAlreadyPending: string;
@@ -589,6 +596,13 @@ export const COPY: Record<Lang, Copy> = {
     inviteParticipant: 'Invite participant',
     inviteHelp: 'Owners can invite trusted reviewers, contributors or viewers.',
     invitationCreated: 'Invitation created.',
+    removeMember: 'Remove member',
+    removeMemberConfirmTitle: 'Remove this member?',
+    removeMemberConfirmBody:
+      'They will lose access to this memorial immediately. Their past contributions stay attributed to them.',
+    removeMemberConfirmYes: 'Yes, remove member',
+    removeMemberSuccess: 'Member removed.',
+    removeMemberFailed: 'Could not remove the member. Please try again.',
     inviteSent: 'Invitation sent to {email}.',
     inviteAlreadyMember: 'This email already belongs to an active member.',
     inviteAlreadyPending: 'An active invitation already exists for this email.',
@@ -885,6 +899,13 @@ export const COPY: Record<Lang, Copy> = {
     inviteParticipant: 'Pozvat účastníka',
     inviteHelp: 'Vlastník může pozvat trusted reviewera, contributora nebo viewera.',
     invitationCreated: 'Pozvánka vytvořena.',
+    removeMember: 'Odebrat člena',
+    removeMemberConfirmTitle: 'Odebrat tohoto člena?',
+    removeMemberConfirmBody:
+      'Okamžitě ztratí přístup k tomuto memorialu. Jejich dřívější příspěvky zůstanou přiřazené jim.',
+    removeMemberConfirmYes: 'Ano, odebrat člena',
+    removeMemberSuccess: 'Člen odebrán.',
+    removeMemberFailed: 'Člena se nepodařilo odebrat. Zkuste to prosím znovu.',
     inviteSent: 'Pozvánka odeslána na {email}.',
     inviteAlreadyMember: 'Tento e-mail už patří aktivnímu členovi.',
     inviteAlreadyPending: 'Pro tento e-mail už existuje aktivní pozvánka.',
@@ -1181,6 +1202,13 @@ export const COPY: Record<Lang, Copy> = {
     inviteParticipant: 'Пригласить участника',
     inviteHelp: 'Владелец может пригласить trusted reviewer, contributor или viewer.',
     invitationCreated: 'Приглашение создано.',
+    removeMember: 'Удалить участника',
+    removeMemberConfirmTitle: 'Удалить этого участника?',
+    removeMemberConfirmBody:
+      'Они сразу потеряют доступ к этому мемориалу. Их прошлые вклады останутся приписаны им.',
+    removeMemberConfirmYes: 'Да, удалить участника',
+    removeMemberSuccess: 'Участник удалён.',
+    removeMemberFailed: 'Не удалось удалить участника. Попробуйте ещё раз.',
     inviteSent: 'Приглашение отправлено на {email}.',
     inviteAlreadyMember: 'Этот адрес уже принадлежит активному участнику.',
     inviteAlreadyPending: 'Для этого адреса уже есть активное приглашение.',
@@ -1468,6 +1496,7 @@ export default function MemorialWorkspace({
 
   const role = selected?.current_user_role;
   const mayInvite = role ? canInvite(role) : false;
+  const mayManageMembers = role ? canManageMembers(role) : false;
   const mayReview = role ? canReview(role) : false;
   const maySubmit = role ? canSubmitContribution(role) : false;
 
@@ -2074,7 +2103,21 @@ export default function MemorialWorkspace({
                       />
                     </div>
                   )}
-                  {activeTab === 'members' && mayReview && <MembersSection members={members} t={t} />}
+                  {activeTab === 'members' && mayReview && (
+                    <MembersSection
+                      canManageMembers={mayManageMembers}
+                      members={members}
+                      onMemberRevoked={async () => {
+                        if (!session || !selected) return;
+                        const refreshed = await listMembers(session.accessToken, selected.id);
+                        setMembers(refreshed);
+                        setNotice(t.removeMemberSuccess);
+                      }}
+                      profileId={selected.id}
+                      t={t}
+                      token={session.accessToken}
+                    />
+                  )}
                   {activeTab === 'invitations' && mayInvite && (
                     <InvitationSection
                       onInvited={() => setNotice(t.invitationCreated)}
@@ -4778,20 +4821,99 @@ function ReviewQueue({
   );
 }
 
-export function MembersSection({ members, t }: { members: MembershipRead[]; t: Copy }) {
+export function MembersSection({
+  members,
+  t,
+  canManageMembers: canManage = false,
+  token,
+  profileId,
+  onMemberRevoked,
+}: {
+  members: MembershipRead[];
+  t: Copy;
+  canManageMembers?: boolean;
+  token?: string;
+  profileId?: number;
+  onMemberRevoked?: () => void | Promise<void>;
+}) {
+  const [confirmUserId, setConfirmUserId] = useState<number | null>(null);
+  const [busyUserId, setBusyUserId] = useState<number | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  async function performRevoke(userId: number) {
+    if (!token || profileId == null) return;
+    setBusyUserId(userId);
+    setError(null);
+    try {
+      await revokeMember(token, profileId, userId);
+      setConfirmUserId(null);
+      await onMemberRevoked?.();
+    } catch (revokeError) {
+      setError(revokeError instanceof MemorialApiError ? t.removeMemberFailed : safeError(revokeError));
+    } finally {
+      setBusyUserId(null);
+    }
+  }
+
   return (
     <div className="min-w-0 space-y-5">
       <h3 className="font-serif text-3xl">{t.members}</h3>
+      {error && <p className="rounded-2xl border border-red-400/30 bg-red-500/10 px-4 py-3 text-sm text-red-100">{error}</p>}
       <div className="grid gap-3">
-        {members.map((member) => (
-          <article className="flex min-w-0 flex-col gap-2 rounded-3xl border border-white/10 bg-black/20 p-4 sm:flex-row sm:items-center sm:justify-between" key={member.id}>
-            <div className="min-w-0">
-              <h4 className="truncate text-base font-semibold">{member.email}</h4>
-              <p className="text-sm text-fg/45">{member.full_name || '-'}</p>
-            </div>
-            <Badge>{roleLabel(t, member.role)}</Badge>
-          </article>
-        ))}
+        {members.map((member) => {
+          const showRemove = canManage && member.role !== 'owner';
+          const confirming = confirmUserId === member.user_id;
+          return (
+            <article
+              className="flex min-w-0 flex-col gap-3 rounded-3xl border border-white/10 bg-black/20 p-4 sm:flex-row sm:items-start sm:justify-between"
+              key={member.id}
+            >
+              <div className="min-w-0">
+                <h4 className="truncate text-base font-semibold">{member.email}</h4>
+                <p className="text-sm text-fg/45">{member.full_name || '-'}</p>
+              </div>
+              <div className="flex shrink-0 flex-col items-stretch gap-2 sm:items-end">
+                <Badge>{roleLabel(t, member.role)}</Badge>
+                {showRemove && !confirming && (
+                  <button
+                    className="rounded-full border border-red-400/30 px-4 py-2 text-sm text-red-200 transition hover:bg-red-500/10"
+                    onClick={() => {
+                      setError(null);
+                      setConfirmUserId(member.user_id);
+                    }}
+                    type="button"
+                  >
+                    {t.removeMember}
+                  </button>
+                )}
+                {showRemove && confirming && (
+                  <div className="grid max-w-sm gap-2 rounded-2xl border border-red-400/30 bg-red-500/10 p-3">
+                    <p className="text-sm font-semibold text-fg">{t.removeMemberConfirmTitle}</p>
+                    <p className="text-sm leading-6 text-fg/70">{t.removeMemberConfirmBody}</p>
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        className="rounded-full bg-red-500/80 px-4 py-2 text-sm font-semibold text-white disabled:opacity-55"
+                        disabled={busyUserId === member.user_id}
+                        onClick={() => void performRevoke(member.user_id)}
+                        type="button"
+                      >
+                        {busyUserId === member.user_id ? t.working : t.removeMemberConfirmYes}
+                      </button>
+                      <button
+                        className="rounded-full border border-white/15 px-4 py-2 text-sm text-fg/75 transition hover:bg-white/10"
+                        disabled={busyUserId === member.user_id}
+                        onClick={() => setConfirmUserId(null)}
+                        type="button"
+                      >
+                        {t.biographyConfirmCancel}
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </article>
+          );
+        })}
       </div>
     </div>
   );

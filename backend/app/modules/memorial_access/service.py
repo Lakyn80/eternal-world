@@ -237,6 +237,33 @@ def list_memberships(db: Session, *, current_user: User, profile_id: int) -> lis
     return repository.list_active_memberships(db, profile_id=profile_id)
 
 
+def revoke_member(
+    db: Session,
+    *,
+    current_user: User,
+    profile_id: int,
+    target_user_id: int,
+) -> MemorialMembership:
+    """Owner soft-revokes a non-owner membership. Does not delete the row."""
+    _require_role(db, profile_id=profile_id, user=current_user, allowed_roles=frozenset({"owner"}))
+
+    membership = repository.get_membership(db, profile_id=profile_id, user_id=target_user_id)
+    if membership is None or membership.status != repository.MEMBERSHIP_STATUS_ACTIVE:
+        raise MemorialNotFoundError("Membership not found")
+    if membership.role == "owner":
+        raise MemorialForbiddenError("Owner membership cannot be revoked")
+
+    repository.revoke_membership(
+        db,
+        membership=membership,
+        revoked_by_user_id=current_user.id,
+        revoked_at=_now(),
+    )
+    db.commit()
+    db.refresh(membership)
+    return membership
+
+
 def invite_participant(
     db: Session,
     *,
@@ -364,6 +391,15 @@ def accept_invitation(db: Session, *, current_user: User, token: str) -> Memoria
         db.commit()
         db.refresh(existing)
         return existing
+
+    prior = repository.get_membership(db, profile_id=invitation.profile_id, user_id=current_user.id)
+    if prior is not None and prior.status == repository.MEMBERSHIP_STATUS_REVOKED:
+        membership = repository.reactivate_membership(db, membership=prior, role=invitation.role)
+        invitation.accepted_at = _now()
+        invitation.accepted_by_user_id = current_user.id
+        db.commit()
+        db.refresh(membership)
+        return membership
 
     membership = repository.create_membership(
         db,

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { canInvite, canReview, canSubmitContribution, isActiveMemoryEligible } from './memorialPermissions';
+import { canInvite, canManageMembers, canReview, canSubmitContribution, isActiveMemoryEligible } from './memorialPermissions';
 import type { ContributionRead } from '../types/memorial';
 
 describe('memorialPermissions', () => {
@@ -8,6 +8,13 @@ describe('memorialPermissions', () => {
     expect(canInvite('trusted_reviewer')).toBe(false);
     expect(canInvite('contributor')).toBe(false);
     expect(canInvite('viewer')).toBe(false);
+  });
+
+  it('only the owner can manage (soft-revoke) members', () => {
+    expect(canManageMembers('owner')).toBe(true);
+    expect(canManageMembers('trusted_reviewer')).toBe(false);
+    expect(canManageMembers('contributor')).toBe(false);
+    expect(canManageMembers('viewer')).toBe(false);
   });
 
   it('owner and trusted_reviewer can review; contributor and viewer cannot', () => {
