@@ -5,11 +5,15 @@ import logging
 import secrets
 from datetime import datetime, timedelta, timezone
 
+from dataclasses import dataclass
+
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from app.core.config import settings
 from app.core.logging import get_logger, log_event
 from app.db.models import MemorialContribution, MemorialInvitation, MemorialMembership, MemoryProfile, User
+from app.modules.auth.schemas import normalize_and_validate_email
 from app.modules.billing.service import enforce_memory_profile_creation_limit
 from app.modules.memorial_access import repository
 from app.modules.memorial_access.schemas import (
@@ -22,6 +26,12 @@ from app.modules.memorial_access.schemas import (
 from app.modules.memorial_contribution_indexing import repository as contribution_indexing_repository
 from app.modules.memorial_contribution_indexing import service as contribution_indexing_service
 from app.modules.memory_profiles import repository as memory_profiles_repository
+from app.modules.notifications.email import (
+    InvitationEmailDeliveryError,
+    build_invitation_accept_url,
+    send_memorial_invitation_email,
+)
+from app.modules.users import repository as users_repository
 
 
 logger = get_logger("memorial_access")
@@ -59,6 +69,18 @@ class InvitationExpiredError(Exception):
 
 class InvitationEmailMismatchError(Exception):
     pass
+
+
+class InvitationDeliveryError(Exception):
+    """Email delivery failed after the invitation row was committed."""
+
+
+@dataclass(frozen=True)
+class InvitationCreateResult:
+    invitation: MemorialInvitation
+    token: str | None
+    accept_url: str | None
+    email_sent: bool
 
 
 class ContributionNotFoundError(Exception):
@@ -221,10 +243,33 @@ def invite_participant(
     current_user: User,
     profile_id: int,
     payload: InvitationCreate,
-) -> tuple[MemorialInvitation, str]:
+) -> InvitationCreateResult:
     _require_role(db, profile_id=profile_id, user=current_user, allowed_roles=frozenset({"owner"}))
     if payload.role not in INVITABLE_ROLES:
         raise MemorialForbiddenError("Role cannot be invited")
+
+    profile = repository.get_profile(db, profile_id=profile_id)
+    if profile is None:
+        raise MemorialNotFoundError("Memorial not found")
+
+    existing_user = users_repository.get_user_by_email(db, payload.email)
+    if existing_user is not None:
+        existing_membership = repository.get_active_membership(
+            db,
+            profile_id=profile_id,
+            user_id=existing_user.id,
+        )
+        if existing_membership is not None:
+            raise MemorialConflictError("An active membership already exists for this email")
+
+    pending = repository.get_active_pending_invitation(
+        db,
+        profile_id=profile_id,
+        email=payload.email,
+        now=_now(),
+    )
+    if pending is not None:
+        raise MemorialConflictError("An active invitation already exists for this email")
 
     token = _build_invitation_token()
     invitation = repository.create_invitation(
@@ -239,7 +284,56 @@ def invite_participant(
     )
     db.commit()
     db.refresh(invitation)
-    return invitation, token
+
+    if not settings.email_enabled:
+        logger.info(
+            "invitation_email_skipped invitation_id=%s profile_id=%s",
+            invitation.id,
+            profile_id,
+        )
+        return InvitationCreateResult(
+            invitation=invitation,
+            token=token,
+            accept_url=build_invitation_accept_url(token=token),
+            email_sent=False,
+        )
+
+    accept_url = build_invitation_accept_url(token=token)
+    if not settings.public_app_origin:
+        _revoke_committed_invitation(db, invitation)
+        raise InvitationDeliveryError("PUBLIC_APP_ORIGIN is required when email is enabled")
+
+    try:
+        send_memorial_invitation_email(
+            to_email=payload.email,
+            memorial_name=profile.name,
+            role=payload.role,
+            accept_url=accept_url,
+        )
+    except InvitationEmailDeliveryError as exc:
+        _revoke_committed_invitation(db, invitation)
+        raise InvitationDeliveryError("Invitation email could not be sent") from exc
+
+    return InvitationCreateResult(
+        invitation=invitation,
+        token=None,
+        accept_url=None,
+        email_sent=True,
+    )
+
+
+def _revoke_committed_invitation(db: Session, invitation: MemorialInvitation) -> None:
+    invitation.revoked_at = _now()
+    db.commit()
+
+
+def _invitation_email_matches_user(*, invitation_email: str, user_email: str) -> bool:
+    """Compare using the project's canonical email normalizer on both sides."""
+    try:
+        return normalize_and_validate_email(invitation_email) == normalize_and_validate_email(user_email)
+    except ValueError:
+        # Corrupt / invalid stored values must never authorize acceptance.
+        return False
 
 
 def accept_invitation(db: Session, *, current_user: User, token: str) -> MemorialMembership:
@@ -250,7 +344,10 @@ def accept_invitation(db: Session, *, current_user: User, token: str) -> Memoria
         raise InvitationInvalidError("Invitation is invalid")
     if _as_aware(invitation.expires_at) <= _now():
         raise InvitationExpiredError("Invitation has expired")
-    if invitation.email != current_user.email:
+    if not _invitation_email_matches_user(
+        invitation_email=invitation.email,
+        user_email=current_user.email,
+    ):
         raise InvitationEmailMismatchError("Invitation email does not match current user")
 
     if (

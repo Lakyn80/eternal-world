@@ -130,6 +130,19 @@ class Settings(BaseSettings):
     #: Debounce for refreshing async queue gauges on backend `/metrics` scrapes.
     metrics_async_queue_refresh_min_interval_seconds: float = Field(default=20, ge=0)
 
+    #: Memorial invitation email. Disabled by default so dev/tests keep the
+    #: raw token in the API response. Production sets EMAIL_ENABLED plus SMTP
+    #: and a per-environment PUBLIC_APP_ORIGIN (no hardcoded domains).
+    email_enabled: bool = False
+    email_smtp_host: str = ""
+    email_smtp_port: int = Field(default=587, gt=0)
+    email_smtp_user: str = ""
+    email_smtp_password: SecretStr | None = None
+    email_smtp_use_tls: bool = True
+    email_smtp_use_ssl: bool = False
+    email_from: str = ""
+    public_app_origin: str = ""
+
     model_config = SettingsConfigDict(
         env_file=ENV_FILE_CANDIDATES,
         env_file_encoding="utf-8",
@@ -279,6 +292,16 @@ class Settings(BaseSettings):
 
         normalized_value = value.strip()
         return normalized_value.rstrip("/") or None
+
+    @field_validator("public_app_origin")
+    @classmethod
+    def normalize_public_app_origin(cls, value: str) -> str:
+        return value.strip().rstrip("/")
+
+    @field_validator("email_smtp_host", "email_smtp_user", "email_from")
+    @classmethod
+    def strip_email_setting(cls, value: str) -> str:
+        return value.strip()
 
 
 settings = Settings()

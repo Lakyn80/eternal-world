@@ -98,6 +98,23 @@ def get_invitation_by_token_hash(db: Session, *, token_hash: str) -> MemorialInv
     return db.scalar(statement)
 
 
+def get_active_pending_invitation(
+    db: Session,
+    *,
+    profile_id: int,
+    email: str,
+    now,
+) -> MemorialInvitation | None:
+    statement = select(MemorialInvitation).where(
+        MemorialInvitation.profile_id == profile_id,
+        MemorialInvitation.email == email,
+        MemorialInvitation.accepted_at.is_(None),
+        MemorialInvitation.revoked_at.is_(None),
+        MemorialInvitation.expires_at > now,
+    )
+    return db.scalar(statement)
+
+
 def create_contribution(
     db: Session,
     *,

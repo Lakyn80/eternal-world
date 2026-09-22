@@ -125,8 +125,9 @@ class InvitationRead(BaseModel):
 
 
 class InvitationCreateResponse(InvitationRead):
-    token: str
-    accept_url: str
+    email_sent: bool = False
+    token: str | None = None
+    accept_url: str | None = None
 
 
 class InvitationAcceptRequest(BaseModel):

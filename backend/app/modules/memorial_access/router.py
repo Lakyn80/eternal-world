@@ -47,6 +47,7 @@ from app.modules.memorial_access.schemas import (
 from app.modules.memorial_access.service import (
     ContributionInvalidTransitionError,
     ContributionNotFoundError,
+    InvitationDeliveryError,
     InvitationEmailMismatchError,
     InvitationExpiredError,
     InvitationInvalidError,
@@ -123,12 +124,13 @@ def _build_invitation_read(invitation: MemorialInvitation) -> InvitationRead:
     )
 
 
-def _build_invitation_response(invitation: MemorialInvitation, token: str) -> InvitationCreateResponse:
-    base = _build_invitation_read(invitation)
+def _build_invitation_response(result) -> InvitationCreateResponse:
+    base = _build_invitation_read(result.invitation)
     return InvitationCreateResponse(
         **base.model_dump(),
-        token=token,
-        accept_url=f"/invitations/accept?token={token}",
+        email_sent=result.email_sent,
+        token=result.token,
+        accept_url=result.accept_url,
     )
 
 
@@ -325,6 +327,8 @@ def list_members_endpoint(
         status.HTTP_401_UNAUTHORIZED: {"model": ErrorResponse},
         status.HTTP_403_FORBIDDEN: {"model": ErrorResponse},
         status.HTTP_404_NOT_FOUND: {"model": ErrorResponse},
+        status.HTTP_409_CONFLICT: {"model": ErrorResponse},
+        status.HTTP_503_SERVICE_UNAVAILABLE: {"model": ErrorResponse},
     },
 )
 def invite_participant_endpoint(
@@ -334,7 +338,7 @@ def invite_participant_endpoint(
     current_user: User = Depends(get_current_user),
 ) -> InvitationCreateResponse:
     try:
-        invitation, token = invite_participant(
+        result = invite_participant(
             db,
             current_user=current_user,
             profile_id=profile_id,
@@ -342,7 +346,9 @@ def invite_participant_endpoint(
         )
     except (MemorialNotFoundError, MemorialForbiddenError, MemorialConflictError) as exc:
         _raise_access_error(exc)
-    return _build_invitation_response(invitation, token)
+    except InvitationDeliveryError as exc:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)) from exc
+    return _build_invitation_response(result)
 
 
 @router.post(

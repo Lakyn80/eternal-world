@@ -123,6 +123,24 @@ If `/opt/eternal-world/.env.prod` is missing, the workflow can seed it from:
 | `CONTENT_TRANSLATION_API_KEY` |
 | `LETSENCRYPT_EMAIL` (required for automatic initial TLS issuance) |
 
+Invitation email is **not** seeded by the workflow. Set these on each server's
+`/opt/eternal-world/.env.prod` independently (no hardcoded domain in the app):
+
+```text
+EMAIL_ENABLED=true
+EMAIL_SMTP_HOST=
+EMAIL_SMTP_PORT=587
+EMAIL_SMTP_USER=
+EMAIL_SMTP_PASSWORD=
+EMAIL_SMTP_USE_TLS=true
+EMAIL_FROM=Memorial World <noreply@example.com>
+PUBLIC_APP_ORIGIN=https://eternalworld.lukiora.com
+```
+
+On the Russia host use `PUBLIC_APP_ORIGIN=https://eternalworld.lukiora.ru`.
+When `EMAIL_ENABLED` is false, the create-invite API still returns the raw
+token for local development.
+
 Use **different** DB passwords and JWT secrets than Russia. Do not copy Russian
 production credentials.
 

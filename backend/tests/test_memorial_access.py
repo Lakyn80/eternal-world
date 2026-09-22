@@ -154,6 +154,27 @@ def test_invitation_email_must_match_logged_in_user(client):
     assert response.json()["detail"] == "Invitation email does not match current user"
 
 
+def test_invitation_email_match_uses_canonical_normalization(client):
+    """Accept must succeed when stored invitation email differs only by case/whitespace."""
+    owner_token = _register_and_login(client, "norm-owner65@example.com")
+    invitee_token = _register_and_login(client, "norm-invitee65@example.com")
+    profile_id = _create_memorial(client, owner_token)
+    invitation_token = _invite(client, owner_token, profile_id, "norm-invitee65@example.com")
+
+    db = app.state.testing_session_local()
+    try:
+        invitation = db.query(MemorialInvitation).one()
+        invitation.email = "  Norm-Invitee65@Example.COM "
+        db.commit()
+    finally:
+        db.close()
+
+    response = _accept(client, invitee_token, invitation_token)
+
+    assert response.status_code == 200
+    assert response.json()["role"] == "contributor"
+
+
 def test_contributor_can_submit_but_cannot_approve_own_contribution(client):
     owner_token = _register_and_login(client, "review-owner65@example.com")
     contributor_token = _register_and_login(client, "review-contributor65@example.com")
@@ -330,4 +351,105 @@ def test_role_escalation_via_invitation_payload_is_blocked(client):
     )
 
     assert response.status_code == 422
+
+
+def test_existing_member_cannot_be_invited_again(client):
+    owner_token = _register_and_login(client, "member-owner65@example.com")
+    profile_id = _create_memorial(client, owner_token)
+
+    response = client.post(
+        f"/api/memorials/{profile_id}/invitations",
+        headers=_auth_headers(owner_token),
+        json={"email": "member-owner65@example.com", "role": "viewer"},
+    )
+
+    assert response.status_code == 409
+    assert "membership" in response.json()["detail"].lower()
+
+
+def test_active_pending_invitation_cannot_be_duplicated(client):
+    owner_token = _register_and_login(client, "pending-owner65@example.com")
+    profile_id = _create_memorial(client, owner_token)
+    payload = {"email": "pending-guest65@example.com", "role": "viewer"}
+
+    first = client.post(
+        f"/api/memorials/{profile_id}/invitations",
+        headers=_auth_headers(owner_token),
+        json=payload,
+    )
+    second = client.post(
+        f"/api/memorials/{profile_id}/invitations",
+        headers=_auth_headers(owner_token),
+        json=payload,
+    )
+
+    assert first.status_code == 201
+    assert first.json()["token"]
+    assert second.status_code == 409
+    assert "invitation" in second.json()["detail"].lower()
+
+
+def test_email_enabled_omits_raw_token(client, monkeypatch):
+    from app.core.config import settings
+
+    owner_token = _register_and_login(client, "mail-owner65@example.com")
+    profile_id = _create_memorial(client, owner_token)
+    sent: dict[str, str] = {}
+
+    def _fake_send(**kwargs):
+        sent["accept_url"] = kwargs["accept_url"]
+        sent["to_email"] = kwargs["to_email"]
+
+    monkeypatch.setattr(settings, "email_enabled", True)
+    monkeypatch.setattr(settings, "public_app_origin", "https://example.test")
+    monkeypatch.setattr(
+        "app.modules.memorial_access.service.send_memorial_invitation_email",
+        _fake_send,
+    )
+
+    response = client.post(
+        f"/api/memorials/{profile_id}/invitations",
+        headers=_auth_headers(owner_token),
+        json={"email": "mail-guest65@example.com", "role": "contributor"},
+    )
+
+    assert response.status_code == 201
+    body = response.json()
+    assert body["email_sent"] is True
+    assert body["token"] is None
+    assert body["accept_url"] is None
+    assert sent["to_email"] == "mail-guest65@example.com"
+    assert sent["accept_url"].startswith("https://example.test/invitations/accept?token=")
+
+
+def test_email_delivery_failure_revokes_invitation(client, monkeypatch):
+    from app.core.config import settings
+    from app.modules.notifications.email import InvitationEmailDeliveryError
+
+    owner_token = _register_and_login(client, "failmail-owner65@example.com")
+    guest_token = _register_and_login(client, "failmail-guest65@example.com")
+    profile_id = _create_memorial(client, owner_token)
+    captured: dict[str, str] = {}
+
+    def _fake_send(**kwargs):
+        captured["accept_url"] = kwargs["accept_url"]
+        raise InvitationEmailDeliveryError("smtp down")
+
+    monkeypatch.setattr(settings, "email_enabled", True)
+    monkeypatch.setattr(settings, "public_app_origin", "https://example.test")
+    monkeypatch.setattr(
+        "app.modules.memorial_access.service.send_memorial_invitation_email",
+        _fake_send,
+    )
+
+    response = client.post(
+        f"/api/memorials/{profile_id}/invitations",
+        headers=_auth_headers(owner_token),
+        json={"email": "failmail-guest65@example.com", "role": "viewer"},
+    )
+
+    assert response.status_code == 503
+    raw_token = captured["accept_url"].split("token=", 1)[1]
+    accepted = _accept(client, guest_token, raw_token)
+    assert accepted.status_code == 404
 
