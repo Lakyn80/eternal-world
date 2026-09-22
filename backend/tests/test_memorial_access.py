@@ -637,3 +637,110 @@ def test_double_revoke_is_not_found(client):
     assert first.status_code == 200
     assert second.status_code == 404
 
+
+def test_owner_sees_contributor_submission_in_review_queue(client):
+    owner_token = _register_and_login(client, "queue-foreign-owner65@example.com")
+    contributor_token = _register_and_login(client, "queue-foreign-contrib65@example.com")
+    profile_id = _create_memorial(client, owner_token)
+    invite = _invite(client, owner_token, profile_id, "queue-foreign-contrib65@example.com")
+    assert _accept(client, contributor_token, invite).status_code == 200
+
+    submitted = _submit_contribution(client, contributor_token, profile_id, "Foreign pending")
+    assert submitted.status_code == 201
+
+    owner_queue = client.get(f"/api/memorials/{profile_id}/review-queue", headers=_auth_headers(owner_token))
+    assert owner_queue.status_code == 200
+    assert [item["id"] for item in owner_queue.json()] == [submitted.json()["id"]]
+    assert owner_queue.json()[0]["author_email"] == "queue-foreign-contrib65@example.com"
+
+
+def test_archive_restore_returns_to_needs_review_without_indexing(client):
+    from app.db.models import MemorialContributionPromotion
+
+    owner_token = _register_and_login(client, "restore-owner65@example.com")
+    contributor_token = _register_and_login(client, "restore-contrib65@example.com")
+    viewer_token = _register_and_login(client, "restore-viewer65@example.com")
+    profile_id = _create_memorial(client, owner_token)
+    assert _accept(
+        client,
+        contributor_token,
+        _invite(client, owner_token, profile_id, "restore-contrib65@example.com"),
+    ).status_code == 200
+    assert _accept(
+        client,
+        viewer_token,
+        _invite(client, owner_token, profile_id, "restore-viewer65@example.com", "viewer"),
+    ).status_code == 200
+
+    submitted = _submit_contribution(client, contributor_token, profile_id, "Poslední den ve škole")
+    contribution_id = submitted.json()["id"]
+
+    archived = client.post(
+        f"/api/memorials/{profile_id}/contributions/{contribution_id}/archive",
+        headers=_auth_headers(owner_token),
+        json={},
+    )
+    assert archived.status_code == 200
+    assert archived.json()["status"] == "archived"
+    assert archived.json()["active_memory_eligible"] is False
+
+    queue_after_archive = client.get(
+        f"/api/memorials/{profile_id}/review-queue",
+        headers=_auth_headers(owner_token),
+    )
+    assert contribution_id not in [item["id"] for item in queue_after_archive.json()]
+
+    forbidden_contrib = client.post(
+        f"/api/memorials/{profile_id}/contributions/{contribution_id}/restore",
+        headers=_auth_headers(contributor_token),
+    )
+    forbidden_viewer = client.post(
+        f"/api/memorials/{profile_id}/contributions/{contribution_id}/restore",
+        headers=_auth_headers(viewer_token),
+    )
+    assert forbidden_contrib.status_code == 403
+    assert forbidden_viewer.status_code == 403
+
+    restored = client.post(
+        f"/api/memorials/{profile_id}/contributions/{contribution_id}/restore",
+        headers=_auth_headers(owner_token),
+    )
+    assert restored.status_code == 200
+    body = restored.json()
+    assert body["status"] == "needs_review"
+    assert body["is_current"] is False
+    assert body["active_memory_eligible"] is False
+    assert body["indexing_status"]["state"] == "not_applicable"
+
+    db = app.state.testing_session_local()
+    try:
+        promotions = (
+            db.query(MemorialContributionPromotion)
+            .filter(MemorialContributionPromotion.contribution_id == contribution_id)
+            .all()
+        )
+        assert promotions == [] or all(row.promotion_status == "retired" for row in promotions)
+    finally:
+        db.close()
+
+    queue_after_restore = client.get(
+        f"/api/memorials/{profile_id}/review-queue",
+        headers=_auth_headers(owner_token),
+    )
+    assert [item["id"] for item in queue_after_restore.json()] == [contribution_id]
+
+    bad_restore = client.post(
+        f"/api/memorials/{profile_id}/contributions/{contribution_id}/restore",
+        headers=_auth_headers(owner_token),
+    )
+    assert bad_restore.status_code == 400
+
+    approved = client.post(
+        f"/api/memorials/{profile_id}/contributions/{contribution_id}/approve",
+        headers=_auth_headers(owner_token),
+        json={"review_note": "ok after restore"},
+    )
+    assert approved.status_code == 200
+    assert approved.json()["status"] == "approved"
+    assert approved.json()["indexing_status"]["state"] == "pending"
+

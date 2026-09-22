@@ -33,6 +33,7 @@ import {
   register,
   resetChat,
   retryContributionIndexing,
+  restoreContribution,
   reviewContribution,
   sendChatMessage,
   setUnauthorizedHandler,
@@ -221,6 +222,7 @@ export type Copy = {
   overviewReviewLabel: string;
   overviewReviewClarifications: string;
   overviewReviewCandidates: string;
+  overviewReviewContributions: string;
   overviewIndexingLabel: string;
   overviewIndexingPending: string;
   overviewIndexingDone: string;
@@ -230,6 +232,7 @@ export type Copy = {
   overviewNextActionAnswerQuestion: string;
   overviewNextActionCompleteClarification: string;
   overviewNextActionReviewCandidate: string;
+  overviewNextActionReviewContribution: string;
   overviewNextActionIndexApproved: string;
   overviewNextActionTestChat: string;
   overviewAllCaughtUp: string;
@@ -295,6 +298,8 @@ export type Copy = {
   approve: string;
   reject: string;
   archive: string;
+  restoreForReview: string;
+  restoreForReviewSuccess: string;
   inviteParticipant: string;
   inviteHelp: string;
   invitationCreated: string;
@@ -523,6 +528,7 @@ export const COPY: Record<Lang, Copy> = {
     overviewReviewLabel: 'Review',
     overviewReviewClarifications: 'clarifications required',
     overviewReviewCandidates: 'candidates waiting for review',
+    overviewReviewContributions: 'family contributions waiting for review',
     overviewIndexingLabel: 'Indexing',
     overviewIndexingPending: 'approved memories waiting for indexing',
     overviewIndexingDone: 'indexed memories',
@@ -532,6 +538,7 @@ export const COPY: Record<Lang, Copy> = {
     overviewNextActionAnswerQuestion: 'Answer the Biographer question',
     overviewNextActionCompleteClarification: 'Complete the pending clarification',
     overviewNextActionReviewCandidate: 'Review a memory candidate',
+    overviewNextActionReviewContribution: 'Review a family contribution',
     overviewNextActionIndexApproved: 'Index an approved memory',
     overviewNextActionTestChat: 'Test the avatar in Chat',
     overviewAllCaughtUp: 'Everything is up to date.',
@@ -565,7 +572,7 @@ export const COPY: Record<Lang, Copy> = {
     statusRejected: 'Rejected',
     statusArchived: 'Archived',
     statusSuperseded: 'Superseded',
-    statusPendingIndex: 'Approved, waiting to be indexed',
+    statusPendingIndex: 'Waiting for indexing',
     statusIndexed: 'Indexed',
     statusPromotionFailed: 'Indexing failed',
     statusPromotionCancelled: 'Indexing cancelled',
@@ -597,6 +604,8 @@ export const COPY: Record<Lang, Copy> = {
     approve: 'Approve',
     reject: 'Reject',
     archive: 'Archive',
+    restoreForReview: 'Restore for review',
+    restoreForReviewSuccess: 'Restored for review.',
     inviteParticipant: 'Invite participant',
     inviteHelp: 'Owners can invite trusted reviewers, contributors or viewers.',
     invitationCreated: 'Invitation created.',
@@ -627,8 +636,8 @@ export const COPY: Record<Lang, Copy> = {
     creating: 'Creating',
     submitting: 'Submitting',
     working: 'Working',
-    indexingPending: 'Approved, indexing pending',
-    indexingIndexed: 'Indexed and searchable',
+    indexingPending: 'Waiting for indexing',
+    indexingIndexed: 'Indexed',
     indexingFailed: 'Indexing failed',
     indexingRetired: 'No longer active evidence',
     startIndexing: 'Index memory',
@@ -636,10 +645,10 @@ export const COPY: Record<Lang, Copy> = {
     retryIndexingSuccess: 'Indexing retried.',
     jobStatusPending: 'Waiting to start',
     jobStatusQueued: 'Queued for indexing',
-    jobStatusProcessing: 'Indexing in progress',
+    jobStatusProcessing: 'Indexing',
     jobStatusRetryScheduled: 'Temporary issue - retrying automatically',
     jobStatusRecoveryPending: 'Recovering the indexing service - retrying automatically',
-    jobStatusSucceeded: 'Indexed and searchable',
+    jobStatusSucceeded: 'Indexed',
     jobStatusFailed: 'Indexing failed',
     jobStatusCancelled: 'Indexing cancelled',
     jobStatusUnauthorized: 'Sign in again to see the latest indexing status.',
@@ -828,6 +837,7 @@ export const COPY: Record<Lang, Copy> = {
     overviewReviewLabel: 'Kontrola',
     overviewReviewClarifications: 'upřesnění je potřeba doplnit',
     overviewReviewCandidates: 'kandidátů čeká na kontrolu',
+    overviewReviewContributions: 'rodinných vzpomínek čeká na kontrolu',
     overviewIndexingLabel: 'Indexace',
     overviewIndexingPending: 'schválených vzpomínek čeká na indexaci',
     overviewIndexingDone: 'zaindexovaných vzpomínek',
@@ -837,6 +847,7 @@ export const COPY: Record<Lang, Copy> = {
     overviewNextActionAnswerQuestion: 'Odpovědět na otázku biografa',
     overviewNextActionCompleteClarification: 'Doplnit čekající upřesnění',
     overviewNextActionReviewCandidate: 'Zkontrolovat vzpomínkového kandidáta',
+    overviewNextActionReviewContribution: 'Zkontrolovat rodinnou vzpomínku',
     overviewNextActionIndexApproved: 'Zaindexovat schválenou vzpomínku',
     overviewNextActionTestChat: 'Vyzkoušet avatara v Chatu',
     overviewAllCaughtUp: 'Vše je aktuální.',
@@ -870,7 +881,7 @@ export const COPY: Record<Lang, Copy> = {
     statusRejected: 'Zamítnuto',
     statusArchived: 'Archivováno',
     statusSuperseded: 'Nahrazeno novější verzí',
-    statusPendingIndex: 'Schváleno, čeká na indexaci',
+    statusPendingIndex: 'Čeká na indexaci',
     statusIndexed: 'Zaindexováno',
     statusPromotionFailed: 'Indexace se nezdařila',
     statusPromotionCancelled: 'Indexace zrušena',
@@ -902,6 +913,8 @@ export const COPY: Record<Lang, Copy> = {
     approve: 'Schválit',
     reject: 'Odmítnout',
     archive: 'Archivovat',
+    restoreForReview: 'Vrátit ke kontrole',
+    restoreForReviewSuccess: 'Vráceno ke kontrole.',
     inviteParticipant: 'Pozvat účastníka',
     inviteHelp: 'Vlastník může pozvat trusted reviewera, contributora nebo viewera.',
     invitationCreated: 'Pozvánka vytvořena.',
@@ -932,19 +945,19 @@ export const COPY: Record<Lang, Copy> = {
     creating: 'Vytvářím',
     submitting: 'Odesílám',
     working: 'Pracuji',
-    indexingPending: 'Schváleno, čeká na indexaci',
-    indexingIndexed: 'Indexováno a vyhledatelné',
+    indexingPending: 'Čeká na indexaci',
+    indexingIndexed: 'Zaindexováno',
     indexingFailed: 'Indexace selhala',
     indexingRetired: 'Již není aktivní znalost',
     startIndexing: 'Zaindexovat vzpomínku',
     retryIndexing: 'Zkusit indexaci znovu',
     retryIndexingSuccess: 'Indexace byla zopakována.',
     jobStatusPending: 'Čeká na zahájení',
-    jobStatusQueued: 'Zařazeno do fronty na indexaci',
-    jobStatusProcessing: 'Probíhá indexace',
+    jobStatusQueued: 'Ve frontě na indexaci',
+    jobStatusProcessing: 'Indexace',
     jobStatusRetryScheduled: 'Dočasný problém - automaticky se opakuje',
     jobStatusRecoveryPending: 'Obnovuji indexační službu - automaticky se opakuje',
-    jobStatusSucceeded: 'Indexováno a vyhledatelné',
+    jobStatusSucceeded: 'Zaindexováno',
     jobStatusFailed: 'Indexace selhala',
     jobStatusCancelled: 'Indexace zrušena',
     jobStatusUnauthorized: 'Přihlaste se znovu pro zobrazení aktuálního stavu indexace.',
@@ -1133,6 +1146,7 @@ export const COPY: Record<Lang, Copy> = {
     overviewReviewLabel: 'Проверка',
     overviewReviewClarifications: 'уточнений нужно заполнить',
     overviewReviewCandidates: 'кандидатов ждут проверки',
+    overviewReviewContributions: 'семейных воспоминаний ждут проверки',
     overviewIndexingLabel: 'Индексация',
     overviewIndexingPending: 'одобренных воспоминаний ждут индексации',
     overviewIndexingDone: 'проиндексированных воспоминаний',
@@ -1142,6 +1156,7 @@ export const COPY: Record<Lang, Copy> = {
     overviewNextActionAnswerQuestion: 'Ответить на вопрос биографа',
     overviewNextActionCompleteClarification: 'Заполнить ожидающее уточнение',
     overviewNextActionReviewCandidate: 'Проверить кандидата в воспоминания',
+    overviewNextActionReviewContribution: 'Проверить семейное воспоминание',
     overviewNextActionIndexApproved: 'Проиндексировать одобренное воспоминание',
     overviewNextActionTestChat: 'Проверить аватара в чате',
     overviewAllCaughtUp: 'Всё актуально.',
@@ -1175,7 +1190,7 @@ export const COPY: Record<Lang, Copy> = {
     statusRejected: 'Отклонено',
     statusArchived: 'В архиве',
     statusSuperseded: 'Заменено новой версией',
-    statusPendingIndex: 'Одобрено, ожидает индексации',
+    statusPendingIndex: 'Ожидает индексации',
     statusIndexed: 'Проиндексировано',
     statusPromotionFailed: 'Индексация не удалась',
     statusPromotionCancelled: 'Индексация отменена',
@@ -1207,6 +1222,8 @@ export const COPY: Record<Lang, Copy> = {
     approve: 'Одобрить',
     reject: 'Отклонить',
     archive: 'Архивировать',
+    restoreForReview: 'Вернуть на проверку',
+    restoreForReviewSuccess: 'Возвращено на проверку.',
     inviteParticipant: 'Пригласить участника',
     inviteHelp: 'Владелец может пригласить trusted reviewer, contributor или viewer.',
     invitationCreated: 'Приглашение создано.',
@@ -1237,8 +1254,8 @@ export const COPY: Record<Lang, Copy> = {
     creating: 'Создаю',
     submitting: 'Отправляю',
     working: 'Выполняю',
-    indexingPending: 'Одобрено, ожидает индексации',
-    indexingIndexed: 'Проиндексировано и доступно для поиска',
+    indexingPending: 'Ожидает индексации',
+    indexingIndexed: 'Проиндексировано',
     indexingFailed: 'Индексация не удалась',
     indexingRetired: 'Больше не активное знание',
     startIndexing: 'Проиндексировать воспоминание',
@@ -1246,10 +1263,10 @@ export const COPY: Record<Lang, Copy> = {
     retryIndexingSuccess: 'Индексация повторена.',
     jobStatusPending: 'Ожидает начала',
     jobStatusQueued: 'В очереди на индексацию',
-    jobStatusProcessing: 'Идёт индексация',
+    jobStatusProcessing: 'Индексация',
     jobStatusRetryScheduled: 'Временная проблема - повтор выполняется автоматически',
     jobStatusRecoveryPending: 'Восстанавливаем службу индексации - повтор выполняется автоматически',
-    jobStatusSucceeded: 'Проиндексировано и доступно для поиска',
+    jobStatusSucceeded: 'Проиндексировано',
     jobStatusFailed: 'Индексация не удалась',
     jobStatusCancelled: 'Индексация отменена',
     jobStatusUnauthorized: 'Войдите снова, чтобы увидеть актуальный статус индексации.',
@@ -1994,6 +2011,7 @@ export default function MemorialWorkspace({
                       candidates={candidatesSummary}
                       canReviewHere={mayReview}
                       canSubmitHere={maySubmit}
+                      familyPendingReviewCount={reviewQueue.length}
                       isOwner={role === 'owner'}
                       lang={lang}
                       memorial={selected}
@@ -2066,6 +2084,15 @@ export default function MemorialWorkspace({
                         setContributions((items) => items.map((item) => (item.id === updated.id ? updated : item)));
                       }}
                       onIndexingSettled={refreshContributions}
+                      onRestored={(contribution) => {
+                        setContributions((items) => items.map((item) => (item.id === contribution.id ? contribution : item)));
+                        if (mayReview && contribution.status === 'needs_review') {
+                          setReviewQueue((items) =>
+                            items.some((item) => item.id === contribution.id) ? items : [contribution, ...items]
+                          );
+                        }
+                        setNotice(t.restoreForReviewSuccess);
+                      }}
                       onSubmitted={(contribution) => {
                         setContributions((items) => [contribution, ...items]);
                         if (mayReview && contribution.status === 'needs_review') {
@@ -2527,6 +2554,7 @@ export function Overview({
   biographerEligible,
   biographerQuestion,
   candidates,
+  familyPendingReviewCount = 0,
   onNavigate,
   token,
   onMemorialUpdated,
@@ -2542,6 +2570,8 @@ export function Overview({
   biographerEligible: boolean;
   biographerQuestion: BiographerQuestionRead | null;
   candidates: MemoryCandidateEnrichmentRead[];
+  /** Memorial-scoped family contributions in needs_review (from review-queue). */
+  familyPendingReviewCount?: number;
   onNavigate: (tab: WorkspaceTab) => void;
   token: string;
   onMemorialUpdated: (memorial: MemorialRead) => void;
@@ -2644,6 +2674,9 @@ export function Overview({
     }
     if (clarificationsRequired > 0) {
       return { label: t.overviewNextActionCompleteClarification, tab: 'biographer' };
+    }
+    if (canReviewHere && familyPendingReviewCount > 0) {
+      return { label: t.overviewNextActionReviewContribution, tab: 'review' };
     }
     if (canReviewHere && candidatesAwaitingReview > 0) {
       return { label: t.overviewNextActionReviewCandidate, tab: 'review' };
@@ -2756,6 +2789,9 @@ export function Overview({
           <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
             <p className="text-xs uppercase tracking-[.2em] text-fg/40">{t.overviewReviewLabel}</p>
             <p className="mt-2 text-sm text-fg/75">
+              {familyPendingReviewCount} {t.overviewReviewContributions}
+            </p>
+            <p className="mt-1 text-sm text-fg/75">
               {clarificationsRequired} {t.overviewReviewClarifications}
             </p>
             <p className="mt-1 text-sm text-fg/75">
@@ -4545,6 +4581,7 @@ function ContributionsSection({
   maySubmit,
   onIndexingRetried,
   onIndexingSettled,
+  onRestored,
   onSubmitted,
   profileId,
   t,
@@ -4559,6 +4596,7 @@ function ContributionsSection({
    * approval-triggered) reaches a terminal state, so the list can be
    * reconciled with the backend's confirmed outcome. */
   onIndexingSettled?: () => void;
+  onRestored?: (contribution: ContributionRead) => void;
   onSubmitted: (contribution: ContributionRead) => void;
   profileId: number;
   t: Copy;
@@ -4575,8 +4613,10 @@ function ContributionsSection({
         contributions={contributions}
         lang={lang}
         canRetryIndexing={mayReview}
+        canRestore={mayReview}
         onIndexingRetried={onIndexingRetried}
         onIndexingSettled={onIndexingSettled}
+        onRestored={onRestored}
         profileId={profileId}
         t={t}
         token={token}
@@ -4657,8 +4697,10 @@ export function ContributionList({
   lang,
   t,
   canRetryIndexing = false,
+  canRestore = false,
   onIndexingRetried,
   onIndexingSettled,
+  onRestored,
   profileId,
   token
 }: {
@@ -4670,13 +4712,17 @@ export function ContributionList({
    * flag only controls whether the button is *offered*; the backend
    * re-checks authorization and eligibility on every request regardless. */
   canRetryIndexing?: boolean;
+  canRestore?: boolean;
   onIndexingRetried?: (contribution: ContributionRead) => void;
   onIndexingSettled?: () => void;
+  onRestored?: (contribution: ContributionRead) => void;
   profileId?: number;
   token?: string;
 }) {
   const [retryingId, setRetryingId] = useState<number | null>(null);
+  const [restoringId, setRestoringId] = useState<number | null>(null);
   const [retryErrorById, setRetryErrorById] = useState<Record<number, string>>({});
+  const [restoreErrorById, setRestoreErrorById] = useState<Record<number, string>>({});
   // Task 65.9.1 (Part F) - contribution id -> the background job id
   // currently being polled for it. Seeded/kept in sync from
   // `contribution.indexing_status.job_id` (Part F.14: recovers an
@@ -4684,6 +4730,7 @@ export function ContributionList({
   // component itself triggered the retry).
   const [activeJobIdByContribution, setActiveJobIdByContribution] = useState<Record<number, number>>({});
   const canOfferRetry = canRetryIndexing && typeof profileId === 'number' && typeof token === 'string' && !!onIndexingRetried;
+  const canOfferRestore = canRestore && typeof profileId === 'number' && typeof token === 'string' && !!onRestored;
 
   useEffect(() => {
     setActiveJobIdByContribution((current) => {
@@ -4733,6 +4780,23 @@ export function ContributionList({
     }
   }
 
+  async function restoreForReview(contribution: ContributionRead) {
+    if (!canOfferRestore || typeof profileId !== 'number' || typeof token !== 'string' || !onRestored) return;
+    setRestoringId(contribution.id);
+    setRestoreErrorById((current) => {
+      const { [contribution.id]: _removed, ...rest } = current;
+      return rest;
+    });
+    try {
+      const updated = await restoreContribution(token, profileId, contribution.id);
+      onRestored(updated);
+    } catch (restoreError) {
+      setRestoreErrorById((current) => ({ ...current, [contribution.id]: safeError(restoreError) }));
+    } finally {
+      setRestoringId(null);
+    }
+  }
+
   if (contributions.length === 0) {
     return <p className="rounded-2xl border border-white/10 bg-black/20 p-4 text-sm text-fg/60">{t.noContributions}</p>;
   }
@@ -4745,7 +4809,9 @@ export function ContributionList({
           canOfferRetry && indexingState === 'pending' && !hasActiveJob;
         const showRetry = canOfferRetry && indexingState === 'failed';
         const showIndexingAction = showStartIndexing || showRetry;
+        const showRestore = canOfferRestore && contribution.status === 'archived';
         const retryError = retryErrorById[contribution.id];
+        const restoreError = restoreErrorById[contribution.id];
         return (
           <article className="min-w-0 rounded-3xl border border-white/10 bg-black/20 p-4" key={contribution.id}>
             <div className="flex min-w-0 flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
@@ -4771,11 +4837,15 @@ export function ContributionList({
                 <Badge tone={isActiveMemoryEligible(contribution) ? 'cyan' : 'muted'}>
                   {isActiveMemoryEligible(contribution) ? t.activeMemory : t.notActiveMemory}
                 </Badge>
-                {indexingStatusLabel(t, indexingState) && (
-                  <Badge tone={indexingStatusTone(indexingState)}>
-                    {indexingStatusLabel(t, indexingState)}
-                  </Badge>
-                )}
+                {/* When a live job is already being polled, JobStatusBadge is the
+                    sole indexing lifecycle label — avoid a second static badge
+                    that still says "waiting/queued" for the same moment. */}
+                {!(hasActiveJob && indexingState === 'pending') &&
+                  indexingStatusLabel(t, indexingState) && (
+                    <Badge tone={indexingStatusTone(indexingState)}>
+                      {indexingStatusLabel(t, indexingState)}
+                    </Badge>
+                  )}
                 {typeof token === 'string' &&
                   typeof profileId === 'number' &&
                   hasActiveJob && (
@@ -4799,6 +4869,17 @@ export function ContributionList({
                   tone="secondary"
                 />
                 {retryError && <p className="text-sm text-red-100">{retryError}</p>}
+              </div>
+            )}
+            {showRestore && (
+              <div className="mt-3 flex flex-col items-start gap-2">
+                <ActionButton
+                  disabled={restoringId === contribution.id}
+                  label={restoringId === contribution.id ? t.working : t.restoreForReview}
+                  onClick={() => void restoreForReview(contribution)}
+                  tone="secondary"
+                />
+                {restoreError && <p className="text-sm text-red-100">{restoreError}</p>}
               </div>
             )}
           </article>

@@ -66,6 +66,7 @@ from app.modules.memorial_access.service import (
     list_memorials,
     list_review_queue,
     reject_contribution,
+    restore_contribution,
     retry_contribution_indexing,
     revoke_member,
     submit_contribution,
@@ -584,6 +585,44 @@ def archive_contribution_endpoint(
     # A superseded contribution (already retired, see approve_contribution)
     # can still be archived afterwards - reflect its real promotion state
     # rather than silently reporting "not_applicable".
+    promotion = contribution_indexing_repository.get_promotion_by_contribution_id(
+        db,
+        contribution_id=contribution.id,
+    )
+    return _build_contribution_read(
+        contribution, promotion=promotion, db=db, current_user=current_user, for_review=True
+    )
+
+
+@router.post(
+    "/api/memorials/{profile_id}/contributions/{contribution_id}/restore",
+    response_model=ContributionRead,
+    responses={
+        status.HTTP_400_BAD_REQUEST: {"model": ErrorResponse},
+        status.HTTP_401_UNAUTHORIZED: {"model": ErrorResponse},
+        status.HTTP_403_FORBIDDEN: {"model": ErrorResponse},
+        status.HTTP_404_NOT_FOUND: {"model": ErrorResponse},
+    },
+)
+def restore_contribution_endpoint(
+    profile_id: ProfileIdPath,
+    contribution_id: ContributionIdPath,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> ContributionRead:
+    try:
+        contribution = restore_contribution(
+            db,
+            current_user=current_user,
+            profile_id=profile_id,
+            contribution_id=contribution_id,
+        )
+    except (MemorialNotFoundError, MemorialForbiddenError, MemorialConflictError) as exc:
+        _raise_access_error(exc)
+    except ContributionNotFoundError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except ContributionInvalidTransitionError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
     promotion = contribution_indexing_repository.get_promotion_by_contribution_id(
         db,
         contribution_id=contribution.id,

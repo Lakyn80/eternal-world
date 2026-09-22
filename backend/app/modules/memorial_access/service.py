@@ -570,6 +570,38 @@ def archive_contribution(
     contribution.rejection_reason = payload.reason
     db.commit()
     db.refresh(contribution)
+    # Archived content must never remain active knowledge / searchable evidence.
+    _retire_contribution_promotion_safely(db, contribution=contribution)
+    db.refresh(contribution)
+    return contribution
+
+
+def restore_contribution(
+    db: Session,
+    *,
+    current_user: User,
+    profile_id: int,
+    contribution_id: int,
+) -> MemorialContribution:
+    """Return an archived contribution to needs_review. Never auto-approves or indexes."""
+    _require_role(db, profile_id=profile_id, user=current_user, allowed_roles=REVIEW_ROLES)
+    contribution = repository.get_contribution(db, profile_id=profile_id, contribution_id=contribution_id)
+    if contribution is None:
+        raise ContributionNotFoundError("Contribution not found")
+    if contribution.status != "archived":
+        raise ContributionInvalidTransitionError("Only archived contributions can be restored")
+
+    contribution.status = "needs_review"
+    contribution.is_current = False
+    contribution.reviewed_at = None
+    contribution.reviewed_by_user_id = None
+    contribution.review_note = None
+    contribution.rejection_reason = None
+    db.commit()
+    db.refresh(contribution)
+    # Ensure any prior promotion/index state cannot leak into RAG before re-approval.
+    _retire_contribution_promotion_safely(db, contribution=contribution)
+    db.refresh(contribution)
     return contribution
 
 

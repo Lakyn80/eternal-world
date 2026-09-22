@@ -568,6 +568,19 @@ export async function reviewContribution(
   );
 }
 
+/** Return an archived family contribution to needs_review. Does not approve or index. */
+export async function restoreContribution(
+  accessToken: string,
+  profileId: number,
+  contributionId: number
+): Promise<ContributionRead> {
+  return requestJson<ContributionRead>(
+    `/api/memorials/${profileId}/contributions/${contributionId}/restore`,
+    { method: 'POST', body: JSON.stringify({}) },
+    accessToken
+  );
+}
+
 /** Task 65.8 (Part I) - authorized reviewer retry of a failed contribution
  * indexing attempt. Only valid once the contribution is approved+current
  * and its indexing status is `failed`; the backend re-derives and returns
