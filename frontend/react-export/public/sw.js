@@ -1,7 +1,7 @@
 /* Eternal World PWA service worker — Task 65.13.9
  * Versioned app-shell cache only. NEVER cache /api or credentialed private data.
  */
-const EW_PWA_VERSION = 'ew-pwa-v1';
+const EW_PWA_VERSION = 'ew-pwa-v2-demo-photos';
 const APP_SHELL_CACHE = `eternal-world-shell-${EW_PWA_VERSION}`;
 
 /** Explicit allowlist prefixes/paths for cacheable public assets only. */

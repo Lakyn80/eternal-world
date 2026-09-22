@@ -67,6 +67,17 @@ docker compose --env-file .env.prod -f docker-compose.prod.yml run --rm backend 
 # Match the established Russia process set (do not force new workers here).
 docker compose --env-file .env.prod -f docker-compose.prod.yml up -d --remove-orphans backend celery_worker frontend
 
+# Ensure marketing demo photos exist in the live frontend dist (CS/EN/RU).
+# Host mirror is populated on the server under demo-marketing-imgs/imgs and
+# survives image recreate; the baked image also contains these assets.
+if [ -d "${APP_DIR}/demo-marketing-imgs/imgs" ]; then
+  frontend_cid="$(docker compose --env-file .env.prod -f docker-compose.prod.yml ps -q frontend)"
+  if [ -n "${frontend_cid}" ]; then
+    docker cp "${APP_DIR}/demo-marketing-imgs/imgs/." "${frontend_cid}:/app/react-export/dist/imgs/"
+    echo "Restored demo marketing imgs into frontend container"
+  fi
+fi
+
 for attempt in $(seq 1 30); do
   if curl -fsS "http://127.0.0.1:${BACKEND_HOST_PORT}/health/runtime" >/dev/null; then
     break
