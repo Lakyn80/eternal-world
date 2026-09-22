@@ -44,6 +44,16 @@ export function writeStoredLang(lang: Lang): void {
   }
 }
 
+/** Removes only the browser-level UI preference; account language is unaffected. */
+export function clearStoredLang(): void {
+  try {
+    if (typeof localStorage === 'undefined') return;
+    localStorage.removeItem(LANG_PREFERENCE_STORAGE_KEY);
+  } catch {
+    // Storage may be unavailable.
+  }
+}
+
 /**
  * Decide UI language after cookie session restore.
  *

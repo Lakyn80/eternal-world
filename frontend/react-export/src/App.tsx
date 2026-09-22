@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type { Lang } from './i18n';
 import Nav from './components/Nav';
 import Hero from './components/Hero';
@@ -10,8 +10,18 @@ import AvatarStudio from './components/AvatarStudio';
 import Moments from './components/Moments';
 import Footer from './components/Footer';
 import AuthenticatedApp from './components/AuthenticatedApp';
-import { readStoredLang, writeStoredLang } from './lib/langPreference';
-import { isAuthenticatedAppPath, navigate, usePathname } from './lib/router';
+import CookieConsent from './components/CookieConsent';
+import CzechLegalPage from './components/CzechLegalPage';
+import { clearStoredLang, readStoredLang, writeStoredLang } from './lib/langPreference';
+import { disableOptionalPwaStorage, registerServiceWorker } from './lib/pwa';
+import {
+  clearFunctionalBrowserStorage,
+  COOKIE_CONSENT_STORAGE_KEY,
+  isFunctionalStorageAllowed,
+  readCookieConsent,
+  type CookieConsentRecord
+} from './lib/privacyConsent';
+import { isAuthenticatedAppPath, navigate, parseCzechLegalPath, usePathname } from './lib/router';
 
 const scrollTo = (id: string) => {
   const el = document.getElementById(id);
@@ -32,27 +42,84 @@ export default function App() {
   // Restore the last explicit EN/CS/RU choice across reloads. Default remains
   // English only when nothing valid is stored yet.
   const [lang, setLangState] = useState<Lang>(() => readStoredLang());
+  const [cookieConsent, setCookieConsent] = useState<CookieConsentRecord | null>(() => readCookieConsent());
   const setLang = useCallback((next: Lang) => {
-    writeStoredLang(next);
+    if (next === 'cs' && !cookieConsent?.categories.functional) {
+      clearStoredLang();
+    } else {
+      writeStoredLang(next);
+    }
     setLangState(next);
-  }, []);
+  }, [cookieConsent]);
   const pathname = usePathname();
+  const legalPage = parseCzechLegalPath(pathname);
+  const consentLang: Lang = legalPage ? 'cs' : lang;
+  const functionalStorageAllowed = isFunctionalStorageAllowed(consentLang, cookieConsent);
+  const functionalStorageAllowedRef = useRef(functionalStorageAllowed);
+  functionalStorageAllowedRef.current = functionalStorageAllowed;
 
-  if (isAuthenticatedAppPath(pathname)) {
-    return <AuthenticatedApp lang={lang} setLang={setLang} />;
+  useEffect(() => {
+    if (functionalStorageAllowed) {
+      void registerServiceWorker()
+        .then((registration) => {
+          if (!functionalStorageAllowedRef.current && registration) void disableOptionalPwaStorage();
+        })
+        .catch(() => {
+          // Offline support is optional and must never block the application.
+        });
+    } else {
+      void (lang === 'cs' ? clearFunctionalBrowserStorage() : disableOptionalPwaStorage());
+    }
+  }, [functionalStorageAllowed, lang]);
+
+  useEffect(() => {
+    const syncConsentAcrossTabs = (event: StorageEvent) => {
+      if (event.key !== COOKIE_CONSENT_STORAGE_KEY) return;
+      const next = readCookieConsent();
+      setCookieConsent(next);
+      if (lang === 'cs' && next?.categories.functional) writeStoredLang('cs');
+    };
+    window.addEventListener('storage', syncConsentAcrossTabs);
+    return () => window.removeEventListener('storage', syncConsentAcrossTabs);
+  }, [lang]);
+
+  const onConsentChange = useCallback((next: CookieConsentRecord) => {
+    setCookieConsent(next);
+    if (lang === 'cs' && next.categories.functional) writeStoredLang('cs');
+  }, [lang]);
+
+  let content;
+
+  if (legalPage) {
+    content = <CzechLegalPage kind={legalPage} />;
+  } else if (isAuthenticatedAppPath(pathname)) {
+    content = (
+      <AuthenticatedApp
+        functionalStorageAllowed={functionalStorageAllowed}
+        lang={lang}
+        setLang={setLang}
+      />
+    );
+  } else {
+    content = (
+      <div className="min-h-screen bg-ink text-fg font-sans">
+        <Nav lang={lang} setLang={setLang} onGoHero={() => scrollTo('hero')} onGoMemorial={() => navigate('/app')} onGoStudio={() => scrollTo('studio')} />
+        <Hero lang={lang} onGoStudio={() => navigate('/app')} onGoDemo={() => scrollTo('demo')} particles />
+        <ConversationDemo lang={lang} autoplay />
+        <Features lang={lang} />
+        <Brain lang={lang} />
+        <Timeline lang={lang} />
+        <AvatarStudio lang={lang} />
+        <Moments lang={lang} />
+        <Footer lang={lang} onGoStudio={() => navigate('/app')} />
+      </div>
+    );
   }
 
   return (
-    <div className="min-h-screen bg-ink text-fg font-sans">
-      <Nav lang={lang} setLang={setLang} onGoHero={() => scrollTo('hero')} onGoMemorial={() => navigate('/app')} onGoStudio={() => scrollTo('studio')} />
-      <Hero lang={lang} onGoStudio={() => navigate('/app')} onGoDemo={() => scrollTo('demo')} particles />
-      <ConversationDemo lang={lang} autoplay />
-      <Features lang={lang} />
-      <Brain lang={lang} />
-      <Timeline lang={lang} />
-      <AvatarStudio lang={lang} />
-      <Moments lang={lang} />
-      <Footer lang={lang} onGoStudio={() => navigate('/app')} />
-    </div>
+    <>
+      {content}
+      <CookieConsent consent={cookieConsent} lang={consentLang} onConsentChange={onConsentChange} />
+    </>
   );
 }

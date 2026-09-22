@@ -4,6 +4,7 @@
  */
 
 export const EW_PWA_UPDATE_AVAILABLE_EVENT = 'ew-pwa-update-available';
+export const EW_PWA_CACHE_PREFIX = 'eternal-world-shell-';
 
 export type BeforeInstallPromptLike = Event & {
   prompt: () => Promise<void>;
@@ -66,6 +67,27 @@ export async function registerServiceWorker(): Promise<ServiceWorkerRegistration
     });
   });
   return registration;
+}
+
+/** Removes the optional offline shell when Czech functional storage is revoked. */
+export async function disableOptionalPwaStorage(): Promise<void> {
+  if (typeof window === 'undefined') return;
+  if ('serviceWorker' in navigator) {
+    try {
+      const registration = await navigator.serviceWorker.getRegistration('/');
+      await registration?.unregister();
+    } catch {
+      // Revocation continues with cache cleanup even if SW access fails.
+    }
+  }
+  if ('caches' in window) {
+    try {
+      const keys = await window.caches.keys();
+      await Promise.all(keys.filter((key) => key.startsWith(EW_PWA_CACHE_PREFIX)).map((key) => window.caches.delete(key)));
+    } catch {
+      // Cache Storage may be unavailable in restricted browser contexts.
+    }
+  }
 }
 
 /** Privacy-safe shell-cache cleanup. Does NOT revoke server sessions/JWTs. */

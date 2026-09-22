@@ -445,7 +445,11 @@ describe('BiographerPanel', () => {
     vi.clearAllMocks();
   });
 
-  function renderPanel(overrides: { lang?: 'cs' | 'ru' | 'en'; onNavigateToBiography?: (() => void) | null } = {}) {
+  function renderPanel(overrides: {
+    functionalStorageAllowed?: boolean;
+    lang?: 'cs' | 'ru' | 'en';
+    onNavigateToBiography?: (() => void) | null;
+  } = {}) {
     const onNavigateToReview = vi.fn();
     // `??` would treat an explicitly-passed `null` the same as "not
     // provided" and silently substitute a spy - checking key presence
@@ -456,6 +460,7 @@ describe('BiographerPanel', () => {
     const utils = render(
       <BiographerPanel
         email="panel-test@example.com"
+        functionalStorageAllowed={overrides.functionalStorageAllowed}
         lang={overrides.lang ?? 'cs'}
         onNavigateToBiography={onNavigateToBiography}
         onNavigateToReview={onNavigateToReview}
@@ -739,6 +744,21 @@ describe('BiographerPanel', () => {
     renderPanel();
     await screen.findByText('Where did you grow up?');
     expect(screen.getByLabelText(t.biographerAnswerPlaceholder)).toHaveValue('A draft in progress');
+  });
+
+  it('does not read or write a Czech draft when functional storage is denied', async () => {
+    const key = 'eternal_world:biographer_draft:panel-test@example.com:7:1';
+    sessionStorage.setItem(key, 'Previously stored draft');
+    vi.mocked(api.getBiographerResume).mockResolvedValue(baseResume());
+    const user = userEvent.setup();
+
+    renderPanel({ functionalStorageAllowed: false });
+
+    await screen.findByText('Where did you grow up?');
+    const answer = screen.getByLabelText(t.biographerAnswerPlaceholder);
+    expect(answer).toHaveValue('');
+    await user.type(answer, 'Current unsaved answer');
+    await waitFor(() => expect(sessionStorage.getItem(key)).toBeNull());
   });
 
   it('does not restore a draft onto a different question', async () => {

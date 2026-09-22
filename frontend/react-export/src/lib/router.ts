@@ -48,6 +48,16 @@ export function usePathname(): string {
 }
 
 const APP_ROOT = '/app';
+export const CZECH_PRIVACY_PATH = '/cs/zasady-ochrany-osobnich-udaju';
+export const CZECH_COOKIES_PATH = '/cs/cookies';
+
+export type CzechLegalPage = 'privacy' | 'cookies';
+
+export function parseCzechLegalPath(pathname: string): CzechLegalPage | null {
+  if (pathname === CZECH_PRIVACY_PATH) return 'privacy';
+  if (pathname === CZECH_COOKIES_PATH) return 'cookies';
+  return null;
+}
 
 export type AppRoute =
   | { name: 'public' }

@@ -1,5 +1,6 @@
 import type { Lang } from '../i18n';
 import { T } from '../i18n';
+import CzechLegalFooter from './CzechLegalFooter';
 
 export default function Footer({ lang, onGoStudio }: { lang: Lang; onGoStudio: () => void }) {
   const t = T[lang];
@@ -23,9 +24,15 @@ export default function Footer({ lang, onGoStudio }: { lang: Lang; onGoStudio: (
         >
           {t.btnCreate}
         </button>
-        <div className="mt-24 pt-6.5 border-t border-white/[0.07] flex justify-between flex-wrap gap-3 text-xs text-fg/40 max-w-[1100px] mx-auto">
-          <div>Memorial World · Věčný svět</div>
-          <div>{t.footNote}</div>
+        <div className="mt-24">
+          {lang === 'cs' ? (
+            <CzechLegalFooter />
+          ) : (
+            <div className="pt-6.5 border-t border-white/[0.07] flex justify-between flex-wrap gap-3 text-xs text-fg/40 max-w-[1100px] mx-auto">
+              <div>Memorial World · Věčný svět</div>
+              <div>{t.footNote}</div>
+            </div>
+          )}
         </div>
       </div>
     </section>

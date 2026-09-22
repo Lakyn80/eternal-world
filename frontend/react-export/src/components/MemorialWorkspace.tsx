@@ -1380,9 +1380,11 @@ export function shortTextPreview(value: string | null | undefined): string {
 }
 
 export default function MemorialWorkspace({
+  functionalStorageAllowed = true,
   lang,
   setLang
 }: {
+  functionalStorageAllowed?: boolean;
   lang: Lang;
   setLang?: (next: Lang) => void;
 }) {
@@ -1924,6 +1926,7 @@ export default function MemorialWorkspace({
                   {activeTab === 'biographer' && maySubmit && (
                     <BiographerPanel
                       email={session.email}
+                      functionalStorageAllowed={functionalStorageAllowed}
                       lang={lang}
                       onNavigateToBiography={role === 'owner' ? () => setActiveTab('biography') : null}
                       onNavigateToReview={() => setActiveTab('review')}
@@ -1933,7 +1936,14 @@ export default function MemorialWorkspace({
                     />
                   )}
                   {activeTab === 'chat' && (
-                    <ChatPanel email={session.email} lang={lang} profileId={selected.id} t={t} token={session.accessToken} />
+                    <ChatPanel
+                      email={session.email}
+                      functionalStorageAllowed={functionalStorageAllowed}
+                      lang={lang}
+                      profileId={selected.id}
+                      t={t}
+                      token={session.accessToken}
+                    />
                   )}
                   {activeTab === 'contributions' && (
                     <ContributionsSection
@@ -2605,17 +2615,20 @@ function ChatPanel({
   token,
   profileId,
   email,
+  functionalStorageAllowed,
   lang,
   t
 }: {
   token: string;
   profileId: number;
   email: string;
+  functionalStorageAllowed: boolean;
   lang: Lang;
   t: Copy;
 }) {
   const [messages, setMessages] = useState<ChatMessageRead[]>([]);
   const [text, setText] = useState(() => {
+    if (!functionalStorageAllowed) return '';
     try {
       return window.sessionStorage.getItem(chatDraftKey({ email, profileId })) ?? '';
     } catch {
@@ -2654,7 +2667,7 @@ function ChatPanel({
   useEffect(() => {
     try {
       const key = chatDraftKey({ email, profileId });
-      if (text.trim()) {
+      if (functionalStorageAllowed && text.trim()) {
         window.sessionStorage.setItem(key, text);
       } else {
         window.sessionStorage.removeItem(key);
@@ -2663,7 +2676,7 @@ function ChatPanel({
       // sessionStorage may be unavailable (private browsing) - drafts are a
       // convenience, never required for correctness.
     }
-  }, [text, email, profileId]);
+  }, [text, email, profileId, functionalStorageAllowed]);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -3261,6 +3274,7 @@ export function BiographerPanel({
   token,
   profileId,
   email,
+  functionalStorageAllowed = true,
   t,
   lang,
   onNavigateToReview,
@@ -3269,6 +3283,7 @@ export function BiographerPanel({
   token: string;
   profileId: number;
   email: string;
+  functionalStorageAllowed?: boolean;
   t: Copy;
   lang: Lang;
   onNavigateToReview: () => void;
@@ -3343,7 +3358,7 @@ export function BiographerPanel({
   // different question, and cleared automatically once that question is no
   // longer the active one (see the effect below).
   useEffect(() => {
-    if (!question) return;
+    if (!question || !functionalStorageAllowed) return;
     try {
       const draft = window.sessionStorage.getItem(biographerDraftKey({ email, profileId, questionId: question.id }));
       if (draft) setAnswerText(draft);
@@ -3351,13 +3366,13 @@ export function BiographerPanel({
       // sessionStorage may be unavailable - drafts are a convenience only.
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [question?.id]);
+  }, [question?.id, functionalStorageAllowed]);
 
   useEffect(() => {
     if (!question) return;
     try {
       const key = biographerDraftKey({ email, profileId, questionId: question.id });
-      if (answerText.trim()) {
+      if (functionalStorageAllowed && answerText.trim()) {
         window.sessionStorage.setItem(key, answerText);
       } else {
         window.sessionStorage.removeItem(key);
@@ -3365,7 +3380,7 @@ export function BiographerPanel({
     } catch {
       // Ignored - see above.
     }
-  }, [answerText, email, profileId, question]);
+  }, [answerText, email, profileId, question, functionalStorageAllowed]);
 
   function clearDraft(questionId: number) {
     try {

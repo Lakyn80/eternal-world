@@ -1,5 +1,73 @@
 # Project Progress
 
+## Czech privacy, cookies, consent, and legal footer (2026-09-22)
+
+Goal: add a production-grade privacy/cookie experience to the Czech frontend
+only, based on an audit of the browser storage and third-party behavior that the
+application actually uses. No commit, push, production deployment, backend
+business-logic change, or Russian UI/route/translation change was requested.
+
+Audit findings:
+- The backend creates the first-party `eternal_world_session` cookie only after
+  authentication. It is HttpOnly, SameSite=Lax, Secure in production, has no
+  browser expiration, and points to a Redis session with a 14-day sliding TTL.
+- The frontend used `eternal-world.ui.lang` in localStorage, per-user/per-profile
+  chat and biographer draft keys in sessionStorage, and a service worker with
+  `eternal-world-shell-*` public app-shell caches.
+- The deployed React frontend contains no Google Analytics, Google Tag Manager,
+  Meta Pixel, advertising integration, Sentry-like telemetry, fingerprinting,
+  iframe, or embedded-media tracker. It does load Google Fonts, which is
+  disclosed as an external network request rather than invented as a cookie.
+- The relevant real consent categories are therefore Necessary and Functional.
+  Empty Analytics and Marketing categories were deliberately not fabricated.
+
+What changed:
+- Added Czech-only legal routes
+  `/cs/zasady-ochrany-osobnich-udaju` and `/cs/cookies`, with accessible,
+  responsive content grounded in the implementation. Unknown controller,
+  processor, transfer, contact, and retention details are visible operator TODOs
+  instead of invented legal facts.
+- Added a Czech-only footer on the public and authenticated trees with copyright,
+  privacy/cookie links, an always-available settings action, and a safe external
+  `https://lukiora.com` attribution. Existing English/Russian footer output is
+  retained behind the locale condition.
+- Added an accessible first-layer banner with equally presented Accept, Reject,
+  and Settings choices. The detailed dialog exposes only Necessary (locked on)
+  and Functional (default off), traps keyboard focus, supports Escape, and links
+  directly to both legal pages.
+- Consent records include version, decision timestamp, expiry timestamp, and
+  category values. Acceptance lasts at most 365 days and rejection 183 days;
+  invalid, expired, or version-mismatched records trigger a new choice. Storage
+  changes are synchronized across tabs.
+- Before Czech functional opt-in, UI-language persistence, chat/biographer draft
+  storage, and PWA registration/cache are blocked. Rejection or revocation removes
+  those optional values and unregisters/deletes the Eternal World shell cache.
+  The necessary consent record and authenticated server session are preserved.
+  English and Russian retain their existing storage/PWA behavior.
+
+Verification:
+- Cookie/privacy regression selection: **37 passed**. This covers Czech first
+  visit, Russian isolation, default-off behavior, acceptance, rejection, custom
+  settings, reload, footer reopening, revocation cleanup, legal links, version
+  mismatch, no analytics/marketing initialization, draft blocking, and PWA cache
+  cleanup.
+- Full frontend suite: **193 passed, 2 failed**. Both failures were reproduced
+  unchanged in a detached worktree at the original `HEAD 7763517`: the persona
+  test searches for a removed `English` button, and the concurrent plan-limit
+  test submits without the now-required memorial-language confirmation. Existing
+  React `act(...)` warnings are non-blocking and also outside this change.
+- `npm run build` (`tsc -b && vite build`) passed; 61 modules transformed. The
+  package defines no lint script.
+- Local runtime at `http://127.0.0.1:8017`: direct legal routes rendered after
+  restarting the existing dev container. Desktop and CDP mobile (390 x 844)
+  screenshots were inspected; mobile document width was exactly 390 px with no
+  page overflow, while legal tables scroll only inside their own containers.
+- Browser runtime flow verified Czech selection -> banner -> rejection ->
+  persisted versioned record, immediate language/draft cleanup, no tracking
+  scripts, and successful reopening from the footer.
+- `git diff --check` is required in the final verification below. No deployment
+  workflow was run and no production environment was changed.
+
 ## Czech homepage demo copy and family photography (2026-09-21)
 
 Goal: modernize the Czech 1995 timeline memory and demo-chat voice, then

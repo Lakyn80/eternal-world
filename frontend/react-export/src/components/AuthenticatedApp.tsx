@@ -2,6 +2,7 @@ import type { Lang } from '../i18n';
 import { navigate } from '../lib/router';
 import { updatePreferredUiLanguage } from '../lib/memorialApi';
 import MemorialWorkspace from './MemorialWorkspace';
+import CzechLegalFooter from './CzechLegalFooter';
 
 const LANGS: Lang[] = ['en', 'cs', 'ru'];
 
@@ -12,7 +13,15 @@ const LANGS: Lang[] = ['en', 'cs', 'ru'];
  * demo personas from `src/demo/` live exclusively in `App.tsx`'s public tree,
  * see that file's comment).
  */
-export default function AuthenticatedApp({ lang, setLang }: { lang: Lang; setLang: (next: Lang) => void }) {
+export default function AuthenticatedApp({
+  functionalStorageAllowed,
+  lang,
+  setLang
+}: {
+  functionalStorageAllowed: boolean;
+  lang: Lang;
+  setLang: (next: Lang) => void;
+}) {
   const langButtonClassName = (candidate: Lang) =>
     `font-sans text-xs font-medium rounded-full px-3 py-1.5 transition-colors ${
       lang === candidate ? 'bg-cyan/20 text-[#bfe9ff]' : 'text-fg/50 hover:text-fg/70'
@@ -53,8 +62,13 @@ export default function AuthenticatedApp({ lang, setLang }: { lang: Lang; setLan
         </div>
       </nav>
       <main className="pt-16">
-        <MemorialWorkspace lang={lang} setLang={onSetLang} />
+        <MemorialWorkspace
+          functionalStorageAllowed={functionalStorageAllowed}
+          lang={lang}
+          setLang={onSetLang}
+        />
       </main>
+      {lang === 'cs' && <CzechLegalFooter compact />}
     </div>
   );
 }

@@ -1,9 +1,10 @@
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   canPromptInstall,
+  disableOptionalPwaStorage,
   isStandaloneDisplay,
   pwaMayCachePublicAsset,
   pwaMustNeverCacheUrl,
@@ -14,6 +15,10 @@ const here = dirname(fileURLToPath(import.meta.url));
 const publicDir = join(here, '../../public');
 
 describe('PWA privacy-safe foundation (Task 65.13.9)', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
   it('links a manifest with required installability fields', () => {
     const html = readFileSync(join(here, '../../index.html'), 'utf8');
     expect(html).toContain('rel="manifest"');
@@ -94,5 +99,27 @@ describe('PWA privacy-safe foundation (Task 65.13.9)', () => {
   it('install helpers do not nag when already standalone or prompt missing', () => {
     expect(canPromptInstall()).toBe(false);
     expect(typeof isStandaloneDisplay()).toBe('boolean');
+  });
+
+  it('unregisters the optional worker and removes only Eternal World shell caches', async () => {
+    const unregister = vi.fn().mockResolvedValue(true);
+    Object.defineProperty(navigator, 'serviceWorker', {
+      configurable: true,
+      value: { getRegistration: vi.fn().mockResolvedValue({ unregister }) }
+    });
+    const deleteCache = vi.fn().mockResolvedValue(true);
+    Object.defineProperty(window, 'caches', {
+      configurable: true,
+      value: {
+        delete: deleteCache,
+        keys: vi.fn().mockResolvedValue(['eternal-world-shell-ew-pwa-v1', 'another-app-cache'])
+      }
+    });
+
+    await disableOptionalPwaStorage();
+
+    expect(unregister).toHaveBeenCalledOnce();
+    expect(deleteCache).toHaveBeenCalledWith('eternal-world-shell-ew-pwa-v1');
+    expect(deleteCache).not.toHaveBeenCalledWith('another-app-cache');
   });
 });
