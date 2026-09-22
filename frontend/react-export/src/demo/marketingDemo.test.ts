@@ -8,23 +8,25 @@ describe('locale-scoped marketing demos', () => {
     expect(Object.keys(MARKETING_DEMOS).sort()).toEqual(['cs', 'en', 'ru']);
   });
 
-  it('keeps Czech realia on the Czech pack only', () => {
+  it('keeps Martin as the Czech demo persona with universal family realia', () => {
     const cs = getMarketingDemo('cs');
-    expect(cs.displayName).toBe('Josef');
-    expect(cs.homePlace).toBe('Brno');
-    expect(cs.events[0].title).toMatch(/Brně/i);
-    expect(JSON.stringify(cs)).toMatch(/Pekařsk/);
-    expect(JSON.stringify(cs)).toMatch(/Sametový/);
+    expect(cs.displayName).toBe('Martin');
+    expect(cs.homePlace).toMatch(/řek/i);
+    const blob = JSON.stringify(cs);
+    expect(blob).not.toMatch(/Josef|Pepa|Brno|Pekař|Škod|Sametov/i);
+    expect(blob).toMatch(/Martin/);
+    expect(cs.events.some((event) => /tiskárn/i.test(event.title))).toBe(true);
+    expect(cs.events.some((event) => /Zlatá svatba/i.test(event.title))).toBe(true);
   });
 
-  it('shows the supplied Czech family photos with the revised 1995 memory', () => {
+  it('wires Martin family photos into timeline and moments', () => {
     const cs = getMarketingDemo('cs');
     const trip = cs.events.find((event) => event.year === 1995);
 
     expect(trip?.desc).toBe(
       'Jeli k moři oslavit Haninu promoci. Auto se dvakrát rozbilo, ale právě ty neplánované zastávky udělaly z cesty nezapomenutelný výlet.'
     );
-    expect(trip?.image?.src).toBe('/imgs/skodovka.png');
+    expect(trip?.image?.src).toBe('/imgs/fe-imgs/martin-road-trip.png');
     expect(cs.replies.milestone).not.toMatch(/Celou cestu jsme se smáli/);
     expect(cs.moments.map((moment) => moment.image?.src)).toEqual([
       '/imgs/vnucka_deda.png',
@@ -32,9 +34,9 @@ describe('locale-scoped marketing demos', () => {
       '/imgs/deda.png',
     ]);
     expect(cs.copy.greet).toBe(
-      'Ahoj. Jsem Josef — tak, jak si ho jeho rodina pamatuje. Ptej se mě na cokoli.'
+      'Ahoj. Jsem Martin — tak, jak si ho jeho rodina pamatuje. Ptej se mě na cokoli.'
     );
-    expect(cs.replies.childhood).toMatch(/Vyrůstal jsem v Brně na Pekařské/);
+    expect(cs.replies.childhood).toMatch(/městě u řeky/);
     expect(cs.replies.milestone).toMatch(/Hana promovala/);
     expect(cs.replies.advice).toMatch(/Neodkládej hezké věci na potom/);
     expect(cs.suggestions).toEqual([
@@ -44,30 +46,30 @@ describe('locale-scoped marketing demos', () => {
     ]);
   });
 
-  it('uses English realia for English — not Brno/Josef', () => {
+  it('uses English realia for English — not Martin Czech story', () => {
     const en = getMarketingDemo('en');
     expect(en.displayName).toBe('James');
     expect(en.homePlace).toBe('Manchester');
     const blob = JSON.stringify(en);
-    expect(blob).not.toMatch(/Josef|Brno|Pekař|Škod|Sametov|Praze/i);
+    expect(blob).not.toMatch(/Josef|Pepa|Brno|Pekař|Škod|Sametov|Praze|Berlin Wall/i);
     expect(blob).toMatch(/Manchester|Cornwall|Margaret|London/);
   });
 
-  it('uses Russian realia for Russian — not Brno/Josef', () => {
+  it('uses Russian realia for Russian — not Martin Czech story', () => {
     const ru = getMarketingDemo('ru');
     expect(ru.displayName).toBe('Иван');
     expect(ru.homePlace).toBe('Ленинград');
     const blob = JSON.stringify(ru);
-    expect(blob).not.toMatch(/Josef|Йозеф|Brno|Брно|Pekař|Škod|Праге/i);
+    expect(blob).not.toMatch(/Josef|Pepa|Йозеф|Brno|Брно|Pekař|Škod|Праге|Август девяносто/i);
     expect(blob).toMatch(/Ленинград|Фонтанк|Анна|Москве|Лад/);
   });
 
   it('switches chrome copy and timeline when the language changes', () => {
-    expect(T.cs.greet).toContain('Josef');
+    expect(T.cs.greet).toContain('Martin');
     expect(T.en.greet).toContain('James');
     expect(T.ru.greet).toContain('Иван');
 
-    expect(EVENTS.cs[0].title).toMatch(/Brně/i);
+    expect(EVENTS.cs[0].title).toMatch(/Narození/i);
     expect(EVENTS.en[0].title).toMatch(/Manchester/i);
     expect(EVENTS.ru[0].title).toMatch(/Ленинград/i);
 
@@ -80,7 +82,7 @@ describe('locale-scoped marketing demos', () => {
   });
 
   it('matches demo replies with locale-specific keywords', () => {
-    expect(matchDemoReply('cs', 'Vyprávěj mi o svém dětství.')).toMatch(/Brně/);
+    expect(matchDemoReply('cs', 'Vyprávěj mi o svém dětství.')).toMatch(/řeky/);
     expect(matchReply('en', 'Tell me about your childhood.')).toMatch(/Manchester/);
     expect(matchReply('ru', 'Расскажи о своём детстве.')).toMatch(/Ленинград/);
 

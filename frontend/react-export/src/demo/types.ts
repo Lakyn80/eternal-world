@@ -2,7 +2,7 @@
  * Locale-scoped marketing demo persona (homepage ConversationDemo / Timeline /
  * AvatarStudio / Moments). Each UI language gets its own culturally grounded
  * fictional memory — Czech realia stay on `cs` only; `en` and `ru` must not
- * reuse Brno / Josef / Velvet November as a translation of the Czech story.
+ * reuse another locale's realia (e.g. Martin) as a word-for-word translation.
  *
  * Add a new language by creating `personas/<lang>.ts` and registering it in
  * `registry.ts`. Components never hardcode a persona name or place.
@@ -45,7 +45,7 @@ export interface MarketingDemoPersona {
   id: string;
   /** Given name shown in chat shell and avatar studio. */
   displayName: string;
-  /** Birth year shown next to the name (e.g. "Josef · 1948"). */
+  /** Birth year shown next to the name (e.g. "Martin · 1948"). */
   birthYear: number;
   /** Short place label used in chrome copy (city / region). */
   homePlace: string;

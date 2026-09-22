@@ -27,7 +27,7 @@ export default function Nav({ lang, setLang, onGoHero, onGoMemorial, onGoStudio 
           }}
         />
         <div className="min-w-0 truncate font-semibold tracking-wide text-[14px] sm:text-[15px]">
-          Memorial World <span className="hidden font-light text-fg/45 text-[13px] sm:inline">· Věčný svět</span>
+          Memorial World
         </div>
       </div>
       <div className="flex min-w-0 items-center justify-end gap-2 sm:gap-4">

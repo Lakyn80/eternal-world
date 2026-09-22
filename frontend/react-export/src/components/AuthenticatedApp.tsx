@@ -50,7 +50,7 @@ export default function AuthenticatedApp({
             }}
           />
           <span className="min-w-0 truncate font-semibold tracking-wide text-[14px] sm:text-[15px]">
-            Memorial World <span className="hidden font-light text-fg/45 text-[13px] sm:inline">· Věčný svět</span>
+            Memorial World
           </span>
         </button>
         <div className="flex shrink-0 items-center gap-1 p-[3px] border border-white/[0.12] rounded-full">

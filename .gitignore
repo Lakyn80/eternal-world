@@ -29,3 +29,9 @@ test-results/
 #     backend/.
 backend/celerybeat-schedule
 backend/celerybeat-schedule.*
+
+# Large generated marketing-demo photos (CS/EN/RU homepage timeline + moments).
+# Keep paths referenced in personas; assets stay local / on deploy hosts only.
+frontend/react-export/public/imgs/fe-imgs/
+frontend/react-export/public/imgs/english_verison/
+frontend/react-export/public/imgs/ChatGPT Image*.png
