@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { canInvite, canManageMembers, canReview, canSubmitContribution, isActiveMemoryEligible } from './memorialPermissions';
+import { canInvite, canManageMembers, canReview, canSubmitContribution, isActiveMemoryEligible, isOwnedMemorial, partitionMemorialsByOwnership } from './memorialPermissions';
 import type { ContributionRead } from '../types/memorial';
 
 describe('memorialPermissions', () => {
@@ -15,6 +15,21 @@ describe('memorialPermissions', () => {
     expect(canManageMembers('trusted_reviewer')).toBe(false);
     expect(canManageMembers('contributor')).toBe(false);
     expect(canManageMembers('viewer')).toBe(false);
+  });
+
+  it('partitions memorials by current_user_role ownership without duplicates', () => {
+    const memorials = [
+      { id: 1, current_user_role: 'owner' as const },
+      { id: 2, current_user_role: 'contributor' as const },
+      { id: 3, current_user_role: 'trusted_reviewer' as const },
+      { id: 4, current_user_role: 'viewer' as const },
+    ];
+    expect(isOwnedMemorial('owner')).toBe(true);
+    expect(isOwnedMemorial('contributor')).toBe(false);
+    const { owned, shared } = partitionMemorialsByOwnership(memorials);
+    expect(owned.map((item) => item.id)).toEqual([1]);
+    expect(shared.map((item) => item.id)).toEqual([2, 3, 4]);
+    expect(owned.length + shared.length).toBe(memorials.length);
   });
 
   it('owner and trusted_reviewer can review; contributor and viewer cannot', () => {

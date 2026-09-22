@@ -44,7 +44,7 @@ import {
   updateMemorialMetadata,
   updatePreferredUiLanguage
 } from '../lib/memorialApi';
-import { canInvite, canManageMembers, canReview, canSubmitContribution, isActiveMemoryEligible } from '../lib/memorialPermissions';
+import { canInvite, canManageMembers, canReview, canSubmitContribution, isActiveMemoryEligible, partitionMemorialsByOwnership } from '../lib/memorialPermissions';
 import { resolveLangAfterSessionRestore } from '../lib/langPreference';
 import { notifyServiceWorkerLogoutCleanup } from '../lib/pwa';
 import { APP_ROOT_PATH, buildMemorialPath, navigate, parseAppRoute, usePathname } from '../lib/router';
@@ -242,6 +242,8 @@ export type Copy = {
   canonicalLanguage: string;
   confirmCanonicalLanguage: string;
   yourMemorials: string;
+  myMemorials: string;
+  sharedWithMe: string;
   empty: string;
   openWorkspace: string;
   overview: string;
@@ -542,6 +544,8 @@ export const COPY: Record<Lang, Copy> = {
     canonicalLanguage: 'Memorial language',
     confirmCanonicalLanguage: 'I understand this memorial language cannot be changed later',
     yourMemorials: 'Your memorials',
+    myMemorials: 'My memorials',
+    sharedWithMe: 'Shared with me',
     empty: 'No memorials are available for this account yet.',
     openWorkspace: 'Open workspace',
     overview: 'Overview',
@@ -845,6 +849,8 @@ export const COPY: Record<Lang, Copy> = {
     canonicalLanguage: 'Jazyk memorialu',
     confirmCanonicalLanguage: 'Rozumím, že jazyk memorialu už později nepůjde změnit',
     yourMemorials: 'Vaše memorialy',
+    myMemorials: 'Moje memorialy',
+    sharedWithMe: 'Sdílené se mnou',
     empty: 'Tento účet zatím nemá žádný memorial.',
     openWorkspace: 'Otevřít workspace',
     overview: 'Přehled',
@@ -1148,6 +1154,8 @@ export const COPY: Record<Lang, Copy> = {
     canonicalLanguage: 'Язык мемориала',
     confirmCanonicalLanguage: 'Я понимаю, что язык мемориала нельзя будет изменить позже',
     yourMemorials: 'Ваши мемориалы',
+    myMemorials: 'Мои мемориалы',
+    sharedWithMe: 'Доступные мне',
     empty: 'Для этого аккаунта пока нет мемориалов.',
     openWorkspace: 'Открыть workspace',
     overview: 'Обзор',
@@ -2371,14 +2379,15 @@ export function CreateMemorialForm({
   }
 
   if (hasReachedProfileLimit(billingLimits) || limitErrorOnSubmit) {
+    const ownedMemorial = existingMemorials.find((memorial) => memorial.current_user_role === 'owner');
     return (
       <section className="min-w-0 rounded-[28px] border border-white/10 bg-white/[.045] p-4 sm:p-6">
         <h3 className="font-serif text-3xl">{t.createMemorial}</h3>
         <p className="mt-4 whitespace-pre-line text-sm leading-6 text-fg/70">{t.planLimitReachedMessage}</p>
-        {existingMemorials[0] && (
+        {ownedMemorial && (
           <button
             className="mt-5 rounded-full bg-gradient-to-r from-cyan to-violet px-6 py-3.5 text-sm font-semibold text-ink"
-            onClick={() => onOpenExisting(existingMemorials[0].id)}
+            onClick={() => onOpenExisting(ownedMemorial.id)}
             type="button"
           >
             {t.openExistingMemorial}
@@ -2437,31 +2446,71 @@ export function MemorialList({
   t: Copy;
   lang: Lang;
 }) {
+  const { owned, shared } = partitionMemorialsByOwnership(memorials);
+  const showEmpty = !loading && memorials.length === 0;
+
   return (
     <section className="min-w-0 rounded-[28px] border border-white/10 bg-white/[.045] p-4 sm:p-6">
-      <div className="flex items-center justify-between gap-3">
-        <h3 className="font-serif text-3xl">{t.yourMemorials}</h3>
-        {loading && <span className="rounded-full bg-white/10 px-3 py-1 text-xs text-fg/55">{t.working}</span>}
-      </div>
-      {!loading && memorials.length === 0 && <p className="mt-5 text-sm leading-6 text-fg/58">{t.empty}</p>}
-      <div className="mt-5 grid gap-3">
-        {memorials.map((memorial) => (
-          <article className="min-w-0 rounded-3xl border border-white/10 bg-black/20 p-4" key={memorial.id}>
-            <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-              <div className="min-w-0">
-                <h4 className="break-words text-lg font-semibold">{memorial.name}</h4>
-                <p className="mt-2 line-clamp-3 text-sm leading-6 text-fg/55">{shortTextPreview(memorial.biography) || t.description}</p>
-                <p className="mt-2 text-xs text-fg/38">{formatDate(memorial.created_at, lang)}</p>
-              </div>
-              <span className="w-fit rounded-full bg-white/10 px-3 py-1 text-xs text-cyan">{roleLabel(t, memorial.current_user_role)}</span>
-            </div>
-            <button className="mt-4 w-full rounded-full border border-white/15 px-4 py-3 text-sm text-fg/75 transition hover:bg-white/10 sm:w-auto" onClick={() => onOpen(memorial.id)} type="button">
-              {t.openWorkspace}
-            </button>
-          </article>
-        ))}
-      </div>
+      {loading && (
+        <div className="mb-4 flex justify-end">
+          <span className="rounded-full bg-white/10 px-3 py-1 text-xs text-fg/55">{t.working}</span>
+        </div>
+      )}
+      {showEmpty && (
+        <>
+          <h3 className="font-serif text-3xl">{t.myMemorials}</h3>
+          <p className="mt-5 text-sm leading-6 text-fg/58">{t.empty}</p>
+        </>
+      )}
+      {owned.length > 0 && (
+        <div>
+          <h3 className="font-serif text-3xl">{t.myMemorials}</h3>
+          <div className="mt-5 grid gap-3">
+            {owned.map((memorial) => (
+              <MemorialListCard key={memorial.id} lang={lang} memorial={memorial} onOpen={onOpen} t={t} />
+            ))}
+          </div>
+        </div>
+      )}
+      {shared.length > 0 && (
+        <div className={owned.length > 0 ? 'mt-8' : undefined}>
+          <h3 className={`font-serif ${owned.length > 0 ? 'text-2xl' : 'text-3xl'}`}>{t.sharedWithMe}</h3>
+          <div className="mt-5 grid gap-3">
+            {shared.map((memorial) => (
+              <MemorialListCard key={memorial.id} lang={lang} memorial={memorial} onOpen={onOpen} t={t} />
+            ))}
+          </div>
+        </div>
+      )}
     </section>
+  );
+}
+
+function MemorialListCard({
+  memorial,
+  onOpen,
+  t,
+  lang
+}: {
+  memorial: MemorialRead;
+  onOpen: (profileId: number) => void;
+  t: Copy;
+  lang: Lang;
+}) {
+  return (
+    <article className="min-w-0 rounded-3xl border border-white/10 bg-black/20 p-4">
+      <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0">
+          <h4 className="break-words text-lg font-semibold">{memorial.name}</h4>
+          <p className="mt-2 line-clamp-3 text-sm leading-6 text-fg/55">{shortTextPreview(memorial.biography) || t.description}</p>
+          <p className="mt-2 text-xs text-fg/38">{formatDate(memorial.created_at, lang)}</p>
+        </div>
+        <span className="w-fit rounded-full bg-white/10 px-3 py-1 text-xs text-cyan">{roleLabel(t, memorial.current_user_role)}</span>
+      </div>
+      <button className="mt-4 w-full rounded-full border border-white/15 px-4 py-3 text-sm text-fg/75 transition hover:bg-white/10 sm:w-auto" onClick={() => onOpen(memorial.id)} type="button">
+        {t.openWorkspace}
+      </button>
+    </article>
   );
 }
 

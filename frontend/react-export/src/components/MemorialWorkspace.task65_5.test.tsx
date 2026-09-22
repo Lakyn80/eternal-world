@@ -307,6 +307,7 @@ describe('CreateMemorialForm - plan limit gating', () => {
     );
 
     await user.type(screen.getByLabelText(t.name), 'Second Memorial');
+    await user.click(screen.getByRole('checkbox'));
     await user.click(screen.getByRole('button', { name: t.createMemorial }));
 
     await waitFor(() => expect(findByNormalizedText(t.planLimitReachedMessage)).toBeInTheDocument());

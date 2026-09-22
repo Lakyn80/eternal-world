@@ -9,6 +9,26 @@ export function canManageMembers(role: MemorialRole): boolean {
   return role === 'owner';
 }
 
+/** Canonical owned-vs-shared rule for dashboard grouping. */
+export function isOwnedMemorial(role: MemorialRole): boolean {
+  return role === 'owner';
+}
+
+export function partitionMemorialsByOwnership<T extends { current_user_role: MemorialRole; id: number }>(
+  memorials: T[]
+): { owned: T[]; shared: T[] } {
+  const owned: T[] = [];
+  const shared: T[] = [];
+  for (const memorial of memorials) {
+    if (isOwnedMemorial(memorial.current_user_role)) {
+      owned.push(memorial);
+    } else {
+      shared.push(memorial);
+    }
+  }
+  return { owned, shared };
+}
+
 export function canReview(role: MemorialRole): boolean {
   return role === 'owner' || role === 'trusted_reviewer';
 }
