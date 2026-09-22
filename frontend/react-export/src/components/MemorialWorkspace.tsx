@@ -50,7 +50,10 @@ import { APP_ROOT_PATH, buildMemorialPath, navigate, parseAppRoute, usePathname 
 import { useJobStatusPoller } from '../hooks/useJobStatusPoller';
 import {
   captureOrRestoreInvitationToken,
-  clearPendingInvitationToken
+  clearPendingInvitationToken,
+  normalizeInvitationToken,
+  toAbsoluteAppUrl,
+  writePendingInvitationToken
 } from '../lib/pendingInvitation';
 import AvatarPersonaPanel from './AvatarPersonaPanel';
 import type {
@@ -304,6 +307,9 @@ export type Copy = {
   acceptInvitation: string;
   invitationAccepted: string;
   invitationEmailMismatch: string;
+  pasteInviteLink: string;
+  pasteInviteLinkHelp: string;
+  useInviteLink: string;
   noToken: string;
   creating: string;
   submitting: string;
@@ -588,14 +594,17 @@ export const COPY: Record<Lang, Copy> = {
     inviteAlreadyPending: 'An active invitation already exists for this email.',
     inviteDeliveryFailed: 'The invitation could not be emailed. Try again later.',
     copyInviteLink: 'Copy invite link',
-    devToken: 'Development invite token',
-    tokenNote: 'Shown because the backend returned it for dev/test flow. It is not stored in browser storage.',
+    devToken: 'Development invitation link',
+    tokenNote: 'Shown because email delivery is disabled in this environment.',
     acceptTitle: 'Accept invitation',
     acceptHelp: 'Sign in with the invited account. The token is used once from the URL.',
     acceptInvitation: 'Accept invitation',
     invitationAccepted: 'Invitation accepted.',
     invitationEmailMismatch:
       'This invitation was sent to another email address. Please sign in using the invited account.',
+    pasteInviteLink: 'Paste invite link or token',
+    pasteInviteLinkHelp: 'If Accept fails, paste the full invite link from the owner here.',
+    useInviteLink: 'Use this invite',
     noToken: 'Invitation token is missing.',
     creating: 'Creating',
     submitting: 'Submitting',
@@ -881,14 +890,17 @@ export const COPY: Record<Lang, Copy> = {
     inviteAlreadyPending: 'Pro tento e-mail už existuje aktivní pozvánka.',
     inviteDeliveryFailed: 'Pozvánku se nepodařilo odeslat e-mailem. Zkuste to znovu později.',
     copyInviteLink: 'Zkopírovat odkaz',
-    devToken: 'Vývojový invite token',
-    tokenNote: 'Zobrazeno, protože backend token vrací pro dev/test flow. Neukládá se do browser storage.',
+    devToken: 'Vývojový odkaz pozvánky',
+    tokenNote: 'Zobrazeno, protože v tomto prostředí je odesílání e-mailů vypnuté.',
     acceptTitle: 'Přijmout pozvánku',
     acceptHelp: 'Přihlaste se účtem pozvaného člověka. Token se použije jednou z URL.',
     acceptInvitation: 'Přijmout pozvánku',
     invitationAccepted: 'Pozvánka přijata.',
     invitationEmailMismatch:
       'Tato pozvánka byla odeslána na jinou e-mailovou adresu. Přihlaste se pozvaným účtem.',
+    pasteInviteLink: 'Vložte odkaz nebo token pozvánky',
+    pasteInviteLinkHelp: 'Když Přijmout selže, vložte sem celý odkaz pozvánky od vlastníka.',
+    useInviteLink: 'Použít tuto pozvánku',
     noToken: 'Chybí token pozvánky.',
     creating: 'Vytvářím',
     submitting: 'Odesílám',
@@ -1174,14 +1186,17 @@ export const COPY: Record<Lang, Copy> = {
     inviteAlreadyPending: 'Для этого адреса уже есть активное приглашение.',
     inviteDeliveryFailed: 'Не удалось отправить приглашение по почте. Попробуйте позже.',
     copyInviteLink: 'Скопировать ссылку',
-    devToken: 'Dev invite token',
-    tokenNote: 'Показан потому, что backend возвращает его для dev/test flow. Он не сохраняется в browser storage.',
+    devToken: 'Ссылка приглашения для разработки',
+    tokenNote: 'Показано, потому что отправка email в этой среде отключена.',
     acceptTitle: 'Принять приглашение',
     acceptHelp: 'Войдите под приглашенным аккаунтом. Token используется один раз из URL.',
     acceptInvitation: 'Принять приглашение',
     invitationAccepted: 'Приглашение принято.',
     invitationEmailMismatch:
       'Это приглашение было отправлено на другой адрес электронной почты. Войдите под приглашенным аккаунтом.',
+    pasteInviteLink: 'Вставьте ссылку или токен приглашения',
+    pasteInviteLinkHelp: 'Если принятие не удалось, вставьте сюда полную ссылку приглашения от владельца.',
+    useInviteLink: 'Использовать это приглашение',
     noToken: 'Token приглашения отсутствует.',
     creating: 'Создаю',
     submitting: 'Отправляю',
@@ -1439,7 +1454,11 @@ export default function MemorialWorkspace({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
-  const [invitationToken, setInvitationToken] = useState<string | null>(null);
+  const [invitationToken, setInvitationToken] = useState<string | null>(() =>
+    typeof window === 'undefined' ? null : captureOrRestoreInvitationToken()
+  );
+  const invitationTokenRef = useRef<string | null>(null);
+  invitationTokenRef.current = invitationToken;
   const [billingLimits, setBillingLimits] = useState<BillingLimitsRead | null>(null);
   // Task 65.7 (Part B.13): bounded startup rehydration - true only while
   // the one-shot `GET /api/auth/session` probe below is in flight, so the
@@ -1454,9 +1473,20 @@ export default function MemorialWorkspace({
 
   const pathname = usePathname();
   const route = parseAppRoute(pathname);
+  const showInvitationAcceptPanel = Boolean(invitationToken) || route.name === 'app-invitations-accept';
 
   useEffect(() => {
-    setInvitationToken(captureOrRestoreInvitationToken());
+    function syncInvitationTokenFromLocation() {
+      const token = captureOrRestoreInvitationToken();
+      if (token) setInvitationToken(token);
+    }
+    syncInvitationTokenFromLocation();
+    window.addEventListener('popstate', syncInvitationTokenFromLocation);
+    window.addEventListener('focus', syncInvitationTokenFromLocation);
+    return () => {
+      window.removeEventListener('popstate', syncInvitationTokenFromLocation);
+      window.removeEventListener('focus', syncInvitationTokenFromLocation);
+    };
   }, []);
 
   const visibleTabs = useMemo(() => {
@@ -1525,6 +1555,9 @@ export default function MemorialWorkspace({
    * rather than silently picking one.
    */
   async function resolveBootstrapSelection(memorialList: MemorialRead[], accessToken: string) {
+    // Keep the user on the invitation accept handoff — do not deep-link away
+    // into a memorial until they finish Accept (token lives in React state).
+    if (invitationTokenRef.current) return;
     if (route.name === 'app-memorial') {
       await loadWorkspace(route.profileId, accessToken);
       return;
@@ -1757,7 +1790,7 @@ export default function MemorialWorkspace({
           <p className="mx-auto mt-5 max-w-2xl text-sm leading-7 text-fg/62 sm:text-base">{t.subtitle}</p>
         </div>
 
-        {invitationToken && (
+        {showInvitationAcceptPanel && (
           <InvitationAcceptPanel
             invitationToken={invitationToken}
             lang={lang}
@@ -1768,6 +1801,16 @@ export default function MemorialWorkspace({
               if (session) void loadMemorials(session.accessToken);
               if (membership.profile_id && session) void loadWorkspace(membership.profile_id, session.accessToken);
             }}
+            onInvalidToken={() => {
+              clearPendingInvitationToken();
+              setInvitationToken(null);
+            }}
+            onTokenReady={(token) => {
+              writePendingInvitationToken(token);
+              setInvitationToken(token);
+              setError(null);
+              setNotice(null);
+            }}
             onAuthenticated={onAuthenticated}
             session={session}
             t={t}
@@ -1777,7 +1820,7 @@ export default function MemorialWorkspace({
         {sessionHydrating ? (
           <p className="text-center text-sm text-fg/55">{t.working}</p>
         ) : !session ? (
-          invitationToken ? null : (
+          showInvitationAcceptPanel ? null : (
           <AuthPanel onAuthenticated={onAuthenticated} t={t} />
           )
         ) : (
@@ -2114,22 +2157,43 @@ function InvitationAcceptPanel({
   lang,
   onAccepted,
   onAuthenticated,
+  onInvalidToken,
+  onTokenReady,
   session,
   t
 }: {
-  invitationToken: string;
+  invitationToken: string | null;
   lang: Lang;
   onAccepted: (membership: MembershipRead) => void;
   onAuthenticated: (session: AuthSession) => void;
+  onInvalidToken: () => void;
+  onTokenReady: (token: string) => void;
   session: AuthSession | null;
   t: Copy;
 }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [pasteValue, setPasteValue] = useState('');
+
+  function applyPastedInvite(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const token = normalizeInvitationToken(pasteValue);
+    if (!token) {
+      setError(t.noToken);
+      return;
+    }
+    onTokenReady(token);
+    setPasteValue('');
+    setError(null);
+  }
 
   async function accept() {
     if (!session) {
       setError(t.signInTitle);
+      return;
+    }
+    if (!invitationToken) {
+      setError(t.noToken);
       return;
     }
     setBusy(true);
@@ -2138,6 +2202,13 @@ function InvitationAcceptPanel({
       onAccepted(await acceptInvitation(session.accessToken, invitationToken));
     } catch (acceptError) {
       setError(invitationAcceptErrorMessage(acceptError, t));
+      if (
+        acceptError instanceof MemorialApiError &&
+        acceptError.status === 404 &&
+        acceptError.detail === 'Invitation is invalid'
+      ) {
+        onInvalidToken();
+      }
     } finally {
       setBusy(false);
     }
@@ -2148,8 +2219,22 @@ function InvitationAcceptPanel({
       <div className="min-w-0">
         <p className="text-xs uppercase tracking-[.24em] text-cyan/70">{t.acceptTitle}</p>
         <p className="mt-3 text-sm leading-6 text-fg/65">{t.acceptHelp}</p>
+        <form className="mt-4 grid gap-2" onSubmit={applyPastedInvite}>
+          <label className="grid gap-2 text-sm text-fg/62">
+            <span>{t.pasteInviteLink}</span>
+            <input
+              className="min-w-0 rounded-2xl border border-white/10 bg-ink px-4 py-3 text-fg outline-none focus:border-cyan/70"
+              onChange={(event) => setPasteValue(event.target.value)}
+              placeholder={t.pasteInviteLinkHelp}
+              value={pasteValue}
+            />
+          </label>
+          <button className="justify-self-start rounded-full border border-white/15 px-4 py-2 text-sm text-fg" type="submit">
+            {t.useInviteLink}
+          </button>
+        </form>
         {error && <p className="mt-4 rounded-2xl border border-red-400/30 bg-red-500/10 px-4 py-3 text-sm text-red-100">{error}</p>}
-        {session && (
+        {session && invitationToken && (
           <button className="mt-5 w-full rounded-full bg-gradient-to-r from-cyan to-violet px-6 py-3.5 text-sm font-semibold text-ink disabled:opacity-55 sm:w-auto" disabled={busy} onClick={accept} type="button">
             {busy ? t.working : t.acceptInvitation}
           </button>
@@ -4719,6 +4804,14 @@ export function InvitationSection({ token, profileId, t, onInvited }: { token: s
   const [error, setError] = useState<string | null>(null);
   const [lastInvitation, setLastInvitation] = useState<InvitationCreateResponse | null>(null);
 
+  const devInviteUrl = lastInvitation
+    ? lastInvitation.accept_url
+      ? toAbsoluteAppUrl(lastInvitation.accept_url)
+      : lastInvitation.token
+        ? toAbsoluteAppUrl(`/invitations/accept?token=${encodeURIComponent(lastInvitation.token)}`)
+        : null
+    : null;
+
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const normalizedEmail = normalizeEmail(email);
@@ -4763,27 +4856,30 @@ export function InvitationSection({ token, profileId, t, onInvited }: { token: s
           {busy ? t.working : t.inviteParticipant}
         </button>
       </form>
-      {lastInvitation && !lastInvitation.token && (
+      {lastInvitation && !devInviteUrl && (
         <p className="rounded-3xl border border-cyan/20 bg-cyan/10 px-4 py-3 text-sm text-cyan">
           {t.inviteSent.replace('{email}', lastInvitation.email)}
         </p>
       )}
-      {lastInvitation?.accept_url && (
-        <div className="min-w-0 rounded-3xl border border-white/10 bg-black/20 p-4">
+      {devInviteUrl && (
+        <div className="min-w-0 rounded-3xl border border-cyan/20 bg-cyan/10 p-4">
+          <strong className="text-cyan">{t.devToken}</strong>
+          <p className="mt-2 text-sm leading-6 text-fg/60">{t.tokenNote}</p>
+          <a
+            className="mt-3 block break-all rounded-2xl border border-white/10 bg-black/30 p-3 font-mono text-xs text-cyan underline-offset-2 hover:underline"
+            href={devInviteUrl}
+            rel="noopener noreferrer"
+            target="_blank"
+          >
+            {devInviteUrl}
+          </a>
           <button
-            className="rounded-full border border-white/15 px-4 py-2 text-sm text-fg"
-            onClick={() => void navigator.clipboard.writeText(lastInvitation.accept_url || '')}
+            className="mt-3 rounded-full border border-white/15 px-4 py-2 text-sm text-fg"
+            onClick={() => void navigator.clipboard.writeText(devInviteUrl)}
             type="button"
           >
             {t.copyInviteLink}
           </button>
-        </div>
-      )}
-      {lastInvitation?.token && (
-        <div className="min-w-0 rounded-3xl border border-cyan/20 bg-cyan/10 p-4">
-          <strong className="text-cyan">{t.devToken}</strong>
-          <p className="mt-2 text-sm leading-6 text-fg/60">{t.tokenNote}</p>
-          <p className="mt-3 break-all rounded-2xl border border-white/10 bg-black/30 p-3 font-mono text-xs text-fg/80">{lastInvitation.token}</p>
         </div>
       )}
     </div>

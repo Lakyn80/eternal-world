@@ -87,6 +87,8 @@ services:
       CELERY_RESULT_BACKEND: redis://redis:6379/1
       CELERY_TASK_ALWAYS_EAGER: "false"
       CELERY_TASK_EAGER_PROPAGATES: "false"
+      # Absolute accept links for local invite copy/paste (email may be off).
+      PUBLIC_APP_ORIGIN: http://localhost:8017
     ports:
       - "8033:8000"
     depends_on:

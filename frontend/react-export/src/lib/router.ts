@@ -44,7 +44,9 @@ export function replace(path: string): void {
 }
 
 export function usePathname(): string {
-  return useSyncExternalStore(subscribe, getSnapshot, () => '/');
+  // Client-only app: use the real pathname for the server snapshot too so the
+  // first paint on `/invitations/accept` does not briefly look like `/`.
+  return useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
 }
 
 const APP_ROOT = '/app';
