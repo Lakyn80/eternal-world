@@ -48,6 +48,10 @@ import { resolveLangAfterSessionRestore } from '../lib/langPreference';
 import { notifyServiceWorkerLogoutCleanup } from '../lib/pwa';
 import { APP_ROOT_PATH, buildMemorialPath, navigate, parseAppRoute, usePathname } from '../lib/router';
 import { useJobStatusPoller } from '../hooks/useJobStatusPoller';
+import {
+  captureOrRestoreInvitationToken,
+  clearPendingInvitationToken
+} from '../lib/pendingInvitation';
 import AvatarPersonaPanel from './AvatarPersonaPanel';
 import type {
   AuthSession,
@@ -288,12 +292,18 @@ export type Copy = {
   inviteParticipant: string;
   inviteHelp: string;
   invitationCreated: string;
+  inviteSent: string;
+  inviteAlreadyMember: string;
+  inviteAlreadyPending: string;
+  inviteDeliveryFailed: string;
+  copyInviteLink: string;
   devToken: string;
   tokenNote: string;
   acceptTitle: string;
   acceptHelp: string;
   acceptInvitation: string;
   invitationAccepted: string;
+  invitationEmailMismatch: string;
   noToken: string;
   creating: string;
   submitting: string;
@@ -573,12 +583,19 @@ export const COPY: Record<Lang, Copy> = {
     inviteParticipant: 'Invite participant',
     inviteHelp: 'Owners can invite trusted reviewers, contributors or viewers.',
     invitationCreated: 'Invitation created.',
+    inviteSent: 'Invitation sent to {email}.',
+    inviteAlreadyMember: 'This email already belongs to an active member.',
+    inviteAlreadyPending: 'An active invitation already exists for this email.',
+    inviteDeliveryFailed: 'The invitation could not be emailed. Try again later.',
+    copyInviteLink: 'Copy invite link',
     devToken: 'Development invite token',
     tokenNote: 'Shown because the backend returned it for dev/test flow. It is not stored in browser storage.',
     acceptTitle: 'Accept invitation',
     acceptHelp: 'Sign in with the invited account. The token is used once from the URL.',
     acceptInvitation: 'Accept invitation',
     invitationAccepted: 'Invitation accepted.',
+    invitationEmailMismatch:
+      'This invitation was sent to another email address. Please sign in using the invited account.',
     noToken: 'Invitation token is missing.',
     creating: 'Creating',
     submitting: 'Submitting',
@@ -859,12 +876,19 @@ export const COPY: Record<Lang, Copy> = {
     inviteParticipant: 'Pozvat účastníka',
     inviteHelp: 'Vlastník může pozvat trusted reviewera, contributora nebo viewera.',
     invitationCreated: 'Pozvánka vytvořena.',
+    inviteSent: 'Pozvánka odeslána na {email}.',
+    inviteAlreadyMember: 'Tento e-mail už patří aktivnímu členovi.',
+    inviteAlreadyPending: 'Pro tento e-mail už existuje aktivní pozvánka.',
+    inviteDeliveryFailed: 'Pozvánku se nepodařilo odeslat e-mailem. Zkuste to znovu později.',
+    copyInviteLink: 'Zkopírovat odkaz',
     devToken: 'Vývojový invite token',
     tokenNote: 'Zobrazeno, protože backend token vrací pro dev/test flow. Neukládá se do browser storage.',
     acceptTitle: 'Přijmout pozvánku',
     acceptHelp: 'Přihlaste se účtem pozvaného člověka. Token se použije jednou z URL.',
     acceptInvitation: 'Přijmout pozvánku',
     invitationAccepted: 'Pozvánka přijata.',
+    invitationEmailMismatch:
+      'Tato pozvánka byla odeslána na jinou e-mailovou adresu. Přihlaste se pozvaným účtem.',
     noToken: 'Chybí token pozvánky.',
     creating: 'Vytvářím',
     submitting: 'Odesílám',
@@ -1145,12 +1169,19 @@ export const COPY: Record<Lang, Copy> = {
     inviteParticipant: 'Пригласить участника',
     inviteHelp: 'Владелец может пригласить trusted reviewer, contributor или viewer.',
     invitationCreated: 'Приглашение создано.',
+    inviteSent: 'Приглашение отправлено на {email}.',
+    inviteAlreadyMember: 'Этот адрес уже принадлежит активному участнику.',
+    inviteAlreadyPending: 'Для этого адреса уже есть активное приглашение.',
+    inviteDeliveryFailed: 'Не удалось отправить приглашение по почте. Попробуйте позже.',
+    copyInviteLink: 'Скопировать ссылку',
     devToken: 'Dev invite token',
     tokenNote: 'Показан потому, что backend возвращает его для dev/test flow. Он не сохраняется в browser storage.',
     acceptTitle: 'Принять приглашение',
     acceptHelp: 'Войдите под приглашенным аккаунтом. Token используется один раз из URL.',
     acceptInvitation: 'Принять приглашение',
     invitationAccepted: 'Приглашение принято.',
+    invitationEmailMismatch:
+      'Это приглашение было отправлено на другой адрес электронной почты. Войдите под приглашенным аккаунтом.',
     noToken: 'Token приглашения отсутствует.',
     creating: 'Создаю',
     submitting: 'Отправляю',
@@ -1227,6 +1258,16 @@ const PRIVACY_SCOPES: PrivacyScope[] = ['private_owner', 'selected_family', 'all
 
 function normalizeEmail(value: string): string {
   return value.trim().toLowerCase();
+}
+
+function inviteErrorMessage(error: unknown, t: Copy): string {
+  if (!(error instanceof MemorialApiError)) return safeError(error);
+  if (error.status === 409) {
+    if (error.detail.toLowerCase().includes('membership')) return t.inviteAlreadyMember;
+    if (error.detail.toLowerCase().includes('invitation')) return t.inviteAlreadyPending;
+  }
+  if (error.status === 502 || error.status === 503) return t.inviteDeliveryFailed;
+  return error.detail || safeError(error);
 }
 
 function safeError(error: unknown): string {
@@ -1362,11 +1403,6 @@ function formatDate(value: string | null, lang: Lang): string {
   return new Intl.DateTimeFormat(locale).format(new Date(value));
 }
 
-function getInvitationTokenFromUrl(): string | null {
-  const params = new URLSearchParams(window.location.search);
-  return params.get('token');
-}
-
 const SHORT_PREVIEW_MAX_LENGTH = 220;
 
 /** A guaranteed, JS-level short preview - never depends on CSS line-clamp
@@ -1420,13 +1456,7 @@ export default function MemorialWorkspace({
   const route = parseAppRoute(pathname);
 
   useEffect(() => {
-    const token = getInvitationTokenFromUrl();
-    setInvitationToken(token);
-    if (token) {
-      const url = new URL(window.location.href);
-      url.searchParams.delete('token');
-      window.history.replaceState({}, document.title, `${url.pathname}${url.search}${url.hash}`);
-    }
+    setInvitationToken(captureOrRestoreInvitationToken());
   }, []);
 
   const visibleTabs = useMemo(() => {
@@ -1733,6 +1763,7 @@ export default function MemorialWorkspace({
             lang={lang}
             onAccepted={(membership) => {
               setNotice(t.invitationAccepted);
+              clearPendingInvitationToken();
               setInvitationToken(null);
               if (session) void loadMemorials(session.accessToken);
               if (membership.profile_id && session) void loadWorkspace(membership.profile_id, session.accessToken);
@@ -2106,7 +2137,7 @@ function InvitationAcceptPanel({
     try {
       onAccepted(await acceptInvitation(session.accessToken, invitationToken));
     } catch (acceptError) {
-      setError(safeError(acceptError));
+      setError(invitationAcceptErrorMessage(acceptError, t));
     } finally {
       setBusy(false);
     }
@@ -2128,6 +2159,15 @@ function InvitationAcceptPanel({
       {session && <p className="self-center rounded-2xl border border-white/10 bg-black/20 p-4 text-sm text-fg/65">{formatDate(new Date().toISOString(), lang)}</p>}
     </section>
   );
+}
+
+const INVITATION_EMAIL_MISMATCH_DETAIL = 'Invitation email does not match current user';
+
+export function invitationAcceptErrorMessage(error: unknown, t: Copy): string {
+  if (error instanceof MemorialApiError && error.detail === INVITATION_EMAIL_MISMATCH_DETAIL) {
+    return t.invitationEmailMismatch;
+  }
+  return safeError(error);
 }
 
 /** Task 65.5: whether the backend would currently accept another memorial
@@ -4694,7 +4734,7 @@ export function InvitationSection({ token, profileId, t, onInvited }: { token: s
       setEmail('');
       onInvited(invitation);
     } catch (inviteError) {
-      setError(safeError(inviteError));
+      setError(inviteErrorMessage(inviteError, t));
     } finally {
       setBusy(false);
     }
@@ -4723,6 +4763,22 @@ export function InvitationSection({ token, profileId, t, onInvited }: { token: s
           {busy ? t.working : t.inviteParticipant}
         </button>
       </form>
+      {lastInvitation && !lastInvitation.token && (
+        <p className="rounded-3xl border border-cyan/20 bg-cyan/10 px-4 py-3 text-sm text-cyan">
+          {t.inviteSent.replace('{email}', lastInvitation.email)}
+        </p>
+      )}
+      {lastInvitation?.accept_url && (
+        <div className="min-w-0 rounded-3xl border border-white/10 bg-black/20 p-4">
+          <button
+            className="rounded-full border border-white/15 px-4 py-2 text-sm text-fg"
+            onClick={() => void navigator.clipboard.writeText(lastInvitation.accept_url || '')}
+            type="button"
+          >
+            {t.copyInviteLink}
+          </button>
+        </div>
+      )}
       {lastInvitation?.token && (
         <div className="min-w-0 rounded-3xl border border-cyan/20 bg-cyan/10 p-4">
           <strong className="text-cyan">{t.devToken}</strong>

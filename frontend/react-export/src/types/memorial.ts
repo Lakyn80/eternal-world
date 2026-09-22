@@ -49,7 +49,8 @@ export type InvitationCreateResponse = {
   revoked_at: string | null;
   created_at: string;
   token?: string;
-  accept_url?: string;
+  accept_url?: string | null;
+  email_sent?: boolean;
 };
 
 export type ContributionRead = {
