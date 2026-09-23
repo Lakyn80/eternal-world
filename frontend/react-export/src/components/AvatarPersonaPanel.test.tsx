@@ -38,7 +38,7 @@ describe('AvatarPersonaPanel', () => {
     vi.mocked(api.updateAvatarPersonaSettings).mockResolvedValue({
       ...defaults,
       personality_traits: ['gentle', 'funny'],
-      supported_languages: ['cs', 'en'],
+      supported_languages: ['cs'],
       primary_language: 'cs',
       remembered_age: 62,
       communication_profile: 'Mluvím klidně.'
@@ -54,9 +54,14 @@ describe('AvatarPersonaPanel', () => {
     expect(screen.getByText('Jak mluvím a reaguji')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Původní nahrávka' })).toBeDisabled();
 
+    // Languages are derived from the memorial (Task 65.13.1) — read-only display, no toggles.
+    const languagesHint = screen.getByText('Jazyky persony odpovídají neměnnému jazyku memorialu.');
+    expect(languagesHint.closest('div')).toHaveTextContent(/Hlavní jazyk:\s*Čeština/);
+    expect(screen.queryByRole('button', { name: 'English' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Čeština' })).not.toBeInTheDocument();
+
     await user.click(screen.getByRole('button', { name: 'Jemný' }));
     await user.click(screen.getByRole('button', { name: 'Vtipný' }));
-    await user.click(screen.getByRole('button', { name: 'English' }));
 
     const age = screen.getByPlaceholderText('62');
     await user.clear(age);
@@ -72,8 +77,6 @@ describe('AvatarPersonaPanel', () => {
     expect(api.updateAvatarPersonaSettings).toHaveBeenCalledWith('tok', 7, {
       voice_mode: 'warm_older',
       personality_traits: ['gentle', 'funny'],
-      primary_language: 'cs',
-      supported_languages: ['cs', 'en'],
       remembered_age: 62,
       communication_profile: 'Mluvím klidně.'
     });
