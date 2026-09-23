@@ -75,6 +75,24 @@ def list_active_memberships(db: Session, *, profile_id: int) -> list[MemorialMem
     return list(db.scalars(statement))
 
 
+def count_active_owner_memberships(db: Session, *, profile_id: int) -> int:
+    statement = select(MemorialMembership).where(
+        MemorialMembership.profile_id == profile_id,
+        MemorialMembership.role == "owner",
+        MemorialMembership.status == MEMBERSHIP_STATUS_ACTIVE,
+    )
+    return len(list(db.scalars(statement)))
+
+
+def get_active_owner_membership(db: Session, *, profile_id: int) -> MemorialMembership | None:
+    statement = select(MemorialMembership).where(
+        MemorialMembership.profile_id == profile_id,
+        MemorialMembership.role == "owner",
+        MemorialMembership.status == MEMBERSHIP_STATUS_ACTIVE,
+    )
+    return db.scalar(statement)
+
+
 def revoke_membership(
     db: Session,
     *,
@@ -94,6 +112,17 @@ def reactivate_membership(
     membership: MemorialMembership,
     role: str,
 ) -> MemorialMembership:
+    """Reactivate a revoked membership with the invited role.
+
+    Phase 5A: never demote an owner row via reactivation, and never create a
+    second active owner for the same memorial.
+    """
+    if membership.role == "owner" and role != "owner":
+        raise ValueError("Owner membership cannot be demoted via reactivation")
+    if role == "owner":
+        existing_owner = get_active_owner_membership(db, profile_id=membership.profile_id)
+        if existing_owner is not None and existing_owner.id != membership.id:
+            raise ValueError("Memorial already has an active owner membership")
     membership.status = MEMBERSHIP_STATUS_ACTIVE
     membership.role = role
     membership.revoked_at = None

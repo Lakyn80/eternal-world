@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 
+import pytest
+
 from app.db.models import MemorialInvitation, MemorialMembership
 from app.main import app
 from app.modules.memorial_access.service import list_active_memory_contributions
@@ -743,4 +745,250 @@ def test_archive_restore_returns_to_needs_review_without_indexing(client):
     assert approved.status_code == 200
     assert approved.json()["status"] == "approved"
     assert approved.json()["indexing_status"]["state"] == "pending"
+
+
+def test_new_memorial_has_exactly_one_active_owner_matching_profile_user(client):
+    from app.db.models import MemorialMembership, MemoryProfile
+    from app.modules.memorial_access import repository as membership_repository
+
+    token = _register_and_login(client, "owner-invariant-create65@example.com")
+    profile_id = _create_memorial(client, token)
+
+    me = client.get("/api/auth/me", headers=_auth_headers(token))
+    assert me.status_code == 200
+    owner_user_id = me.json()["id"]
+
+    db = app.state.testing_session_local()
+    try:
+        profile = db.get(MemoryProfile, profile_id)
+        assert profile is not None
+        assert profile.user_id == owner_user_id
+        owners = (
+            db.query(MemorialMembership)
+            .filter(
+                MemorialMembership.profile_id == profile_id,
+                MemorialMembership.role == "owner",
+                MemorialMembership.status == membership_repository.MEMBERSHIP_STATUS_ACTIVE,
+            )
+            .all()
+        )
+        assert len(owners) == 1
+        assert owners[0].user_id == profile.user_id
+    finally:
+        db.close()
+
+
+def test_partial_unique_rejects_second_active_owner_even_when_service_bypassed(client):
+    from sqlalchemy.exc import IntegrityError
+
+    from app.db.models import MemorialMembership
+    from app.modules.memorial_access import repository as membership_repository
+
+    owner_token = _register_and_login(client, "owner-invariant-a65@example.com")
+    other_token = _register_and_login(client, "owner-invariant-b65@example.com")
+    profile_id = _create_memorial(client, owner_token)
+    other_id = client.get("/api/auth/me", headers=_auth_headers(other_token)).json()["id"]
+
+    db = app.state.testing_session_local()
+    try:
+        membership_repository.create_membership(
+            db,
+            profile_id=profile_id,
+            user_id=other_id,
+            role="owner",
+            created_by_user_id=other_id,
+        )
+        with pytest.raises(IntegrityError):
+            db.commit()
+        db.rollback()
+        active_owners = (
+            db.query(MemorialMembership)
+            .filter(
+                MemorialMembership.profile_id == profile_id,
+                MemorialMembership.role == "owner",
+                MemorialMembership.status == membership_repository.MEMBERSHIP_STATUS_ACTIVE,
+            )
+            .count()
+        )
+        assert active_owners == 1
+    finally:
+        db.close()
+
+
+def test_invite_cannot_assign_owner_role(client):
+    owner_token = _register_and_login(client, "owner-invite-block65@example.com")
+    profile_id = _create_memorial(client, owner_token)
+    response = client.post(
+        f"/api/memorials/{profile_id}/invitations",
+        headers=_auth_headers(owner_token),
+        json={"email": "someone65@example.com", "role": "owner"},
+    )
+    assert response.status_code == 422
+
+
+def test_reinvite_revoked_contributor_does_not_change_owner(client):
+    from app.db.models import MemorialMembership, MemoryProfile
+    from app.modules.memorial_access import repository as membership_repository
+
+    owner_token = _register_and_login(client, "owner-reinvite-o65@example.com")
+    contributor_token = _register_and_login(client, "owner-reinvite-c65@example.com")
+    profile_id = _create_memorial(client, owner_token)
+    owner_user_id = client.get("/api/auth/me", headers=_auth_headers(owner_token)).json()["id"]
+    contributor_user_id = client.get("/api/auth/me", headers=_auth_headers(contributor_token)).json()["id"]
+
+    invite = _invite(client, owner_token, profile_id, "owner-reinvite-c65@example.com")
+    assert _accept(client, contributor_token, invite).status_code == 200
+    assert (
+        client.delete(
+            f"/api/memorials/{profile_id}/members/{contributor_user_id}",
+            headers=_auth_headers(owner_token),
+        ).status_code
+        == 200
+    )
+
+    reinvite = _invite(client, owner_token, profile_id, "owner-reinvite-c65@example.com", "trusted_reviewer")
+    assert _accept(client, contributor_token, reinvite).status_code == 200
+
+    db = app.state.testing_session_local()
+    try:
+        profile = db.get(MemoryProfile, profile_id)
+        assert profile is not None
+        assert profile.user_id == owner_user_id
+        owners = (
+            db.query(MemorialMembership)
+            .filter(
+                MemorialMembership.profile_id == profile_id,
+                MemorialMembership.role == "owner",
+                MemorialMembership.status == membership_repository.MEMBERSHIP_STATUS_ACTIVE,
+            )
+            .all()
+        )
+        assert len(owners) == 1
+        assert owners[0].user_id == owner_user_id
+        contributor = (
+            db.query(MemorialMembership)
+            .filter(
+                MemorialMembership.profile_id == profile_id,
+                MemorialMembership.user_id == contributor_user_id,
+            )
+            .one()
+        )
+        assert contributor.status == membership_repository.MEMBERSHIP_STATUS_ACTIVE
+        assert contributor.role == "trusted_reviewer"
+    finally:
+        db.close()
+
+
+def test_owner_revoke_remains_forbidden_under_single_owner_invariant(client):
+    owner_token = _register_and_login(client, "owner-self-revoke65@example.com")
+    profile_id = _create_memorial(client, owner_token)
+    owner_user_id = client.get("/api/auth/me", headers=_auth_headers(owner_token)).json()["id"]
+    response = client.delete(
+        f"/api/memorials/{profile_id}/members/{owner_user_id}",
+        headers=_auth_headers(owner_token),
+    )
+    assert response.status_code == 403
+
+
+def test_legacy_memory_profile_zero_owner_self_heals_via_capability_path(client):
+    """Legacy /api/memory-profiles create leaves zero owners until self-heal.
+
+    Phase 5A documents this as intentional compatibility — not auto-repaired
+    by migration. Capability resolution creates exactly one matching owner.
+    """
+    from app.db.models import MemorialMembership
+    from app.modules.memorial_access import repository as membership_repository
+    from app.modules.memorial_access.owner_integrity import check_memorial_owner_integrity
+
+    token = _register_and_login(client, "legacy-zero-owner65@example.com")
+    created = client.post(
+        "/api/memory-profiles",
+        headers=_auth_headers(token),
+        json={"name": "Legacy Zero Owner", "canonical_language": "cs", "confirm_canonical_language": True},
+    )
+    assert created.status_code == 201
+    profile_id = created.json()["id"]
+    owner_user_id = client.get("/api/auth/me", headers=_auth_headers(token)).json()["id"]
+
+    db = app.state.testing_session_local()
+    try:
+        assert (
+            db.query(MemorialMembership)
+            .filter(MemorialMembership.profile_id == profile_id)
+            .count()
+            == 0
+        )
+        report = check_memorial_owner_integrity(db)
+        assert any(
+            item.code == "zero_active_owners" and item.profile_id == profile_id for item in report.findings
+        )
+    finally:
+        db.close()
+
+    # Memorial list/get do not self-heal; capability path does.
+    listed = client.get("/api/memorials", headers=_auth_headers(token))
+    assert listed.status_code == 200
+    assert all(item["id"] != profile_id for item in listed.json())
+
+    persona = client.get(f"/api/memorials/{profile_id}/avatar-persona", headers=_auth_headers(token))
+    assert persona.status_code == 200
+
+    db = app.state.testing_session_local()
+    try:
+        owners = (
+            db.query(MemorialMembership)
+            .filter(
+                MemorialMembership.profile_id == profile_id,
+                MemorialMembership.role == "owner",
+                MemorialMembership.status == membership_repository.MEMBERSHIP_STATUS_ACTIVE,
+            )
+            .all()
+        )
+        assert len(owners) == 1
+        assert owners[0].user_id == owner_user_id
+        report_after = check_memorial_owner_integrity(db)
+        assert not any(
+            item.code == "zero_active_owners" and item.profile_id == profile_id
+            for item in report_after.findings
+        )
+    finally:
+        db.close()
+
+
+def test_owner_integrity_preflight_detects_zero_multi_and_mismatch(client):
+    from app.db.models import MemoryProfile
+    from app.modules.memorial_access.owner_integrity import check_memorial_owner_integrity
+
+    token = _register_and_login(client, "integrity-scan-owner65@example.com")
+    other = _register_and_login(client, "integrity-scan-other65@example.com")
+    profile_id = _create_memorial(client, token)
+    other_id = client.get("/api/auth/me", headers=_auth_headers(other)).json()["id"]
+
+    # Clean memorial should not appear in findings for this profile.
+    db = app.state.testing_session_local()
+    try:
+        clean = check_memorial_owner_integrity(db)
+        assert not any(item.profile_id == profile_id for item in clean.findings)
+
+        # Force mismatch by pointing profile.user_id at another user while
+        # keeping the existing active owner membership (read-only scan only).
+        profile = db.get(MemoryProfile, profile_id)
+        assert profile is not None
+        original_owner = profile.user_id
+        profile.user_id = other_id
+        db.commit()
+
+        mismatch_report = check_memorial_owner_integrity(db)
+        assert any(
+            item.code == "owner_profile_mismatch" and item.profile_id == profile_id
+            for item in mismatch_report.findings
+        )
+
+        # Restore profile owner for isolation (do not leave dirty fixture).
+        profile = db.get(MemoryProfile, profile_id)
+        assert profile is not None
+        profile.user_id = original_owner
+        db.commit()
+    finally:
+        db.close()
 

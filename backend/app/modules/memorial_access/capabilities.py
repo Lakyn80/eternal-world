@@ -17,11 +17,16 @@ from __future__ import annotations
 
 from enum import Enum
 
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.db.models import MemorialMembership, MemoryProfile, User
 from app.modules.memorial_access import repository
-from app.modules.memorial_access.service import MemorialForbiddenError, MemorialNotFoundError
+from app.modules.memorial_access.service import (
+    MemorialConflictError,
+    MemorialForbiddenError,
+    MemorialNotFoundError,
+)
 
 
 class MemorialCapability(str, Enum):
@@ -132,15 +137,33 @@ def resolve_authorized_profile(
         # own direct owner (`memory_profiles.user_id`) must never be treated
         # as unauthorized for their own memorial - create the missing
         # membership row once, so this converges going forward.
-        membership = repository.create_membership(
-            db,
-            profile_id=profile_id,
-            user_id=current_user.id,
-            role="owner",
-            created_by_user_id=current_user.id,
-        )
-        db.commit()
-        db.refresh(membership)
+        #
+        # Phase 5A: never create a second active owner if one already exists
+        # for another user (would violate uq_memorial_memberships_one_active_owner).
+        existing_owner = repository.get_active_owner_membership(db, profile_id=profile_id)
+        if existing_owner is not None:
+            if existing_owner.user_id != current_user.id:
+                raise MemorialForbiddenError("Memorial already has an active owner membership")
+            membership = existing_owner
+        else:
+            membership = repository.create_membership(
+                db,
+                profile_id=profile_id,
+                user_id=current_user.id,
+                role="owner",
+                created_by_user_id=current_user.id,
+            )
+            try:
+                db.commit()
+            except IntegrityError as exc:
+                db.rollback()
+                membership = repository.get_active_membership(
+                    db, profile_id=profile_id, user_id=current_user.id
+                )
+                if membership is None:
+                    raise MemorialConflictError("Could not create owner membership") from exc
+            else:
+                db.refresh(membership)
 
     if not role_has_capability(membership.role, capability):
         raise MemorialForbiddenError("Insufficient memorial permissions")

@@ -197,6 +197,13 @@ def _retire_contribution_promotion_safely(db: Session, *, contribution: Memorial
 
 
 def create_memorial(db: Session, *, current_user: User, payload: MemorialCreate) -> tuple[MemoryProfile, MemorialMembership]:
+    """Create a memorial with exactly one active owner membership.
+
+    Phase 5A: the owner membership ``user_id`` always equals
+    ``memory_profiles.user_id`` (= ``current_user.id``). This is the
+    canonical write path; legacy ``/api/memory-profiles`` create does not
+    create a membership and relies on capability self-heal instead.
+    """
     from app.modules.language_registry.persona_sync import sync_persona_languages_to_canonical, utcnow
 
     current_profiles = memory_profiles_repository.count_memory_profiles_for_user(db, current_user.id)
@@ -394,12 +401,18 @@ def accept_invitation(db: Session, *, current_user: User, token: str) -> Memoria
 
     prior = repository.get_membership(db, profile_id=invitation.profile_id, user_id=current_user.id)
     if prior is not None and prior.status == repository.MEMBERSHIP_STATUS_REVOKED:
-        membership = repository.reactivate_membership(db, membership=prior, role=invitation.role)
+        try:
+            membership = repository.reactivate_membership(db, membership=prior, role=invitation.role)
+        except ValueError as exc:
+            raise MemorialForbiddenError(str(exc)) from exc
         invitation.accepted_at = _now()
         invitation.accepted_by_user_id = current_user.id
         db.commit()
         db.refresh(membership)
         return membership
+
+    if invitation.role == "owner":
+        raise MemorialForbiddenError("Invitations cannot grant owner role")
 
     membership = repository.create_membership(
         db,

@@ -384,6 +384,18 @@ class MemorialMembership(TimestampMixin, Base):
         UniqueConstraint("profile_id", "user_id", name="uq_memorial_memberships_profile_user"),
         Index("ix_memorial_memberships_profile_role", "profile_id", "role"),
         Index("ix_memorial_memberships_user_status", "user_id", "status"),
+        # Phase 5A: at most one active owner membership per memorial (DB).
+        # Exactly-one + owner↔profile.user_id match are service invariants for
+        # canonical create_memorial; legacy /api/memory-profiles rows may
+        # temporarily have zero owners until resolve_authorized_profile self-heals.
+        # Both dialect kwargs are required — SQLite backs create_all tests.
+        Index(
+            "uq_memorial_memberships_one_active_owner",
+            "profile_id",
+            unique=True,
+            postgresql_where=text("role = 'owner' AND status = 'active'"),
+            sqlite_where=text("role = 'owner' AND status = 'active'"),
+        ),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)
