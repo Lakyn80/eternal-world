@@ -41,6 +41,8 @@ yaml = pytest.importorskip("yaml", reason="PyYAML is required for the Compose st
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DEV_COMPOSE_PATH = REPO_ROOT / "docker-compose.yml"
 PROD_COMPOSE_PATH = REPO_ROOT / "docker-compose.prod.yml"
+HETZNER_DEPLOY_SCRIPT = REPO_ROOT / "deploy" / "hetzner" / "remote-deploy.sh"
+RUSSIA_DEPLOY_SCRIPT = REPO_ROOT / "deploy" / "russia" / "remote-deploy.sh"
 
 EXPECTED_GENERAL_WORKER_QUEUES = {"document_processing", "ai_generation", "media", "notifications"}
 EXPECTED_EMBEDDING_QUEUES = {"embedding"}
@@ -168,3 +170,22 @@ def test_local_celery_observability_is_profile_gated_and_absent_from_prod() -> N
     flower_ports = dev_services["flower"].get("ports") or []
     assert any("127.0.0.1:5555" in str(port) for port in flower_ports)
     assert not (dev_services["celery_exporter"].get("ports") or [])
+
+
+@pytest.mark.parametrize(
+    "script_path",
+    [
+        pytest.param(HETZNER_DEPLOY_SCRIPT, id="hetzner"),
+        pytest.param(RUSSIA_DEPLOY_SCRIPT, id="russia"),
+    ],
+)
+def test_production_deploy_scripts_start_embedding_and_maintenance_workers(script_path: Path) -> None:
+    """Queue isolation requires both workers in every production deploy up set."""
+
+    if not script_path.is_file():
+        pytest.skip(f"deploy script not present at {script_path}")
+    text = script_path.read_text(encoding="utf-8")
+    assert "embedding_worker" in text, f"{script_path.name} must start embedding_worker"
+    assert "maintenance_worker" in text, f"{script_path.name} must start maintenance_worker"
+    # Guard against the historical Russia omit that left indexing stuck queued.
+    assert "do not force new workers" not in text.lower()

@@ -64,8 +64,9 @@ docker compose --env-file .env.prod -f docker-compose.prod.yml run --rm backend 
 docker compose --env-file .env.prod -f docker-compose.prod.yml run --rm backend python scripts/ensure_persona_chat_languages.py
 # Preserve historical Russia behavior: seed demo profile when present.
 docker compose --env-file .env.prod -f docker-compose.prod.yml run --rm backend python scripts/bootstrap_family_avatar_ru_e2e.py || true
-# Match the established Russia process set (do not force new workers here).
-docker compose --env-file .env.prod -f docker-compose.prod.yml up -d --remove-orphans backend celery_worker frontend
+# Match Hetzner: indexing requires embedding_worker; stale-job recovery requires maintenance_worker.
+docker compose --env-file .env.prod -f docker-compose.prod.yml up -d --remove-orphans \
+  backend celery_worker embedding_worker maintenance_worker frontend
 
 # Ensure marketing demo photos exist in the live frontend dist (CS/EN/RU).
 # Host mirror is populated on the server under demo-marketing-imgs/imgs and

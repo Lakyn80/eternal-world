@@ -1312,7 +1312,10 @@ describe('ContributionList - Task 65.8 retry / start indexing', () => {
       />
     );
 
-    expect(screen.getByText(t.indexingPending)).toBeInTheDocument();
+    // Review status stays; static indexing-pending badge must not compete with
+    // the live JobStatusBadge for the same lifecycle moment.
+    expect(screen.getByText(t.statusApproved)).toBeInTheDocument();
+    expect(screen.queryByText(t.indexingPending)).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: t.startIndexing })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: t.retryIndexing })).not.toBeInTheDocument();
   });
@@ -1577,5 +1580,157 @@ describe('ContributionList - Task 65.8 retry / start indexing', () => {
     );
 
     expect(screen.queryByText(t.indexingIndexed)).not.toBeInTheDocument();
+  });
+
+  it('shows live queued indexing status without a competing Waiting-for-indexing badge', async () => {
+    vi.mocked(api.getBackgroundJob).mockResolvedValue({
+      id: 42,
+      owner_user_id: 1,
+      profile_id: 7,
+      job_type: 'qdrant_indexing',
+      status: 'queued',
+      progress_current: 0,
+      progress_total: 1,
+      celery_task_id: null,
+      result_payload: null,
+      error_payload: null,
+      error_message: null,
+      queue: 'embedding',
+      attempt_count: 0,
+      max_attempts: 3,
+      safe_error_category: null,
+      created_at: '2026-01-01T00:00:00Z',
+      updated_at: '2026-01-01T00:00:00Z'
+    });
+
+    render(
+      <ContributionList
+        contributions={[
+          baseContribution({
+            indexing_status: {
+              state: 'pending',
+              indexed_at: null,
+              attempt_count: 0,
+              failure_reason: null,
+              job_id: 42
+            }
+          })
+        ]}
+        lang="en"
+        t={t}
+        canRetryIndexing
+        onIndexingRetried={vi.fn()}
+        profileId={7}
+        token="tok"
+      />
+    );
+
+    expect(screen.getByText(t.statusApproved)).toBeInTheDocument();
+    expect(await screen.findByText(t.jobStatusQueued)).toBeInTheDocument();
+    expect(screen.queryByText(t.indexingPending)).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: t.retryIndexing })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: t.startIndexing })).not.toBeInTheDocument();
+  });
+
+  it('shows live processing indexing status without Retry', async () => {
+    vi.mocked(api.getBackgroundJob).mockResolvedValue({
+      id: 42,
+      owner_user_id: 1,
+      profile_id: 7,
+      job_type: 'qdrant_indexing',
+      status: 'running',
+      progress_current: 0,
+      progress_total: 1,
+      celery_task_id: null,
+      result_payload: null,
+      error_payload: null,
+      error_message: null,
+      queue: 'embedding',
+      attempt_count: 0,
+      max_attempts: 3,
+      safe_error_category: null,
+      created_at: '2026-01-01T00:00:00Z',
+      updated_at: '2026-01-01T00:00:00Z'
+    });
+
+    render(
+      <ContributionList
+        contributions={[
+          baseContribution({
+            indexing_status: {
+              state: 'pending',
+              indexed_at: null,
+              attempt_count: 0,
+              failure_reason: null,
+              job_id: 42
+            }
+          })
+        ]}
+        lang="en"
+        t={t}
+        canRetryIndexing
+        onIndexingRetried={vi.fn()}
+        profileId={7}
+        token="tok"
+      />
+    );
+
+    expect(await screen.findByText(t.jobStatusProcessing)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: t.retryIndexing })).not.toBeInTheDocument();
+  });
+
+  it('renders indexing lifecycle labels in EN / CS / RU without Approved+Queued ambiguity', () => {
+    for (const lang of ['en', 'cs', 'ru'] as const) {
+      const copy = COPY[lang];
+      const { unmount } = render(
+        <ContributionList
+          contributions={[
+            baseContribution({
+              id: 1,
+              indexing_status: {
+                state: 'pending',
+                indexed_at: null,
+                attempt_count: 0,
+                failure_reason: null,
+                job_id: null
+              }
+            }),
+            baseContribution({
+              id: 2,
+              indexing_status: {
+                state: 'indexed',
+                indexed_at: '2026-01-02T00:00:00Z',
+                attempt_count: 1,
+                failure_reason: null,
+                job_id: null
+              }
+            }),
+            baseContribution({
+              id: 3,
+              indexing_status: {
+                state: 'failed',
+                indexed_at: null,
+                attempt_count: 1,
+                failure_reason: 'boom',
+                job_id: null
+              }
+            })
+          ]}
+          lang={lang}
+          t={copy}
+          canRetryIndexing
+          onIndexingRetried={vi.fn()}
+          profileId={7}
+          token="tok"
+        />
+      );
+      expect(screen.getByText(copy.indexingPending)).toBeInTheDocument();
+      expect(screen.getByText(copy.indexingIndexed)).toBeInTheDocument();
+      expect(screen.getByText(copy.indexingFailed)).toBeInTheDocument();
+      expect(screen.getAllByText(copy.statusApproved).length).toBeGreaterThanOrEqual(1);
+      // Static pending label must not still say "Approved, ..." in any locale.
+      expect(copy.indexingPending.toLowerCase()).not.toContain(copy.statusApproved.toLowerCase());
+      unmount();
+    }
   });
 });

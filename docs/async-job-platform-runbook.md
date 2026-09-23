@@ -11,7 +11,33 @@ All commands below are exact, repository-specific, and assume the local
 dev stack (`docker-compose.yml`). For production (`docker-compose.prod.yml`)
 substitute the compose file and production container names.
 
-## 0. Inspecting each worker's queue subscription (Task 65.9.1, Part D)
+## 0. Required workers on every normal startup (Task Phase 4)
+
+After queue isolation (Task 65.9.1), indexing **cannot** complete without
+`embedding_worker`, and stale/recoverable jobs need `maintenance_worker`.
+
+These services are **not** behind a Compose profile. A normal local start:
+
+```bash
+docker compose up -d
+```
+
+must bring up at least:
+
+```text
+db redis qdrant backend frontend celery_worker embedding_worker maintenance_worker
+```
+
+Do **not** treat `docker compose up -d backend frontend` (or `backend` +
+`celery_worker` only) as a supported indexing stack — jobs will stay
+`pending`/`queued` forever.
+
+Production deploy scripts must start the same worker set:
+
+- Hetzner: `deploy/hetzner/remote-deploy.sh`
+- Russia: `deploy/russia/remote-deploy.sh`
+
+## 0a. Inspecting each worker's queue subscription (Task 65.9.1, Part D)
 
 ```bash
 docker compose exec celery_worker celery -A app.worker.celery_app.celery_app inspect active_queues
@@ -65,7 +91,7 @@ Worker `-Q` flags and routing are intentionally unchanged. App series on
 `backend:8000/metrics` (`async_jobs_*`, …) remain the product source of
 truth for job lifecycle; the exporter adds broker/Celery-side visibility.
 
-## 0a. Confirming the general worker cannot consume `embedding`
+## 0c. Confirming the general worker cannot consume `embedding`
 
 ```bash
 docker compose exec celery_worker celery -A app.worker.celery_app.celery_app inspect active_queues | grep -i embedding
@@ -82,7 +108,7 @@ assert 'maintenance' not in GENERAL_WORKER_QUEUES
 print(GENERAL_WORKER_QUEUES)"
 ```
 
-## 0b. Confirming `embedding_worker` consumes only `embedding`
+## 0d. Confirming `embedding_worker` consumes only `embedding`
 
 ```bash
 docker compose exec embedding_worker celery -A app.worker.celery_app.celery_app inspect active_queues
@@ -92,7 +118,7 @@ Must show exactly one queue, `embedding`. This is also the only container
 with `EMBEDDING_WORKER_SELF_RECYCLE_ENABLED=true` (§10) and
 `--concurrency=1 --prefetch-multiplier=1`.
 
-## 0c. Confirming `maintenance_worker` consumes only `maintenance`
+## 0e. Confirming `maintenance_worker` consumes only `maintenance`
 
 ```bash
 docker compose exec maintenance_worker celery -A app.worker.celery_app.celery_app inspect active_queues
