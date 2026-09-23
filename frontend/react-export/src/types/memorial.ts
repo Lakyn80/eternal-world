@@ -48,9 +48,25 @@ export type InvitationCreateResponse = {
   accepted_at: string | null;
   revoked_at: string | null;
   created_at: string;
+  status?: InvitationLifecycleStatus;
   token?: string;
   accept_url?: string | null;
   email_sent?: boolean;
+};
+
+export type InvitationLifecycleStatus = 'pending' | 'expired' | 'accepted' | 'revoked';
+
+export type InvitationRead = {
+  id: number;
+  profile_id: number;
+  email: string;
+  role: InvitableMemorialRole;
+  preferred_locale_hint?: string | null;
+  expires_at: string;
+  accepted_at: string | null;
+  revoked_at: string | null;
+  created_at: string;
+  status: InvitationLifecycleStatus;
 };
 
 export type ContributionRead = {

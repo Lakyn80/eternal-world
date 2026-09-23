@@ -21,6 +21,7 @@ import {
   listBiographyMemoryEntries,
   listChatMessages,
   listContributions,
+  listInvitations,
   listMembers,
   listMemorials,
   listMemoryCandidates,
@@ -28,6 +29,7 @@ import {
   login,
   logoutSession,
   MemorialApiError,
+  revokeInvitation,
   revokeMember,
   ownerReviewCandidate,
   register,
@@ -73,6 +75,7 @@ import type {
   ClarificationQuestionRead,
   ContributionRead,
   InvitationCreateResponse,
+  InvitationRead,
   InvitableMemorialRole,
   MembershipRead,
   MemoryCandidateEnrichmentRead,
@@ -313,6 +316,14 @@ export type Copy = {
   inviteAlreadyMember: string;
   inviteAlreadyPending: string;
   inviteDeliveryFailed: string;
+  pendingInvitations: string;
+  revokeInvitation: string;
+  invitationRevoked: string;
+  invitationExpires: string;
+  invitationStatusPending: string;
+  invitationStatusExpired: string;
+  revokeInvitationFailed: string;
+  noPendingInvitations: string;
   copyInviteLink: string;
   devToken: string;
   tokenNote: string;
@@ -620,6 +631,14 @@ export const COPY: Record<Lang, Copy> = {
     inviteAlreadyMember: 'This email already belongs to an active member.',
     inviteAlreadyPending: 'An active invitation already exists for this email.',
     inviteDeliveryFailed: 'The invitation could not be emailed. Try again later.',
+    pendingInvitations: 'Pending invitations',
+    revokeInvitation: 'Revoke invitation',
+    invitationRevoked: 'Invitation revoked.',
+    invitationExpires: 'Expires',
+    invitationStatusPending: 'Pending',
+    invitationStatusExpired: 'Expired',
+    revokeInvitationFailed: 'Could not revoke the invitation.',
+    noPendingInvitations: 'No pending invitations.',
     copyInviteLink: 'Copy invite link',
     devToken: 'Development invitation link',
     tokenNote: 'Shown because email delivery is disabled in this environment.',
@@ -929,6 +948,14 @@ export const COPY: Record<Lang, Copy> = {
     inviteAlreadyMember: 'Tento e-mail už patří aktivnímu členovi.',
     inviteAlreadyPending: 'Pro tento e-mail už existuje aktivní pozvánka.',
     inviteDeliveryFailed: 'Pozvánku se nepodařilo odeslat e-mailem. Zkuste to znovu později.',
+    pendingInvitations: 'Čekající pozvánky',
+    revokeInvitation: 'Zrušit pozvánku',
+    invitationRevoked: 'Pozvánka zrušena.',
+    invitationExpires: 'Vyprší',
+    invitationStatusPending: 'Čeká',
+    invitationStatusExpired: 'Vypršela',
+    revokeInvitationFailed: 'Pozvánku se nepodařilo zrušit.',
+    noPendingInvitations: 'Žádné čekající pozvánky.',
     copyInviteLink: 'Zkopírovat odkaz',
     devToken: 'Vývojový odkaz pozvánky',
     tokenNote: 'Zobrazeno, protože v tomto prostředí je odesílání e-mailů vypnuté.',
@@ -1238,6 +1265,14 @@ export const COPY: Record<Lang, Copy> = {
     inviteAlreadyMember: 'Этот адрес уже принадлежит активному участнику.',
     inviteAlreadyPending: 'Для этого адреса уже есть активное приглашение.',
     inviteDeliveryFailed: 'Не удалось отправить приглашение по почте. Попробуйте позже.',
+    pendingInvitations: 'Ожидающие приглашения',
+    revokeInvitation: 'Отозвать приглашение',
+    invitationRevoked: 'Приглашение отозвано.',
+    invitationExpires: 'Истекает',
+    invitationStatusPending: 'Ожидает',
+    invitationStatusExpired: 'Истекло',
+    revokeInvitationFailed: 'Не удалось отозвать приглашение.',
+    noPendingInvitations: 'Нет ожидающих приглашений.',
     copyInviteLink: 'Скопировать ссылку',
     devToken: 'Ссылка приглашения для разработки',
     tokenNote: 'Показано, потому что отправка email в этой среде отключена.',
@@ -2155,7 +2190,9 @@ export default function MemorialWorkspace({
                   )}
                   {activeTab === 'invitations' && mayInvite && (
                     <InvitationSection
+                      lang={lang}
                       onInvited={() => setNotice(t.invitationCreated)}
+                      onInvitationRevoked={() => setNotice(t.invitationRevoked)}
                       profileId={selected.id}
                       t={t}
                       token={session.accessToken}
@@ -5049,12 +5086,48 @@ export function MembersSection({
   );
 }
 
-export function InvitationSection({ token, profileId, t, onInvited }: { token: string; profileId: number; t: Copy; onInvited: (invitation: InvitationCreateResponse) => void }) {
+export function InvitationSection({
+  token,
+  profileId,
+  t,
+  lang,
+  onInvited,
+  onInvitationRevoked,
+  canRevoke = true,
+}: {
+  token: string;
+  profileId: number;
+  t: Copy;
+  lang: Lang;
+  onInvited: (invitation: InvitationCreateResponse) => void;
+  onInvitationRevoked?: () => void;
+  canRevoke?: boolean;
+}) {
   const [email, setEmail] = useState('');
   const [role, setRole] = useState<InvitableMemorialRole>('contributor');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [lastInvitation, setLastInvitation] = useState<InvitationCreateResponse | null>(null);
+  const [pending, setPending] = useState<InvitationRead[]>([]);
+  const [pendingLoading, setPendingLoading] = useState(true);
+  const [revokingId, setRevokingId] = useState<number | null>(null);
+  const [revokeError, setRevokeError] = useState<string | null>(null);
+
+  async function refreshPending() {
+    setPendingLoading(true);
+    try {
+      setPending(await listInvitations(token, profileId));
+    } catch (loadError) {
+      setRevokeError(safeError(loadError));
+    } finally {
+      setPendingLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    void refreshPending();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- reload when memorial/token changes
+  }, [token, profileId]);
 
   const devInviteUrl = lastInvitation
     ? lastInvitation.accept_url
@@ -5078,10 +5151,25 @@ export function InvitationSection({ token, profileId, t, onInvited }: { token: s
       setLastInvitation(invitation);
       setEmail('');
       onInvited(invitation);
+      await refreshPending();
     } catch (inviteError) {
       setError(inviteErrorMessage(inviteError, t));
     } finally {
       setBusy(false);
+    }
+  }
+
+  async function revokePending(invitationId: number) {
+    setRevokingId(invitationId);
+    setRevokeError(null);
+    try {
+      await revokeInvitation(token, profileId, invitationId);
+      setPending((items) => items.filter((item) => item.id !== invitationId));
+      onInvitationRevoked?.();
+    } catch (err) {
+      setRevokeError(err instanceof MemorialApiError ? t.revokeInvitationFailed : safeError(err));
+    } finally {
+      setRevokingId(null);
     }
   }
 
@@ -5134,6 +5222,48 @@ export function InvitationSection({ token, profileId, t, onInvited }: { token: s
           </button>
         </div>
       )}
+
+      <div className="min-w-0 space-y-3">
+        <h4 className="font-serif text-2xl">{t.pendingInvitations}</h4>
+        {revokeError && <p className="rounded-2xl border border-red-400/30 bg-red-500/10 px-4 py-3 text-sm text-red-100">{revokeError}</p>}
+        {pendingLoading ? (
+          <p className="text-sm text-fg/55">{t.working}</p>
+        ) : pending.length === 0 ? (
+          <p className="rounded-2xl border border-white/10 bg-black/20 p-4 text-sm text-fg/60">{t.noPendingInvitations}</p>
+        ) : (
+          <div className="grid gap-3">
+            {pending.map((invitation) => (
+              <article
+                className="flex min-w-0 flex-col gap-3 rounded-3xl border border-white/10 bg-black/20 p-4 sm:flex-row sm:items-start sm:justify-between"
+                key={invitation.id}
+              >
+                <div className="min-w-0">
+                  <h4 className="truncate text-base font-semibold">{invitation.email}</h4>
+                  <p className="mt-1 text-sm text-fg/55">
+                    {t.invitationExpires}: {formatDate(invitation.expires_at, lang)}
+                  </p>
+                </div>
+                <div className="flex shrink-0 flex-col items-stretch gap-2 sm:items-end">
+                  <Badge>{roleLabel(t, invitation.role)}</Badge>
+                  <Badge tone={invitation.status === 'expired' ? 'muted' : 'cyan'}>
+                    {invitation.status === 'expired' ? t.invitationStatusExpired : t.invitationStatusPending}
+                  </Badge>
+                  {canRevoke && (
+                    <button
+                      className="rounded-full border border-red-400/30 px-4 py-2 text-sm text-red-200 transition hover:bg-red-500/10 disabled:opacity-55"
+                      disabled={revokingId === invitation.id}
+                      onClick={() => void revokePending(invitation.id)}
+                      type="button"
+                    >
+                      {revokingId === invitation.id ? t.working : t.revokeInvitation}
+                    </button>
+                  )}
+                </div>
+              </article>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

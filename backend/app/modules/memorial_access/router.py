@@ -60,14 +60,17 @@ from app.modules.memorial_access.service import (
     contribution_is_active_memory,
     create_memorial,
     get_memorial,
+    invitation_status,
     invite_participant,
     list_contributions,
+    list_invitations,
     list_memberships,
     list_memorials,
     list_review_queue,
     reject_contribution,
     restore_contribution,
     retry_contribution_indexing,
+    revoke_invitation,
     revoke_member,
     submit_contribution,
 )
@@ -76,6 +79,7 @@ from app.modules.memorial_access.service import (
 router = APIRouter(tags=["memorial-access"])
 ProfileIdPath = Annotated[int, Path(gt=0)]
 ContributionIdPath = Annotated[int, Path(gt=0)]
+InvitationIdPath = Annotated[int, Path(gt=0)]
 
 
 def _build_memorial_read(profile: MemoryProfile, membership: MemorialMembership) -> MemorialRead:
@@ -123,6 +127,7 @@ def _build_invitation_read(invitation: MemorialInvitation) -> InvitationRead:
         accepted_at=invitation.accepted_at,
         revoked_at=invitation.revoked_at,
         created_at=invitation.created_at,
+        status=invitation_status(invitation),  # type: ignore[arg-type]
     )
 
 
@@ -378,6 +383,55 @@ def invite_participant_endpoint(
     except InvitationDeliveryError as exc:
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)) from exc
     return _build_invitation_response(result)
+
+
+@router.get(
+    "/api/memorials/{profile_id}/invitations",
+    response_model=list[InvitationRead],
+    responses={
+        status.HTTP_401_UNAUTHORIZED: {"model": ErrorResponse},
+        status.HTTP_403_FORBIDDEN: {"model": ErrorResponse},
+        status.HTTP_404_NOT_FOUND: {"model": ErrorResponse},
+    },
+)
+def list_invitations_endpoint(
+    profile_id: ProfileIdPath,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> list[InvitationRead]:
+    try:
+        invitations = list_invitations(db, current_user=current_user, profile_id=profile_id)
+    except (MemorialNotFoundError, MemorialForbiddenError, MemorialConflictError) as exc:
+        _raise_access_error(exc)
+    return [_build_invitation_read(invitation) for invitation in invitations]
+
+
+@router.delete(
+    "/api/memorials/{profile_id}/invitations/{invitation_id}",
+    response_model=InvitationRead,
+    responses={
+        status.HTTP_401_UNAUTHORIZED: {"model": ErrorResponse},
+        status.HTTP_403_FORBIDDEN: {"model": ErrorResponse},
+        status.HTTP_404_NOT_FOUND: {"model": ErrorResponse},
+        status.HTTP_409_CONFLICT: {"model": ErrorResponse},
+    },
+)
+def revoke_invitation_endpoint(
+    profile_id: ProfileIdPath,
+    invitation_id: InvitationIdPath,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> InvitationRead:
+    try:
+        invitation = revoke_invitation(
+            db,
+            current_user=current_user,
+            profile_id=profile_id,
+            invitation_id=invitation_id,
+        )
+    except (MemorialNotFoundError, MemorialForbiddenError, MemorialConflictError) as exc:
+        _raise_access_error(exc)
+    return _build_invitation_read(invitation)
 
 
 @router.post(

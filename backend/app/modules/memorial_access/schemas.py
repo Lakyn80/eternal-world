@@ -122,6 +122,8 @@ class InvitationRead(BaseModel):
     accepted_at: datetime | None
     revoked_at: datetime | None
     created_at: datetime
+    #: Derived lifecycle for owner management UI (not a DB column).
+    status: Literal["pending", "expired", "accepted", "revoked"] = "pending"
 
 
 class InvitationCreateResponse(InvitationRead):

@@ -361,6 +361,54 @@ def _revoke_committed_invitation(db: Session, invitation: MemorialInvitation) ->
     db.commit()
 
 
+def invitation_status(invitation: MemorialInvitation, *, now: datetime | None = None) -> str:
+    """Derive invitation lifecycle status for API responses."""
+    moment = now or _now()
+    if invitation.revoked_at is not None:
+        return "revoked"
+    if invitation.accepted_at is not None:
+        return "accepted"
+    if _as_aware(invitation.expires_at) <= moment:
+        return "expired"
+    return "pending"
+
+
+def list_invitations(
+    db: Session,
+    *,
+    current_user: User,
+    profile_id: int,
+) -> list[MemorialInvitation]:
+    """Owner-only list of open (pending/expired) invitations for a memorial."""
+    _require_role(db, profile_id=profile_id, user=current_user, allowed_roles=frozenset({"owner"}))
+    return repository.list_open_invitations(db, profile_id=profile_id)
+
+
+def revoke_invitation(
+    db: Session,
+    *,
+    current_user: User,
+    profile_id: int,
+    invitation_id: int,
+) -> MemorialInvitation:
+    """Owner soft-revokes a pending/expired invitation. Does not delete the row.
+
+    Does not touch memberships. Accepted invitations cannot be revoked here.
+    Already-revoked invitations return not-found (same convention as member revoke).
+    """
+    _require_role(db, profile_id=profile_id, user=current_user, allowed_roles=frozenset({"owner"}))
+    invitation = repository.get_invitation(db, profile_id=profile_id, invitation_id=invitation_id)
+    if invitation is None or invitation.revoked_at is not None:
+        raise MemorialNotFoundError("Invitation not found")
+    if invitation.accepted_at is not None:
+        raise MemorialConflictError("Accepted invitation cannot be revoked")
+
+    invitation.revoked_at = _now()
+    db.commit()
+    db.refresh(invitation)
+    return invitation
+
+
 def _invitation_email_matches_user(*, invitation_email: str, user_email: str) -> bool:
     """Compare using the project's canonical email normalizer on both sides."""
     try:

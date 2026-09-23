@@ -9,7 +9,8 @@ vi.mock('../lib/memorialApi', async () => {
   const actual = await vi.importActual<typeof import('../lib/memorialApi')>('../lib/memorialApi');
   return {
     ...actual,
-    inviteParticipant: vi.fn()
+    inviteParticipant: vi.fn(),
+    listInvitations: vi.fn().mockResolvedValue([])
   };
 });
 
@@ -50,7 +51,7 @@ describe('InvitationSection development invite link', () => {
       value: { writeText }
     });
 
-    render(<InvitationSection token="access" profileId={7} t={t} onInvited={() => {}} />);
+    render(<InvitationSection lang="en" token="access" profileId={7} t={t} onInvited={() => {}} />);
 
     await user.type(screen.getByLabelText(t.email), 'invitee@example.com');
     await user.click(screen.getByRole('button', { name: t.inviteParticipant }));
@@ -77,7 +78,7 @@ describe('InvitationSection development invite link', () => {
       })
     );
 
-    render(<InvitationSection token="access" profileId={7} t={t} onInvited={() => {}} />);
+    render(<InvitationSection lang="en" token="access" profileId={7} t={t} onInvited={() => {}} />);
 
     await user.type(screen.getByLabelText(t.email), 'invitee@example.com');
     await user.click(screen.getByRole('button', { name: t.inviteParticipant }));

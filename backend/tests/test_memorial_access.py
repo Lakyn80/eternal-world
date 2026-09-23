@@ -992,3 +992,152 @@ def test_owner_integrity_preflight_detects_zero_multi_and_mismatch(client):
     finally:
         db.close()
 
+
+def test_owner_lists_and_revokes_pending_invitation(client):
+    owner_token = _register_and_login(client, "invite-list-owner65@example.com")
+    contributor_token = _register_and_login(client, "invite-list-contrib65@example.com")
+    reviewer_token = _register_and_login(client, "invite-list-reviewer65@example.com")
+    profile_id = _create_memorial(client, owner_token)
+    assert (
+        _accept(
+            client,
+            reviewer_token,
+            _invite(client, owner_token, profile_id, "invite-list-reviewer65@example.com", "trusted_reviewer"),
+        ).status_code
+        == 200
+    )
+
+    invite_token = _invite(client, owner_token, profile_id, "invite-list-pending65@example.com")
+    listed = client.get(f"/api/memorials/{profile_id}/invitations", headers=_auth_headers(owner_token))
+    assert listed.status_code == 200
+    body = listed.json()
+    assert len(body) == 1
+    assert body[0]["email"] == "invite-list-pending65@example.com"
+    assert body[0]["role"] == "contributor"
+    assert body[0]["status"] == "pending"
+    assert body[0]["accepted_at"] is None
+    assert body[0]["revoked_at"] is None
+    invitation_id = body[0]["id"]
+
+    forbidden_contrib = client.get(
+        f"/api/memorials/{profile_id}/invitations",
+        headers=_auth_headers(contributor_token),
+    )
+    # Contributor is not a member → memorial not revealed as 404.
+    assert forbidden_contrib.status_code == 404
+    forbidden_reviewer = client.get(
+        f"/api/memorials/{profile_id}/invitations",
+        headers=_auth_headers(reviewer_token),
+    )
+    assert forbidden_reviewer.status_code == 403
+
+    forbidden_revoke = client.delete(
+        f"/api/memorials/{profile_id}/invitations/{invitation_id}",
+        headers=_auth_headers(reviewer_token),
+    )
+    assert forbidden_revoke.status_code == 403
+
+    revoked = client.delete(
+        f"/api/memorials/{profile_id}/invitations/{invitation_id}",
+        headers=_auth_headers(owner_token),
+    )
+    assert revoked.status_code == 200
+    assert revoked.json()["status"] == "revoked"
+    assert revoked.json()["revoked_at"] is not None
+
+    listed_after = client.get(f"/api/memorials/{profile_id}/invitations", headers=_auth_headers(owner_token))
+    assert listed_after.json() == []
+
+    accept_revoked = _accept(client, contributor_token, invite_token)
+    assert accept_revoked.status_code == 404
+
+    double = client.delete(
+        f"/api/memorials/{profile_id}/invitations/{invitation_id}",
+        headers=_auth_headers(owner_token),
+    )
+    assert double.status_code == 404
+
+
+def test_reinvite_after_invitation_revoke_creates_new_pending(client):
+    owner_token = _register_and_login(client, "reinvite-after-revoke-o65@example.com")
+    invitee_token = _register_and_login(client, "reinvite-after-revoke-i65@example.com")
+    profile_id = _create_memorial(client, owner_token)
+    email = "reinvite-after-revoke-i65@example.com"
+
+    first_token = _invite(client, owner_token, profile_id, email)
+    listed = client.get(f"/api/memorials/{profile_id}/invitations", headers=_auth_headers(owner_token))
+    invitation_id = listed.json()[0]["id"]
+    assert (
+        client.delete(
+            f"/api/memorials/{profile_id}/invitations/{invitation_id}",
+            headers=_auth_headers(owner_token),
+        ).status_code
+        == 200
+    )
+
+    second_token = _invite(client, owner_token, profile_id, email)
+    assert second_token != first_token
+    listed2 = client.get(f"/api/memorials/{profile_id}/invitations", headers=_auth_headers(owner_token))
+    assert len(listed2.json()) == 1
+    assert listed2.json()[0]["email"] == email
+    assert listed2.json()[0]["status"] == "pending"
+
+    accepted = _accept(client, invitee_token, second_token)
+    assert accepted.status_code == 200
+    assert accepted.json()["role"] == "contributor"
+
+    members = client.get(f"/api/memorials/{profile_id}/members", headers=_auth_headers(owner_token))
+    assert members.status_code == 200
+    assert any(m["email"] == email and m["status"] == "active" for m in members.json())
+
+
+def test_accepted_invitation_is_not_listed_and_cannot_be_revoked(client):
+    owner_token = _register_and_login(client, "accepted-invite-o65@example.com")
+    invitee_token = _register_and_login(client, "accepted-invite-i65@example.com")
+    profile_id = _create_memorial(client, owner_token)
+    token = _invite(client, owner_token, profile_id, "accepted-invite-i65@example.com")
+    listed_before = client.get(f"/api/memorials/{profile_id}/invitations", headers=_auth_headers(owner_token))
+    invitation_id = listed_before.json()[0]["id"]
+    assert _accept(client, invitee_token, token).status_code == 200
+
+    listed = client.get(f"/api/memorials/{profile_id}/invitations", headers=_auth_headers(owner_token))
+    assert listed.json() == []
+
+    revoke_accepted = client.delete(
+        f"/api/memorials/{profile_id}/invitations/{invitation_id}",
+        headers=_auth_headers(owner_token),
+    )
+    assert revoke_accepted.status_code == 409
+
+    members = client.get(f"/api/memorials/{profile_id}/members", headers=_auth_headers(owner_token))
+    assert any(m["email"] == "accepted-invite-i65@example.com" and m["status"] == "active" for m in members.json())
+
+
+def test_expired_invitation_is_listed_as_expired_and_does_not_block_reinvite(client):
+    owner_token = _register_and_login(client, "expired-list-o65@example.com")
+    profile_id = _create_memorial(client, owner_token)
+    _invite(client, owner_token, profile_id, "expired-list65@example.com")
+
+    db = app.state.testing_session_local()
+    try:
+        invitation = db.query(MemorialInvitation).filter(MemorialInvitation.profile_id == profile_id).one()
+        invitation.expires_at = datetime.now(timezone.utc) - timedelta(minutes=1)
+        invitation_id = invitation.id
+        db.commit()
+    finally:
+        db.close()
+
+    listed = client.get(f"/api/memorials/{profile_id}/invitations", headers=_auth_headers(owner_token))
+    assert listed.status_code == 200
+    assert len(listed.json()) == 1
+    assert listed.json()[0]["status"] == "expired"
+    assert listed.json()[0]["id"] == invitation_id
+
+    # Expired is not an active pending invite — re-invite must succeed.
+    second = client.post(
+        f"/api/memorials/{profile_id}/invitations",
+        headers=_auth_headers(owner_token),
+        json={"email": "expired-list65@example.com", "role": "viewer"},
+    )
+    assert second.status_code == 201
+

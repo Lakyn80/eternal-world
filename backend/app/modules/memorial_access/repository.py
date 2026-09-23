@@ -193,6 +193,37 @@ def get_active_pending_invitation(
     return db.scalar(statement)
 
 
+def list_open_invitations(db: Session, *, profile_id: int) -> list[MemorialInvitation]:
+    """Invitations still open for owner management: not accepted and not revoked.
+
+    Includes both pending (unexpired) and expired rows so owners can see and
+    revoke leftovers. Historical accepted/revoked rows are omitted.
+    """
+    statement = (
+        select(MemorialInvitation)
+        .where(
+            MemorialInvitation.profile_id == profile_id,
+            MemorialInvitation.accepted_at.is_(None),
+            MemorialInvitation.revoked_at.is_(None),
+        )
+        .order_by(MemorialInvitation.created_at.desc(), MemorialInvitation.id.desc())
+    )
+    return list(db.scalars(statement))
+
+
+def get_invitation(
+    db: Session,
+    *,
+    profile_id: int,
+    invitation_id: int,
+) -> MemorialInvitation | None:
+    statement = select(MemorialInvitation).where(
+        MemorialInvitation.profile_id == profile_id,
+        MemorialInvitation.id == invitation_id,
+    )
+    return db.scalar(statement)
+
+
 def create_contribution(
     db: Session,
     *,

@@ -17,6 +17,7 @@ import type {
   ChatSendResponse,
   ContributionRead,
   InvitationCreateResponse,
+  InvitationRead,
   InvitableMemorialRole,
   MembershipRead,
   MemoryCandidateEnrichmentRead,
@@ -314,6 +315,24 @@ export async function inviteParticipant(
   return requestJson<InvitationCreateResponse>(
     `/api/memorials/${profileId}/invitations`,
     { method: 'POST', body: JSON.stringify(payload) },
+    accessToken
+  );
+}
+
+/** Owner lists open (pending/expired) invitations for a memorial. */
+export async function listInvitations(accessToken: string, profileId: number): Promise<InvitationRead[]> {
+  return requestJson<InvitationRead[]>(`/api/memorials/${profileId}/invitations`, undefined, accessToken);
+}
+
+/** Owner soft-revokes a pending/expired invitation. Does not delete the row. */
+export async function revokeInvitation(
+  accessToken: string,
+  profileId: number,
+  invitationId: number
+): Promise<InvitationRead> {
+  return requestJson<InvitationRead>(
+    `/api/memorials/${profileId}/invitations/${invitationId}`,
+    { method: 'DELETE' },
     accessToken
   );
 }
