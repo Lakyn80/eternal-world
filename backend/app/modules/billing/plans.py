@@ -22,9 +22,14 @@ class PlanLimitsDefinition:
 
 @dataclass(frozen=True)
 class PlanDefinition:
+    """Product / entitlement definition — currency-agnostic.
+
+    Commercial amounts live in ``billing.prices.PriceDefinition`` keyed by
+    ``(plan_code, billing_market, currency)``.
+    """
+
     code: str
     name: str
-    price_rub_monthly: int
     features: tuple[str, ...]
     limits: PlanLimitsDefinition
     watermark_enabled: bool
@@ -47,7 +52,6 @@ PLAN_DEFINITIONS: tuple[PlanDefinition, ...] = (
     PlanDefinition(
         code=FREE_PLAN_CODE,
         name="FREE",
-        price_rub_monthly=0,
         features=(
             "1 profile",
             "up to 10 memories",
@@ -76,7 +80,6 @@ PLAN_DEFINITIONS: tuple[PlanDefinition, ...] = (
     PlanDefinition(
         code=BASIC_PLAN_CODE,
         name="BASIC",
-        price_rub_monthly=499,
         features=(
             "up to 3 profiles",
             "unlimited memories",
@@ -105,7 +108,6 @@ PLAN_DEFINITIONS: tuple[PlanDefinition, ...] = (
     PlanDefinition(
         code=PREMIUM_PLAN_CODE,
         name="PREMIUM",
-        price_rub_monthly=999,
         features=(
             "unlimited profiles",
             "unlimited audio and video",
@@ -135,7 +137,6 @@ PLAN_DEFINITIONS: tuple[PlanDefinition, ...] = (
     PlanDefinition(
         code=FAMILY_PLAN_CODE,
         name="FAMILY",
-        price_rub_monthly=1999,
         features=(
             "everything from Premium",
             "up to 6 family members",
