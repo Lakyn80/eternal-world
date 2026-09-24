@@ -10,7 +10,8 @@ import {
   setUnauthorizedHandler,
   startBiographyIngestion,
   updateAvatarPersonaSettings,
-  updateBiography
+  updateBiography,
+  updateContribution
 } from './memorialApi';
 
 function jsonResponse(status: number, body: unknown, headers: Record<string, string> = {}): Response {
@@ -280,6 +281,51 @@ describe('memorialApi', () => {
       personality_traits: ['funny'],
       primary_language: 'en',
       supported_languages: ['en']
+    });
+  });
+
+  it('updateContribution PATCHes author fields on the contribution endpoint', async () => {
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse(200, {
+        id: 11,
+        profile_id: 7,
+        author_user_id: 2,
+        author_email: 'contrib@example.com',
+        title: 'Fixed',
+        memory_text: 'Corrected text',
+        source_language: 'cs',
+        source_note: null,
+        privacy_scope: 'all_family',
+        status: 'needs_review',
+        is_current: false,
+        supersedes_contribution_id: null,
+        reviewed_at: null,
+        reviewed_by_user_id: null,
+        review_note: null,
+        rejection_reason: null,
+        active_memory_eligible: false,
+        indexing_status: { state: 'not_applicable', indexed_at: null, attempt_count: 0, failure_reason: null },
+        created_at: '2026-01-01T00:00:00Z',
+        updated_at: '2026-01-02T00:00:00Z'
+      })
+    );
+
+    const result = await updateContribution('secret-token', 7, 11, {
+      title: 'Fixed',
+      memory_text: 'Corrected text',
+      source_note: null,
+      privacy_scope: 'all_family'
+    });
+
+    expect(result.title).toBe('Fixed');
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe('http://localhost:8033/api/memorials/7/contributions/11');
+    expect(init?.method).toBe('PATCH');
+    expect(JSON.parse(init?.body as string)).toEqual({
+      title: 'Fixed',
+      memory_text: 'Corrected text',
+      source_note: null,
+      privacy_scope: 'all_family'
     });
   });
 });

@@ -1,5 +1,14 @@
 import { describe, expect, it } from 'vitest';
-import { canInvite, canManageMembers, canReview, canSubmitContribution, isActiveMemoryEligible, isOwnedMemorial, partitionMemorialsByOwnership } from './memorialPermissions';
+import {
+  canEditOwnContribution,
+  canInvite,
+  canManageMembers,
+  canReview,
+  canSubmitContribution,
+  isActiveMemoryEligible,
+  isOwnedMemorial,
+  partitionMemorialsByOwnership
+} from './memorialPermissions';
 import type { ContributionRead } from '../types/memorial';
 
 describe('memorialPermissions', () => {
@@ -44,6 +53,23 @@ describe('memorialPermissions', () => {
     expect(canSubmitContribution('trusted_reviewer')).toBe(true);
     expect(canSubmitContribution('contributor')).toBe(true);
     expect(canSubmitContribution('viewer')).toBe(false);
+  });
+
+  it('Phase 5C: edit own only for draft/needs_review matching current user email', () => {
+    expect(
+      canEditOwnContribution({ status: 'needs_review', author_email: 'me@example.com' }, 'me@example.com')
+    ).toBe(true);
+    expect(canEditOwnContribution({ status: 'draft', author_email: 'Me@Example.com' }, 'me@example.com')).toBe(true);
+    expect(
+      canEditOwnContribution({ status: 'approved', author_email: 'me@example.com' }, 'me@example.com')
+    ).toBe(false);
+    expect(
+      canEditOwnContribution({ status: 'archived', author_email: 'me@example.com' }, 'me@example.com')
+    ).toBe(false);
+    expect(
+      canEditOwnContribution({ status: 'needs_review', author_email: 'other@example.com' }, 'me@example.com')
+    ).toBe(false);
+    expect(canEditOwnContribution({ status: 'needs_review', author_email: 'me@example.com' }, null)).toBe(false);
   });
 
   it('active-memory eligibility requires approved, current, and eligible', () => {

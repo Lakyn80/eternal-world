@@ -20,6 +20,7 @@ from app.modules.memorial_access.schemas import (
     ContributionCreate,
     ContributionRejectRequest,
     ContributionReviewRequest,
+    ContributionUpdate,
     InvitationCreate,
     MemorialCreate,
 )
@@ -41,6 +42,10 @@ REVIEW_ROLES = frozenset({"owner", "trusted_reviewer"})
 CONTRIBUTION_ROLES = frozenset({"owner", "trusted_reviewer", "contributor"})
 MEMBERSHIP_VIEW_ROLES = frozenset({"owner", "trusted_reviewer"})
 INVITABLE_ROLES = frozenset({"trusted_reviewer", "contributor", "viewer"})
+#: Author may edit own contribution only while it remains pre-review /
+#: awaiting review. Approved / rejected / archived / superseded are immutable
+#: through the author edit endpoint (Phase 5C).
+EDITABLE_CONTRIBUTION_STATUSES = frozenset({"draft", "needs_review"})
 
 
 class MemorialAccessError(Exception):
@@ -516,6 +521,64 @@ def submit_contribution(
         profile=profile,
         author=current_user,
     )
+    db.commit()
+    db.refresh(contribution)
+    return contribution
+
+
+def update_contribution(
+    db: Session,
+    *,
+    current_user: User,
+    profile_id: int,
+    contribution_id: int,
+    payload: ContributionUpdate,
+) -> MemorialContribution:
+    """Author edit of own pending contribution (Phase 5C).
+
+    Requires ``SUBMIT_CONTRIBUTION`` (owner / trusted_reviewer / contributor),
+    ``author_user_id == current_user.id``, and status in
+    ``EDITABLE_CONTRIBUTION_STATUSES``. Does not grant review or manage
+    capabilities. Status and review/indexing fields are left unchanged.
+    """
+
+    from app.modules.memorial_access.capabilities import MemorialCapability, resolve_authorized_profile
+    from app.modules.memorial_access.contribution_translations import ensure_canonical_and_author_display
+
+    profile, _membership = resolve_authorized_profile(
+        db,
+        current_user=current_user,
+        profile_id=profile_id,
+        capability=MemorialCapability.SUBMIT_CONTRIBUTION,
+    )
+    contribution = repository.get_contribution(db, profile_id=profile_id, contribution_id=contribution_id)
+    if contribution is None:
+        raise ContributionNotFoundError("Contribution not found")
+    if contribution.author_user_id != current_user.id:
+        raise MemorialForbiddenError("Insufficient memorial permissions")
+    if contribution.status not in EDITABLE_CONTRIBUTION_STATUSES:
+        raise ContributionInvalidTransitionError(
+            "Only draft or needs_review contributions can be edited by their author"
+        )
+
+    memory_text_changed = contribution.memory_text != payload.memory_text
+    contribution.title = payload.title
+    contribution.memory_text = payload.memory_text
+    contribution.source_note = payload.source_note
+    contribution.privacy_scope = payload.privacy_scope
+
+    if memory_text_changed:
+        # Reuse submit-time translation bridge so derived canonical/display
+        # rows refresh against the new source (content_translation marks
+        # prior hashes stale / re-translates). Title/source_note/privacy
+        # alone do not affect translation rows.
+        ensure_canonical_and_author_display(
+            db,
+            contribution=contribution,
+            profile=profile,
+            author=current_user,
+        )
+
     db.commit()
     db.refresh(contribution)
     return contribution

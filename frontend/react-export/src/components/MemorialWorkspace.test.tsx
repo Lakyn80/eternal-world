@@ -50,6 +50,7 @@ vi.mock('../lib/memorialApi', async () => {
     getSession: vi.fn(),
     logoutSession: vi.fn(),
     retryContributionIndexing: vi.fn(),
+    updateContribution: vi.fn(),
     // Task 65.9.1 (Part F/G): defaults to an immediate, harmless 404 so any
     // test that triggers a job-tracking JobStatusBadge (via a `job_id` in
     // an indexCandidateMemory/retryContributionIndexing mock response)
@@ -1732,5 +1733,167 @@ describe('ContributionList - Task 65.8 retry / start indexing', () => {
       expect(copy.indexingPending.toLowerCase()).not.toContain(copy.statusApproved.toLowerCase());
       unmount();
     }
+  });
+});
+
+describe('ContributionList - Phase 5C edit own pending contribution', () => {
+  afterEach(() => {
+    vi.mocked(api.updateContribution).mockReset();
+  });
+
+  it('shows Edit for own draft and needs_review', () => {
+    render(
+      <ContributionList
+        contributions={[
+          baseContribution({
+            id: 1,
+            status: 'draft',
+            author_email: 'me@example.com',
+            active_memory_eligible: false,
+            indexing_status: { state: 'not_applicable', indexed_at: null, attempt_count: 0, failure_reason: null }
+          }),
+          baseContribution({
+            id: 2,
+            status: 'needs_review',
+            author_email: 'me@example.com',
+            active_memory_eligible: false,
+            indexing_status: { state: 'not_applicable', indexed_at: null, attempt_count: 0, failure_reason: null }
+          })
+        ]}
+        currentUserEmail="me@example.com"
+        lang="en"
+        onUpdated={vi.fn()}
+        profileId={7}
+        t={t}
+        token="tok"
+      />
+    );
+
+    expect(screen.getAllByRole('button', { name: t.editContribution })).toHaveLength(2);
+  });
+
+  it('hides Edit for approved/archived and for another author', () => {
+    render(
+      <ContributionList
+        contributions={[
+          baseContribution({
+            id: 1,
+            status: 'approved',
+            author_email: 'me@example.com',
+            indexing_status: { state: 'indexed', indexed_at: '2026-07-23T00:00:00Z', attempt_count: 1, failure_reason: null }
+          }),
+          baseContribution({
+            id: 2,
+            status: 'archived',
+            author_email: 'me@example.com',
+            is_current: false,
+            active_memory_eligible: false,
+            indexing_status: { state: 'not_applicable', indexed_at: null, attempt_count: 0, failure_reason: null }
+          }),
+          baseContribution({
+            id: 3,
+            status: 'needs_review',
+            author_email: 'other@example.com',
+            active_memory_eligible: false,
+            indexing_status: { state: 'not_applicable', indexed_at: null, attempt_count: 0, failure_reason: null }
+          })
+        ]}
+        currentUserEmail="me@example.com"
+        lang="en"
+        onUpdated={vi.fn()}
+        profileId={7}
+        t={t}
+        token="tok"
+      />
+    );
+
+    expect(screen.queryByRole('button', { name: t.editContribution })).not.toBeInTheDocument();
+  });
+
+  it('submits the correct PATCH payload and refreshes via onUpdated', async () => {
+    const onUpdated = vi.fn();
+    const pending = baseContribution({
+      id: 11,
+      status: 'needs_review',
+      author_email: 'me@example.com',
+      title: 'Old title',
+      memory_text: 'Old memory',
+      source_note: 'Note',
+      privacy_scope: 'all_family',
+      active_memory_eligible: false,
+      indexing_status: { state: 'not_applicable', indexed_at: null, attempt_count: 0, failure_reason: null }
+    });
+    vi.mocked(api.updateContribution).mockResolvedValue({
+      ...pending,
+      title: 'New title',
+      memory_text: 'New memory'
+    });
+    const user = userEvent.setup();
+
+    render(
+      <ContributionList
+        contributions={[pending]}
+        currentUserEmail="me@example.com"
+        lang="en"
+        onUpdated={onUpdated}
+        profileId={7}
+        t={t}
+        token="tok"
+      />
+    );
+
+    await user.click(screen.getByRole('button', { name: t.editContribution }));
+    const titleInput = screen.getByDisplayValue('Old title');
+    await user.clear(titleInput);
+    await user.type(titleInput, 'New title');
+    const memoryInput = screen.getByDisplayValue('Old memory');
+    await user.clear(memoryInput);
+    await user.type(memoryInput, 'New memory');
+    await user.click(screen.getByRole('button', { name: t.saveContribution }));
+
+    await waitFor(() => expect(api.updateContribution).toHaveBeenCalledTimes(1));
+    expect(api.updateContribution).toHaveBeenCalledWith('tok', 7, 11, {
+      title: 'New title',
+      memory_text: 'New memory',
+      source_note: 'Note',
+      privacy_scope: 'all_family'
+    });
+    await waitFor(() => expect(onUpdated).toHaveBeenCalledTimes(1));
+    expect(onUpdated.mock.calls[0][0].title).toBe('New title');
+  });
+
+  it('keeps prior contribution visible when edit fails', async () => {
+    vi.mocked(api.updateContribution).mockRejectedValue(new Error('boom'));
+    const onUpdated = vi.fn();
+    const pending = baseContribution({
+      id: 11,
+      status: 'needs_review',
+      author_email: 'me@example.com',
+      title: 'Keep me',
+      memory_text: 'Unchanged body',
+      active_memory_eligible: false,
+      indexing_status: { state: 'not_applicable', indexed_at: null, attempt_count: 0, failure_reason: null }
+    });
+    const user = userEvent.setup();
+
+    render(
+      <ContributionList
+        contributions={[pending]}
+        currentUserEmail="me@example.com"
+        lang="en"
+        onUpdated={onUpdated}
+        profileId={7}
+        t={t}
+        token="tok"
+      />
+    );
+
+    await user.click(screen.getByRole('button', { name: t.editContribution }));
+    await user.click(screen.getByRole('button', { name: t.saveContribution }));
+
+    await waitFor(() => expect(api.updateContribution).toHaveBeenCalledTimes(1));
+    expect(onUpdated).not.toHaveBeenCalled();
+    expect(screen.getByDisplayValue('Keep me')).toBeInTheDocument();
+    expect(screen.getByDisplayValue('Unchanged body')).toBeInTheDocument();
   });
 });

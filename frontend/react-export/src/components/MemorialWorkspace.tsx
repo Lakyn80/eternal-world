@@ -44,10 +44,19 @@ import {
   startBiographyIngestion,
   submitContribution,
   updateBiography,
+  updateContribution,
   updateMemorialMetadata,
   updatePreferredUiLanguage
 } from '../lib/memorialApi';
-import { canInvite, canManageMembers, canReview, canSubmitContribution, isActiveMemoryEligible, partitionMemorialsByOwnership } from '../lib/memorialPermissions';
+import {
+  canEditOwnContribution,
+  canInvite,
+  canManageMembers,
+  canReview,
+  canSubmitContribution,
+  isActiveMemoryEligible,
+  partitionMemorialsByOwnership
+} from '../lib/memorialPermissions';
 import { resolveLangAfterSessionRestore } from '../lib/langPreference';
 import { notifyServiceWorkerLogoutCleanup } from '../lib/pwa';
 import { APP_ROOT_PATH, buildMemorialPath, navigate, parseAppRoute, usePathname } from '../lib/router';
@@ -293,6 +302,10 @@ export type Copy = {
   sourceNote: string;
   privacyScope: string;
   submitForReview: string;
+  editContribution: string;
+  saveContribution: string;
+  cancelEditContribution: string;
+  contributionUpdated: string;
   viewerReadOnly: string;
   noContributions: string;
   notActiveMemory: string;
@@ -607,6 +620,10 @@ export const COPY: Record<Lang, Copy> = {
     sourceNote: 'Source note',
     privacyScope: 'Privacy scope',
     submitForReview: 'Submit for review',
+    editContribution: 'Edit',
+    saveContribution: 'Save changes',
+    cancelEditContribution: 'Cancel',
+    contributionUpdated: 'Memory updated.',
     viewerReadOnly: 'Viewers cannot submit memories.',
     noContributions: 'No contributions are visible for this role.',
     notActiveMemory: 'Not active memory',
@@ -924,6 +941,10 @@ export const COPY: Record<Lang, Copy> = {
     sourceNote: 'Poznámka ke zdroji',
     privacyScope: 'Soukromí',
     submitForReview: 'Odeslat ke kontrole',
+    editContribution: 'Upravit',
+    saveContribution: 'Uložit změny',
+    cancelEditContribution: 'Zrušit',
+    contributionUpdated: 'Vzpomínka byla upravena.',
     viewerReadOnly: 'Viewer nemůže přidávat vzpomínky.',
     noContributions: 'Pro tuto roli nejsou viditelné žádné vzpomínky.',
     notActiveMemory: 'Není aktivní paměť',
@@ -1241,6 +1262,10 @@ export const COPY: Record<Lang, Copy> = {
     sourceNote: 'Источник',
     privacyScope: 'Приватность',
     submitForReview: 'Отправить на проверку',
+    editContribution: 'Редактировать',
+    saveContribution: 'Сохранить изменения',
+    cancelEditContribution: 'Отмена',
+    contributionUpdated: 'Воспоминание обновлено.',
     viewerReadOnly: 'Viewer не может добавлять воспоминания.',
     noContributions: 'Для этой роли нет видимых воспоминаний.',
     notActiveMemory: 'Не активная память',
@@ -2112,6 +2137,7 @@ export default function MemorialWorkspace({
                   {activeTab === 'contributions' && (
                     <ContributionsSection
                       contributions={contributions}
+                      currentUserEmail={session.email}
                       lang={lang}
                       mayReview={mayReview}
                       maySubmit={maySubmit}
@@ -2134,6 +2160,15 @@ export default function MemorialWorkspace({
                           setReviewQueue((items) => [contribution, ...items]);
                         }
                         setNotice(t.submitting);
+                      }}
+                      onUpdated={(contribution) => {
+                        setContributions((items) => items.map((item) => (item.id === contribution.id ? contribution : item)));
+                        if (mayReview) {
+                          setReviewQueue((items) =>
+                            items.map((item) => (item.id === contribution.id ? contribution : item))
+                          );
+                        }
+                        setNotice(t.contributionUpdated);
                       }}
                       profileId={selected.id}
                       t={t}
@@ -4613,6 +4648,7 @@ export function CandidatesReviewSection({
 
 function ContributionsSection({
   contributions,
+  currentUserEmail,
   lang,
   mayReview,
   maySubmit,
@@ -4620,11 +4656,13 @@ function ContributionsSection({
   onIndexingSettled,
   onRestored,
   onSubmitted,
+  onUpdated,
   profileId,
   t,
   token
 }: {
   contributions: ContributionRead[];
+  currentUserEmail: string;
   lang: Lang;
   mayReview: boolean;
   maySubmit: boolean;
@@ -4635,6 +4673,7 @@ function ContributionsSection({
   onIndexingSettled?: () => void;
   onRestored?: (contribution: ContributionRead) => void;
   onSubmitted: (contribution: ContributionRead) => void;
+  onUpdated: (contribution: ContributionRead) => void;
   profileId: number;
   t: Copy;
   token: string;
@@ -4648,12 +4687,14 @@ function ContributionsSection({
       {maySubmit ? <ContributionForm onSubmitted={onSubmitted} profileId={profileId} t={t} token={token} /> : <p className="rounded-2xl border border-white/10 bg-black/20 p-4 text-sm text-fg/60">{t.viewerReadOnly}</p>}
       <ContributionList
         contributions={contributions}
+        currentUserEmail={currentUserEmail}
         lang={lang}
         canRetryIndexing={mayReview}
         canRestore={mayReview}
         onIndexingRetried={onIndexingRetried}
         onIndexingSettled={onIndexingSettled}
         onRestored={onRestored}
+        onUpdated={onUpdated}
         profileId={profileId}
         t={t}
         token={token}
@@ -4666,19 +4707,34 @@ export function ContributionForm({
   token,
   profileId,
   t,
-  onSubmitted
+  onSubmitted,
+  onCancel,
+  editing
 }: {
   token: string;
   profileId: number;
   t: Copy;
   onSubmitted: (contribution: ContributionRead) => void;
+  onCancel?: () => void;
+  /** When set, form PATCHes this contribution instead of creating a new one. */
+  editing?: ContributionRead | null;
 }) {
-  const [title, setTitle] = useState('');
-  const [memoryText, setMemoryText] = useState('');
-  const [sourceNote, setSourceNote] = useState('');
-  const [privacyScope, setPrivacyScope] = useState<PrivacyScope>('private_owner');
+  const [title, setTitle] = useState(editing?.title ?? '');
+  const [memoryText, setMemoryText] = useState(editing?.memory_text ?? '');
+  const [sourceNote, setSourceNote] = useState(editing?.source_note ?? '');
+  const [privacyScope, setPrivacyScope] = useState<PrivacyScope>(editing?.privacy_scope ?? 'private_owner');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const isEdit = editing != null;
+
+  useEffect(() => {
+    if (!editing) return;
+    setTitle(editing.title);
+    setMemoryText(editing.memory_text);
+    setSourceNote(editing.source_note ?? '');
+    setPrivacyScope(editing.privacy_scope);
+    setError(null);
+  }, [editing]);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -4688,16 +4744,22 @@ export function ContributionForm({
     }
     setBusy(true);
     setError(null);
+    const payload = {
+      title: title.trim(),
+      memory_text: memoryText.trim(),
+      source_note: sourceNote.trim() || null,
+      privacy_scope: privacyScope
+    };
     try {
-      const contribution = await submitContribution(token, profileId, {
-        title: title.trim(),
-        memory_text: memoryText.trim(),
-        source_note: sourceNote.trim() || null,
-        privacy_scope: privacyScope
-      });
-      setTitle('');
-      setMemoryText('');
-      setSourceNote('');
+      let contribution: ContributionRead;
+      if (editing) {
+        contribution = await updateContribution(token, profileId, editing.id, payload);
+      } else {
+        contribution = await submitContribution(token, profileId, payload);
+        setTitle('');
+        setMemoryText('');
+        setSourceNote('');
+      }
       onSubmitted(contribution);
     } catch (submitError) {
       setError(safeError(submitError));
@@ -4721,16 +4783,33 @@ export function ContributionForm({
           ))}
         </select>
       </label>
-      {error && <p className="rounded-2xl border border-red-400/30 bg-red-500/10 px-4 py-3 text-sm text-red-100">{error}</p>}
-      <button className="rounded-full bg-gradient-to-r from-cyan to-violet px-6 py-3.5 text-sm font-semibold text-ink disabled:opacity-55" disabled={busy} type="submit">
-        {busy ? t.submitting : t.submitForReview}
-      </button>
+      {error && <p className="text-sm text-red-100">{error}</p>}
+      <div className="flex flex-wrap gap-3">
+        <button
+          className="rounded-2xl bg-cyan/90 px-5 py-3 text-sm font-semibold text-ink disabled:opacity-50"
+          disabled={busy}
+          type="submit"
+        >
+          {busy ? t.working : isEdit ? t.saveContribution : t.submitForReview}
+        </button>
+        {isEdit && onCancel && (
+          <button
+            className="rounded-2xl border border-white/15 bg-white/[.06] px-5 py-3 text-sm text-fg/80 disabled:opacity-50"
+            disabled={busy}
+            onClick={onCancel}
+            type="button"
+          >
+            {t.cancelEditContribution}
+          </button>
+        )}
+      </div>
     </form>
   );
 }
 
 export function ContributionList({
   contributions,
+  currentUserEmail,
   lang,
   t,
   canRetryIndexing = false,
@@ -4738,10 +4817,12 @@ export function ContributionList({
   onIndexingRetried,
   onIndexingSettled,
   onRestored,
+  onUpdated,
   profileId,
   token
 }: {
   contributions: ContributionRead[];
+  currentUserEmail?: string | null;
   lang: Lang;
   t: Copy;
   /** Task 65.8 (Part I/J): backend-authorized reviewers only - mirrors the
@@ -4753,11 +4834,13 @@ export function ContributionList({
   onIndexingRetried?: (contribution: ContributionRead) => void;
   onIndexingSettled?: () => void;
   onRestored?: (contribution: ContributionRead) => void;
+  onUpdated?: (contribution: ContributionRead) => void;
   profileId?: number;
   token?: string;
 }) {
   const [retryingId, setRetryingId] = useState<number | null>(null);
   const [restoringId, setRestoringId] = useState<number | null>(null);
+  const [editingId, setEditingId] = useState<number | null>(null);
   const [retryErrorById, setRetryErrorById] = useState<Record<number, string>>({});
   const [restoreErrorById, setRestoreErrorById] = useState<Record<number, string>>({});
   // Task 65.9.1 (Part F) - contribution id -> the background job id
@@ -4768,6 +4851,8 @@ export function ContributionList({
   const [activeJobIdByContribution, setActiveJobIdByContribution] = useState<Record<number, number>>({});
   const canOfferRetry = canRetryIndexing && typeof profileId === 'number' && typeof token === 'string' && !!onIndexingRetried;
   const canOfferRestore = canRestore && typeof profileId === 'number' && typeof token === 'string' && !!onRestored;
+  const canOfferEdit =
+    typeof profileId === 'number' && typeof token === 'string' && !!onUpdated && !!currentUserEmail;
 
   useEffect(() => {
     setActiveJobIdByContribution((current) => {
@@ -4847,77 +4932,106 @@ export function ContributionList({
         const showRetry = canOfferRetry && indexingState === 'failed';
         const showIndexingAction = showStartIndexing || showRetry;
         const showRestore = canOfferRestore && contribution.status === 'archived';
+        const showEdit =
+          canOfferEdit && canEditOwnContribution(contribution, currentUserEmail);
+        const isEditing = editingId === contribution.id;
         const retryError = retryErrorById[contribution.id];
         const restoreError = restoreErrorById[contribution.id];
         return (
           <article className="min-w-0 rounded-3xl border border-white/10 bg-black/20 p-4" key={contribution.id}>
-            <div className="flex min-w-0 flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-              <div className="min-w-0">
-                <h4 className="break-words text-lg font-semibold">{contribution.title}</h4>
-                <p className="mt-2 break-words text-sm leading-6 text-fg/60">
-                  {contribution.display_text || contribution.memory_text}
-                </p>
-                {contribution.source_language &&
-                  contribution.display_language &&
-                  contribution.display_language !== contribution.source_language && (
-                    <p className="mt-1 text-xs text-fg/38">
-                      original ({contribution.source_language}): {contribution.memory_text}
+            {isEditing && typeof profileId === 'number' && typeof token === 'string' && onUpdated ? (
+              <ContributionForm
+                editing={contribution}
+                onCancel={() => setEditingId(null)}
+                onSubmitted={(updated) => {
+                  onUpdated(updated);
+                  setEditingId(null);
+                }}
+                profileId={profileId}
+                t={t}
+                token={token}
+              />
+            ) : (
+              <>
+                <div className="flex min-w-0 flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                  <div className="min-w-0">
+                    <h4 className="break-words text-lg font-semibold">{contribution.title}</h4>
+                    <p className="mt-2 break-words text-sm leading-6 text-fg/60">
+                      {contribution.display_text || contribution.memory_text}
                     </p>
-                  )}
-                <p className="mt-3 text-xs text-fg/38">
-                  {contribution.author_email} · {formatDate(contribution.created_at, lang)}
-                </p>
-                {contribution.rejection_reason && <p className="mt-2 text-sm text-red-100">{contribution.rejection_reason}</p>}
-              </div>
-              <div className="flex shrink-0 flex-wrap gap-2 lg:justify-end">
-                <Badge>{candidateStatusLabel(t, contribution.status)}</Badge>
-                <Badge tone={isActiveMemoryEligible(contribution) ? 'cyan' : 'muted'}>
-                  {isActiveMemoryEligible(contribution) ? t.activeMemory : t.notActiveMemory}
-                </Badge>
-                {/* When a live job is already being polled, JobStatusBadge is the
-                    sole indexing lifecycle label — avoid a second static badge
-                    that still says "waiting/queued" for the same moment. */}
-                {!(hasActiveJob && indexingState === 'pending') &&
-                  indexingStatusLabel(t, indexingState) && (
-                    <Badge tone={indexingStatusTone(indexingState)}>
-                      {indexingStatusLabel(t, indexingState)}
+                    {contribution.source_language &&
+                      contribution.display_language &&
+                      contribution.display_language !== contribution.source_language && (
+                        <p className="mt-1 text-xs text-fg/38">
+                          original ({contribution.source_language}): {contribution.memory_text}
+                        </p>
+                      )}
+                    <p className="mt-3 text-xs text-fg/38">
+                      {contribution.author_email} · {formatDate(contribution.created_at, lang)}
+                    </p>
+                    {contribution.rejection_reason && <p className="mt-2 text-sm text-red-100">{contribution.rejection_reason}</p>}
+                  </div>
+                  <div className="flex shrink-0 flex-wrap gap-2 lg:justify-end">
+                    <Badge>{candidateStatusLabel(t, contribution.status)}</Badge>
+                    <Badge tone={isActiveMemoryEligible(contribution) ? 'cyan' : 'muted'}>
+                      {isActiveMemoryEligible(contribution) ? t.activeMemory : t.notActiveMemory}
                     </Badge>
-                  )}
-                {typeof token === 'string' &&
-                  typeof profileId === 'number' &&
-                  hasActiveJob && (
-                    <JobStatusBadge
-                      accountKey={token}
-                      jobId={activeJobIdByContribution[contribution.id]}
-                      onTerminal={() => onJobTerminal(contribution.id)}
-                      profileId={profileId}
-                      t={t}
-                      token={token}
+                    {/* When a live job is already being polled, JobStatusBadge is the
+                        sole indexing lifecycle label — avoid a second static badge
+                        that still says "waiting/queued" for the same moment. */}
+                    {!(hasActiveJob && indexingState === 'pending') &&
+                      indexingStatusLabel(t, indexingState) && (
+                        <Badge tone={indexingStatusTone(indexingState)}>
+                          {indexingStatusLabel(t, indexingState)}
+                        </Badge>
+                      )}
+                    {typeof token === 'string' &&
+                      typeof profileId === 'number' &&
+                      hasActiveJob && (
+                        <JobStatusBadge
+                          accountKey={token}
+                          jobId={activeJobIdByContribution[contribution.id]}
+                          onTerminal={() => onJobTerminal(contribution.id)}
+                          profileId={profileId}
+                          t={t}
+                          token={token}
+                        />
+                      )}
+                  </div>
+                </div>
+                {showEdit && (
+                  <div className="mt-3 flex flex-col items-start gap-2">
+                    <ActionButton
+                      disabled={false}
+                      label={t.editContribution}
+                      onClick={() => setEditingId(contribution.id)}
+                      tone="secondary"
                     />
-                  )}
-              </div>
-            </div>
-            {showIndexingAction && (
-              <div className="mt-3 flex flex-col items-start gap-2">
-                <ActionButton
-                  disabled={retryingId === contribution.id}
-                  label={showRetry ? t.retryIndexing : t.startIndexing}
-                  onClick={() => void retryIndexing(contribution)}
-                  tone="secondary"
-                />
-                {retryError && <p className="text-sm text-red-100">{retryError}</p>}
-              </div>
-            )}
-            {showRestore && (
-              <div className="mt-3 flex flex-col items-start gap-2">
-                <ActionButton
-                  disabled={restoringId === contribution.id}
-                  label={restoringId === contribution.id ? t.working : t.restoreForReview}
-                  onClick={() => void restoreForReview(contribution)}
-                  tone="secondary"
-                />
-                {restoreError && <p className="text-sm text-red-100">{restoreError}</p>}
-              </div>
+                  </div>
+                )}
+                {showIndexingAction && (
+                  <div className="mt-3 flex flex-col items-start gap-2">
+                    <ActionButton
+                      disabled={retryingId === contribution.id}
+                      label={showRetry ? t.retryIndexing : t.startIndexing}
+                      onClick={() => void retryIndexing(contribution)}
+                      tone="secondary"
+                    />
+                    {retryError && <p className="text-sm text-red-100">{retryError}</p>}
+                  </div>
+                )}
+                {showRestore && (
+                  <div className="mt-3 flex flex-col items-start gap-2">
+                    <ActionButton
+                      disabled={restoringId === contribution.id}
+                      label={restoringId === contribution.id ? t.working : t.restoreForReview}
+                      onClick={() => void restoreForReview(contribution)}
+                      tone="secondary"
+                    />
+                    {restoreError && <p className="text-sm text-red-100">{restoreError}</p>}
+                  </div>
+                )}
+              </>
             )}
           </article>
         );

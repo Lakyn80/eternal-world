@@ -58,6 +58,13 @@ export type ContributionCreatePayload = {
   source_language?: string | null;
 };
 
+export type ContributionUpdatePayload = {
+  title: string;
+  memory_text: string;
+  source_note?: string | null;
+  privacy_scope: PrivacyScope;
+};
+
 export type InvitationCreatePayload = {
   email: string;
   role: InvitableMemorialRole;
@@ -353,6 +360,19 @@ export async function submitContribution(
   return requestJson<ContributionRead>(
     `/api/memorials/${profileId}/contributions`,
     { method: 'POST', body: JSON.stringify(payload) },
+    accessToken
+  );
+}
+
+export async function updateContribution(
+  accessToken: string,
+  profileId: number,
+  contributionId: number,
+  payload: ContributionUpdatePayload
+): Promise<ContributionRead> {
+  return requestJson<ContributionRead>(
+    `/api/memorials/${profileId}/contributions/${contributionId}`,
+    { method: 'PATCH', body: JSON.stringify(payload) },
     accessToken
   );
 }

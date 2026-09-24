@@ -179,6 +179,34 @@ class ContributionCreate(BaseModel):
         return assert_translation_language(value)
 
 
+class ContributionUpdate(BaseModel):
+    """Author edit of a still-pending contribution (draft / needs_review).
+
+    Phase 5C: only author-owned content fields. Status, reviewer, promotion,
+    and indexing fields are intentionally omitted and remain immutable here.
+    """
+
+    title: str = Field(max_length=200)
+    memory_text: str = Field(max_length=5000)
+    source_note: str | None = Field(default=None, max_length=500)
+    privacy_scope: PrivacyScope = "private_owner"
+
+    @field_validator("title")
+    @classmethod
+    def validate_title(cls, value: str) -> str:
+        return normalize_required_text(value, "title")
+
+    @field_validator("memory_text")
+    @classmethod
+    def validate_memory_text(cls, value: str) -> str:
+        return normalize_required_text(value, "memory_text")
+
+    @field_validator("source_note")
+    @classmethod
+    def validate_source_note(cls, value: str | None) -> str | None:
+        return normalize_optional_text(value)
+
+
 class ContributionReviewRequest(BaseModel):
     review_note: str | None = Field(default=None, max_length=500)
     supersedes_contribution_id: int | None = Field(default=None, gt=0)

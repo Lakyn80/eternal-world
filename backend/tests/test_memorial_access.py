@@ -1141,3 +1141,296 @@ def test_expired_invitation_is_listed_as_expired_and_does_not_block_reinvite(cli
     )
     assert second.status_code == 201
 
+
+def _patch_contribution(client, token: str, profile_id: int, contribution_id: int, **fields):
+    body = {
+        "title": "Ukolébavka",
+        "memory_text": "Babička zpívala ukolébavku o měsíci - opravený text.",
+        "source_note": "Rodinné vyprávění",
+        "privacy_scope": "all_family",
+        **fields,
+    }
+    return client.patch(
+        f"/api/memorials/{profile_id}/contributions/{contribution_id}",
+        headers=_auth_headers(token),
+        json=body,
+    )
+
+
+def test_contributor_can_edit_own_needs_review_contribution(client):
+    owner_token = _register_and_login(client, "edit-nr-owner65@example.com")
+    contributor_token = _register_and_login(client, "edit-nr-contrib65@example.com")
+    profile_id = _create_memorial(client, owner_token)
+    invitation_token = _invite(client, owner_token, profile_id, "edit-nr-contrib65@example.com")
+    assert _accept(client, contributor_token, invitation_token).status_code == 200
+
+    submitted = _submit_contribution(client, contributor_token, profile_id)
+    assert submitted.status_code == 201
+    assert submitted.json()["status"] == "needs_review"
+    contribution_id = submitted.json()["id"]
+
+    updated = _patch_contribution(
+        client,
+        contributor_token,
+        profile_id,
+        contribution_id,
+        title="Ukolébavka (oprava)",
+        memory_text="Babička zpívala ukolébavku o měsíci - bez překlepu.",
+    )
+    assert updated.status_code == 200
+    body = updated.json()
+    assert body["id"] == contribution_id
+    assert body["status"] == "needs_review"
+    assert body["title"] == "Ukolébavka (oprava)"
+    assert body["memory_text"] == "Babička zpívala ukolébavku o měsíci - bez překlepu."
+    assert body["author_user_id"] == submitted.json()["author_user_id"]
+
+
+def test_contributor_can_edit_own_draft_contribution(client):
+    owner_token = _register_and_login(client, "edit-draft-owner65@example.com")
+    contributor_token = _register_and_login(client, "edit-draft-contrib65@example.com")
+    profile_id = _create_memorial(client, owner_token)
+    invitation_token = _invite(client, owner_token, profile_id, "edit-draft-contrib65@example.com")
+    assert _accept(client, contributor_token, invitation_token).status_code == 200
+
+    draft = client.post(
+        f"/api/memorials/{profile_id}/contributions",
+        headers=_auth_headers(contributor_token),
+        json={
+            "title": "Draft memory",
+            "memory_text": "Draft text before polish.",
+            "privacy_scope": "private_owner",
+            "submit_for_review": False,
+        },
+    )
+    assert draft.status_code == 201
+    assert draft.json()["status"] == "draft"
+    contribution_id = draft.json()["id"]
+
+    updated = _patch_contribution(
+        client,
+        contributor_token,
+        profile_id,
+        contribution_id,
+        title="Draft memory polished",
+        memory_text="Draft text after polish.",
+        privacy_scope="private_owner",
+        source_note=None,
+    )
+    assert updated.status_code == 200
+    assert updated.json()["status"] == "draft"
+    assert updated.json()["title"] == "Draft memory polished"
+    assert updated.json()["memory_text"] == "Draft text after polish."
+
+
+def test_contributor_cannot_edit_another_authors_contribution(client):
+    owner_token = _register_and_login(client, "edit-other-owner65@example.com")
+    contributor_a = _register_and_login(client, "edit-other-a65@example.com")
+    contributor_b = _register_and_login(client, "edit-other-b65@example.com")
+    profile_id = _create_memorial(client, owner_token)
+    token_a = _invite(client, owner_token, profile_id, "edit-other-a65@example.com")
+    token_b = _invite(client, owner_token, profile_id, "edit-other-b65@example.com")
+    assert _accept(client, contributor_a, token_a).status_code == 200
+    assert _accept(client, contributor_b, token_b).status_code == 200
+
+    submitted = _submit_contribution(client, contributor_a, profile_id, title="A's memory")
+    assert submitted.status_code == 201
+
+    denied = _patch_contribution(client, contributor_b, profile_id, submitted.json()["id"])
+    assert denied.status_code == 403
+
+
+def test_contributor_cannot_edit_own_approved_rejected_archived_or_superseded(client):
+    owner_token = _register_and_login(client, "edit-immut-owner65@example.com")
+    contributor_token = _register_and_login(client, "edit-immut-contrib65@example.com")
+    profile_id = _create_memorial(client, owner_token)
+    invitation_token = _invite(client, owner_token, profile_id, "edit-immut-contrib65@example.com")
+    assert _accept(client, contributor_token, invitation_token).status_code == 200
+
+    needs_review = _submit_contribution(client, contributor_token, profile_id, title="Will approve")
+    assert needs_review.status_code == 201
+    approved = client.post(
+        f"/api/memorials/{profile_id}/contributions/{needs_review.json()['id']}/approve",
+        headers=_auth_headers(owner_token),
+        json={},
+    )
+    assert approved.status_code == 200
+    assert (
+        _patch_contribution(client, contributor_token, profile_id, approved.json()["id"]).status_code
+        == 400
+    )
+
+    rejected_src = _submit_contribution(client, contributor_token, profile_id, title="Will reject")
+    rejected = client.post(
+        f"/api/memorials/{profile_id}/contributions/{rejected_src.json()['id']}/reject",
+        headers=_auth_headers(owner_token),
+        json={"reason": "Not suitable"},
+    )
+    assert rejected.status_code == 200
+    assert (
+        _patch_contribution(client, contributor_token, profile_id, rejected.json()["id"]).status_code
+        == 400
+    )
+
+    archived_src = _submit_contribution(client, contributor_token, profile_id, title="Will archive")
+    archived = client.post(
+        f"/api/memorials/{profile_id}/contributions/{archived_src.json()['id']}/archive",
+        headers=_auth_headers(owner_token),
+        json={"reason": "Duplicate"},
+    )
+    assert archived.status_code == 200
+    assert (
+        _patch_contribution(client, contributor_token, profile_id, archived.json()["id"]).status_code
+        == 400
+    )
+
+    old = _submit_contribution(client, contributor_token, profile_id, title="Old version")
+    assert old.status_code == 201
+    assert (
+        client.post(
+            f"/api/memorials/{profile_id}/contributions/{old.json()['id']}/approve",
+            headers=_auth_headers(owner_token),
+            json={},
+        ).status_code
+        == 200
+    )
+    newer = _submit_contribution(client, contributor_token, profile_id, title="New version")
+    assert newer.status_code == 201
+    superseding = client.post(
+        f"/api/memorials/{profile_id}/contributions/{newer.json()['id']}/approve",
+        headers=_auth_headers(owner_token),
+        json={"supersedes_contribution_id": old.json()["id"]},
+    )
+    assert superseding.status_code == 200
+    # Old row is superseded and immutable for the author.
+    assert _patch_contribution(client, contributor_token, profile_id, old.json()["id"]).status_code == 400
+
+
+def test_viewer_cannot_edit_contribution(client):
+    owner_token = _register_and_login(client, "edit-viewer-owner65@example.com")
+    viewer_token = _register_and_login(client, "edit-viewer65@example.com")
+    profile_id = _create_memorial(client, owner_token)
+    invitation_token = _invite(client, owner_token, profile_id, "edit-viewer65@example.com", role="viewer")
+    assert _accept(client, viewer_token, invitation_token).status_code == 200
+
+    owner_submission = _submit_contribution(client, owner_token, profile_id)
+    assert owner_submission.status_code == 201
+
+    denied = _patch_contribution(client, viewer_token, profile_id, owner_submission.json()["id"])
+    assert denied.status_code == 403
+
+
+def test_trusted_reviewer_may_edit_only_own_pending_contribution(client):
+    owner_token = _register_and_login(client, "edit-tr-owner65@example.com")
+    reviewer_token = _register_and_login(client, "edit-tr-reviewer65@example.com")
+    contributor_token = _register_and_login(client, "edit-tr-contrib65@example.com")
+    profile_id = _create_memorial(client, owner_token)
+    reviewer_invite = _invite(
+        client, owner_token, profile_id, "edit-tr-reviewer65@example.com", role="trusted_reviewer"
+    )
+    contributor_invite = _invite(client, owner_token, profile_id, "edit-tr-contrib65@example.com")
+    assert _accept(client, reviewer_token, reviewer_invite).status_code == 200
+    assert _accept(client, contributor_token, contributor_invite).status_code == 200
+
+    own = _submit_contribution(client, reviewer_token, profile_id, title="Reviewer memory")
+    assert own.status_code == 201
+    own_edit = _patch_contribution(
+        client,
+        reviewer_token,
+        profile_id,
+        own.json()["id"],
+        title="Reviewer memory fixed",
+        memory_text="Reviewer fixed their own pending text.",
+    )
+    assert own_edit.status_code == 200
+    assert own_edit.json()["title"] == "Reviewer memory fixed"
+
+    others = _submit_contribution(client, contributor_token, profile_id, title="Contributor memory")
+    assert others.status_code == 201
+    assert _patch_contribution(client, reviewer_token, profile_id, others.json()["id"]).status_code == 403
+
+
+def test_approval_still_works_after_author_edit(client):
+    owner_token = _register_and_login(client, "edit-then-approve-o65@example.com")
+    contributor_token = _register_and_login(client, "edit-then-approve-c65@example.com")
+    profile_id = _create_memorial(client, owner_token)
+    invitation_token = _invite(client, owner_token, profile_id, "edit-then-approve-c65@example.com")
+    assert _accept(client, contributor_token, invitation_token).status_code == 200
+
+    submitted = _submit_contribution(client, contributor_token, profile_id, title="Before edit")
+    assert submitted.status_code == 201
+    contribution_id = submitted.json()["id"]
+
+    edited = _patch_contribution(
+        client,
+        contributor_token,
+        profile_id,
+        contribution_id,
+        title="After edit",
+        memory_text="Corrected memory text ready for approval.",
+    )
+    assert edited.status_code == 200
+    assert edited.json()["status"] == "needs_review"
+
+    approved = client.post(
+        f"/api/memorials/{profile_id}/contributions/{contribution_id}/approve",
+        headers=_auth_headers(owner_token),
+        json={},
+    )
+    assert approved.status_code == 200
+    assert approved.json()["status"] == "approved"
+    assert approved.json()["title"] == "After edit"
+    assert approved.json()["memory_text"] == "Corrected memory text ready for approval."
+    assert approved.json()["active_memory_eligible"] is True
+
+
+def test_contributor_still_cannot_approve_or_manage_after_edit_endpoint(client):
+    owner_token = _register_and_login(client, "edit-no-esc-o65@example.com")
+    contributor_token = _register_and_login(client, "edit-no-esc-c65@example.com")
+    profile_id = _create_memorial(client, owner_token)
+    invitation_token = _invite(client, owner_token, profile_id, "edit-no-esc-c65@example.com")
+    assert _accept(client, contributor_token, invitation_token).status_code == 200
+
+    submitted = _submit_contribution(client, contributor_token, profile_id)
+    assert submitted.status_code == 201
+    contribution_id = submitted.json()["id"]
+    assert _patch_contribution(client, contributor_token, profile_id, contribution_id).status_code == 200
+
+    assert (
+        client.post(
+            f"/api/memorials/{profile_id}/contributions/{contribution_id}/approve",
+            headers=_auth_headers(contributor_token),
+            json={},
+        ).status_code
+        == 403
+    )
+    assert (
+        client.get(f"/api/memorials/{profile_id}/review-queue", headers=_auth_headers(contributor_token)).status_code
+        == 403
+    )
+    assert (
+        client.post(
+            f"/api/memorials/{profile_id}/invitations",
+            headers=_auth_headers(contributor_token),
+            json={"email": "someone@example.com", "role": "viewer"},
+        ).status_code
+        == 403
+    )
+    assert client.get(f"/api/memorials/{profile_id}/members", headers=_auth_headers(contributor_token)).status_code == 403
+    assert (
+        client.patch(
+            f"/api/memorials/{profile_id}/biography",
+            headers=_auth_headers(contributor_token),
+            json={"biography": "Hacked biography"},
+        ).status_code
+        == 403
+    )
+    assert (
+        client.patch(
+            f"/api/memorials/{profile_id}/avatar-persona",
+            headers=_auth_headers(contributor_token),
+            json={"voice_style": "warm"},
+        ).status_code
+        == 403
+    )
+

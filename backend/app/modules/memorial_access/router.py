@@ -36,6 +36,7 @@ from app.modules.memorial_access.schemas import (
     ContributionRead,
     ContributionRejectRequest,
     ContributionReviewRequest,
+    ContributionUpdate,
     InvitationAcceptRequest,
     InvitationCreate,
     InvitationCreateResponse,
@@ -73,6 +74,7 @@ from app.modules.memorial_access.service import (
     revoke_invitation,
     revoke_member,
     submit_contribution,
+    update_contribution,
 )
 
 
@@ -488,6 +490,42 @@ def submit_contribution_endpoint(
     return _build_contribution_read(
         contribution, db=db, current_user=current_user
     )  # freshly submitted: never has a promotion yet
+
+
+@router.patch(
+    "/api/memorials/{profile_id}/contributions/{contribution_id}",
+    response_model=ContributionRead,
+    responses={
+        status.HTTP_400_BAD_REQUEST: {"model": ErrorResponse},
+        status.HTTP_401_UNAUTHORIZED: {"model": ErrorResponse},
+        status.HTTP_403_FORBIDDEN: {"model": ErrorResponse},
+        status.HTTP_404_NOT_FOUND: {"model": ErrorResponse},
+    },
+)
+def update_contribution_endpoint(
+    profile_id: ProfileIdPath,
+    contribution_id: ContributionIdPath,
+    payload: ContributionUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> ContributionRead:
+    """Phase 5C: author may edit own draft / needs_review contribution only."""
+
+    try:
+        contribution = update_contribution(
+            db,
+            current_user=current_user,
+            profile_id=profile_id,
+            contribution_id=contribution_id,
+            payload=payload,
+        )
+    except (MemorialNotFoundError, MemorialForbiddenError, MemorialConflictError) as exc:
+        _raise_access_error(exc)
+    except ContributionNotFoundError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except ContributionInvalidTransitionError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    return _build_contribution_read(contribution, db=db, current_user=current_user)
 
 
 @router.get(

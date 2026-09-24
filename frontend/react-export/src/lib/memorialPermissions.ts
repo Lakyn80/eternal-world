@@ -37,6 +37,17 @@ export function canSubmitContribution(role: MemorialRole): boolean {
   return role === 'owner' || role === 'trusted_reviewer' || role === 'contributor';
 }
 
+/** Phase 5C: author may edit own contribution only while draft / needs_review.
+ * Backend re-checks SUBMIT_CONTRIBUTION + authorship + status on every PATCH. */
+export function canEditOwnContribution(
+  contribution: Pick<ContributionRead, 'status' | 'author_email'>,
+  currentUserEmail: string | null | undefined
+): boolean {
+  if (!currentUserEmail) return false;
+  if (contribution.status !== 'draft' && contribution.status !== 'needs_review') return false;
+  return contribution.author_email.trim().toLowerCase() === currentUserEmail.trim().toLowerCase();
+}
+
 export function isActiveMemoryEligible(contribution: ContributionRead): boolean {
   return contribution.active_memory_eligible && contribution.status === 'approved' && contribution.is_current;
 }
