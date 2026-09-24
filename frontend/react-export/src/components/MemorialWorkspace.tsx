@@ -281,6 +281,8 @@ export type Copy = {
   billingUpgrade: string;
   billingCheckoutUnavailable: string;
   billingPerMonth: string;
+  billingCurrency: string;
+  billingPricePending: string;
   role: string;
   roleOwner: string;
   roleTrustedReviewer: string;
@@ -613,6 +615,8 @@ export const COPY: Record<Lang, Copy> = {
     billingUpgrade: 'Choose plan',
     billingCheckoutUnavailable: 'Paid checkout is not available yet. Your plan was not changed.',
     billingPerMonth: 'month',
+    billingCurrency: 'Currency',
+    billingPricePending: 'Price coming soon',
     role: 'Role',
     roleOwner: 'Owner',
     roleTrustedReviewer: 'Trusted reviewer',
@@ -948,6 +952,8 @@ export const COPY: Record<Lang, Copy> = {
     billingUpgrade: 'Vybrat plán',
     billingCheckoutUnavailable: 'Placená platba zatím není k dispozici. Váš plán se nezměnil.',
     billingPerMonth: 'měsíc',
+    billingCurrency: 'Měna',
+    billingPricePending: 'Cena bude doplněna',
     role: 'Role',
     roleOwner: 'Vlastník',
     roleTrustedReviewer: 'Důvěryhodný kontrolor',
@@ -1283,6 +1289,8 @@ export const COPY: Record<Lang, Copy> = {
     billingUpgrade: 'Выбрать план',
     billingCheckoutUnavailable: 'Оплата пока недоступна. Ваш план не изменился.',
     billingPerMonth: 'месяц',
+    billingCurrency: 'Валюта',
+    billingPricePending: 'Цена будет указана позже',
     role: 'Роль',
     roleOwner: 'Владелец',
     roleTrustedReviewer: 'Доверенный рецензент',
@@ -2032,7 +2040,7 @@ export default function MemorialWorkspace({
                 a duplicated affordance for the same action. */}
             {!selected && focusBillingPlans && (
               <section className="min-w-0 rounded-[28px] border border-white/10 bg-white/[.045] p-4 sm:p-6">
-                <BillingAccountPanel showPlansInitially t={t} token={session.accessToken} />
+                <BillingAccountPanel lang={lang} showPlansInitially t={t} token={session.accessToken} />
                 <button
                   className="mt-5 rounded-full border border-white/15 px-5 py-3 text-sm text-fg/80 transition hover:bg-white/10"
                   onClick={() => setFocusBillingPlans(false)}
@@ -2317,7 +2325,12 @@ export default function MemorialWorkspace({
                     />
                   )}
                   {activeTab === 'billing' && (
-                    <BillingAccountPanel showPlansInitially={focusBillingPlans} t={t} token={session.accessToken} />
+                    <BillingAccountPanel
+                      lang={lang}
+                      showPlansInitially={focusBillingPlans}
+                      t={t}
+                      token={session.accessToken}
+                    />
                   )}
                 </div>
               </section>

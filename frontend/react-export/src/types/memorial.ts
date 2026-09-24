@@ -396,21 +396,36 @@ export type BillingPlanLimits = {
   max_video_quality: string;
 };
 
+export type BillingPriceRead = {
+  currency: string;
+  amount: number | null;
+  availability: 'priced' | 'pending_price';
+  billing_interval: string;
+};
+
 export type BillingPlanRead = {
   code: string;
   name: string;
-  price_rub_monthly: number;
-  currency: string;
   billing_interval: string;
   features: string[];
   limits: BillingPlanLimits;
   watermark_enabled: boolean;
   priority_support_enabled: boolean;
+  prices: BillingPriceRead[];
+};
+
+export type BillingCatalogRead = {
+  billing_market: string;
+  default_currency: string;
+  allowed_currencies: string[];
+  locale: string | null;
+  plans: BillingPlanRead[];
 };
 
 export type BillingSubscriptionStateRead = {
   status: string | null;
   plan_code: string | null;
+  currency: string | null;
   current_period_start: string | null;
   current_period_end: string | null;
   cancel_at_period_end: boolean;
@@ -434,6 +449,10 @@ export type BillingLimitsRead = {
 
 export type BillingCurrentPlanRead = {
   user_id: number;
+  billing_market: string;
+  default_currency: string;
+  allowed_currencies: string[];
+  locale: string | null;
   plan: BillingPlanRead;
   subscription: BillingSubscriptionStateRead;
   limits: BillingPlanLimits;

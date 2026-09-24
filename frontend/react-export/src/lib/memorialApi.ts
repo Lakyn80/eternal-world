@@ -7,6 +7,7 @@ import type {
   BiographerEligibilityRead,
   BiographerQuestionRead,
   BiographerResumeRead,
+  BillingCatalogRead,
   BillingCurrentPlanRead,
   BillingLimitsRead,
   BillingPlanRead,
@@ -257,30 +258,94 @@ export async function getBillingLimits(accessToken: string): Promise<BillingLimi
   return requestJson<BillingLimitsRead>('/api/billing/limits', undefined, accessToken);
 }
 
-export async function getBillingPlans(): Promise<BillingPlanRead[]> {
-  return requestJson<BillingPlanRead[]>('/api/billing/plans');
+export async function getBillingPlans(locale?: string): Promise<BillingCatalogRead> {
+  const query = locale ? `?locale=${encodeURIComponent(locale)}` : '';
+  const payload = await requestJson<BillingCatalogRead | BillingPlanRead[]>(`/api/billing/plans${query}`);
+  return normalizeBillingCatalog(payload);
 }
 
-export async function getBillingAccount(accessToken: string): Promise<BillingCurrentPlanRead> {
-  return requestJson<BillingCurrentPlanRead>('/api/billing/me', undefined, accessToken);
+/** Accept catalog envelope; reject/legacy-guard bare arrays so UI never calls .map on an object. */
+export function normalizeBillingCatalog(payload: BillingCatalogRead | BillingPlanRead[]): BillingCatalogRead {
+  if (Array.isArray(payload)) {
+    const currencies = Array.from(
+      new Set(
+        payload.flatMap((plan) =>
+          Array.isArray(plan.prices) ? plan.prices.map((price) => price.currency) : []
+        )
+      )
+    );
+    const defaultCurrency = currencies[0] ?? 'RUB';
+    return {
+      billing_market: 'RU',
+      default_currency: defaultCurrency,
+      allowed_currencies: currencies.length > 0 ? currencies : [defaultCurrency],
+      locale: null,
+      plans: payload
+    };
+  }
+  if (
+    payload &&
+    typeof payload === 'object' &&
+    Array.isArray(payload.plans) &&
+    typeof payload.billing_market === 'string' &&
+    typeof payload.default_currency === 'string' &&
+    Array.isArray(payload.allowed_currencies)
+  ) {
+    return payload;
+  }
+  throw new MemorialApiError(502, 'Billing catalog response was not in the expected market-aware shape.');
+}
+
+
+export async function getBillingAccount(
+  accessToken: string,
+  locale?: string
+): Promise<BillingCurrentPlanRead> {
+  const query = locale ? `?locale=${encodeURIComponent(locale)}` : '';
+  return requestJson<BillingCurrentPlanRead>(`/api/billing/me${query}`, undefined, accessToken);
 }
 
 export type CheckoutStartResult =
   | { available: true; checkoutUrl: string }
-  | { available: false; detail: string; code: string };
+  | {
+      available: false;
+      detail: string;
+      code: string;
+      plan_code?: string | null;
+      currency?: string | null;
+      billing_market?: string | null;
+    };
 
 /** Phase 6A stub - never reports a completed payment. Phase 6C wires a provider. */
-export async function startCheckout(accessToken: string, planCode: string): Promise<CheckoutStartResult> {
+export async function startCheckout(
+  accessToken: string,
+  planCode: string,
+  options?: { currency?: string; locale?: string }
+): Promise<CheckoutStartResult> {
+  const query = options?.locale ? `?locale=${encodeURIComponent(options.locale)}` : '';
   try {
-    const payload = await requestJson<{ available?: boolean; detail?: string; code?: string }>(
-      `/api/billing/checkout/${encodeURIComponent(planCode)}`,
-      { method: 'POST' },
+    const payload = await requestJson<{
+      available?: boolean;
+      detail?: string;
+      code?: string;
+      plan_code?: string | null;
+      currency?: string | null;
+      billing_market?: string | null;
+    }>(
+      `/api/billing/checkout/${encodeURIComponent(planCode)}${query}`,
+      {
+        method: 'POST',
+        body: JSON.stringify({ currency: options?.currency ?? null })
+      },
       accessToken
     );
     return {
       available: false,
       detail: payload.detail ?? 'Checkout is not available yet',
-      code: payload.code ?? 'checkout_not_available'
+      code: payload.code ?? 'checkout_not_available',
+      plan_code: payload.plan_code ?? planCode,
+      currency: payload.currency ?? options?.currency ?? null,
+      billing_market: payload.billing_market ?? null
     };
   } catch (error) {
     if (error instanceof MemorialApiError && (error.status === 501 || error.status === 503)) {

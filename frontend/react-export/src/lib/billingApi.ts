@@ -9,6 +9,7 @@
 export {
   getBillingAccount,
   getBillingPlans,
+  normalizeBillingCatalog,
   startCheckout,
   type CheckoutStartResult
 } from './memorialApi';
