@@ -104,6 +104,7 @@ def create_memory(
     )
     current_memories = repository.count_memories_for_user(db, current_user.id)
     enforce_memory_creation_limit(
+        db,
         current_user=current_user,
         current_memories=current_memories,
     )

@@ -78,6 +78,7 @@ def create_memory_profile(
 
     current_profiles = repository.count_memory_profiles_for_user(db, current_user.id)
     enforce_memory_profile_creation_limit(
+        db,
         current_user=current_user,
         current_profiles=current_profiles,
     )

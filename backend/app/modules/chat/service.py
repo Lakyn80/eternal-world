@@ -353,7 +353,7 @@ async def send_chat_message_async(
     idle only during the awaited Brain provider call — not AsyncSession.
     """
 
-    plan = get_effective_plan_definition_for_user(current_user)
+    plan = get_effective_plan_definition_for_user(db, current_user)
     rate_limit = resolve_user_chat_rate_limit(
         allow_unlimited_chat=plan.limits.allow_unlimited_chat
     )
@@ -651,7 +651,7 @@ def send_chat_message(
         current_user=current_user,
         profile_id=profile_id,
     )
-    plan = get_effective_plan_definition_for_user(current_user)
+    plan = get_effective_plan_definition_for_user(db, current_user)
     rate_limit = resolve_user_chat_rate_limit(
         allow_unlimited_chat=plan.limits.allow_unlimited_chat
     )

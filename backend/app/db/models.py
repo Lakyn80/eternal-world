@@ -129,6 +129,61 @@ class User(TimestampMixin, Base):
         foreign_keys="MemorialContribution.reviewed_by_user_id",
         back_populates="reviewed_by_user",
     )
+    billing_subscription: Mapped[BillingSubscription | None] = relationship(
+        back_populates="user",
+        cascade="all, delete-orphan",
+        uselist=False,
+    )
+
+
+class BillingSubscription(TimestampMixin, Base):
+    """One current subscription row per user (Phase 6A).
+
+    Payment-provider webhooks (future) and test fixtures update this row via
+    ``billing.subscriptions.apply_subscription_state``. Entitlement consumers
+    never read provider columns - only ``plan_code`` / ``status`` / period
+    fields through the effective-plan resolver.
+    """
+
+    __tablename__ = "billing_subscriptions"
+    __table_args__ = (
+        UniqueConstraint("user_id", name="uq_billing_subscriptions_user_id"),
+        CheckConstraint(
+            "status IN ('active', 'trialing', 'past_due', 'canceled', 'expired')",
+            name="billing_subscriptions_status",
+        ),
+        Index("ix_billing_subscriptions_status", "status"),
+        Index("ix_billing_subscriptions_provider_subscription_id", "provider_subscription_id"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    plan_code: Mapped[str] = mapped_column(String(32), nullable=False)
+    status: Mapped[str] = mapped_column(String(32), nullable=False)
+    current_period_start: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+    current_period_end: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+    cancel_at_period_end: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=False,
+        server_default=text("false"),
+    )
+    #: Future payment-provider identity (nullable until Phase 6C+).
+    provider: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    provider_customer_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    provider_subscription_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    provider_price_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
+
+    user: Mapped[User] = relationship(back_populates="billing_subscription")
 
 
 class MemoryProfile(TimestampMixin, Base):

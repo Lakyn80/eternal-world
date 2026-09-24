@@ -212,7 +212,9 @@ def create_memorial(db: Session, *, current_user: User, payload: MemorialCreate)
     from app.modules.language_registry.persona_sync import sync_persona_languages_to_canonical, utcnow
 
     current_profiles = memory_profiles_repository.count_memory_profiles_for_user(db, current_user.id)
-    enforce_memory_profile_creation_limit(current_user=current_user, current_profiles=current_profiles)
+    enforce_memory_profile_creation_limit(
+        db, current_user=current_user, current_profiles=current_profiles
+    )
     profile_fields = payload.model_dump(exclude={"confirm_canonical_language"})
     profile = memory_profiles_repository.create_memory_profile(
         db,

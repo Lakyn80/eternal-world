@@ -254,6 +254,7 @@ describe('CreateMemorialForm - plan limit gating', () => {
 
   it('replaces the create form with the localized limit message and an Open-existing action once the plan limit is reached', async () => {
     const onOpenExisting = vi.fn();
+    const onViewPlans = vi.fn();
     const existing = baseMemorial();
     const user = userEvent.setup();
 
@@ -263,6 +264,7 @@ describe('CreateMemorialForm - plan limit gating', () => {
         existingMemorials={[existing]}
         onCreated={vi.fn()}
         onOpenExisting={onOpenExisting}
+        onViewPlans={onViewPlans}
         t={t}
         token="tok"
       />
@@ -273,6 +275,9 @@ describe('CreateMemorialForm - plan limit gating', () => {
 
     await user.click(screen.getByRole('button', { name: t.openExistingMemorial }));
     expect(onOpenExisting).toHaveBeenCalledWith(existing.id);
+
+    await user.click(screen.getByRole('button', { name: t.billingViewPlans }));
+    expect(onViewPlans).toHaveBeenCalledTimes(1);
   });
 
   it('never calls createMemorial while the form is in the blocked state', () => {

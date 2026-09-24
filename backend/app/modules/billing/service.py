@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+from datetime import datetime, timezone
+
 from sqlalchemy.orm import Session
 
-from app.db.models import User
+from app.db.models import BillingSubscription, User
+from app.modules.billing import repository as billing_repository
 from app.modules.billing.entitlements import enforce_usage_limit
 from app.modules.billing.limits import build_plan_limits
 from app.modules.billing.plans import FREE_PLAN_CODE, PLAN_DEFINITIONS, PlanDefinition, get_plan_definition
@@ -10,9 +13,19 @@ from app.modules.billing.schemas import (
     BillingCurrentPlanRead,
     BillingLimitsRead,
     BillingPlanRead,
+    BillingSubscriptionStateRead,
 )
+from app.modules.billing.subscriptions import subscription_grants_plan_entitlements
 from app.modules.billing.usage import BillingUsageTotals, build_usage_snapshot
 from app.modules.memory_profiles import repository as memory_profiles_repository
+
+
+BILLING_CURRENCY = "RUB"
+BILLING_INTERVAL = "month"
+
+
+def _utc_now() -> datetime:
+    return datetime.now(timezone.utc)
 
 
 def _build_plan_read(plan_code: str) -> BillingPlanRead:
@@ -32,6 +45,8 @@ def build_plan_read(plan_definition: PlanDefinition) -> BillingPlanRead:
         code=plan_definition.code,
         name=plan_definition.name,
         price_rub_monthly=plan_definition.price_rub_monthly,
+        currency=BILLING_CURRENCY,
+        billing_interval=BILLING_INTERVAL,
         features=list(plan_definition.features),
         limits=build_plan_limits(plan_definition),
         watermark_enabled=plan_definition.watermark_enabled,
@@ -43,33 +58,75 @@ def list_billing_plans() -> list[BillingPlanRead]:
     return [_build_plan_read(plan_definition.code) for plan_definition in PLAN_DEFINITIONS]
 
 
-def get_effective_plan_code_for_user(current_user: User) -> str:
-    _ = current_user
+def get_effective_plan_code_for_user(db: Session, current_user: User) -> str:
+    """Resolve the plan code that entitlements must use.
+
+    Rules (Phase 6A):
+
+    * No subscription row → ``free``
+    * Row whose status/period/plan fails :func:`subscription_grants_plan_entitlements`
+      → ``free`` (covers canceled/expired/past_due, ended periods, invalid plan codes)
+    * Otherwise → stored ``plan_code``
+    """
+
+    subscription = billing_repository.get_subscription_for_user(db, user_id=current_user.id)
+    if subscription is None:
+        return FREE_PLAN_CODE
+
+    if subscription_grants_plan_entitlements(
+        status=subscription.status,
+        plan_code=subscription.plan_code,
+        current_period_end=subscription.current_period_end,
+        now=_utc_now(),
+    ):
+        return subscription.plan_code
+
     return FREE_PLAN_CODE
 
 
-def get_effective_plan_definition_for_user(current_user: User) -> PlanDefinition:
-    return get_plan_definition_or_raise(get_effective_plan_code_for_user(current_user))
+def get_effective_plan_definition_for_user(db: Session, current_user: User) -> PlanDefinition:
+    return get_plan_definition_or_raise(get_effective_plan_code_for_user(db, current_user))
 
 
-def get_current_user_plan(current_user: User) -> BillingCurrentPlanRead:
+def _build_subscription_state_read(
+    subscription: BillingSubscription | None,
+) -> BillingSubscriptionStateRead:
+    if subscription is None:
+        return BillingSubscriptionStateRead()
+
+    grants = subscription_grants_plan_entitlements(
+        status=subscription.status,
+        plan_code=subscription.plan_code,
+        current_period_end=subscription.current_period_end,
+        now=_utc_now(),
+    )
+    return BillingSubscriptionStateRead(
+        status=subscription.status,
+        plan_code=subscription.plan_code,
+        current_period_start=subscription.current_period_start,
+        current_period_end=subscription.current_period_end,
+        cancel_at_period_end=subscription.cancel_at_period_end,
+        grants_entitlements=grants,
+    )
+
+
+def get_current_user_plan(db: Session, current_user: User) -> BillingCurrentPlanRead:
+    plan_definition = get_effective_plan_definition_for_user(db, current_user)
+    subscription = billing_repository.get_subscription_for_user(db, user_id=current_user.id)
+    current_profiles = memory_profiles_repository.count_memory_profiles_for_user(db, current_user.id)
     return BillingCurrentPlanRead(
         user_id=current_user.id,
-        plan=build_plan_read(get_effective_plan_definition_for_user(current_user)),
+        plan=build_plan_read(plan_definition),
+        subscription=_build_subscription_state_read(subscription),
+        limits=build_plan_limits(plan_definition),
+        current_usage=build_usage_snapshot(BillingUsageTotals(current_profiles=current_profiles)),
     )
 
 
 def get_current_user_limits(db: Session, current_user: User) -> BillingLimitsRead:
-    # Task 65.5: `build_usage_snapshot()` used to be called with no
-    # arguments, which always reports zero usage regardless of the
-    # account's actual data - this silently broke the frontend's
-    # create-memorial gating, since it always looked like the plan had room
-    # for another profile even when the real limit was already reached.
-    # `current_profiles` is the only field this task's plan-limit UX
-    # depends on, so it is the only one wired to a real query here; the
-    # other usage fields remain the pre-existing placeholder zero until a
-    # billing task actually needs them.
-    plan_definition = get_effective_plan_definition_for_user(current_user)
+    # Task 65.5: `current_profiles` is wired to a real query; other usage
+    # fields remain placeholder zeros until a later billing task needs them.
+    plan_definition = get_effective_plan_definition_for_user(db, current_user)
     current_profiles = memory_profiles_repository.count_memory_profiles_for_user(db, current_user.id)
     return BillingLimitsRead(
         user_id=current_user.id,
@@ -95,12 +152,13 @@ def enforce_memory_profile_limit_for_plan(
 
 
 def enforce_memory_profile_creation_limit(
+    db: Session,
     *,
     current_user: User,
     current_profiles: int,
 ) -> None:
     enforce_memory_profile_limit_for_plan(
-        plan_code=get_effective_plan_code_for_user(current_user),
+        plan_code=get_effective_plan_code_for_user(db, current_user),
         current_profiles=current_profiles,
     )
 
@@ -121,11 +179,12 @@ def enforce_memory_limit_for_plan(
 
 
 def enforce_memory_creation_limit(
+    db: Session,
     *,
     current_user: User,
     current_memories: int,
 ) -> None:
     enforce_memory_limit_for_plan(
-        plan_code=get_effective_plan_code_for_user(current_user),
+        plan_code=get_effective_plan_code_for_user(db, current_user),
         current_memories=current_memories,
     )

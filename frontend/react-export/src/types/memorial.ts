@@ -98,7 +98,7 @@ export type ContributionRead = {
   updated_at: string;
 };
 
-export type WorkspaceTab = 'overview' | 'biography' | 'persona' | 'biographer' | 'chat' | 'contributions' | 'review' | 'members' | 'invitations';
+export type WorkspaceTab = 'overview' | 'biography' | 'persona' | 'biographer' | 'chat' | 'contributions' | 'review' | 'members' | 'invitations' | 'billing';
 
 /** Task 65.12 - canonical memorial avatar persona settings. */
 export type AvatarVoiceMode = 'original_recording' | 'warm_older' | 'younger_self';
@@ -396,6 +396,27 @@ export type BillingPlanLimits = {
   max_video_quality: string;
 };
 
+export type BillingPlanRead = {
+  code: string;
+  name: string;
+  price_rub_monthly: number;
+  currency: string;
+  billing_interval: string;
+  features: string[];
+  limits: BillingPlanLimits;
+  watermark_enabled: boolean;
+  priority_support_enabled: boolean;
+};
+
+export type BillingSubscriptionStateRead = {
+  status: string | null;
+  plan_code: string | null;
+  current_period_start: string | null;
+  current_period_end: string | null;
+  cancel_at_period_end: boolean;
+  grants_entitlements: boolean;
+};
+
 export type BillingUsageSnapshot = {
   current_profiles: number;
   current_memories: number;
@@ -407,6 +428,14 @@ export type BillingUsageSnapshot = {
 export type BillingLimitsRead = {
   user_id: number;
   plan_code: string;
+  limits: BillingPlanLimits;
+  current_usage: BillingUsageSnapshot;
+};
+
+export type BillingCurrentPlanRead = {
+  user_id: number;
+  plan: BillingPlanRead;
+  subscription: BillingSubscriptionStateRead;
   limits: BillingPlanLimits;
   current_usage: BillingUsageSnapshot;
 };

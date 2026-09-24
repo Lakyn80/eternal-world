@@ -7,7 +7,9 @@ import type {
   BiographerEligibilityRead,
   BiographerQuestionRead,
   BiographerResumeRead,
+  BillingCurrentPlanRead,
   BillingLimitsRead,
+  BillingPlanRead,
   BiographyIngestionStartResponse,
   BiographyMemoryEntryRead,
   BiographyStatusRead,
@@ -253,6 +255,43 @@ export async function fetchMemorial(accessToken: string, profileId: number): Pro
 
 export async function getBillingLimits(accessToken: string): Promise<BillingLimitsRead> {
   return requestJson<BillingLimitsRead>('/api/billing/limits', undefined, accessToken);
+}
+
+export async function getBillingPlans(): Promise<BillingPlanRead[]> {
+  return requestJson<BillingPlanRead[]>('/api/billing/plans');
+}
+
+export async function getBillingAccount(accessToken: string): Promise<BillingCurrentPlanRead> {
+  return requestJson<BillingCurrentPlanRead>('/api/billing/me', undefined, accessToken);
+}
+
+export type CheckoutStartResult =
+  | { available: true; checkoutUrl: string }
+  | { available: false; detail: string; code: string };
+
+/** Phase 6A stub - never reports a completed payment. Phase 6C wires a provider. */
+export async function startCheckout(accessToken: string, planCode: string): Promise<CheckoutStartResult> {
+  try {
+    const payload = await requestJson<{ available?: boolean; detail?: string; code?: string }>(
+      `/api/billing/checkout/${encodeURIComponent(planCode)}`,
+      { method: 'POST' },
+      accessToken
+    );
+    return {
+      available: false,
+      detail: payload.detail ?? 'Checkout is not available yet',
+      code: payload.code ?? 'checkout_not_available'
+    };
+  } catch (error) {
+    if (error instanceof MemorialApiError && (error.status === 501 || error.status === 503)) {
+      return {
+        available: false,
+        detail: error.detail || 'Checkout is not available yet',
+        code: 'checkout_not_available'
+      };
+    }
+    throw error;
+  }
 }
 
 export type MemorialMetadataUpdatePayload = {

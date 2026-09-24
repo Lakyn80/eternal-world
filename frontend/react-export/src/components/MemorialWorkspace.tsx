@@ -69,6 +69,7 @@ import {
   writePendingInvitationToken
 } from '../lib/pendingInvitation';
 import AvatarPersonaPanel from './AvatarPersonaPanel';
+import { BillingAccountPanel } from './BillingAccountPanel';
 import type {
   AuthSession,
   BackgroundJobRead,
@@ -266,6 +267,20 @@ export type Copy = {
   review: string;
   members: string;
   invitations: string;
+  billing: string;
+  billingCurrentPlan: string;
+  billingUsage: string;
+  billingMemorialsUsage: string;
+  billingMemoriesUsage: string;
+  billingUnlimited: string;
+  billingSubscriptionStatus: string;
+  billingPeriodEnd: string;
+  billingCancelAtPeriodEnd: string;
+  billingViewPlans: string;
+  billingPlansTitle: string;
+  billingUpgrade: string;
+  billingCheckoutUnavailable: string;
+  billingPerMonth: string;
   role: string;
   roleOwner: string;
   roleTrustedReviewer: string;
@@ -584,6 +599,20 @@ export const COPY: Record<Lang, Copy> = {
     review: 'Review',
     members: 'Members',
     invitations: 'Invitations',
+    billing: 'Billing',
+    billingCurrentPlan: 'Current plan',
+    billingUsage: 'Current usage',
+    billingMemorialsUsage: 'Memorials',
+    billingMemoriesUsage: 'Memories',
+    billingUnlimited: 'Unlimited',
+    billingSubscriptionStatus: 'Subscription status',
+    billingPeriodEnd: 'Current period ends',
+    billingCancelAtPeriodEnd: 'Cancels at period end',
+    billingViewPlans: 'View plans',
+    billingPlansTitle: 'Available plans',
+    billingUpgrade: 'Choose plan',
+    billingCheckoutUnavailable: 'Paid checkout is not available yet. Your plan was not changed.',
+    billingPerMonth: 'month',
     role: 'Role',
     roleOwner: 'Owner',
     roleTrustedReviewer: 'Trusted reviewer',
@@ -691,7 +720,7 @@ export const COPY: Record<Lang, Copy> = {
     jobStatusNetworkRetrying: 'Reconnecting to check indexing status...',
     backToSite: 'Back to site',
     planLimitReachedMessage:
-      'Your current plan already includes the maximum number of memorials.\nOpen your existing memorial to edit its biography.',
+      'Your current plan already includes the maximum number of memorials.\nOpen your existing memorial to edit its biography, or view plans to upgrade.',
     openExistingMemorial: 'Open existing memorial',
     biographyIndexingExplanation:
       'The biography is saved, but the avatar cannot use it yet. Start indexing to create memory embeddings.',
@@ -905,6 +934,20 @@ export const COPY: Record<Lang, Copy> = {
     review: 'Kontrola',
     members: 'Členové',
     invitations: 'Pozvánky',
+    billing: 'Předplatné',
+    billingCurrentPlan: 'Aktuální plán',
+    billingUsage: 'Aktuální využití',
+    billingMemorialsUsage: 'Memoriály',
+    billingMemoriesUsage: 'Vzpomínky',
+    billingUnlimited: 'Neomezeně',
+    billingSubscriptionStatus: 'Stav předplatného',
+    billingPeriodEnd: 'Konec aktuálního období',
+    billingCancelAtPeriodEnd: 'Zruší se na konci období',
+    billingViewPlans: 'Zobrazit plány',
+    billingPlansTitle: 'Dostupné plány',
+    billingUpgrade: 'Vybrat plán',
+    billingCheckoutUnavailable: 'Placená platba zatím není k dispozici. Váš plán se nezměnil.',
+    billingPerMonth: 'měsíc',
     role: 'Role',
     roleOwner: 'Vlastník',
     roleTrustedReviewer: 'Důvěryhodný kontrolor',
@@ -1012,7 +1055,7 @@ export const COPY: Record<Lang, Copy> = {
     jobStatusNetworkRetrying: 'Obnovuji připojení pro kontrolu stavu indexace...',
     backToSite: 'Zpět na web',
     planLimitReachedMessage:
-      'V aktuálním plánu už máte maximální počet memorialů.\nOtevřete existující memorial a upravte jeho životopis.',
+      'V aktuálním plánu už máte maximální počet memorialů.\nOtevřete existující memorial a upravte jeho životopis, nebo si prohlédněte plány pro upgrade.',
     openExistingMemorial: 'Otevřít existující memorial',
     biographyIndexingExplanation:
       'Životopis je uložený, ale avatar ho zatím nemůže používat.\nSpusťte indexaci, aby se vytvořila jeho paměť.',
@@ -1226,6 +1269,20 @@ export const COPY: Record<Lang, Copy> = {
     review: 'Проверка',
     members: 'Участники',
     invitations: 'Приглашения',
+    billing: 'Подписка',
+    billingCurrentPlan: 'Текущий план',
+    billingUsage: 'Текущее использование',
+    billingMemorialsUsage: 'Мемориалы',
+    billingMemoriesUsage: 'Воспоминания',
+    billingUnlimited: 'Без ограничений',
+    billingSubscriptionStatus: 'Статус подписки',
+    billingPeriodEnd: 'Конец текущего периода',
+    billingCancelAtPeriodEnd: 'Отменится в конце периода',
+    billingViewPlans: 'Смотреть планы',
+    billingPlansTitle: 'Доступные планы',
+    billingUpgrade: 'Выбрать план',
+    billingCheckoutUnavailable: 'Оплата пока недоступна. Ваш план не изменился.',
+    billingPerMonth: 'месяц',
     role: 'Роль',
     roleOwner: 'Владелец',
     roleTrustedReviewer: 'Доверенный рецензент',
@@ -1333,7 +1390,7 @@ export const COPY: Record<Lang, Copy> = {
     jobStatusNetworkRetrying: 'Восстанавливаем соединение для проверки статуса индексации...',
     backToSite: 'Вернуться на сайт',
     planLimitReachedMessage:
-      'В текущем тарифе уже создано максимальное количество мемориалов.\nОткройте существующий мемориал и измените его биографию.',
+      'В текущем тарифе уже создано максимальное количество мемориалов.\nОткройте существующий мемориал и измените его биографию или посмотрите планы для апгрейда.',
     openExistingMemorial: 'Открыть существующий мемориал',
     biographyIndexingExplanation:
       'Биография сохранена, но аватар пока не может её использовать.\nЗапустите индексацию, чтобы создать его память.',
@@ -1573,6 +1630,7 @@ export default function MemorialWorkspace({
   const invitationTokenRef = useRef<string | null>(null);
   invitationTokenRef.current = invitationToken;
   const [billingLimits, setBillingLimits] = useState<BillingLimitsRead | null>(null);
+  const [focusBillingPlans, setFocusBillingPlans] = useState(false);
   // Task 65.7 (Part B.13): bounded startup rehydration - true only while
   // the one-shot `GET /api/auth/session` probe below is in flight, so the
   // login form is never briefly flashed for an already-logged-in user
@@ -1613,7 +1671,8 @@ export default function MemorialWorkspace({
       'contributions',
       'review',
       'members',
-      'invitations'
+      'invitations',
+      'billing'
     ];
     return tabs.filter((tab) => {
       if (tab === 'review') return mayReview;
@@ -1945,7 +2004,17 @@ export default function MemorialWorkspace({
                   <p className="text-xs uppercase tracking-[.22em] text-fg/40">{t.signedInAs}</p>
                   <strong className="block truncate text-sm text-fg sm:text-base">{session.email}</strong>
                 </div>
-                <div className="flex sm:justify-end">
+                <div className="flex flex-wrap gap-2 sm:justify-end">
+                  <button
+                    className="rounded-full border border-white/15 px-4 py-2.5 text-sm text-fg/75 transition hover:bg-white/10"
+                    onClick={() => {
+                      setFocusBillingPlans(true);
+                      if (selected) setActiveTab('billing');
+                    }}
+                    type="button"
+                  >
+                    {t.billing}
+                  </button>
                   <button className="rounded-full border border-white/15 px-4 py-2.5 text-sm text-fg/75 transition hover:bg-white/10" onClick={() => signOut()} type="button">
                     {t.signOut}
                   </button>
@@ -1961,7 +2030,20 @@ export default function MemorialWorkspace({
                 "Open workspace" button (in MemorialList) would otherwise
                 render simultaneously with the workspace already being open,
                 a duplicated affordance for the same action. */}
-            {!selected && (
+            {!selected && focusBillingPlans && (
+              <section className="min-w-0 rounded-[28px] border border-white/10 bg-white/[.045] p-4 sm:p-6">
+                <BillingAccountPanel showPlansInitially t={t} token={session.accessToken} />
+                <button
+                  className="mt-5 rounded-full border border-white/15 px-5 py-3 text-sm text-fg/80 transition hover:bg-white/10"
+                  onClick={() => setFocusBillingPlans(false)}
+                  type="button"
+                >
+                  {t.backToSite}
+                </button>
+              </section>
+            )}
+
+            {!selected && !focusBillingPlans && (
               <div className="grid min-w-0 gap-5 lg:grid-cols-[minmax(0,0.88fr)_minmax(0,1.12fr)]">
                 <CreateMemorialForm
                   billingLimits={billingLimits}
@@ -1971,6 +2053,7 @@ export default function MemorialWorkspace({
                     void loadWorkspace(memorial.id);
                   }}
                   onOpenExisting={(profileId) => void loadWorkspace(profileId)}
+                  onViewPlans={() => setFocusBillingPlans(true)}
                   t={t}
                   token={session.accessToken}
                 />
@@ -2233,6 +2316,9 @@ export default function MemorialWorkspace({
                       token={session.accessToken}
                     />
                   )}
+                  {activeTab === 'billing' && (
+                    <BillingAccountPanel showPlansInitially={focusBillingPlans} t={t} token={session.accessToken} />
+                  )}
                 </div>
               </section>
             )}
@@ -2425,7 +2511,8 @@ export function CreateMemorialForm({
   onCreated,
   billingLimits,
   existingMemorials,
-  onOpenExisting
+  onOpenExisting,
+  onViewPlans
 }: {
   token: string;
   t: Copy;
@@ -2433,6 +2520,7 @@ export function CreateMemorialForm({
   billingLimits: BillingLimitsRead | null;
   existingMemorials: MemorialRead[];
   onOpenExisting: (profileId: number) => void;
+  onViewPlans?: () => void;
 }) {
   const [name, setName] = useState('');
   const [biography, setBiography] = useState('');
@@ -2483,15 +2571,26 @@ export function CreateMemorialForm({
       <section className="min-w-0 rounded-[28px] border border-white/10 bg-white/[.045] p-4 sm:p-6">
         <h3 className="font-serif text-3xl">{t.createMemorial}</h3>
         <p className="mt-4 whitespace-pre-line text-sm leading-6 text-fg/70">{t.planLimitReachedMessage}</p>
-        {ownedMemorial && (
-          <button
-            className="mt-5 rounded-full bg-gradient-to-r from-cyan to-violet px-6 py-3.5 text-sm font-semibold text-ink"
-            onClick={() => onOpenExisting(ownedMemorial.id)}
-            type="button"
-          >
-            {t.openExistingMemorial}
-          </button>
-        )}
+        <div className="mt-5 flex flex-wrap gap-3">
+          {ownedMemorial && (
+            <button
+              className="rounded-full bg-gradient-to-r from-cyan to-violet px-6 py-3.5 text-sm font-semibold text-ink"
+              onClick={() => onOpenExisting(ownedMemorial.id)}
+              type="button"
+            >
+              {t.openExistingMemorial}
+            </button>
+          )}
+          {onViewPlans && (
+            <button
+              className="rounded-full border border-white/15 px-6 py-3.5 text-sm text-fg/80 transition hover:bg-white/10"
+              onClick={onViewPlans}
+              type="button"
+            >
+              {t.billingViewPlans}
+            </button>
+          )}
+        </div>
       </section>
     );
   }
