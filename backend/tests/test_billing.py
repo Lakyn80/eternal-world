@@ -79,17 +79,20 @@ def test_list_plans_returns_all_four_plans(client):
 
     assert response.status_code == 200
     body = response.json()
-    assert len(body) == 4
-    for plan in body:
-        assert plan["currency"] == "RUB"
+    assert body["billing_market"] == "RU"
+    assert body["default_currency"] == "RUB"
+    assert body["allowed_currencies"] == ["RUB"]
+    assert len(body["plans"]) == 4
+    for plan in body["plans"]:
         assert plan["billing_interval"] == "month"
+        assert [price["currency"] for price in plan["prices"]] == ["RUB"]
 
 
 def test_plan_codes_are_stable_and_ordered(client):
     response = client.get("/api/billing/plans")
 
     assert response.status_code == 200
-    assert [plan["code"] for plan in response.json()] == [
+    assert [plan["code"] for plan in response.json()["plans"]] == [
         "free",
         "basic",
         "premium",
@@ -113,9 +116,14 @@ def test_authenticated_user_defaults_to_free_plan(client):
 
     assert response.status_code == 200
     body = response.json()
+    assert body["billing_market"] == "RU"
+    assert body["default_currency"] == "RUB"
+    assert body["allowed_currencies"] == ["RUB"]
     assert body["plan"]["code"] == "free"
-    assert body["plan"]["price_rub_monthly"] == 0
+    assert body["plan"]["prices"][0]["amount"] == 0
+    assert body["plan"]["prices"][0]["currency"] == "RUB"
     assert body["subscription"]["status"] is None
+    assert body["subscription"]["currency"] is None
     assert body["subscription"]["grants_entitlements"] is False
     assert body["limits"]["max_profiles"] == 1
 
@@ -136,10 +144,10 @@ def test_billing_limits_rejects_unauthenticated_users(client):
 
 def test_free_plan_has_correct_limits(client):
     response = client.get("/api/billing/plans")
-    free_plan = response.json()[0]
+    free_plan = response.json()["plans"][0]
 
     assert free_plan["code"] == "free"
-    assert free_plan["price_rub_monthly"] == 0
+    assert free_plan["prices"][0]["amount"] == 0
     assert free_plan["watermark_enabled"] is True
     assert free_plan["priority_support_enabled"] is False
     assert free_plan["limits"] == {
@@ -161,10 +169,11 @@ def test_free_plan_has_correct_limits(client):
 
 def test_basic_plan_has_correct_limits(client):
     response = client.get("/api/billing/plans")
-    basic_plan = response.json()[1]
+    basic_plan = response.json()["plans"][1]
 
     assert basic_plan["code"] == "basic"
-    assert basic_plan["price_rub_monthly"] == 499
+    assert basic_plan["prices"][0]["amount"] == 499
+    assert basic_plan["prices"][0]["currency"] == "RUB"
     assert basic_plan["watermark_enabled"] is False
     assert basic_plan["limits"]["max_profiles"] == 3
     assert basic_plan["limits"]["max_memories"] is None
@@ -176,10 +185,10 @@ def test_basic_plan_has_correct_limits(client):
 
 def test_premium_plan_has_unlimited_values_where_expected(client):
     response = client.get("/api/billing/plans")
-    premium_plan = response.json()[2]
+    premium_plan = response.json()["plans"][2]
 
     assert premium_plan["code"] == "premium"
-    assert premium_plan["price_rub_monthly"] == 999
+    assert premium_plan["prices"][0]["amount"] == 999
     assert premium_plan["limits"]["max_profiles"] is None
     assert premium_plan["limits"]["max_memories"] is None
     assert premium_plan["limits"]["max_audio_minutes"] is None
@@ -192,10 +201,10 @@ def test_premium_plan_has_unlimited_values_where_expected(client):
 
 def test_family_plan_includes_family_specific_flags(client):
     response = client.get("/api/billing/plans")
-    family_plan = response.json()[3]
+    family_plan = response.json()["plans"][3]
 
     assert family_plan["code"] == "family"
-    assert family_plan["price_rub_monthly"] == 1999
+    assert family_plan["prices"][0]["amount"] == 1999
     assert family_plan["limits"]["allow_family_members"] is True
     assert family_plan["limits"]["allow_shared_memories"] is True
     assert family_plan["limits"]["allow_family_tree"] is True
@@ -439,10 +448,18 @@ def test_checkout_stub_does_not_mutate_subscription(client):
     email = "billing-checkout-stub@example.com"
     token = _register_and_login(client, email)
 
-    response = client.post("/api/billing/checkout/premium", headers=_auth_headers(token))
+    response = client.post(
+        "/api/billing/checkout/premium",
+        headers=_auth_headers(token),
+        json={"currency": "RUB"},
+    )
     assert response.status_code == 501
-    assert response.json()["available"] is False
-    assert response.json()["code"] == "checkout_not_available"
+    body = response.json()
+    assert body["available"] is False
+    assert body["code"] == "checkout_not_available"
+    assert body["currency"] == "RUB"
+    assert body["billing_market"] == "RU"
+    assert body["plan_code"] == "premium"
 
     me = client.get("/api/billing/me", headers=_auth_headers(token))
     assert me.json()["plan"]["code"] == "free"

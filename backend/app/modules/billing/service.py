@@ -4,15 +4,24 @@ from datetime import datetime, timezone
 
 from sqlalchemy.orm import Session
 
+from app.core.config import settings
 from app.db.models import BillingSubscription, User
 from app.modules.billing import repository as billing_repository
 from app.modules.billing.entitlements import enforce_usage_limit
 from app.modules.billing.limits import build_plan_limits
+from app.modules.billing.market import (
+    MarketCurrencyPolicy,
+    resolve_checkout_currency,
+    resolve_market_currency_policy,
+)
 from app.modules.billing.plans import FREE_PLAN_CODE, PLAN_DEFINITIONS, PlanDefinition, get_plan_definition
+from app.modules.billing.prices import BILLING_INTERVAL_MONTH, list_prices_for_plan
 from app.modules.billing.schemas import (
+    BillingCatalogRead,
     BillingCurrentPlanRead,
     BillingLimitsRead,
     BillingPlanRead,
+    BillingPriceRead,
     BillingSubscriptionStateRead,
 )
 from app.modules.billing.subscriptions import subscription_grants_plan_entitlements
@@ -20,16 +29,19 @@ from app.modules.billing.usage import BillingUsageTotals, build_usage_snapshot
 from app.modules.memory_profiles import repository as memory_profiles_repository
 
 
-BILLING_CURRENCY = "RUB"
-BILLING_INTERVAL = "month"
-
-
 def _utc_now() -> datetime:
     return datetime.now(timezone.utc)
 
 
-def _build_plan_read(plan_code: str) -> BillingPlanRead:
-    return build_plan_read(get_plan_definition_or_raise(plan_code))
+def get_configured_billing_market() -> str:
+    return settings.billing_market
+
+
+def resolve_request_currency_policy(locale: str | None = None) -> MarketCurrencyPolicy:
+    return resolve_market_currency_policy(
+        billing_market=get_configured_billing_market(),
+        locale=locale,
+    )
 
 
 def get_plan_definition_or_raise(plan_code: str) -> PlanDefinition:
@@ -40,22 +52,45 @@ def get_plan_definition_or_raise(plan_code: str) -> PlanDefinition:
     return plan_definition
 
 
-def build_plan_read(plan_definition: PlanDefinition) -> BillingPlanRead:
+def build_plan_read(
+    plan_definition: PlanDefinition,
+    *,
+    policy: MarketCurrencyPolicy,
+) -> BillingPlanRead:
+    price_rows = list_prices_for_plan(
+        plan_code=plan_definition.code,
+        billing_market=policy.billing_market,
+        allowed_currencies=policy.allowed_currencies,
+    )
     return BillingPlanRead(
         code=plan_definition.code,
         name=plan_definition.name,
-        price_rub_monthly=plan_definition.price_rub_monthly,
-        currency=BILLING_CURRENCY,
-        billing_interval=BILLING_INTERVAL,
+        billing_interval=BILLING_INTERVAL_MONTH,
         features=list(plan_definition.features),
         limits=build_plan_limits(plan_definition),
         watermark_enabled=plan_definition.watermark_enabled,
         priority_support_enabled=plan_definition.priority_support_enabled,
+        prices=[
+            BillingPriceRead(
+                currency=price.currency,
+                amount=price.amount,
+                availability=price.availability,  # type: ignore[arg-type]
+                billing_interval=price.billing_interval,
+            )
+            for price in price_rows
+        ],
     )
 
 
-def list_billing_plans() -> list[BillingPlanRead]:
-    return [_build_plan_read(plan_definition.code) for plan_definition in PLAN_DEFINITIONS]
+def list_billing_catalog(*, locale: str | None = None) -> BillingCatalogRead:
+    policy = resolve_request_currency_policy(locale)
+    return BillingCatalogRead(
+        billing_market=policy.billing_market,
+        default_currency=policy.default_currency,
+        allowed_currencies=list(policy.allowed_currencies),
+        locale=policy.locale,
+        plans=[build_plan_read(plan_definition, policy=policy) for plan_definition in PLAN_DEFINITIONS],
+    )
 
 
 def get_effective_plan_code_for_user(db: Session, current_user: User) -> str:
@@ -103,6 +138,7 @@ def _build_subscription_state_read(
     return BillingSubscriptionStateRead(
         status=subscription.status,
         plan_code=subscription.plan_code,
+        currency=subscription.currency,
         current_period_start=subscription.current_period_start,
         current_period_end=subscription.current_period_end,
         cancel_at_period_end=subscription.cancel_at_period_end,
@@ -110,13 +146,23 @@ def _build_subscription_state_read(
     )
 
 
-def get_current_user_plan(db: Session, current_user: User) -> BillingCurrentPlanRead:
+def get_current_user_plan(
+    db: Session,
+    current_user: User,
+    *,
+    locale: str | None = None,
+) -> BillingCurrentPlanRead:
+    policy = resolve_request_currency_policy(locale)
     plan_definition = get_effective_plan_definition_for_user(db, current_user)
     subscription = billing_repository.get_subscription_for_user(db, user_id=current_user.id)
     current_profiles = memory_profiles_repository.count_memory_profiles_for_user(db, current_user.id)
     return BillingCurrentPlanRead(
         user_id=current_user.id,
-        plan=build_plan_read(plan_definition),
+        billing_market=policy.billing_market,
+        default_currency=policy.default_currency,
+        allowed_currencies=list(policy.allowed_currencies),
+        locale=policy.locale,
+        plan=build_plan_read(plan_definition, policy=policy),
         subscription=_build_subscription_state_read(subscription),
         limits=build_plan_limits(plan_definition),
         current_usage=build_usage_snapshot(BillingUsageTotals(current_profiles=current_profiles)),
@@ -188,3 +234,24 @@ def enforce_memory_creation_limit(
         plan_code=get_effective_plan_code_for_user(db, current_user),
         current_memories=current_memories,
     )
+
+
+def prepare_checkout_stub(
+    *,
+    plan_code: str,
+    requested_currency: str | None,
+    locale: str | None = None,
+) -> tuple[str, str, MarketCurrencyPolicy]:
+    """Validate checkout inputs for the future provider path; no payment side effects.
+
+    Returns ``(normalized_plan_code, validated_currency, policy)``.
+    Raises ``ValueError`` for unknown plans or disallowed currencies.
+    """
+
+    plan_definition = get_plan_definition_or_raise(plan_code)
+    policy = resolve_request_currency_policy(locale)
+    currency = resolve_checkout_currency(
+        requested_currency=requested_currency,
+        policy=policy,
+    )
+    return plan_definition.code, currency, policy
