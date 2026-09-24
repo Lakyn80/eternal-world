@@ -143,6 +143,11 @@ class Settings(BaseSettings):
     email_from: str = ""
     public_app_origin: str = ""
 
+    #: Phase 6A market correction — deployment billing market (not UI locale).
+    #: ``RU`` = Russian market (RUB only). ``CZ`` = Czech/EU market (locale-scoped
+    #: CZK / EUR / USD). Never infer from browser language or hostname.
+    billing_market: str = "RU"
+
     model_config = SettingsConfigDict(
         env_file=ENV_FILE_CANDIDATES,
         env_file_encoding="utf-8",
@@ -302,6 +307,14 @@ class Settings(BaseSettings):
     @classmethod
     def strip_email_setting(cls, value: str) -> str:
         return value.strip()
+
+    @field_validator("billing_market")
+    @classmethod
+    def normalize_billing_market(cls, value: str) -> str:
+        normalized_value = value.strip().upper()
+        if normalized_value not in {"RU", "CZ"}:
+            raise ValueError("BILLING_MARKET must be one of: RU, CZ")
+        return normalized_value
 
 
 settings = Settings()
