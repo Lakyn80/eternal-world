@@ -57,6 +57,7 @@ def apply_subscription_state(
     provider_customer_id: str | None = None,
     provider_subscription_id: str | None = None,
     provider_price_id: str | None = None,
+    currency: str | None = None,
     commit: bool = True,
 ) -> BillingSubscription:
     """Persist the user's current subscription state (upsert by user_id).
@@ -86,6 +87,7 @@ def apply_subscription_state(
         provider_customer_id=provider_customer_id,
         provider_subscription_id=provider_subscription_id,
         provider_price_id=provider_price_id,
+        currency=currency,
     )
     if commit:
         db.commit()

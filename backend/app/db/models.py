@@ -182,6 +182,8 @@ class BillingSubscription(TimestampMixin, Base):
     provider_customer_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
     provider_subscription_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
     provider_price_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    #: ISO currency of the purchase (nullable until a paid checkout succeeds).
+    currency: Mapped[str | None] = mapped_column(String(3), nullable=True)
 
     user: Mapped[User] = relationship(back_populates="billing_subscription")
 

@@ -28,6 +28,7 @@ def upsert_subscription(
     provider_customer_id: str | None = None,
     provider_subscription_id: str | None = None,
     provider_price_id: str | None = None,
+    currency: str | None = None,
 ) -> BillingSubscription:
     """Create or replace the single current subscription row for ``user_id``."""
 
@@ -45,5 +46,6 @@ def upsert_subscription(
     row.provider_customer_id = provider_customer_id
     row.provider_subscription_id = provider_subscription_id
     row.provider_price_id = provider_price_id
+    row.currency = currency.strip().upper() if currency else None
     db.flush()
     return row
