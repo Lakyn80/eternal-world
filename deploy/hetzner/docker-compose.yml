@@ -78,6 +78,7 @@ services:
       EMBEDDING_CACHE_PROVIDER: redis
       EMBEDDING_CACHE_TTL_SECONDS: "604800"
       EMBEDDING_CACHE_KEY_PREFIX: eternal_world_hetzner
+      BILLING_MARKET: CZ
       CUDA_VISIBLE_DEVICES: ""
       NVIDIA_VISIBLE_DEVICES: void
     depends_on:

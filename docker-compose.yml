@@ -36,11 +36,15 @@ services:
       dockerfile: Dockerfile
     container_name: eternal_world_backend
     restart: unless-stopped
+    # Without --reload: WatchFiles + Windows bind mount can leave the reloader
+    # parent up while the worker never binds :8000 (login: "server could not be reached").
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
     environment:
       DATABASE_URL: postgresql+psycopg://eternal_user:eternal_password@db:5432/eternal_world
       REDIS_URL: redis://redis:6379/0
       APP_NAME: Eternal World API
       ENVIRONMENT: local
+      BILLING_MARKET: RU
       BACKEND_CORS_ORIGINS: http://localhost:8017,http://127.0.0.1:8017
       AI_BRAIN_PROVIDER: openai_compatible
       AI_BRAIN_MODEL: ${AI_BRAIN_MODEL}
@@ -127,6 +131,7 @@ services:
       REDIS_URL: redis://redis:6379/0
       APP_NAME: Eternal World API
       ENVIRONMENT: local
+      BILLING_MARKET: RU
       BACKEND_CORS_ORIGINS: http://localhost:8017,http://127.0.0.1:8017
       AI_BRAIN_PROVIDER: mock
       AI_BRAIN_TIMEOUT_SECONDS: 30
@@ -199,6 +204,7 @@ services:
       REDIS_URL: redis://redis:6379/0
       APP_NAME: Eternal World API
       ENVIRONMENT: local
+      BILLING_MARKET: RU
       BACKEND_CORS_ORIGINS: http://localhost:8017,http://127.0.0.1:8017
       AI_BRAIN_PROVIDER: mock
       AI_BRAIN_TIMEOUT_SECONDS: 30
@@ -261,6 +267,7 @@ services:
       REDIS_URL: redis://redis:6379/0
       APP_NAME: Eternal World API
       ENVIRONMENT: local
+      BILLING_MARKET: RU
       BACKEND_CORS_ORIGINS: http://localhost:8017,http://127.0.0.1:8017
       AI_BRAIN_PROVIDER: mock
       CONTENT_TRANSLATION_PROVIDER: mock
