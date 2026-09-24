@@ -44,7 +44,7 @@ services:
       REDIS_URL: redis://redis:6379/0
       APP_NAME: Eternal World API
       ENVIRONMENT: local
-      BILLING_MARKET: RU
+      BILLING_MARKET: CZ
       BACKEND_CORS_ORIGINS: http://localhost:8017,http://127.0.0.1:8017
       AI_BRAIN_PROVIDER: openai_compatible
       AI_BRAIN_MODEL: ${AI_BRAIN_MODEL}
@@ -131,7 +131,7 @@ services:
       REDIS_URL: redis://redis:6379/0
       APP_NAME: Eternal World API
       ENVIRONMENT: local
-      BILLING_MARKET: RU
+      BILLING_MARKET: CZ
       BACKEND_CORS_ORIGINS: http://localhost:8017,http://127.0.0.1:8017
       AI_BRAIN_PROVIDER: mock
       AI_BRAIN_TIMEOUT_SECONDS: 30
@@ -204,7 +204,7 @@ services:
       REDIS_URL: redis://redis:6379/0
       APP_NAME: Eternal World API
       ENVIRONMENT: local
-      BILLING_MARKET: RU
+      BILLING_MARKET: CZ
       BACKEND_CORS_ORIGINS: http://localhost:8017,http://127.0.0.1:8017
       AI_BRAIN_PROVIDER: mock
       AI_BRAIN_TIMEOUT_SECONDS: 30
@@ -267,7 +267,7 @@ services:
       REDIS_URL: redis://redis:6379/0
       APP_NAME: Eternal World API
       ENVIRONMENT: local
-      BILLING_MARKET: RU
+      BILLING_MARKET: CZ
       BACKEND_CORS_ORIGINS: http://localhost:8017,http://127.0.0.1:8017
       AI_BRAIN_PROVIDER: mock
       CONTENT_TRANSLATION_PROVIDER: mock

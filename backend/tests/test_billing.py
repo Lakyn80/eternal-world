@@ -8,6 +8,7 @@ from pathlib import Path
 
 from app.db.models import User
 from app.main import app
+from app.core.config import settings
 from app.modules.billing.entitlements import check_usage_limit
 from app.modules.billing.exceptions import BillingLimitExceededError
 from app.modules.billing.service import (
@@ -19,6 +20,13 @@ from app.modules.billing.subscriptions import apply_subscription_state, clear_su
 
 
 PASSWORD = "StrongPass123"
+
+
+@pytest.fixture(autouse=True)
+def _force_ru_billing_market(monkeypatch):
+    """Foundation catalog assertions are RUB-priced; market matrix lives in test_billing_market."""
+
+    monkeypatch.setattr(settings, "billing_market", "RU")
 
 
 def _register_and_login(client, email: str) -> str:
