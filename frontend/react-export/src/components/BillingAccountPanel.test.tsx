@@ -3,7 +3,12 @@ import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { BillingAccountPanel } from './BillingAccountPanel';
 import * as billingApi from '../lib/billingApi';
-import type { BillingCatalogRead, BillingCurrentPlanRead, BillingPlanRead } from '../types/memorial';
+import type {
+  BillingCatalogRead,
+  BillingCurrentPlanRead,
+  BillingPlanLimits,
+  BillingPlanRead
+} from '../types/memorial';
 
 vi.mock('../lib/billingApi', () => ({
   getBillingAccount: vi.fn(),
@@ -31,7 +36,7 @@ const t = {
   working: 'Working'
 };
 
-const freeLimits = {
+const freeLimits: BillingPlanLimits = {
   max_profiles: 1,
   max_memories: 10,
   max_audio_minutes: 30,
@@ -51,7 +56,7 @@ function plan(
   code: string,
   name: string,
   prices: BillingPlanRead['prices'],
-  limits = freeLimits
+  limits: BillingPlanLimits = freeLimits
 ): BillingPlanRead {
   return {
     code,
