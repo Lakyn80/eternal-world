@@ -16,6 +16,7 @@ from app.modules.billing.market import (
 )
 from app.modules.billing.plans import FREE_PLAN_CODE, PLAN_DEFINITIONS, PlanDefinition, get_plan_definition
 from app.modules.billing.prices import BILLING_INTERVAL_MONTH, list_prices_for_plan
+from app.modules.billing.quota_locks import lock_user_row_for_billing_quota
 from app.modules.billing.schemas import (
     BillingCatalogRead,
     BillingCurrentPlanRead,
@@ -27,6 +28,7 @@ from app.modules.billing.schemas import (
 from app.modules.billing.subscriptions import subscription_grants_plan_entitlements
 from app.modules.billing.usage import BillingUsageTotals, build_usage_snapshot
 from app.modules.memory_profiles import repository as memory_profiles_repository
+from app.modules.memories import repository as memories_repository
 
 
 def _utc_now() -> datetime:
@@ -209,6 +211,24 @@ def enforce_memory_profile_creation_limit(
     )
 
 
+def reserve_memory_profile_creation_slot(db: Session, *, current_user: User) -> None:
+    """Lock the user row, then count+enforce profile quota in one transaction window.
+
+    Call before inserting a MemoryProfile from either memorial or memory-profile
+    create paths so concurrent workers cannot both pass a stale count.
+    """
+
+    locked_user = lock_user_row_for_billing_quota(db, user_id=current_user.id)
+    current_profiles = memory_profiles_repository.count_memory_profiles_for_user(
+        db, locked_user.id
+    )
+    enforce_memory_profile_creation_limit(
+        db,
+        current_user=locked_user,
+        current_profiles=current_profiles,
+    )
+
+
 def enforce_memory_limit_for_plan(
     *,
     plan_code: str,
@@ -232,6 +252,18 @@ def enforce_memory_creation_limit(
 ) -> None:
     enforce_memory_limit_for_plan(
         plan_code=get_effective_plan_code_for_user(db, current_user),
+        current_memories=current_memories,
+    )
+
+
+def reserve_memory_creation_slot(db: Session, *, current_user: User) -> None:
+    """Lock the user row, then count+enforce memory quota in one transaction window."""
+
+    locked_user = lock_user_row_for_billing_quota(db, user_id=current_user.id)
+    current_memories = memories_repository.count_memories_for_user(db, locked_user.id)
+    enforce_memory_creation_limit(
+        db,
+        current_user=locked_user,
         current_memories=current_memories,
     )
 

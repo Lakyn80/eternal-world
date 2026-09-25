@@ -12,7 +12,7 @@ from app.modules.avatar_memory_indexing.qdrant_writer import (
     AvatarMemoryQdrantWriter,
     DefaultAvatarMemoryQdrantWriter,
 )
-from app.modules.billing.service import enforce_memory_profile_creation_limit
+from app.modules.billing.service import reserve_memory_profile_creation_slot
 from app.modules.media import repository as media_repository
 from app.modules.memory_profiles import repository
 from app.modules.memory_profiles.schemas import (
@@ -76,12 +76,7 @@ def create_memory_profile(
 ) -> MemoryProfile:
     from app.modules.language_registry.persona_sync import sync_persona_languages_to_canonical, utcnow
 
-    current_profiles = repository.count_memory_profiles_for_user(db, current_user.id)
-    enforce_memory_profile_creation_limit(
-        db,
-        current_user=current_user,
-        current_profiles=current_profiles,
-    )
+    reserve_memory_profile_creation_slot(db, current_user=current_user)
     profile_fields = payload.model_dump(exclude={"confirm_canonical_language"})
     memory_profile = repository.create_memory_profile(
         db,

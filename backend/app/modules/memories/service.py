@@ -3,7 +3,7 @@ from __future__ import annotations
 from sqlalchemy.orm import Session
 
 from app.db.models import Memory, MediaAsset, User
-from app.modules.billing.service import enforce_memory_creation_limit
+from app.modules.billing.service import reserve_memory_creation_slot
 from app.modules.media import repository as media_repository
 from app.modules.memories import repository
 from app.modules.memories.schemas import MemoryCreate, MemoryUpdate
@@ -102,12 +102,7 @@ def create_memory(
         user_id=current_user.id,
         profile_id=profile_id,
     )
-    current_memories = repository.count_memories_for_user(db, current_user.id)
-    enforce_memory_creation_limit(
-        db,
-        current_user=current_user,
-        current_memories=current_memories,
-    )
+    reserve_memory_creation_slot(db, current_user=current_user)
     _validate_media_for_memory(
         db,
         user_id=current_user.id,
